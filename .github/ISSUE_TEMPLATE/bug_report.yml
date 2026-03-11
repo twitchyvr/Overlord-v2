@@ -1,0 +1,94 @@
+name: Bug Report
+description: Report a bug in Overlord v2
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill out the sections below.
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Affected Layer
+      description: Which architectural layer is affected?
+      options:
+        - Core (bus, config)
+        - Transport (socket, API)
+        - Rooms (room-manager, room-types, phase-gates)
+        - Agents (registry, session, router)
+        - Tools (registry, executor, providers)
+        - AI (providers, streaming, prompt-builder)
+        - Storage (database, models)
+        - Plugins (loader, sandbox)
+        - UI (frontend, components, views)
+        - Unknown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: floor
+    attributes:
+      label: Affected Floor (if applicable)
+      description: Which building floor is affected?
+      options:
+        - N/A
+        - Lobby
+        - Strategy Floor
+        - Collaboration Floor
+        - Execution Floor
+        - Operations Floor
+        - Governance Floor
+        - Integration Floor
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Clear description of the bug
+      placeholder: What happened? What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to reproduce the behavior
+      placeholder: |
+        1. Start server with '...'
+        2. Send message '...'
+        3. Observe error in '...'
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs / Error Output
+      description: Paste any relevant log output
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Overlord v2 version (from package.json)
+      placeholder: "0.1.0"
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js Version
+      placeholder: "20.x"

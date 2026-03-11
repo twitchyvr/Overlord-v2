@@ -1,0 +1,84 @@
+name: New Room Type
+description: Propose a new room type for the Building
+title: "room: "
+labels: ["enhancement", "rooms"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Define a new room type for the Overlord v2 Building system.
+
+  - type: input
+    id: room-name
+    attributes:
+      label: Room Name
+      placeholder: "e.g., Documentation Lab"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: floor
+    attributes:
+      label: Target Floor
+      options:
+        - Lobby
+        - Strategy Floor
+        - Collaboration Floor
+        - Execution Floor
+        - Operations Floor
+        - Governance Floor
+        - Integration Floor
+        - New Floor (describe below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Room Purpose
+      description: What work happens in this room?
+    validations:
+      required: true
+
+  - type: textarea
+    id: tools
+    attributes:
+      label: Allowed Tools
+      description: Which tools should be available in this room?
+      placeholder: |
+        - read_file
+        - list_dir
+        - web_search
+    validations:
+      required: true
+
+  - type: textarea
+    id: tables
+    attributes:
+      label: Table Configuration
+      description: What table modes should this room support?
+      placeholder: |
+        - focus: 1 agent, solo work
+        - collab: 4 agents, shared context
+
+  - type: textarea
+    id: exit-doc
+    attributes:
+      label: Exit Document Template
+      description: What structured output must agents produce to leave this room?
+      placeholder: |
+        {
+          "type": "documentation-report",
+          "fields": ["docsCreated", "docsUpdated", "coverageGaps"]
+        }
+    validations:
+      required: true
+
+  - type: textarea
+    id: escalation
+    attributes:
+      label: Escalation Rules
+      description: Where should work go if this room encounters problems?
+      placeholder: |
+        - onError: war-room
+        - onScopeChange: discovery

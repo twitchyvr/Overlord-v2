@@ -1,0 +1,204 @@
+/**
+ * Storage Layer
+ *
+ * Swappable storage backend. SQLite by default, designed for
+ * future migration to Postgres/Redis.
+ *
+ * Creates all v2 tables: buildings, floors, rooms, agents,
+ * messages, tasks, todos, phase_gates, raid_entries, exit_documents.
+ */
+
+import Database from 'better-sqlite3';
+import { mkdirSync, existsSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { logger } from '../core/logger.js';
+
+const log = logger.child({ module: 'storage' });
+
+let db = null;
+
+const SCHEMA_SQL = `
+  CREATE TABLE IF NOT EXISTS buildings (
+    id TEXT PRIMARY KEY,
+    project_id TEXT,
+    name TEXT NOT NULL,
+    config TEXT DEFAULT '{}',
+    active_phase TEXT DEFAULT 'strategy',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS floors (
+    id TEXT PRIMARY KEY,
+    building_id TEXT NOT NULL REFERENCES buildings(id),
+    type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    config TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS rooms (
+    id TEXT PRIMARY KEY,
+    floor_id TEXT NOT NULL REFERENCES floors(id),
+    type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    allowed_tools TEXT DEFAULT '[]',
+    file_scope TEXT DEFAULT 'assigned',
+    exit_template TEXT DEFAULT '{}',
+    escalation TEXT DEFAULT '{}',
+    provider TEXT DEFAULT 'configurable',
+    config TEXT DEFAULT '{}',
+    status TEXT DEFAULT 'idle',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS tables_v2 (
+    id TEXT PRIMARY KEY,
+    room_id TEXT NOT NULL REFERENCES rooms(id),
+    type TEXT NOT NULL DEFAULT 'focus',
+    chairs INTEGER DEFAULT 1,
+    description TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS agents (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    capabilities TEXT DEFAULT '[]',
+    room_access TEXT DEFAULT '[]',
+    badge TEXT,
+    status TEXT DEFAULT 'idle',
+    current_room_id TEXT REFERENCES rooms(id),
+    current_table_id TEXT REFERENCES tables_v2(id),
+    config TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    room_id TEXT NOT NULL REFERENCES rooms(id),
+    agent_id TEXT REFERENCES agents(id),
+    role TEXT NOT NULL,
+    content TEXT,
+    tool_calls TEXT,
+    thread_id TEXT,
+    parent_id TEXT REFERENCES messages(id),
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,
+    building_id TEXT NOT NULL REFERENCES buildings(id),
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT DEFAULT 'pending',
+    parent_id TEXT REFERENCES tasks(id),
+    milestone_id TEXT,
+    assignee_id TEXT REFERENCES agents(id),
+    room_id TEXT REFERENCES rooms(id),
+    phase TEXT,
+    priority TEXT DEFAULT 'normal',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS todos (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id),
+    agent_id TEXT REFERENCES agents(id),
+    room_id TEXT REFERENCES rooms(id),
+    description TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    exit_doc_ref TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS exit_documents (
+    id TEXT PRIMARY KEY,
+    room_id TEXT NOT NULL REFERENCES rooms(id),
+    type TEXT NOT NULL,
+    completed_by TEXT NOT NULL,
+    fields TEXT DEFAULT '{}',
+    artifacts TEXT DEFAULT '[]',
+    raid_entry_ids TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS phase_gates (
+    id TEXT PRIMARY KEY,
+    building_id TEXT NOT NULL REFERENCES buildings(id),
+    phase TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    exit_doc_id TEXT REFERENCES exit_documents(id),
+    signoff_reviewer TEXT,
+    signoff_verdict TEXT,
+    signoff_conditions TEXT DEFAULT '[]',
+    signoff_timestamp TEXT,
+    next_phase_input TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS raid_entries (
+    id TEXT PRIMARY KEY,
+    building_id TEXT NOT NULL REFERENCES buildings(id),
+    type TEXT NOT NULL CHECK(type IN ('risk', 'assumption', 'issue', 'decision')),
+    phase TEXT NOT NULL,
+    room_id TEXT REFERENCES rooms(id),
+    summary TEXT NOT NULL,
+    rationale TEXT,
+    decided_by TEXT,
+    approved_by TEXT,
+    affected_areas TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'active' CHECK(status IN ('active', 'superseded', 'closed')),
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS migrations (
+    version INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    applied_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_rooms_floor ON rooms(floor_id);
+  CREATE INDEX IF NOT EXISTS idx_rooms_type ON rooms(type);
+  CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id);
+  CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id);
+  CREATE INDEX IF NOT EXISTS idx_agents_room ON agents(current_room_id);
+  CREATE INDEX IF NOT EXISTS idx_tasks_building ON tasks(building_id);
+  CREATE INDEX IF NOT EXISTS idx_todos_task ON todos(task_id);
+  CREATE INDEX IF NOT EXISTS idx_raid_building ON raid_entries(building_id);
+  CREATE INDEX IF NOT EXISTS idx_raid_phase ON raid_entries(phase);
+  CREATE INDEX IF NOT EXISTS idx_raid_type ON raid_entries(type);
+  CREATE INDEX IF NOT EXISTS idx_exit_docs_room ON exit_documents(room_id);
+  CREATE INDEX IF NOT EXISTS idx_phase_gates_building ON phase_gates(building_id);
+`;
+
+export async function initStorage(config) {
+  const dbPath = config.get('DB_PATH');
+  const dir = dirname(dbPath);
+
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+
+  // Run schema creation
+  db.exec(SCHEMA_SQL);
+  log.info({ path: dbPath }, 'Database initialized with v2 schema');
+
+  return db;
+}
+
+export function getDb() {
+  if (!db) throw new Error('Database not initialized. Call initStorage() first.');
+  return db;
+}

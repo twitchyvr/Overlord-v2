@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Architecture Report
+    url: https://github.com/twitchyvr/Overlord-v2/blob/main/docs/architecture/README.md
+    about: Read the v2 architecture report before proposing changes
+  - name: Discussion
+    url: https://github.com/twitchyvr/Overlord-v2/discussions
+    about: Ask questions or start a discussion

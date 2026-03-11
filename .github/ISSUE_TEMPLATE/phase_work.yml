@@ -1,0 +1,58 @@
+name: Phase Work Item
+description: Track work for a specific implementation phase
+title: "phase: "
+labels: ["phase-work"]
+body:
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Implementation Phase
+      options:
+        - "Phase 0: Stabilize v1"
+        - "Phase 1: Foundation (Bus + Storage + Config)"
+        - "Phase 2: Rooms (Room Manager + Testing Lab + Exit Protocol)"
+        - "Phase 3: Agents + AI (Registry + Providers + Tool Executor)"
+        - "Phase 4: All Rooms + RAID (Remaining Rooms + Phase Gates)"
+        - "Phase 5: Phase Zero (Strategist + Building Architect)"
+        - "Phase 6: UI (Building-Themed Frontend)"
+        - "Phase 7: Plugins + Polish (Scripting + Integration)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Work Description
+      description: What needs to be done?
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Deliverables
+      description: What artifacts will this produce?
+      placeholder: |
+        - [ ] File: src/core/bus.js
+        - [ ] File: src/storage/db.js
+        - [ ] Test: tests/unit/core/bus.test.js
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: What must be completed before this can start?
+      placeholder: "Requires Phase 1 foundation to be complete"
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How do we know this is done?
+      placeholder: |
+        - [ ] All tests pass
+        - [ ] Integration test demonstrates end-to-end flow
+    validations:
+      required: true
