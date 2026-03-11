@@ -17,11 +17,6 @@ interface AnthropicTool {
   input_schema: Record<string, unknown>;
 }
 
-interface AnthropicMessage {
-  role: 'user' | 'assistant';
-  content: string | AnthropicContentBlock[];
-}
-
 interface AnthropicContentBlock {
   type: 'text' | 'thinking' | 'tool_use' | 'tool_result';
   text?: string;

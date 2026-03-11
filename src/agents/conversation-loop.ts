@@ -18,7 +18,6 @@ import type {
   AIProviderAPI,
   ToolRegistryAPI,
   BaseRoomLike,
-  ToolDefinition,
 } from '../core/contracts.js';
 
 const log = logger.child({ module: 'conversation-loop' });

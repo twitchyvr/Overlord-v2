@@ -11,7 +11,7 @@ import type { AIAdapter } from '../../../src/core/contracts.js';
 describe('AI Provider', () => {
   const mockAdapter: AIAdapter = {
     name: 'mock',
-    async sendMessage(messages, tools, options) {
+    async sendMessage(messages, _tools, _options) {
       return {
         id: 'mock_1',
         role: 'assistant',

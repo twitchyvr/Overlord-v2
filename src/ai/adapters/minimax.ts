@@ -22,8 +22,6 @@ import type { AIAdapter, ToolDefinition, Config } from '../../core/contracts.js'
 
 const log = logger.child({ module: 'ai:minimax' });
 
-const DEFAULT_MINIMAX_BASE_URL = 'https://api.minimax.io/anthropic';
-
 interface AnthropicContentBlock {
   type: 'text' | 'thinking' | 'tool_use' | 'tool_result';
   text?: string;
