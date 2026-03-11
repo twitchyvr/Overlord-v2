@@ -1,0 +1,184 @@
+/* ═══════════════════════════════════════════════════
+   OVERLORD v2 — Responsive Layout
+   ═══════════════════════════════════════════════════ */
+
+/* ── Main app layout ── */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+#main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Left sidebar: Building visualization ── */
+#building-panel {
+  width: var(--sidebar-width);
+  border-right: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  overflow-y: auto;
+  flex-shrink: 0;
+  transition: width var(--duration-normal) var(--ease-default);
+}
+
+/* ── Center: Chat or Dashboard ── */
+#center-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0; /* Prevents flex overflow */
+}
+
+/* ── Right sidebar: Panels ── */
+#right-panel {
+  width: var(--panel-width);
+  border-left: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  overflow-y: auto;
+  flex-shrink: 0;
+  transition: width var(--duration-normal) var(--ease-default);
+}
+
+/* ── Phase bar ── */
+#phase-bar {
+  flex-shrink: 0;
+}
+
+/* ── Mobile nav ── */
+#mobile-nav {
+  height: var(--mobile-nav-height);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-primary);
+  display: none;
+  align-items: center;
+  justify-content: space-around;
+  flex-shrink: 0;
+}
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color var(--duration-fast);
+}
+.mobile-nav-item.active {
+  color: var(--accent-blue);
+}
+.mobile-nav-icon {
+  font-size: 18px;
+}
+
+/* ── Modal root ── */
+#modal-root {
+  position: relative;
+  z-index: var(--z-modal);
+}
+
+/* ── Toast container ── */
+#toast-container {
+  position: fixed;
+  top: calc(var(--header-height) + var(--sp-4));
+  right: var(--sp-4);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════
+   TABLET (≤1024px) — Collapse building sidebar
+   ══════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  #building-panel {
+    position: fixed;
+    left: 0;
+    top: var(--header-height);
+    bottom: 0;
+    z-index: var(--z-above);
+    transform: translateX(-100%);
+    transition: transform var(--duration-normal) var(--ease-default);
+    box-shadow: var(--shadow-xl);
+  }
+  #building-panel.open {
+    transform: translateX(0);
+  }
+
+  #right-panel {
+    position: fixed;
+    right: 0;
+    top: var(--header-height);
+    bottom: 0;
+    z-index: var(--z-above);
+    transform: translateX(100%);
+    transition: transform var(--duration-normal) var(--ease-default);
+    box-shadow: var(--shadow-xl);
+  }
+  #right-panel.open {
+    transform: translateX(0);
+  }
+
+  .phase-label { display: none; }
+  .phase-step { flex: 0; padding: var(--sp-1) var(--sp-2); }
+}
+
+/* ══════════════════════════════════════════════
+   MOBILE (≤640px) — Full screen views + bottom nav
+   ══════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  #building-panel {
+    width: 100%;
+  }
+  #right-panel {
+    width: 100%;
+  }
+
+  #mobile-nav {
+    display: flex;
+  }
+
+  .phase-bar {
+    padding: var(--sp-1) var(--sp-2);
+  }
+  .phase-dot {
+    width: 8px;
+    height: 8px;
+  }
+
+  .floor-rooms {
+    grid-template-columns: 1fr;
+  }
+
+  .room-tables {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-content {
+    width: 100%;
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .toast-container {
+    left: var(--sp-2);
+    right: var(--sp-2);
+    top: auto;
+    bottom: calc(var(--mobile-nav-height) + var(--sp-2));
+  }
+  .toast {
+    max-width: 100%;
+  }
+}

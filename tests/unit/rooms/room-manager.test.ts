@@ -26,7 +26,7 @@ import * as dbModule from '../../../src/storage/db.js';
 import { vi } from 'vitest';
 import { BaseRoom } from '../../../src/rooms/room-types/base-room.js';
 import type { RoomContract, Result } from '../../../src/core/contracts.js';
-import { ok, err } from '../../../src/core/contracts.js';
+import { err } from '../../../src/core/contracts.js';
 
 let db: Database.Database;
 

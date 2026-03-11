@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { AgentSession } from '../../../src/agents/agent-session.js';
-import type { SessionMessage } from '../../../src/agents/agent-session.js';
+
 import * as dbModule from '../../../src/storage/db.js';
 
 let db: Database.Database;
