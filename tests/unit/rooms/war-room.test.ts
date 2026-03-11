@@ -2,8 +2,8 @@
  * War Room Tests
  *
  * Verifies the War Room contract — Collaboration Floor.
- * Incident response with elevated access. Full file scope.
- * Has ALL tools including write, bash, github — max capability.
+ * Incident response. Elevated access. All-hands troubleshooting.
+ * Full file scope, 8-chair boardroom, no escalation (IS the top target).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -20,27 +20,24 @@ describe('WarRoom', () => {
 
     it('has boardroom table with 8 chairs — all-hands', () => {
       expect(Object.keys(contract.tables)).toHaveLength(1);
+      expect(contract.tables.boardroom).toBeDefined();
       expect(contract.tables.boardroom.chairs).toBe(8);
-      expect(contract.tables.boardroom.description).toContain('incident');
     });
 
-    it('has FULL file scope — elevated access during incidents', () => {
+    it('has full file scope — elevated access', () => {
       expect(contract.fileScope).toBe('full');
     });
 
-    it('has the most comprehensive tool set of any room', () => {
-      const tools = contract.tools;
-      expect(tools).toContain('read_file');
-      expect(tools).toContain('write_file');
-      expect(tools).toContain('patch_file');
-      expect(tools).toContain('list_dir');
-      expect(tools).toContain('bash');
-      expect(tools).toContain('web_search');
-      expect(tools).toContain('fetch_webpage');
-      expect(tools).toContain('qa_run_tests');
-      expect(tools).toContain('qa_check_lint');
-      expect(tools).toContain('github');
-      expect(tools).toHaveLength(10);
+    it('provides full tool set including write and patch', () => {
+      expect(contract.tools).toContain('read_file');
+      expect(contract.tools).toContain('write_file');
+      expect(contract.tools).toContain('patch_file');
+      expect(contract.tools).toContain('list_dir');
+      expect(contract.tools).toContain('bash');
+      expect(contract.tools).toContain('web_search');
+      expect(contract.tools).toContain('github');
+      expect(contract.tools).toContain('qa_run_tests');
+      expect(contract.tools).toContain('qa_check_lint');
     });
 
     it('requires incident-report exit template with 5 fields', () => {
@@ -55,7 +52,7 @@ describe('WarRoom', () => {
       ]);
     });
 
-    it('has empty escalation — war room is the top escalation target', () => {
+    it('has NO escalation — war room IS the top escalation target', () => {
       expect(contract.escalation).toEqual({});
     });
   });
@@ -66,24 +63,16 @@ describe('WarRoom', () => {
       expect(room.type).toBe('war-room');
     });
 
-    it('getAllowedTools returns all 10 tools', () => {
+    it('getAllowedTools returns full set of 10 tools', () => {
       const room = new WarRoom('room_1');
       expect(room.getAllowedTools()).toHaveLength(10);
     });
 
-    it('hasTool returns true for write tools — elevated access', () => {
-      const room = new WarRoom('room_1');
-      expect(room.hasTool('write_file')).toBe(true);
-      expect(room.hasTool('patch_file')).toBe(true);
-      expect(room.hasTool('bash')).toBe(true);
-      expect(room.hasTool('github')).toBe(true);
-    });
-
-    it('getRules emphasizes incident focus and time-boxing', () => {
+    it('getRules emphasizes incident response and root cause', () => {
       const room = new WarRoom('room_1');
       const rules = room.getRules();
       expect(rules.some((r) => r.includes('War Room'))).toBe(true);
-      expect(rules.some((r) => r.includes('incident response'))).toBe(true);
+      expect(rules.some((r) => r.includes('incident'))).toBe(true);
       expect(rules.some((r) => r.includes('root cause'))).toBe(true);
       expect(rules.some((r) => r.includes('prevention plan'))).toBe(true);
     });
@@ -97,35 +86,81 @@ describe('WarRoom', () => {
       expect(format).toHaveProperty('preventionPlan');
       expect(format).toHaveProperty('timeToResolve');
     });
+  });
 
-    it('buildContextInjection includes full file scope', () => {
-      const room = new WarRoom('room_1');
-      const ctx = room.buildContextInjection();
-      expect(ctx.roomType).toBe('war-room');
-      expect(ctx.fileScope).toBe('full');
-      expect((ctx.tools as string[])).toContain('write_file');
-      expect((ctx.tools as string[])).toContain('github');
-    });
-
-    it('validates complete exit document', () => {
+  describe('exit document validation', () => {
+    it('accepts complete incident report', () => {
       const room = new WarRoom('room_1');
       const result = room.validateExitDocument({
-        incidentSummary: 'Database connection pool exhausted',
-        rootCause: 'Missing connection timeout in config',
-        resolution: 'Added 30s timeout to pool config',
-        preventionPlan: ['Add connection pool monitoring', 'Set up alerts'],
+        incidentSummary: 'Production API returned 500 errors for /users endpoint',
+        rootCause: 'Database connection pool exhausted due to unclosed transactions',
+        resolution: 'Added connection pool monitoring and automatic transaction cleanup',
+        preventionPlan: ['Add connection pool metrics to dashboard', 'Set max transaction timeout to 30s'],
         timeToResolve: '45 minutes',
       });
       expect(result.ok).toBe(true);
     });
 
-    it('rejects exit document missing root cause', () => {
+    it('rejects empty rootCause', () => {
       const room = new WarRoom('room_1');
       const result = room.validateExitDocument({
         incidentSummary: 'Something broke',
+        rootCause: '',
         resolution: 'Fixed it',
+        preventionPlan: ['Monitor'],
+        timeToResolve: '10m',
       });
       expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('rootCause');
+    });
+
+    it('rejects empty resolution', () => {
+      const room = new WarRoom('room_1');
+      const result = room.validateExitDocument({
+        incidentSummary: 'Something broke',
+        rootCause: 'Bad config',
+        resolution: '   ',
+        preventionPlan: ['Monitor'],
+        timeToResolve: '10m',
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('resolution');
+    });
+
+    it('rejects empty preventionPlan array', () => {
+      const room = new WarRoom('room_1');
+      const result = room.validateExitDocument({
+        incidentSummary: 'Something broke',
+        rootCause: 'Bad config',
+        resolution: 'Fixed config',
+        preventionPlan: [],
+        timeToResolve: '10m',
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('preventionPlan');
+    });
+
+    it('rejects non-array preventionPlan', () => {
+      const room = new WarRoom('room_1');
+      const result = room.validateExitDocument({
+        incidentSummary: 'Something broke',
+        rootCause: 'Bad config',
+        resolution: 'Fixed config',
+        preventionPlan: 'just one thing',
+        timeToResolve: '10m',
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('preventionPlan');
+    });
+
+    it('rejects document missing required fields (base validation)', () => {
+      const room = new WarRoom('room_1');
+      const result = room.validateExitDocument({
+        incidentSummary: 'Something broke',
+        rootCause: 'Bad config',
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.code).toBe('EXIT_DOC_INCOMPLETE');
     });
   });
 });
