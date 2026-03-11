@@ -619,7 +619,7 @@ describe('window.overlordSocket.fetchFloors()', () => {
 
     const result = await api.fetchFloors('b1');
     expect(mockSocket.emit).toHaveBeenCalledWith('floor:list', { buildingId: 'b1' }, expect.any(Function));
-    expect(mockStore.set).toHaveBeenCalledWith('floors.list', floors);
+    expect(mockStore.set).toHaveBeenCalledWith('building.floors', floors);
     expect(result.ok).toBe(true);
   });
 });
@@ -831,7 +831,7 @@ describe('window.overlordSocket.applyBlueprint()', () => {
       if (ack) ack(response);
     });
 
-    const result = await api.applyBlueprint('b1', { rooms: 5 }, 'agent-1');
+    const result = await api.applyBlueprint({ buildingId: 'b1', blueprint: { rooms: 5 }, agentId: 'agent-1' });
     expect(mockSocket.emit).toHaveBeenCalledWith(
       'building:apply-blueprint',
       { buildingId: 'b1', blueprint: { rooms: 5 }, agentId: 'agent-1' },
@@ -920,7 +920,7 @@ describe('window.overlordSocket.sendMessage()', () => {
     const now = 1700000000000;
     vi.spyOn(Date, 'now').mockReturnValue(now);
 
-    api.sendMessage('hello', 'a1');
+    api.sendMessage({ content: 'hello', agentId: 'a1' });
 
     expect(mockStore.update).toHaveBeenCalledWith('chat.messages', expect.any(Function));
     const updaterFn = mockStore.update.mock.calls.find((c: any) => c[0] === 'chat.messages')![1];
@@ -931,21 +931,21 @@ describe('window.overlordSocket.sendMessage()', () => {
   it('sets ui.processing to true', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
-    api.sendMessage('test', 'a1');
+    api.sendMessage({ content: 'test', agentId: 'a1' });
     expect(mockStore.set).toHaveBeenCalledWith('ui.processing', true);
   });
 
   it('emits chat:message via socket (fire-and-forget, no ack)', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
-    api.sendMessage('hello world', 'agent-5');
-    expect(mockSocket.emit).toHaveBeenCalledWith('chat:message', { content: 'hello world', agentId: 'agent-5' });
+    api.sendMessage({ content: 'hello world', agentId: 'agent-5' });
+    expect(mockSocket.emit).toHaveBeenCalledWith('chat:message', { content: 'hello world', agentId: 'agent-5', tokens: undefined, buildingId: undefined });
   });
 
   it('does not return a promise (synchronous fire-and-forget)', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
-    const result = api.sendMessage('msg', 'a1');
+    const result = api.sendMessage({ content: 'msg', agentId: 'a1' });
     expect(result).toBeUndefined();
   });
 });

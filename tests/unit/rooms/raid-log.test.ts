@@ -242,7 +242,7 @@ describe('RAID Log', () => {
       const entry = addRaidEntry({ buildingId: 'bld_1', type: 'decision', phase: 'strategy', summary: 'Old approach' });
       if (!entry.ok) throw new Error('failed');
 
-      const result = updateRaidStatus(entry.data.id, 'superseded');
+      const result = updateRaidStatus({ id: entry.data.id, status: 'superseded' });
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.data.status).toBe('superseded');
@@ -256,7 +256,7 @@ describe('RAID Log', () => {
       const entry = addRaidEntry({ buildingId: 'bld_1', type: 'issue', phase: 'execution', summary: 'Bug fixed' });
       if (!entry.ok) throw new Error('failed');
 
-      const result = updateRaidStatus(entry.data.id, 'closed');
+      const result = updateRaidStatus({ id: entry.data.id, status: 'closed' });
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.data.status).toBe('closed');

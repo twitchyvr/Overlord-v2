@@ -144,6 +144,17 @@ export interface BuildingRow {
   updated_at: string;
 }
 
+export interface FloorRow {
+  id: string;
+  building_id: string;
+  type: string;
+  name: string;
+  sort_order: number;
+  is_active: number;
+  config: string;
+  created_at: string;
+}
+
 export interface PhaseGateRow {
   id: string;
   building_id: string;

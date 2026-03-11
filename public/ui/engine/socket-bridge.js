@@ -122,6 +122,12 @@ export function initSocketBridge(socket, store, engine) {
   window.overlordSocket = {
     socket,
 
+    emit(event, data) {
+      return new Promise((resolve) => {
+        socket.emit(event, data, (res) => resolve(res));
+      });
+    },
+
     fetchBuilding(buildingId) {
       return new Promise((resolve) => {
         socket.emit('building:get', { buildingId }, (res) => {
@@ -137,7 +143,7 @@ export function initSocketBridge(socket, store, engine) {
       return new Promise((resolve) => {
         socket.emit('floor:list', { buildingId }, (res) => {
           if (res && res.ok) {
-            store.set('floors.list', res.data);
+            store.set('building.floors', res.data);
           }
           resolve(res);
         });
@@ -239,9 +245,9 @@ export function initSocketBridge(socket, store, engine) {
       });
     },
 
-    applyBlueprint(buildingId, blueprint, agentId) {
+    applyBlueprint(params) {
       return new Promise((resolve) => {
-        socket.emit('building:apply-blueprint', { buildingId, blueprint, agentId }, (res) => resolve(res));
+        socket.emit('building:apply-blueprint', params, (res) => resolve(res));
       });
     },
 
@@ -274,10 +280,11 @@ export function initSocketBridge(socket, store, engine) {
       });
     },
 
-    sendMessage(content, agentId) {
+    sendMessage(params) {
+      const { content, agentId, tokens, buildingId } = params;
       store.update('chat.messages', (msgs) => [...(msgs || []), { content, agentId, type: 'user', timestamp: Date.now() }]);
       store.set('ui.processing', true);
-      socket.emit('chat:message', { content, agentId });
+      socket.emit('chat:message', { content, agentId, tokens, buildingId });
     },
 
     submitExitDoc(roomId, agentId, document) {
@@ -290,6 +297,19 @@ export function initSocketBridge(socket, store, engine) {
       return new Promise((resolve) => {
         socket.emit('phase:gate', data, (res) => resolve(res));
       });
+    },
+
+    async selectBuilding(buildingId) {
+      store.set('building.active', buildingId);
+      await Promise.all([
+        this.fetchBuilding(buildingId),
+        this.fetchFloors(buildingId),
+        this.fetchAgents({}),
+        this.fetchGates(buildingId),
+        this.fetchCanAdvance(buildingId),
+        this.fetchRaidEntries(buildingId),
+        this.fetchRooms(),
+      ]);
     },
   };
 
