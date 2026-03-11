@@ -25,7 +25,8 @@ import {
 import * as dbModule from '../../../src/storage/db.js';
 import { vi } from 'vitest';
 import { BaseRoom } from '../../../src/rooms/room-types/base-room.js';
-import type { RoomContract } from '../../../src/core/contracts.js';
+import type { RoomContract, Result } from '../../../src/core/contracts.js';
+import { ok, err } from '../../../src/core/contracts.js';
 
 let db: Database.Database;
 
@@ -85,6 +86,22 @@ class TestCodeLab extends BaseRoom {
 
   override getRules(): string[] {
     return ['Write clean code.', 'Add tests for new logic.'];
+  }
+}
+
+// Room type whose onAgentEnter always rejects — tests rollback path
+class RejectingCodeLab extends BaseRoom {
+  static override contract: RoomContract = {
+    ...TestCodeLab.contract,
+    roomType: 'rejecting-lab',
+  };
+
+  override onAgentEnter(_agentId: string, _tableType?: string): Result {
+    return err('ROOM_REJECTED', 'Room is in lockdown — no entry allowed');
+  }
+
+  override getRules(): string[] {
+    return ['No entry.'];
   }
 }
 
@@ -272,6 +289,35 @@ describe('Room Manager', () => {
       db.prepare(`INSERT INTO agents (id, name, role, room_access) VALUES ('agent_wild', 'Admin', 'admin', '["*"]')`).run();
       const result = enterRoom({ roomId, agentId: 'agent_wild' });
       expect(result.ok).toBe(true);
+    });
+
+    it('rolls back DB state when onAgentEnter rejects entry', () => {
+      // Register the rejecting room type and create one
+      registerRoomType('rejecting-lab', RejectingCodeLab as any);
+      const created = createRoom({ type: 'rejecting-lab', floorId: 'floor_exec', name: 'Locked Lab' });
+      if (!created.ok) throw new Error('room creation failed');
+      const rejectRoomId = created.data.id;
+
+      // Seed an agent with access
+      db.prepare(`INSERT INTO agents (id, name, role, room_access) VALUES ('agent_reject', 'Tester', 'developer', '["rejecting-lab"]')`).run();
+
+      // Attempt entry — should fail because onAgentEnter returns err
+      const result = enterRoom({ roomId: rejectRoomId, agentId: 'agent_reject' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('ROOM_REJECTED');
+        expect(result.error.message).toContain('lockdown');
+      }
+
+      // Verify rollback: agent should be back to idle with no room/table
+      const agent = db.prepare('SELECT status, current_room_id, current_table_id FROM agents WHERE id = ?').get('agent_reject') as {
+        status: string;
+        current_room_id: string | null;
+        current_table_id: string | null;
+      };
+      expect(agent.status).toBe('idle');
+      expect(agent.current_room_id).toBeNull();
+      expect(agent.current_table_id).toBeNull();
     });
   });
 
