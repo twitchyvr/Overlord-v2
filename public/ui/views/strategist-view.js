@@ -1,0 +1,409 @@
+/**
+ * Overlord v2 — Strategist View (Phase Zero)
+ *
+ * New-user onboarding wizard. Presents Quick Start templates
+ * for project creation, collects project goals and success criteria,
+ * then triggers Phase Zero (building creation + blueprint application).
+ *
+ * Shown when the user has no buildings (first time, or after reset).
+ */
+
+import { Component } from '../engine/component.js';
+import { OverlordUI } from '../engine/engine.js';
+import { h } from '../engine/helpers.js';
+import { Button } from '../components/button.js';
+import { Toast } from '../components/toast.js';
+
+
+// Quick Start project templates
+const TEMPLATES = [
+  {
+    id: 'web-app',
+    name: 'Web Application',
+    icon: '\u{1F310}',
+    description: 'Full-stack web app with frontend, backend, database, and deployment pipeline.',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
+      { floor: 'integration', rooms: ['deploy', 'monitoring'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Frontend Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Backend Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'DevOps', role: 'devops', rooms: ['deploy', 'monitoring'] }
+    ]
+  },
+  {
+    id: 'microservices',
+    name: 'Microservices',
+    icon: '\u{1F9E9}',
+    description: 'Distributed architecture with multiple services, API gateways, and event-driven communication.',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'code-lab', 'review'] },
+      { floor: 'integration', rooms: ['deploy', 'monitoring'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'System Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Service Dev A', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Service Dev B', role: 'developer', rooms: ['code-lab'] },
+      { name: 'API Specialist', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Lead', role: 'reviewer', rooms: ['review'] },
+      { name: 'Platform Engineer', role: 'devops', rooms: ['deploy', 'monitoring'] }
+    ]
+  },
+  {
+    id: 'data-pipeline',
+    name: 'Data Pipeline',
+    icon: '\u{1F4CA}',
+    description: 'ETL pipelines, data warehousing, analytics dashboards, and ML model deployment.',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
+      { floor: 'integration', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Data Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Data Engineer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'ML Engineer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Data Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Infra Engineer', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
+    id: 'cli-tool',
+    name: 'CLI Tool',
+    icon: '\u{1F4BB}',
+    description: 'Command-line application with argument parsing, subcommands, and cross-platform packaging.',
+    floorsNeeded: ['strategy', 'collaboration', 'execution'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'review'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'CLI Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'CLI Developer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Reviewer', role: 'reviewer', rooms: ['review'] }
+    ]
+  },
+  {
+    id: 'api-service',
+    name: 'API Service',
+    icon: '\u{1F517}',
+    description: 'REST or GraphQL API with authentication, rate limiting, documentation, and monitoring.',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'review'] },
+      { floor: 'integration', rooms: ['deploy', 'monitoring'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'API Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Backend Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'API Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'DevOps', role: 'devops', rooms: ['deploy', 'monitoring'] }
+    ]
+  }
+];
+
+
+export class StrategistView extends Component {
+
+  constructor(el, opts = {}) {
+    super(el, opts);
+    this._selectedTemplate = null;
+    this._step = 'select'; // 'select' | 'configure' | 'creating'
+    this._projectName = '';
+    this._projectGoals = '';
+    this._successCriteria = '';
+  }
+
+  mount() {
+    this._mounted = true;
+    this.render();
+
+    // Listen for navigate events
+    this._listeners.push(
+      OverlordUI.subscribe('navigate:strategist', () => {
+        this._step = 'select';
+        this._selectedTemplate = null;
+        this.render();
+      })
+    );
+  }
+
+  render() {
+    this.el.textContent = '';
+    this.el.className = 'strategist-view';
+
+    switch (this._step) {
+      case 'select':
+        this._renderTemplateSelection();
+        break;
+      case 'configure':
+        this._renderConfiguration();
+        break;
+      case 'creating':
+        this._renderCreating();
+        break;
+    }
+  }
+
+  _renderTemplateSelection() {
+    // Header
+    const header = h('div', { class: 'strategist-header' },
+      h('h2', null, 'New Project'),
+      h('p', { class: 'strategist-subtitle' }, 'Choose a project template to get started. Each template pre-configures floors, rooms, and agents for your project type.')
+    );
+    this.el.appendChild(header);
+
+    // Template grid
+    const grid = h('div', { class: 'template-grid' });
+
+    for (const template of TEMPLATES) {
+      const card = h('div', {
+        class: 'template-card glass-card',
+        'data-template-id': template.id
+      });
+
+      const icon = h('div', { class: 'template-card-icon' }, template.icon);
+      const info = h('div', { class: 'template-card-info' },
+        h('h3', { class: 'template-card-name' }, template.name),
+        h('p', { class: 'template-card-desc' }, template.description)
+      );
+
+      // Blueprint preview
+      const preview = h('div', { class: 'template-card-preview' },
+        h('span', null, `${template.floorsNeeded.length} floors`),
+        h('span', null, '\u2022'),
+        h('span', null, `${template.agentRoster.length} agents`),
+        h('span', null, '\u2022'),
+        h('span', null, `${template.roomConfig.reduce((s, f) => s + f.rooms.length, 0)} rooms`)
+      );
+
+      card.appendChild(icon);
+      card.appendChild(info);
+      card.appendChild(preview);
+
+      card.addEventListener('click', () => {
+        this._selectedTemplate = template;
+        this._step = 'configure';
+        this.render();
+      });
+
+      grid.appendChild(card);
+    }
+
+    this.el.appendChild(grid);
+  }
+
+  _renderConfiguration() {
+    const template = this._selectedTemplate;
+    if (!template) return;
+
+    // Back button + header
+    const header = h('div', { class: 'strategist-header' },
+      h('button', {
+        class: 'btn btn-ghost btn-sm',
+        onClick: () => { this._step = 'select'; this.render(); }
+      }, '\u2190 Back'),
+      h('h2', null, `Configure: ${template.name}`),
+      h('p', { class: 'strategist-subtitle' }, template.description)
+    );
+    this.el.appendChild(header);
+
+    // Configuration form
+    const form = h('div', { class: 'strategist-form' });
+
+    // Project name
+    const nameGroup = h('div', { class: 'form-group' },
+      h('label', { class: 'form-label', for: 'project-name' }, 'Project Name'),
+      h('input', {
+        class: 'form-input',
+        id: 'project-name',
+        type: 'text',
+        placeholder: 'My Awesome Project',
+        value: this._projectName
+      })
+    );
+    nameGroup.querySelector('input').addEventListener('input', (e) => {
+      this._projectName = e.target.value;
+    });
+    form.appendChild(nameGroup);
+
+    // Project goals
+    const goalsGroup = h('div', { class: 'form-group' },
+      h('label', { class: 'form-label', for: 'project-goals' }, 'Project Goals'),
+      h('textarea', {
+        class: 'form-input form-textarea',
+        id: 'project-goals',
+        placeholder: 'What are you building? What problem does it solve?',
+        rows: '3'
+      }, this._projectGoals)
+    );
+    goalsGroup.querySelector('textarea').addEventListener('input', (e) => {
+      this._projectGoals = e.target.value;
+    });
+    form.appendChild(goalsGroup);
+
+    // Success criteria
+    const criteriaGroup = h('div', { class: 'form-group' },
+      h('label', { class: 'form-label', for: 'success-criteria' }, 'Success Criteria'),
+      h('textarea', {
+        class: 'form-input form-textarea',
+        id: 'success-criteria',
+        placeholder: 'How will you know when the project is complete?',
+        rows: '3'
+      }, this._successCriteria)
+    );
+    criteriaGroup.querySelector('textarea').addEventListener('input', (e) => {
+      this._successCriteria = e.target.value;
+    });
+    form.appendChild(criteriaGroup);
+
+    // Blueprint preview
+    const previewSection = h('div', { class: 'blueprint-preview' },
+      h('h3', null, 'Blueprint Preview')
+    );
+
+    // Floors
+    const floorList = h('div', { class: 'blueprint-floors' });
+    for (const floorType of template.floorsNeeded) {
+      const roomsOnFloor = template.roomConfig
+        .filter(rc => rc.floor === floorType)
+        .flatMap(rc => rc.rooms);
+
+      floorList.appendChild(h('div', { class: 'blueprint-floor-row' },
+        h('span', {
+          class: 'blueprint-floor-dot',
+          style: { background: `var(--floor-${floorType})` }
+        }),
+        h('span', { class: 'blueprint-floor-name' }, floorType),
+        h('span', { class: 'blueprint-floor-rooms' },
+          roomsOnFloor.map(r => r).join(', ')
+        )
+      ));
+    }
+    previewSection.appendChild(floorList);
+
+    // Agents
+    const agentList = h('div', { class: 'blueprint-agents' },
+      h('h4', null, `${template.agentRoster.length} Agents`)
+    );
+    for (const agent of template.agentRoster) {
+      agentList.appendChild(h('div', { class: 'blueprint-agent-row' },
+        h('span', { class: 'blueprint-agent-name' }, agent.name),
+        h('span', { class: 'blueprint-agent-role' }, agent.role),
+        h('span', { class: 'blueprint-agent-rooms' }, agent.rooms.join(', '))
+      ));
+    }
+    previewSection.appendChild(agentList);
+
+    form.appendChild(previewSection);
+
+    // Create button
+    const actions = h('div', { class: 'strategist-actions' });
+    const createBtn = Button.create('Create Project', {
+      variant: 'primary',
+      size: 'lg',
+      icon: '\u{1F680}',
+      onClick: () => this._createProject()
+    });
+    actions.appendChild(createBtn);
+    form.appendChild(actions);
+
+    this.el.appendChild(form);
+  }
+
+  _renderCreating() {
+    this.el.appendChild(h('div', { class: 'empty-state' },
+      h('div', { class: 'spinner' }),
+      h('p', { class: 'empty-state-title', style: { marginTop: '1rem' } }, 'Creating Project...'),
+      h('p', { class: 'empty-state-text' }, 'Setting up building, floors, rooms, and agents.')
+    ));
+  }
+
+  async _createProject() {
+    const template = this._selectedTemplate;
+    if (!template) return;
+
+    const projectName = this._projectName.trim() || template.name;
+
+    this._step = 'creating';
+    this.render();
+
+    try {
+      if (!window.overlordSocket) {
+        throw new Error('Socket not connected');
+      }
+
+      // Step 1: Create building
+      const buildResult = await window.overlordSocket.createBuilding({
+        name: projectName,
+        projectDescription: this._projectGoals || `${template.name} project`,
+        template: template.id
+      });
+
+      if (!buildResult || !buildResult.ok) {
+        throw new Error(buildResult?.error?.message || 'Failed to create building');
+      }
+
+      const buildingId = buildResult.data.id;
+
+      // Step 2: Apply blueprint
+      const blueprintResult = await window.overlordSocket.applyBlueprint({
+        buildingId,
+        blueprint: {
+          mode: 'quickStart',
+          floorsNeeded: template.floorsNeeded,
+          roomConfig: template.roomConfig,
+          agentRoster: template.agentRoster,
+          projectGoals: this._projectGoals,
+          successCriteria: this._successCriteria
+        },
+        agentId: 'user'
+      });
+
+      if (!blueprintResult || !blueprintResult.ok) {
+        throw new Error(blueprintResult?.error?.message || 'Failed to apply blueprint');
+      }
+
+      Toast.success(`Project "${projectName}" created successfully!`);
+
+      // Update store
+      const store = OverlordUI.getStore();
+      if (store) {
+        store.set('building.active', buildingId);
+        // Refresh building list
+        const listResult = await window.overlordSocket.emit('building:list', {});
+        if (listResult?.ok) {
+          store.set('building.list', listResult.data);
+        }
+      }
+
+      OverlordUI.dispatch('navigate:dashboard');
+      OverlordUI.dispatch('building:selected', { buildingId });
+
+    } catch (err) {
+      console.error('[StrategistView] Project creation failed:', err);
+      Toast.error(`Failed to create project: ${err.message}`);
+      this._step = 'configure';
+      this.render();
+    }
+  }
+}
