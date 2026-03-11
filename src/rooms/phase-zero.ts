@@ -74,23 +74,25 @@ export function handleBlueprintSubmission({
   // Create and auto-sign strategy phase gate
   const gateResult = createGate({ buildingId, phase: 'strategy' });
   if (!gateResult.ok) {
-    log.warn({ buildingId, error: gateResult.error }, 'Failed to create strategy gate (may already exist)');
-  } else {
-    const gateData = gateResult.data as { id: string };
-    const signoff = signoffGate({
-      gateId: gateData.id,
-      reviewer: agentId,
-      verdict: 'GO',
-      nextPhaseInput: {
-        projectGoals: blueprint.projectGoals,
-        successCriteria: blueprint.successCriteria,
-        estimatedPhases: blueprint.estimatedPhases,
-      },
-    });
+    log.error({ buildingId, error: gateResult.error }, 'Failed to create strategy gate');
+    return err('GATE_CREATION_FAILED', `Strategy gate creation failed: ${gateResult.error.message}`);
+  }
 
-    if (!signoff.ok) {
-      log.warn({ error: signoff.error }, 'Failed to sign off strategy gate');
-    }
+  const gateData = gateResult.data as { id: string };
+  const signoff = signoffGate({
+    gateId: gateData.id,
+    reviewer: agentId,
+    verdict: 'GO',
+    nextPhaseInput: {
+      projectGoals: blueprint.projectGoals,
+      successCriteria: blueprint.successCriteria,
+      estimatedPhases: blueprint.estimatedPhases,
+    },
+  });
+
+  if (!signoff.ok) {
+    log.error({ error: signoff.error }, 'Failed to sign off strategy gate');
+    return err('GATE_SIGNOFF_FAILED', `Strategy gate signoff failed: ${signoff.error.message}`);
   }
 
   log.info(
@@ -174,9 +176,9 @@ export function suggestNextRoom(buildingId: string): Result {
     return err('NO_COLLABORATION_FLOOR', 'Building has no collaboration floor for Discovery room');
   }
 
-  // Get agents that have access to discovery rooms
+  // Get all agents and filter by discovery room access
   const agents = db.prepare(
-    'SELECT id, name, role, room_access FROM agents WHERE id IN (SELECT id FROM agents)',
+    'SELECT id, name, role, room_access FROM agents',
   ).all() as Array<{ id: string; name: string; role: string; room_access: string }>;
 
   const eligibleAgents = agents.filter((a) => {

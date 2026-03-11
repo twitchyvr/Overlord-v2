@@ -121,10 +121,35 @@ export class BuildingArchitect extends BaseRoom {
       }
     }
 
+    // ── toolOverrides ──
+    const toolOverrides = document.toolOverrides as unknown[];
+    if (!Array.isArray(toolOverrides)) {
+      return err('EXIT_DOC_INVALID', 'toolOverrides must be an array (can be empty)');
+    }
+    for (let i = 0; i < toolOverrides.length; i++) {
+      const ov = toolOverrides[i] as Record<string, unknown> | undefined;
+      if (
+        !ov ||
+        typeof ov.roomName !== 'string' ||
+        !Array.isArray(ov.add) ||
+        !Array.isArray(ov.remove)
+      ) {
+        return err(
+          'EXIT_DOC_INVALID',
+          `toolOverrides[${i}] must have 'roomName' (string), 'add' (array), and 'remove' (array)`,
+        );
+      }
+    }
+
     // ── phaseConfig ──
     const phaseConfig = document.phaseConfig as unknown[];
     if (!Array.isArray(phaseConfig) || phaseConfig.length === 0) {
       return err('EXIT_DOC_INVALID', 'phaseConfig must be a non-empty array');
+    }
+    for (let i = 0; i < phaseConfig.length; i++) {
+      if (typeof phaseConfig[i] !== 'string' || (phaseConfig[i] as string).length === 0) {
+        return err('EXIT_DOC_INVALID', `phaseConfig[${i}] must be a non-empty string`);
+      }
     }
 
     return ok(document);

@@ -184,4 +184,110 @@ describe('BuildingArchitect', () => {
       expect(result.error.code).toBe('EXIT_DOC_INCOMPLETE');
     });
   });
+
+  describe('validateExitDocumentValues — extended validation', () => {
+    const validDoc = {
+      floors: [{ type: 'execution', name: 'Build Floor' }],
+      roomAssignments: [{ floor: 'execution', roomType: 'code-lab', roomName: 'Main Lab' }],
+      agentDefinitions: [{ name: 'Dev', role: 'developer' }],
+      toolOverrides: [],
+      phaseConfig: ['discovery', 'execution'],
+    };
+
+    it('rejects roomAssignment without roomType field', () => {
+      const room = new BuildingArchitect('room_test');
+      const result = room.validateExitDocumentValues({
+        ...validDoc,
+        roomAssignments: [{ floor: 'execution', roomName: 'Main Lab' }],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('roomAssignments[0]');
+    });
+
+    it('rejects roomAssignment without roomName field', () => {
+      const room = new BuildingArchitect('room_test');
+      const result = room.validateExitDocumentValues({
+        ...validDoc,
+        roomAssignments: [{ floor: 'execution', roomType: 'code-lab' }],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('roomAssignments[0]');
+    });
+
+    it('rejects agent without role field', () => {
+      const room = new BuildingArchitect('room_test');
+      const result = room.validateExitDocumentValues({
+        ...validDoc,
+        agentDefinitions: [{ name: 'Dev' }],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('agentDefinitions[0]');
+    });
+
+    it('rejects toolOverrides that is not an array', () => {
+      const room = new BuildingArchitect('room_test');
+      const result = room.validateExitDocumentValues({
+        ...validDoc,
+        toolOverrides: 'not-an-array',
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('toolOverrides');
+    });
+
+    it('rejects toolOverrides entry missing roomName', () => {
+      const room = new BuildingArchitect('room_test');
+      const result = room.validateExitDocumentValues({
+        ...validDoc,
+        toolOverrides: [{ add: [], remove: [] }],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('toolOverrides[0]');
+    });
+
+    it('rejects toolOverrides entry missing add array', () => {
+      const room = new BuildingArchitect('room_test');
+      const result = room.validateExitDocumentValues({
+        ...validDoc,
+        toolOverrides: [{ roomName: 'code-lab', remove: [] }],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('toolOverrides[0]');
+    });
+
+    it('rejects toolOverrides entry missing remove array', () => {
+      const room = new BuildingArchitect('room_test');
+      const result = room.validateExitDocumentValues({
+        ...validDoc,
+        toolOverrides: [{ roomName: 'code-lab', add: [] }],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('toolOverrides[0]');
+    });
+
+    it('accepts toolOverrides as empty array (valid — overrides are optional)', () => {
+      const room = new BuildingArchitect('room_test');
+      const result = room.validateExitDocumentValues(validDoc);
+      expect(result.ok).toBe(true);
+    });
+
+    it('rejects phaseConfig with empty string entry', () => {
+      const room = new BuildingArchitect('room_test');
+      const result = room.validateExitDocumentValues({
+        ...validDoc,
+        phaseConfig: ['discovery', ''],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('phaseConfig[1]');
+    });
+
+    it('rejects phaseConfig with non-string entry', () => {
+      const room = new BuildingArchitect('room_test');
+      const result = room.validateExitDocumentValues({
+        ...validDoc,
+        phaseConfig: [42],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('phaseConfig[0]');
+    });
+  });
 });

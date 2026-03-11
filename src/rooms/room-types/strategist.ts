@@ -233,23 +233,58 @@ export class StrategistOffice extends BaseRoom {
     const agentRoster = document.agentRoster as unknown[];
     const estimatedPhases = document.estimatedPhases as unknown[];
 
+    // ── projectGoals: non-empty array of strings ──
     if (!Array.isArray(projectGoals) || projectGoals.length === 0) {
       return err('EXIT_DOC_INVALID', 'projectGoals must be a non-empty array');
     }
+    if (projectGoals.some((g) => typeof g !== 'string' || (g as string).length === 0)) {
+      return err('EXIT_DOC_INVALID', 'Each projectGoal must be a non-empty string');
+    }
+
+    // ── successCriteria: non-empty array of strings ──
     if (!Array.isArray(successCriteria) || successCriteria.length === 0) {
       return err('EXIT_DOC_INVALID', 'successCriteria must be a non-empty array');
     }
+    if (successCriteria.some((c) => typeof c !== 'string' || (c as string).length === 0)) {
+      return err('EXIT_DOC_INVALID', 'Each successCriteria must be a non-empty string');
+    }
+
+    // ── floorsNeeded: non-empty array of strings ──
     if (!Array.isArray(floorsNeeded) || floorsNeeded.length === 0) {
       return err('EXIT_DOC_INVALID', 'floorsNeeded must be a non-empty array');
     }
+    if (floorsNeeded.some((f) => typeof f !== 'string' || (f as string).length === 0)) {
+      return err('EXIT_DOC_INVALID', 'Each floorsNeeded entry must be a non-empty string');
+    }
+
+    // ── roomConfig: non-empty array of { floor: string, rooms: string[] } ──
     if (!Array.isArray(roomConfig) || roomConfig.length === 0) {
       return err('EXIT_DOC_INVALID', 'roomConfig must be a non-empty array');
     }
+    for (let i = 0; i < roomConfig.length; i++) {
+      const rc = roomConfig[i] as Record<string, unknown> | undefined;
+      if (!rc || typeof rc.floor !== 'string' || !Array.isArray(rc.rooms)) {
+        return err('EXIT_DOC_INVALID', `roomConfig[${i}] must have 'floor' (string) and 'rooms' (array)`);
+      }
+    }
+
+    // ── agentRoster: non-empty array of { name: string, role: string, rooms: string[] } ──
     if (!Array.isArray(agentRoster) || agentRoster.length === 0) {
       return err('EXIT_DOC_INVALID', 'agentRoster must be a non-empty array');
     }
+    for (let i = 0; i < agentRoster.length; i++) {
+      const agent = agentRoster[i] as Record<string, unknown> | undefined;
+      if (!agent || typeof agent.name !== 'string' || typeof agent.role !== 'string' || !Array.isArray(agent.rooms)) {
+        return err('EXIT_DOC_INVALID', `agentRoster[${i}] must have 'name' (string), 'role' (string), and 'rooms' (array)`);
+      }
+    }
+
+    // ── estimatedPhases: non-empty array of strings ──
     if (!Array.isArray(estimatedPhases) || estimatedPhases.length === 0) {
       return err('EXIT_DOC_INVALID', 'estimatedPhases must be a non-empty array');
+    }
+    if (estimatedPhases.some((p) => typeof p !== 'string' || (p as string).length === 0)) {
+      return err('EXIT_DOC_INVALID', 'Each estimatedPhases entry must be a non-empty string');
     }
 
     return ok(document);
