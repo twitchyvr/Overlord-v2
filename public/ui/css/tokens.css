@@ -56,6 +56,7 @@
   --raid-assumption:  #fbbf24;
   --raid-issue:       #fb923c;
   --raid-decision:    #38bdf8;
+  --raid-dependency:  #38bdf8;
 
   /* ── Building visualization ── */
   --building-bg:        #0a0e14;
