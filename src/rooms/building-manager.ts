@@ -11,7 +11,7 @@
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
-import type { Result, BuildingRow } from '../core/contracts.js';
+import type { Result, ErrResult, BuildingRow } from '../core/contracts.js';
 
 const log = logger.child({ module: 'building-manager' });
 
@@ -206,4 +206,170 @@ export function getFloorByType(buildingId: string, floorType: string): Result {
 
   if (!floor) return err('FLOOR_NOT_FOUND', `No ${floorType} floor in building ${buildingId}`);
   return ok(floor);
+}
+
+// ─── Blueprint Application Pipeline ───
+
+interface BlueprintData {
+  floorsNeeded: string[];
+  roomConfig: Array<{ floor: string; rooms: string[] }>;
+  agentRoster: Array<{ name: string; role: string; rooms: string[] }>;
+}
+
+interface CustomPlanData {
+  floors: Array<{ type: string; name: string }>;
+  roomAssignments: Array<{ floor: string; roomType: string; roomName: string; config?: Record<string, unknown> }>;
+  agentDefinitions: Array<{ name: string; role: string; capabilities?: string[]; roomAccess?: string[] }>;
+}
+
+/**
+ * Apply a building-blueprint exit document (from Strategist) to provision
+ * floors, rooms, and agents for a building.
+ *
+ * This is the automated pipeline that turns a Strategist's exit document
+ * into a fully scaffolded building — floors created, rooms inserted as
+ * DB rows (plan records, not active instances), and agents registered.
+ */
+export function applyBlueprint(buildingId: string, blueprint: BlueprintData): Result {
+  const db = getDb();
+
+  // 1. Verify building exists
+  const building = db.prepare('SELECT id FROM buildings WHERE id = ?').get(buildingId) as { id: string } | undefined;
+  if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
+
+  let floorsCreated = 0;
+  let roomsCreated = 0;
+  let agentsCreated = 0;
+
+  // 2. Provision floors that don't already exist
+  for (const floorType of blueprint.floorsNeeded) {
+    const existing = db.prepare(
+      'SELECT id FROM floors WHERE building_id = ? AND type = ?',
+    ).get(buildingId, floorType) as { id: string } | undefined;
+
+    if (!existing) {
+      const result = createFloor({
+        buildingId,
+        type: floorType,
+        name: `${floorType.charAt(0).toUpperCase() + floorType.slice(1)} Floor`,
+      });
+      if (result.ok) {
+        floorsCreated++;
+      } else {
+        log.warn({ buildingId, floorType, error: (result as ErrResult).error }, 'Failed to create floor during blueprint apply');
+      }
+    }
+  }
+
+  // 3. Create room DB rows on each floor
+  for (const entry of blueprint.roomConfig) {
+    const floor = db.prepare(
+      'SELECT id FROM floors WHERE building_id = ? AND type = ?',
+    ).get(buildingId, entry.floor) as { id: string } | undefined;
+
+    if (!floor) {
+      log.warn({ buildingId, floorType: entry.floor }, 'Floor not found for room config — skipping');
+      continue;
+    }
+
+    for (const roomType of entry.rooms) {
+      const roomId = `room_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      db.prepare(`
+        INSERT INTO rooms (id, floor_id, type, name, config)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(roomId, floor.id, roomType, roomType, JSON.stringify({}));
+      roomsCreated++;
+    }
+  }
+
+  // 4. Create agent DB rows with room access
+  for (const agent of blueprint.agentRoster) {
+    const agentId = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    db.prepare(`
+      INSERT INTO agents (id, name, role, room_access)
+      VALUES (?, ?, ?, ?)
+    `).run(agentId, agent.name, agent.role, JSON.stringify(agent.rooms));
+    agentsCreated++;
+  }
+
+  log.info({ buildingId, floorsCreated, roomsCreated, agentsCreated }, 'Blueprint applied');
+  return ok({ buildingId, floorsCreated, roomsCreated, agentsCreated });
+}
+
+/**
+ * Apply a custom-building-plan exit document (from Building Architect) to
+ * provision floors, rooms, and agents with full configuration control.
+ *
+ * Unlike applyBlueprint, this accepts explicit names, configs, and
+ * capabilities for each entity — used when the plan comes from an
+ * architect room rather than the strategist's template output.
+ */
+export function applyCustomPlan(buildingId: string, plan: CustomPlanData): Result {
+  const db = getDb();
+
+  // 1. Verify building exists
+  const building = db.prepare('SELECT id FROM buildings WHERE id = ?').get(buildingId) as { id: string } | undefined;
+  if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
+
+  let floorsCreated = 0;
+  let roomsCreated = 0;
+  let agentsCreated = 0;
+
+  // 2. Create floors that don't already exist
+  for (const floorDef of plan.floors) {
+    const existing = db.prepare(
+      'SELECT id FROM floors WHERE building_id = ? AND type = ?',
+    ).get(buildingId, floorDef.type) as { id: string } | undefined;
+
+    if (!existing) {
+      const result = createFloor({
+        buildingId,
+        type: floorDef.type,
+        name: floorDef.name,
+      });
+      if (result.ok) {
+        floorsCreated++;
+      } else {
+        log.warn({ buildingId, floorType: floorDef.type, error: (result as ErrResult).error }, 'Failed to create floor during custom plan apply');
+      }
+    }
+  }
+
+  // 3. Create room DB rows with config
+  for (const assignment of plan.roomAssignments) {
+    const floor = db.prepare(
+      'SELECT id FROM floors WHERE building_id = ? AND type = ?',
+    ).get(buildingId, assignment.floor) as { id: string } | undefined;
+
+    if (!floor) {
+      log.warn({ buildingId, floorType: assignment.floor }, 'Floor not found for room assignment — skipping');
+      continue;
+    }
+
+    const roomId = `room_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    db.prepare(`
+      INSERT INTO rooms (id, floor_id, type, name, config)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(roomId, floor.id, assignment.roomType, assignment.roomName, JSON.stringify(assignment.config || {}));
+    roomsCreated++;
+  }
+
+  // 4. Create agent DB rows with capabilities and room access
+  for (const agentDef of plan.agentDefinitions) {
+    const agentId = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    db.prepare(`
+      INSERT INTO agents (id, name, role, capabilities, room_access)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      agentId,
+      agentDef.name,
+      agentDef.role,
+      JSON.stringify(agentDef.capabilities || []),
+      JSON.stringify(agentDef.roomAccess || []),
+    );
+    agentsCreated++;
+  }
+
+  log.info({ buildingId, floorsCreated, roomsCreated, agentsCreated }, 'Custom plan applied');
+  return ok({ buildingId, floorsCreated, roomsCreated, agentsCreated });
 }

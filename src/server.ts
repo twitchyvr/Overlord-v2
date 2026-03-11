@@ -21,6 +21,9 @@ import { initAgents } from './agents/agent-registry.js';
 import { initRooms } from './rooms/room-manager.js';
 import { registerBuiltInRoomTypes } from './rooms/room-types/index.js';
 import { initTransport } from './transport/socket-handler.js';
+import { initPhaseZeroHandler } from './rooms/phase-zero.js';
+import { initScopeChangeHandler } from './rooms/scope-change.js';
+import { listBuildings } from './rooms/building-manager.js';
 
 import type { Request, Response } from 'express';
 
@@ -48,7 +51,12 @@ async function start(): Promise<void> {
 
   const rooms = initRooms({ bus, agents, tools, ai });
   registerBuiltInRoomTypes(rooms.registerRoomType);
-  log.info('Room manager initialized (8 built-in room types registered)');
+  log.info('Room manager initialized (9 built-in room types registered)');
+
+  // Wire bus handlers for Phase Zero and Scope Change protocols
+  initPhaseZeroHandler(bus);
+  initScopeChangeHandler(bus);
+  log.info('Phase Zero + Scope Change bus handlers initialized');
 
   // 3. HTTP + Socket.IO
   const app = express();
@@ -64,9 +72,19 @@ async function start(): Promise<void> {
   initTransport({ io, bus, rooms, agents, tools });
   log.info('Transport layer initialized');
 
-  // 5. Health check
+  // 5. Health check + system status
   app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok', version: '0.1.0', uptime: process.uptime() });
+  });
+
+  // Returning-user check: if buildings exist → dashboard, else → Strategist
+  app.get('/api/status', (_req: Request, res: Response) => {
+    const result = listBuildings();
+    const buildings = result.ok ? (result.data as Array<{ id: string; name: string; active_phase: string }>) : [];
+    res.json({
+      isNewUser: buildings.length === 0,
+      buildings: buildings.map((b) => ({ id: b.id, name: b.name, activePhase: b.active_phase })),
+    });
   });
 
   // 6. Start listening
