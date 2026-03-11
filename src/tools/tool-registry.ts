@@ -11,6 +11,8 @@ import { logger } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
 import { executeShell } from './providers/shell.js';
 import { readFileImpl, writeFileImpl, patchFileImpl, listDirImpl } from './providers/filesystem.js';
+import { recordNote, recallNotes } from './providers/notes.js';
+import { webSearch, fetchWebpage } from './providers/web.js';
 import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
 
 const log = logger.child({ module: 'tool-registry' });
@@ -183,29 +185,47 @@ function registerBuiltinTools(): void {
     },
   });
 
-  // ─── Web Tools (still delegated — require external API integration) ───
+  // ─── Web Tools ───
   registerTool({
     name: 'web_search',
-    description: 'Search the web',
+    description: 'Search the web using DuckDuckGo HTML',
     category: 'web',
     inputSchema: {
       type: 'object',
-      properties: { query: { type: 'string', description: 'Search query' } },
+      properties: {
+        query: { type: 'string', description: 'Search query' },
+        maxResults: { type: 'number', description: 'Max results to return (default: 5)' },
+      },
       required: ['query'],
     },
-    execute: async (p) => ({ output: `Web search not yet implemented. Query: ${p.query}` }),
+    execute: async (p) => {
+      const results = await webSearch({
+        query: p.query as string,
+        maxResults: (p.maxResults as number) || 5,
+      });
+      return { output: results.map((r) => `${r.title}\n${r.url}\n${r.snippet}`).join('\n\n'), results };
+    },
   });
 
   registerTool({
     name: 'fetch_webpage',
-    description: 'Fetch and parse a webpage',
+    description: 'Fetch a webpage and extract its text content',
     category: 'web',
     inputSchema: {
       type: 'object',
-      properties: { url: { type: 'string', description: 'URL to fetch' } },
+      properties: {
+        url: { type: 'string', description: 'URL to fetch' },
+        maxLength: { type: 'number', description: 'Max content length (default: 10000)' },
+      },
       required: ['url'],
     },
-    execute: async (p) => ({ output: `Webpage fetch not yet implemented. URL: ${p.url}` }),
+    execute: async (p) => {
+      const result = await fetchWebpage({
+        url: p.url as string,
+        maxLength: (p.maxLength as number) || 10000,
+      });
+      return { output: result.content, url: result.url, title: result.title, length: result.content.length };
+    },
   });
 
   // ─── QA Tools ───
@@ -253,40 +273,90 @@ function registerBuiltinTools(): void {
     },
   });
 
-  // ─── Notes (DB-backed, basic for now) ───
+  // ─── Notes (DB-backed) ───
   registerTool({
     name: 'record_note',
-    description: 'Record a session note',
+    description: 'Record a session note (persisted to database)',
     category: 'notes',
     inputSchema: {
       type: 'object',
-      properties: { content: { type: 'string', description: 'Note content' } },
+      properties: {
+        content: { type: 'string', description: 'Note content' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags' },
+      },
       required: ['content'],
     },
-    execute: async (p) => ({ output: 'Note recorded', content: p.content }),
+    execute: async (p, ctx) => {
+      const result = recordNote({
+        content: p.content as string,
+        tags: (p.tags as string[]) || [],
+        agentId: ctx?.agentId,
+        roomId: ctx?.roomId,
+      });
+      return { output: `Note recorded (id: ${result.id})`, id: result.id };
+    },
   });
 
   registerTool({
     name: 'recall_notes',
-    description: 'Recall session notes',
+    description: 'Recall session notes by keyword search or tags',
     category: 'notes',
     inputSchema: {
       type: 'object',
-      properties: { query: { type: 'string', description: 'Search query for notes' } },
+      properties: {
+        query: { type: 'string', description: 'Search query for notes' },
+        tag: { type: 'string', description: 'Filter by tag' },
+        limit: { type: 'number', description: 'Max notes to return (default: 10)' },
+      },
     },
-    execute: async () => ({ output: 'Notes recall not yet implemented' }),
+    execute: async (p, ctx) => {
+      const notes = recallNotes({
+        query: p.query as string | undefined,
+        tag: p.tag as string | undefined,
+        agentId: ctx?.agentId,
+        limit: (p.limit as number) || 10,
+      });
+      if (notes.length === 0) {
+        return { output: 'No notes found', notes: [] };
+      }
+      const formatted = notes.map((n) => `[${n.id}] (${n.created_at}) ${n.content}`).join('\n');
+      return { output: formatted, notes, count: notes.length };
+    },
   });
 
   // ─── System ───
   registerTool({
     name: 'ask_user',
-    description: 'Ask the user a question',
+    description: 'Ask the user a question via the transport layer',
     category: 'system',
     inputSchema: {
       type: 'object',
-      properties: { question: { type: 'string', description: 'Question to ask' } },
+      properties: {
+        question: { type: 'string', description: 'Question to ask the user' },
+        context: { type: 'string', description: 'Additional context for the question' },
+      },
       required: ['question'],
     },
-    execute: async (p) => ({ output: 'User question delegated to transport layer', question: p.question }),
+    execute: async (p, ctx) => {
+      // Emit bus event for transport layer to relay to connected client
+      // The transport layer will listen for ask_user:request and forward to socket
+      const { bus } = await import('../core/bus.js');
+      const requestId = `ask_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+      bus.emit('ask_user:request', {
+        requestId,
+        question: p.question,
+        context: p.context,
+        agentId: ctx?.agentId,
+        roomId: ctx?.roomId,
+      });
+
+      return {
+        output: `Question sent to user: "${p.question}"`,
+        requestId,
+        question: p.question,
+        pending: true,
+      };
+    },
   });
 }

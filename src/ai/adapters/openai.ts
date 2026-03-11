@@ -43,12 +43,16 @@ function toOpenAIMessages(messages: AnthropicMessage[], system?: string): OpenAI
       continue;
     }
 
-    // Handle content block arrays
+    // Handle content block arrays — batch text blocks from same message
+    const textParts: string[] = [];
+    const toolUseCalls: OpenAI.ChatCompletionMessageParam[] = [];
+    const toolResults: OpenAI.ChatCompletionMessageParam[] = [];
+
     for (const block of msg.content) {
       if (block.type === 'text') {
-        result.push({ role: msg.role, content: block.text || '' });
+        textParts.push(block.text || '');
       } else if (block.type === 'tool_use' && msg.role === 'assistant') {
-        result.push({
+        toolUseCalls.push({
           role: 'assistant',
           content: null,
           tool_calls: [{
@@ -61,13 +65,20 @@ function toOpenAIMessages(messages: AnthropicMessage[], system?: string): OpenAI
           }],
         });
       } else if (block.type === 'tool_result') {
-        result.push({
+        toolResults.push({
           role: 'tool',
           tool_call_id: block.tool_use_id || '',
           content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
         });
       }
     }
+
+    // Emit batched text as a single message (avoids consecutive same-role messages)
+    if (textParts.length > 0) {
+      result.push({ role: msg.role, content: textParts.join('\n') });
+    }
+    // Then tool calls and results (each must be their own message per OpenAI spec)
+    result.push(...toolUseCalls, ...toolResults);
   }
 
   return result;
