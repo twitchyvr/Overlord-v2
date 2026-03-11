@@ -6,7 +6,7 @@
  */
 
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
-import { resolve, relative, basename } from 'node:path';
+import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { logger } from '../../core/logger.js';
 

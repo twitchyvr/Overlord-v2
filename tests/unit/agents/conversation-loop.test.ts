@@ -5,7 +5,7 @@
  * Uses mocked AI provider to simulate the loop without real API calls.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { runConversationLoop } from '../../../src/agents/conversation-loop.js';
 import { ok } from '../../../src/core/contracts.js';
 import { EventEmitter } from 'eventemitter3';
@@ -134,6 +134,7 @@ describe('Conversation Loop', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data.finalText).toBe('Hello, I am ready to help.');
+      expect(result.data.thinking).toEqual([]);
       expect(result.data.toolCalls.length).toBe(0);
       expect(result.data.iterations).toBe(1);
       expect(result.data.totalTokens.input).toBe(10);
@@ -243,6 +244,37 @@ describe('Conversation Loop', () => {
       expect(result.data.toolCalls[0].name).toBe('read_file');
       expect(result.data.toolCalls[1].name).toBe('bash');
       expect(result.data.iterations).toBe(3);
+    }
+  });
+
+  it('captures thinking blocks from MiniMax M2.5 responses', async () => {
+    const ai = createMockAI([{
+      id: 'msg_1',
+      role: 'assistant',
+      content: [
+        { type: 'thinking', thinking: 'Let me think about this carefully...', signature: 'sig_123' },
+        { type: 'text', text: 'Here is my answer.' },
+      ],
+      model: 'MiniMax-M2.5',
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 10, output_tokens: 30 },
+    }]);
+
+    const result = await runConversationLoop({
+      provider: 'minimax',
+      room: createMockRoom(),
+      agentId: 'agent_1',
+      messages: [{ role: 'user', content: 'Think about this' }],
+      ai,
+      tools: createMockTools(),
+      bus: createMockBus(),
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.finalText).toBe('Here is my answer.');
+      expect(result.data.thinking).toEqual(['Let me think about this carefully...']);
+      expect(result.data.iterations).toBe(1);
     }
   });
 

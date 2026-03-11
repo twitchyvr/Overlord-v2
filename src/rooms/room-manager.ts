@@ -16,7 +16,6 @@ import type {
   RoomManagerAPI,
   RoomRow,
   AgentRow,
-  BaseRoomLike,
   BaseRoomConstructor,
   AgentRegistryAPI,
   ToolRegistryAPI,

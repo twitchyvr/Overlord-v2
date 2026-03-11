@@ -69,4 +69,4 @@ jobs:
       - name: Check for circular dependencies
         run: npx madge --circular src/
       - name: Verify layer ordering
-        run: node scripts/check-layers.js
+        run: npx tsx scripts/check-layers.ts

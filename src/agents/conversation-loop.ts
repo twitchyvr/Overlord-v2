@@ -18,7 +18,6 @@ import type {
   AIProviderAPI,
   ToolRegistryAPI,
   BaseRoomLike,
-  ToolDefinition,
 } from '../core/contracts.js';
 
 const log = logger.child({ module: 'conversation-loop' });
@@ -26,8 +25,10 @@ const log = logger.child({ module: 'conversation-loop' });
 const MAX_TOOL_ITERATIONS = 20;
 
 interface ContentBlock {
-  type: 'text' | 'tool_use' | 'tool_result';
+  type: 'text' | 'thinking' | 'tool_use' | 'tool_result';
   text?: string;
+  thinking?: string;
+  signature?: string;
   id?: string;
   name?: string;
   input?: Record<string, unknown>;
@@ -53,6 +54,7 @@ interface Message {
 export interface ConversationResult {
   messages: Message[];
   finalText: string;
+  thinking: string[];
   toolCalls: { name: string; input: Record<string, unknown>; result: unknown }[];
   totalTokens: { input: number; output: number };
   iterations: number;
@@ -76,6 +78,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   const { provider, room, agentId, ai, tools, bus, options = {} } = params;
   const messages: Message[] = [...params.messages];
   const toolCallLog: ConversationResult['toolCalls'] = [];
+  const thinkingLog: string[] = [];
   const totalTokens = { input: 0, output: 0 };
 
   // Get room's allowed tools as ToolDefinitions for the AI
@@ -113,7 +116,16 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     totalTokens.input += response.usage.input_tokens;
     totalTokens.output += response.usage.output_tokens;
 
-    // Add assistant response to message history
+    // Capture any thinking blocks from the response (MiniMax M2.5 always-on thinking)
+    const thinkingBlocks = response.content.filter((b) => b.type === 'thinking');
+    for (const tb of thinkingBlocks) {
+      if (tb.thinking) {
+        thinkingLog.push(tb.thinking);
+        log.debug({ agentId, roomId: room.id, thinkingLength: tb.thinking.length }, 'AI thinking block');
+      }
+    }
+
+    // Add assistant response to message history (MUST include all blocks including thinking)
     messages.push({ role: 'assistant', content: response.content });
 
     bus.emit('chat:stream', {
@@ -215,6 +227,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     data: {
       messages,
       finalText,
+      thinking: thinkingLog,
       toolCalls: toolCallLog,
       totalTokens,
       iterations: iteration,
