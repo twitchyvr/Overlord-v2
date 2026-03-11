@@ -382,13 +382,12 @@ describe('Socket Handler (Transport Layer)', () => {
       expect(ack).toHaveBeenCalledWith({ ok: true });
     });
 
-    it('raid:search emits to bus', () => {
+    it('raid:search calls searchRaid and acks result', () => {
       const ack = vi.fn();
       socket.emit('raid:search', { type: 'risk' }, ack);
 
-      const event = bus.emitted.find((e) => e.event === 'raid:search');
-      expect(event).toBeDefined();
-      expect(ack).toHaveBeenCalledWith({ ok: true });
+      expect(searchRaid).toHaveBeenCalledWith({ type: 'risk' });
+      expect(ack).toHaveBeenCalledWith({ ok: true, data: [] });
     });
   });
 

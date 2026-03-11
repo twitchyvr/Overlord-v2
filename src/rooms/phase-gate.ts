@@ -100,6 +100,10 @@ export function canAdvance(buildingId: string): Result {
   if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
 
   const currentPhase = building.active_phase;
+  const idx = PHASE_ORDER.indexOf(currentPhase);
+  if (idx === -1) return err('UNKNOWN_PHASE', `Phase '${currentPhase}' not in phase order`);
+  if (idx >= PHASE_ORDER.length - 1) return ok({ canAdvance: false, currentPhase, reason: 'Final phase reached' });
+
   const gate = db.prepare(`
     SELECT * FROM phase_gates
     WHERE building_id = ? AND phase = ?
@@ -109,7 +113,7 @@ export function canAdvance(buildingId: string): Result {
   if (!gate) return ok({ canAdvance: false, reason: 'No gate exists for current phase' });
   if (gate.status !== 'go') return ok({ canAdvance: false, reason: `Gate verdict: ${gate.signoff_verdict}`, gate });
 
-  return ok({ canAdvance: true, currentPhase, nextPhase: PHASE_ORDER[PHASE_ORDER.indexOf(currentPhase) + 1] });
+  return ok({ canAdvance: true, currentPhase, nextPhase: PHASE_ORDER[idx + 1] });
 }
 
 /**

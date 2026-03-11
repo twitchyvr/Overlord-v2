@@ -355,8 +355,10 @@ export class StrategistView extends Component {
       // Step 1: Create building
       const buildResult = await window.overlordSocket.createBuilding({
         name: projectName,
-        projectDescription: this._projectGoals || `${template.name} project`,
-        template: template.id
+        config: {
+          projectDescription: this._projectGoals || `${template.name} project`,
+          template: template.id
+        }
       });
 
       if (!buildResult || !buildResult.ok) {
@@ -385,16 +387,8 @@ export class StrategistView extends Component {
 
       Toast.success(`Project "${projectName}" created successfully!`);
 
-      // Update store
-      const store = OverlordUI.getStore();
-      if (store) {
-        store.set('building.active', buildingId);
-        // Refresh building list
-        const listResult = await window.overlordSocket.emit('building:list', {});
-        if (listResult?.ok) {
-          store.set('building.list', listResult.data);
-        }
-      }
+      // Select the new building (hydrates all data into store)
+      await window.overlordSocket.selectBuilding(buildingId);
 
       OverlordUI.dispatch('navigate:dashboard');
       OverlordUI.dispatch('building:selected', { buildingId });

@@ -77,21 +77,21 @@ export class PhasePanel extends PanelComponent {
     const gateList = h('div', { class: 'phase-gate-list' });
 
     for (const gate of this._gates) {
-      const verdictClass = gate.verdict === 'GO' ? 'gate-go' :
-                          gate.verdict === 'NO_GO' ? 'gate-nogo' : 'gate-pending';
+      const verdictClass = gate.signoff_verdict === 'GO' ? 'gate-go' :
+                          gate.signoff_verdict === 'NO_GO' ? 'gate-nogo' : 'gate-pending';
 
       const item = DrillItem.create('gate', gate, {
-        icon: gate.verdict === 'GO' ? '\u2705' : gate.verdict === 'NO_GO' ? '\u274C' : '\u23F3',
+        icon: gate.signoff_verdict === 'GO' ? '\u2705' : gate.signoff_verdict === 'NO_GO' ? '\u274C' : '\u23F3',
         summary: `${gate.phase} Gate`,
         badge: (d) => ({
-          text: d.verdict || 'PENDING',
-          color: d.verdict === 'GO' ? 'var(--gate-go)' :
-                 d.verdict === 'NO_GO' ? 'var(--gate-nogo)' : 'var(--gate-pending)'
+          text: d.signoff_verdict || 'PENDING',
+          color: d.signoff_verdict === 'GO' ? 'var(--gate-go)' :
+                 d.signoff_verdict === 'NO_GO' ? 'var(--gate-nogo)' : 'var(--gate-pending)'
         }),
         meta: (d) => d.created_at ? formatTime(d.created_at) : '',
         detail: [
           { label: 'Phase', key: 'phase' },
-          { label: 'Verdict', key: 'verdict' },
+          { label: 'Verdict', key: 'signoff_verdict' },
           { label: 'Reviewer', key: 'reviewer' },
           { label: 'Created', key: 'created_at', format: 'date' }
         ]
@@ -103,11 +103,13 @@ export class PhasePanel extends PanelComponent {
     body.appendChild(gateList);
 
     // Advance button (if allowed)
-    if (this._canAdvance && this._canAdvance.ok && this._canAdvance.data?.canAdvance) {
+    if (this._canAdvance) {
+      const nextIdx = PHASE_ORDER.indexOf(this._activePhase) + 1;
+      const nextPhase = nextIdx < PHASE_ORDER.length ? PHASE_ORDER[nextIdx] : 'next phase';
       const advanceBtn = h('button', {
         class: 'btn btn-primary btn-sm phase-advance-btn',
         onClick: () => this._handleAdvance()
-      }, `Advance to ${this._canAdvance.data.nextPhase || 'next phase'}`);
+      }, `Advance to ${nextPhase}`);
       body.appendChild(advanceBtn);
     }
   }

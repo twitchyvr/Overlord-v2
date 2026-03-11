@@ -187,8 +187,9 @@ export class DashboardView extends Component {
         className: isActive ? 'building-card-active' : '',
         actions: {
           'Open': () => {
-            const store = OverlordUI.getStore();
-            if (store) store.set('building.active', building.id);
+            if (window.overlordSocket) {
+              window.overlordSocket.selectBuilding(building.id);
+            }
             OverlordUI.dispatch('building:selected', { buildingId: building.id });
           }
         }

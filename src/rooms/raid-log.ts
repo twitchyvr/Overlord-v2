@@ -8,7 +8,7 @@
 
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
-import { ok } from '../core/contracts.js';
+import { ok, err } from '../core/contracts.js';
 import type { Result, RaidEntryRow } from '../core/contracts.js';
 
 const log = logger.child({ module: 'raid-log' });
@@ -93,9 +93,14 @@ export function buildContextBrief(buildingId: string): Result {
 /**
  * Update RAID entry status
  */
-export function updateRaidStatus(id: string, status: string): Result {
+export function updateRaidStatus({ id, status }: { id: string; status: string }): Result {
   const db = getDb();
-  db.prepare('UPDATE raid_entries SET status = ?, updated_at = datetime(?) WHERE id = ?')
-    .run(status, new Date().toISOString(), id);
+  const VALID_STATUSES = ['active', 'superseded', 'closed'];
+  if (!VALID_STATUSES.includes(status)) {
+    return err('INVALID_STATUS', `Status must be one of: ${VALID_STATUSES.join(', ')}`);
+  }
+  const existing = db.prepare('SELECT id FROM raid_entries WHERE id = ?').get(id);
+  if (!existing) return err('RAID_NOT_FOUND', `RAID entry ${id} does not exist`);
+  db.prepare("UPDATE raid_entries SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, id);
   return ok({ id, status });
 }

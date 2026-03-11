@@ -8,10 +8,15 @@
  * When a building is created, default floors are provisioned based on config.
  */
 
+import { randomUUID } from 'crypto';
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
-import type { Result, ErrResult, BuildingRow } from '../core/contracts.js';
+import type { Result, ErrResult, BuildingRow, FloorRow } from '../core/contracts.js';
+
+function uid(prefix: string): string {
+  return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
+}
 
 const log = logger.child({ module: 'building-manager' });
 
@@ -40,7 +45,7 @@ interface CreateBuildingParams {
  */
 export function createBuilding({ name, projectId, config = {}, provisionFloors = true }: CreateBuildingParams): Result {
   const db = getDb();
-  const id = `bld_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const id = uid('bld');
 
   db.prepare(`
     INSERT INTO buildings (id, project_id, name, config)
@@ -51,7 +56,7 @@ export function createBuilding({ name, projectId, config = {}, provisionFloors =
 
   if (provisionFloors) {
     for (const floor of DEFAULT_FLOORS) {
-      const floorId = `floor_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const floorId = uid('floor');
       db.prepare(`
         INSERT INTO floors (id, building_id, type, name, sort_order)
         VALUES (?, ?, ?, ?, ?)
@@ -121,17 +126,6 @@ export function updateBuilding(buildingId: string, updates: { name?: string; con
 
 // ─── Floors ───
 
-interface FloorRow {
-  id: string;
-  building_id: string;
-  type: string;
-  name: string;
-  sort_order: number;
-  is_active: number;
-  config: string;
-  created_at: string;
-}
-
 interface CreateFloorParams {
   buildingId: string;
   type: string;
@@ -155,7 +149,7 @@ export function createFloor({ buildingId, type, name, sortOrder, config = {} }: 
     'SELECT COALESCE(MAX(sort_order), -1) + 1 as next FROM floors WHERE building_id = ?',
   ).get(buildingId) as { next: number }).next;
 
-  const id = `floor_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const id = uid('floor');
 
   db.prepare(`
     INSERT INTO floors (id, building_id, type, name, sort_order, config)
@@ -205,7 +199,7 @@ export function getFloorByType(buildingId: string, floorType: string): Result {
   ).get(buildingId, floorType) as FloorRow | undefined;
 
   if (!floor) return err('FLOOR_NOT_FOUND', `No ${floorType} floor in building ${buildingId}`);
-  return ok(floor);
+  return ok({ ...floor, config: JSON.parse((floor as any).config || '{}') });
 }
 
 // ─── Blueprint Application Pipeline ───
@@ -273,7 +267,7 @@ export function applyBlueprint(buildingId: string, blueprint: BlueprintData): Re
     }
 
     for (const roomType of entry.rooms) {
-      const roomId = `room_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const roomId = uid('room');
       db.prepare(`
         INSERT INTO rooms (id, floor_id, type, name, config)
         VALUES (?, ?, ?, ?, ?)
@@ -284,7 +278,7 @@ export function applyBlueprint(buildingId: string, blueprint: BlueprintData): Re
 
   // 4. Create agent DB rows with room access
   for (const agent of blueprint.agentRoster) {
-    const agentId = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const agentId = uid('agent');
     db.prepare(`
       INSERT INTO agents (id, name, role, room_access)
       VALUES (?, ?, ?, ?)
@@ -356,7 +350,7 @@ export function applyCustomPlan(buildingId: string, plan: CustomPlanData): Resul
 
   // 4. Create agent DB rows with capabilities and room access
   for (const agentDef of plan.agentDefinitions) {
-    const agentId = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const agentId = uid('agent');
     db.prepare(`
       INSERT INTO agents (id, name, role, capabilities, room_access)
       VALUES (?, ?, ?, ?, ?)
