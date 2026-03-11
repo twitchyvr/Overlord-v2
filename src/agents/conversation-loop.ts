@@ -91,12 +91,13 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     tools: room.getAllowedTools(),
   });
 
-  // Record initial user messages in the session
+  // Record initial user messages in the session + fire onMessage hooks
   for (const msg of params.messages) {
     const content = typeof msg.content === 'string'
       ? msg.content
       : msg.content.filter((b) => b.type === 'text').map((b) => b.text || '').join('\n');
     session.addMessage({ role: msg.role, content });
+    room.onMessage(agentId, content, msg.role);
   }
 
   // Persist session to DB (initial save)
@@ -149,13 +150,14 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     // Add assistant response to message history (MUST include all blocks including thinking)
     messages.push({ role: 'assistant', content: response.content });
 
-    // Record assistant response in session
+    // Record assistant response in session + fire onMessage hook
     const assistantText = response.content
       .filter((b: ContentBlock) => b.type === 'text')
       .map((b: ContentBlock) => b.text || '')
       .join('\n');
     if (assistantText) {
       session.addMessage({ role: 'assistant', content: assistantText });
+      room.onMessage(agentId, assistantText, 'assistant');
     }
 
     bus.emit('chat:stream', {
@@ -185,6 +187,25 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
       log.info({ tool: toolName, agentId, roomId: room.id }, 'Executing tool');
 
+      // Room-level guardrail: onBeforeToolCall can BLOCK execution
+      const beforeResult = room.onBeforeToolCall(toolName, agentId, toolInput);
+      if (!beforeResult.ok) {
+        log.warn({ tool: toolName, agentId, reason: beforeResult.error.message }, 'Tool blocked by room');
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content: `Blocked by room: ${beforeResult.error.message}`,
+          is_error: true,
+        });
+        toolCallLog.push({
+          name: toolName,
+          input: toolInput,
+          result: beforeResult.error,
+        });
+        bus.emit('tool:blocked', { toolName, agentId, roomId: room.id, reason: beforeResult.error.message });
+        continue;
+      }
+
       bus.emit('tool:executing', {
         toolName,
         agentId,
@@ -204,6 +225,9 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
           fileScope: room.fileScope,
         },
       });
+
+      // Room-level observation: onAfterToolCall can trigger escalation
+      room.onAfterToolCall(toolName, agentId, toolResult);
 
       const resultContent = toolResult.ok
         ? JSON.stringify(toolResult.data)
@@ -281,6 +305,8 @@ function buildSystemPrompt(
   const tools = context.tools as string[] || [];
   const fileScope = context.fileScope as string || 'read-only';
   const exitTemplate = context.exitTemplate as { type: string; fields: string[] } | undefined;
+  const outputFormat = context.outputFormat as Record<string, unknown> | null;
+  const escalation = context.escalation as Record<string, string> | undefined;
 
   const sections = [
     `You are an AI agent working in the ${room.type} room.`,
@@ -292,12 +318,30 @@ function buildSystemPrompt(
     '',
     '## Available Tools',
     ...tools.map((t) => `- ${t}`),
+    'Only these tools are available. Do not attempt to call any tool not in this list.',
   ];
 
   if (exitTemplate && exitTemplate.fields.length > 0) {
     sections.push('', '## Exit Document Required');
     sections.push(`Type: ${exitTemplate.type}`);
     sections.push(`Required fields: ${exitTemplate.fields.join(', ')}`);
+    sections.push('You MUST submit a valid exit document before leaving this room.');
+  }
+
+  if (outputFormat && typeof outputFormat === 'object') {
+    sections.push('', '## Expected Output Format');
+    sections.push('Your exit document should match this schema:');
+    sections.push('```json');
+    sections.push(JSON.stringify(outputFormat, null, 2));
+    sections.push('```');
+  }
+
+  if (escalation && Object.keys(escalation).length > 0) {
+    sections.push('', '## Escalation Rules');
+    for (const [condition, target] of Object.entries(escalation)) {
+      sections.push(`- ${condition}: escalate to **${target}** room`);
+    }
+    sections.push('When an escalation condition is met, report it clearly and request escalation.');
   }
 
   return sections.join('\n');

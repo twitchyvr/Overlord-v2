@@ -4,10 +4,14 @@
  * Collaboration Floor — Phase 2.
  * Break requirements into milestones, tasks, dependency graph, tech decisions.
  * Read-only — no code changes, receives Discovery exit doc as input.
+ *
+ * Active behavior:
+ * - validateExitDocumentValues: rejects empty milestones/tasks/decisions
  */
 
 import { BaseRoom } from './base-room.js';
-import type { RoomContract } from '../../core/contracts.js';
+import { ok, err } from '../../core/contracts.js';
+import type { Result, RoomContract } from '../../core/contracts.js';
 
 export class ArchitectureRoom extends BaseRoom {
   static override contract: RoomContract = {
@@ -60,5 +64,23 @@ export class ArchitectureRoom extends BaseRoom {
       techDecisions: [{ decision: 'string', reasoning: 'string', alternatives: ['string'] }],
       fileAssignments: 'object',
     };
+  }
+
+  override validateExitDocumentValues(document: Record<string, unknown>): Result {
+    const milestones = document.milestones as unknown[];
+    const taskBreakdown = document.taskBreakdown as unknown[];
+    const techDecisions = document.techDecisions as unknown[];
+
+    if (!Array.isArray(milestones) || milestones.length === 0) {
+      return err('EXIT_DOC_INVALID', 'milestones must be a non-empty array');
+    }
+    if (!Array.isArray(taskBreakdown) || taskBreakdown.length === 0) {
+      return err('EXIT_DOC_INVALID', 'taskBreakdown must be a non-empty array');
+    }
+    if (!Array.isArray(techDecisions) || techDecisions.length === 0) {
+      return err('EXIT_DOC_INVALID', 'techDecisions must be a non-empty array');
+    }
+
+    return ok(document);
   }
 }

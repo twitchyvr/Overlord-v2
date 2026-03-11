@@ -5,11 +5,14 @@
  * write_file and patch_file are NOT in the tools list = structurally impossible.
  * Agents can only run tests and report results.
  *
- * This is the simplest room to build first — clear constraints, obvious validation.
+ * Active behavior:
+ * - validateExitDocumentValues: rejects nonsense (testsRun: 0, negative coverage)
+ * - onAfterToolCall: detects test failures and emits escalation suggestion
  */
 
 import { BaseRoom } from './base-room.js';
-import type { RoomContract } from '../../core/contracts.js';
+import { ok, err } from '../../core/contracts.js';
+import type { Result, RoomContract } from '../../core/contracts.js';
 
 export class TestingLab extends BaseRoom {
   static override contract: RoomContract = {
@@ -46,7 +49,7 @@ export class TestingLab extends BaseRoom {
       onFailure: 'code-lab',
       onCritical: 'war-room',
     },
-    provider: 'configurable', // Repetitive test runs — use cost-effective model
+    provider: 'configurable',
   };
 
   override getRules(): string[] {
@@ -69,5 +72,59 @@ export class TestingLab extends BaseRoom {
       lintErrors: 'number',
       recommendations: ['string'],
     };
+  }
+
+  /**
+   * Value validation for test reports.
+   * - testsRun must be a positive number
+   * - testsPassed + testsFailed must equal testsRun
+   * - coverage must be non-negative
+   * - lintErrors must be non-negative
+   * - recommendations must be a non-empty array
+   */
+  override validateExitDocumentValues(document: Record<string, unknown>): Result {
+    const testsRun = document.testsRun as number;
+    const testsPassed = document.testsPassed as number;
+    const testsFailed = document.testsFailed as number;
+    const lintErrors = document.lintErrors as number;
+    const recommendations = document.recommendations as unknown[];
+
+    if (typeof testsRun !== 'number' || testsRun < 1) {
+      return err('EXIT_DOC_INVALID', 'testsRun must be a positive number');
+    }
+    if (typeof testsPassed !== 'number' || testsPassed < 0) {
+      return err('EXIT_DOC_INVALID', 'testsPassed must be a non-negative number');
+    }
+    if (typeof testsFailed !== 'number' || testsFailed < 0) {
+      return err('EXIT_DOC_INVALID', 'testsFailed must be a non-negative number');
+    }
+    if (testsPassed + testsFailed !== testsRun) {
+      return err('EXIT_DOC_INVALID', `testsPassed (${testsPassed}) + testsFailed (${testsFailed}) must equal testsRun (${testsRun})`);
+    }
+    if (typeof lintErrors !== 'number' || lintErrors < 0) {
+      return err('EXIT_DOC_INVALID', 'lintErrors must be a non-negative number');
+    }
+    if (!Array.isArray(recommendations) || recommendations.length === 0) {
+      return err('EXIT_DOC_INVALID', 'recommendations must be a non-empty array');
+    }
+
+    return ok(document);
+  }
+
+  /**
+   * After tool call: detect test failures and suggest escalation.
+   */
+  override onAfterToolCall(toolName: string, agentId: string, result: Result): void {
+    if (toolName !== 'qa_run_tests' && toolName !== 'bash') return;
+    if (!result.ok) {
+      this.bus?.emit('room:escalation:suggested', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+        condition: 'onFailure',
+        targetRoom: this.escalation.onFailure || 'code-lab',
+        reason: `Tool ${toolName} failed: ${result.error.message}`,
+      });
+    }
   }
 }

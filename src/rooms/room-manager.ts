@@ -29,6 +29,9 @@ const log = logger.child({ module: 'room-manager' });
 const activeRooms = new Map<string, BaseRoom>();
 const roomTypeRegistry = new Map<string, typeof BaseRoom>();
 
+// Module-scope bus reference — injected via initRooms, used by createRoom to inject into rooms
+let moduleBus: Bus | null = null;
+
 interface InitRoomsParams {
   bus: Bus;
   agents: AgentRegistryAPI;
@@ -37,6 +40,7 @@ interface InitRoomsParams {
 }
 
 export function initRooms({ bus }: InitRoomsParams): RoomManagerAPI {
+  moduleBus = bus;
   bus.on('room:create', (data: Record<string, unknown>) => createRoom(data as unknown as CreateRoomParams));
   bus.on('room:enter', (data: Record<string, unknown>) => enterRoom(data as unknown as EnterRoomParams));
   bus.on('room:exit', (data: Record<string, unknown>) => exitRoom(data as unknown as ExitRoomParams));
@@ -92,6 +96,7 @@ export function createRoom({ type, floorId, name, config: roomConfig = {} }: Cre
   );
 
   const room = new Factory(id, { ...contract, ...roomConfig });
+  if (moduleBus) room.setBus(moduleBus);
   activeRooms.set(id, room);
 
   log.info({ id, type, name, floor: floorId }, 'Room created');
@@ -175,6 +180,17 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
     agentId,
   );
 
+  // Fire lifecycle hook — room can track agent, emit bus events, run setup logic
+  const enterResult = room.onAgentEnter(agentId, tableType);
+  if (!enterResult.ok) {
+    // Roll back DB change if room rejects entry
+    db.prepare('UPDATE agents SET current_room_id = NULL, current_table_id = NULL, status = ? WHERE id = ?').run(
+      'idle',
+      agentId,
+    );
+    return enterResult;
+  }
+
   log.info({ roomId, agentId, tableType, tableId: tableRow.id }, 'Agent entered room');
   return ok({ roomId, agentId, tableId: tableRow.id, tools: room.getAllowedTools(), fileScope: room.fileScope });
 }
@@ -208,6 +224,12 @@ export function exitRoom({ roomId, agentId }: ExitRoomParams): Result {
         { context: { roomType: room.type, requiredFields: exitReq.fields } },
       );
     }
+  }
+
+  // Fire lifecycle hook — room can clean up agent state, emit bus events
+  const exitResult = room.onAgentExit(agentId);
+  if (!exitResult.ok) {
+    return exitResult;
   }
 
   const db = getDb();

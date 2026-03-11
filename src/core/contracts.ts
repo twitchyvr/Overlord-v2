@@ -282,10 +282,22 @@ export interface BaseRoomLike {
   hasTool(toolName: string): boolean;
   readonly fileScope: FileScope;
   readonly exitRequired: ExitTemplate;
+  readonly escalation: Record<string, string>;
   validateExitDocument(document: Record<string, unknown>): Result;
+  validateExitDocumentValues(document: Record<string, unknown>): Result;
   buildContextInjection(): Record<string, unknown>;
   getRules(): string[];
   getOutputFormat(): unknown;
+
+  // Lifecycle hooks — rooms actively participate in agent work
+  onAgentEnter(agentId: string, tableType: string): Result;
+  onAgentExit(agentId: string): Result;
+  onBeforeToolCall(toolName: string, agentId: string, input: Record<string, unknown>): Result;
+  onAfterToolCall(toolName: string, agentId: string, result: Result): void;
+  onMessage(agentId: string, content: string, role: 'user' | 'assistant'): void;
+
+  // Bus injection for event emission
+  setBus(bus: import('../core/bus.js').Bus): void;
 }
 
 export type BaseRoomConstructor = new (id: string, config?: Partial<RoomContract>) => BaseRoomLike;
