@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import * as dbModule from '../../../src/storage/db.js';
+import * as phaseGateModule from '../../../src/rooms/phase-gate.js';
 import { EventEmitter } from 'eventemitter3';
 import { initRooms, registerRoomType } from '../../../src/rooms/room-manager.js';
 import { createBuilding, applyBlueprint, applyCustomPlan } from '../../../src/rooms/building-manager.js';
@@ -294,6 +295,52 @@ describe('handleBlueprintSubmission', () => {
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('BUILDING_NOT_FOUND');
   });
+
+  it('returns GATE_CREATION_FAILED when gate creation fails', () => {
+    vi.spyOn(phaseGateModule, 'createGate').mockReturnValue({
+      ok: false,
+      error: { code: 'DB_ERROR', message: 'insert failed', retryable: false },
+    });
+
+    const result = handleBlueprintSubmission({
+      buildingId,
+      agentId: 'agent_test',
+      blueprint: {
+        floorsNeeded: [],
+        roomConfig: [],
+        agentRoster: [],
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('GATE_CREATION_FAILED');
+    vi.restoreAllMocks();
+    // Re-mock getDb after restoreAllMocks
+    vi.spyOn(dbModule, 'getDb').mockReturnValue(memDb as unknown as ReturnType<typeof dbModule.getDb>);
+  });
+
+  it('returns GATE_SIGNOFF_FAILED when signoff fails', () => {
+    vi.spyOn(phaseGateModule, 'signoffGate').mockReturnValue({
+      ok: false,
+      error: { code: 'INVALID_VERDICT', message: 'signoff rejected', retryable: false },
+    });
+
+    const result = handleBlueprintSubmission({
+      buildingId,
+      agentId: 'agent_test',
+      blueprint: {
+        floorsNeeded: [],
+        roomConfig: [],
+        agentRoster: [],
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('GATE_SIGNOFF_FAILED');
+    vi.restoreAllMocks();
+    // Re-mock getDb after restoreAllMocks
+    vi.spyOn(dbModule, 'getDb').mockReturnValue(memDb as unknown as ReturnType<typeof dbModule.getDb>);
+  });
 });
 
 // ─── Bus Handler ───
@@ -364,6 +411,69 @@ describe('initPhaseZeroHandler', () => {
 
     expect(completed).toHaveLength(0);
   });
+
+  it('emits phase-zero:failed when blueprint application fails', () => {
+    initPhaseZeroHandler(testBus);
+
+    const failed: unknown[] = [];
+    testBus.on('phase-zero:failed', (data: unknown) => failed.push(data));
+
+    testBus.emit('exit-doc:submitted', {
+      roomType: 'strategist',
+      buildingId: 'bld_nonexistent',
+      agentId: 'agent_test',
+      document: {
+        floorsNeeded: ['execution'],
+        roomConfig: [],
+        agentRoster: [],
+      },
+    });
+
+    expect(failed).toHaveLength(1);
+    const event = failed[0] as Record<string, unknown>;
+    expect(event.buildingId).toBe('bld_nonexistent');
+    expect(event.error).toBeDefined();
+  });
+
+  it('ignores event with missing buildingId', () => {
+    initPhaseZeroHandler(testBus);
+
+    const completed: unknown[] = [];
+    const failed: unknown[] = [];
+    testBus.on('phase-zero:complete', (data: unknown) => completed.push(data));
+    testBus.on('phase-zero:failed', (data: unknown) => failed.push(data));
+
+    testBus.emit('exit-doc:submitted', {
+      roomType: 'strategist',
+      agentId: 'agent_test',
+      document: {
+        floorsNeeded: ['execution'],
+        roomConfig: [],
+        agentRoster: [],
+      },
+    });
+
+    expect(completed).toHaveLength(0);
+    expect(failed).toHaveLength(0);
+  });
+
+  it('ignores event with missing document', () => {
+    initPhaseZeroHandler(testBus);
+
+    const completed: unknown[] = [];
+    const failed: unknown[] = [];
+    testBus.on('phase-zero:complete', (data: unknown) => completed.push(data));
+    testBus.on('phase-zero:failed', (data: unknown) => failed.push(data));
+
+    testBus.emit('exit-doc:submitted', {
+      roomType: 'strategist',
+      buildingId,
+      agentId: 'agent_test',
+    });
+
+    expect(completed).toHaveLength(0);
+    expect(failed).toHaveLength(0);
+  });
 });
 
 // ─── Next Room Suggestion ───
@@ -408,5 +518,14 @@ describe('suggestNextRoom', () => {
     expect(ids).toContain('agent_disco');
     expect(ids).toContain('agent_wild');
     expect(ids).not.toContain('agent_code');
+  });
+
+  it('returns NO_COLLABORATION_FLOOR when building has no collaboration floor', () => {
+    // Delete the collaboration floor from the DB
+    memDb.prepare("DELETE FROM floors WHERE building_id = ? AND type = 'collaboration'").run(buildingId);
+
+    const result = suggestNextRoom(buildingId);
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('NO_COLLABORATION_FLOOR');
   });
 });

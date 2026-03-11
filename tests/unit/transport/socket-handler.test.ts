@@ -252,6 +252,20 @@ describe('Socket Handler (Transport Layer)', () => {
       const broadcast = io.broadcasted.find((b) => b.event === 'raid:entry:added');
       expect(broadcast).toBeDefined();
     });
+
+    it('broadcasts room:agent:exited from bus to all sockets', () => {
+      bus.emit('room:agent:exited', { roomId: 'r1', agentId: 'a1' });
+
+      const broadcast = io.broadcasted.find((b) => b.event === 'room:agent:exited');
+      expect(broadcast).toBeDefined();
+    });
+
+    it('broadcasts chat:response from bus to all sockets', () => {
+      bus.emit('chat:response', { agentId: 'a1', content: 'reply text' });
+
+      const broadcast = io.broadcasted.find((b) => b.event === 'chat:response');
+      expect(broadcast).toBeDefined();
+    });
   });
 
   describe('phase and RAID events', () => {
@@ -343,6 +357,31 @@ describe('Socket Handler (Transport Layer)', () => {
 
       const broadcast = io.broadcasted.find((b) => b.event === 'scope-change:detected');
       expect(broadcast).toBeDefined();
+    });
+  });
+
+  describe('error handling', () => {
+    it('building:create acks error result when createBuilding fails', () => {
+      (createBuilding as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+        ok: false,
+        error: { code: 'INVALID_NAME', message: 'Name is required', retryable: false },
+      });
+
+      const ack = vi.fn();
+      socket.emit('building:create', { name: '' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: { code: 'INVALID_NAME', message: 'Name is required', retryable: false },
+      });
+    });
+  });
+
+  describe('connection lifecycle (continued)', () => {
+    it('disconnect event fires without error', () => {
+      expect(() => {
+        socket.emit('disconnect');
+      }).not.toThrow();
     });
   });
 });

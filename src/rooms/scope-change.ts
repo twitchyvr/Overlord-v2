@@ -157,7 +157,10 @@ export function initiateReEntry({
 
   // Determine table type — use first table if not specified
   const room = getRoom(roomData.id);
-  const resolvedTableType = tableType || (room ? Object.keys(room.tables)[0] : 'focus');
+  if (!room) {
+    return err('ROOM_NOT_FOUND', `Room ${roomData.id} was created but could not be retrieved`);
+  }
+  const resolvedTableType = tableType || Object.keys(room.tables)[0] || 'focus';
 
   // Enter agent into the new room
   const enterResult = enterRoom({

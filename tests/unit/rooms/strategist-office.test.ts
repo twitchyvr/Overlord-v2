@@ -195,4 +195,97 @@ describe('StrategistOffice', () => {
       expect(result.ok).toBe(false);
     });
   });
+
+  describe('validateExitDocumentValues', () => {
+    const validDoc = {
+      projectGoals: ['Build a web app'],
+      successCriteria: ['100% test coverage'],
+      floorsNeeded: ['strategy', 'execution'],
+      roomConfig: [{ floor: 'execution', rooms: ['code-lab'] }],
+      agentRoster: [{ name: 'Dev', role: 'developer', rooms: ['code-lab'] }],
+      estimatedPhases: ['discovery', 'execution'],
+    };
+
+    it('rejects exit doc with empty projectGoals array', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, projectGoals: [] });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('projectGoals');
+    });
+
+    it('rejects exit doc with non-string projectGoals entries', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, projectGoals: [42] });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('projectGoal');
+    });
+
+    it('rejects exit doc with empty successCriteria array', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, successCriteria: [] });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('successCriteria');
+    });
+
+    it('rejects exit doc with empty floorsNeeded array', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, floorsNeeded: [] });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('floorsNeeded');
+    });
+
+    it('rejects exit doc with empty roomConfig array', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, roomConfig: [] });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('roomConfig');
+    });
+
+    it('rejects exit doc with roomConfig entry missing floor field', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({
+        ...validDoc,
+        roomConfig: [{ rooms: ['code-lab'] }],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('roomConfig[0]');
+    });
+
+    it('rejects exit doc with empty agentRoster array', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, agentRoster: [] });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('agentRoster');
+    });
+
+    it('rejects exit doc with agentRoster entry missing name/role/rooms', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({
+        ...validDoc,
+        agentRoster: [{ name: 'Dev' }],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('agentRoster[0]');
+    });
+
+    it('rejects exit doc with empty estimatedPhases array', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, estimatedPhases: [] });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('estimatedPhases');
+    });
+
+    it('rejects exit doc with non-string estimatedPhases entries', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, estimatedPhases: [123] });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('estimatedPhases');
+    });
+
+    it('accepts exit doc with all valid fields (happy path value validation)', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues(validDoc);
+      expect(result.ok).toBe(true);
+    });
+  });
 });
