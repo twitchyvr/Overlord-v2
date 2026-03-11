@@ -121,7 +121,7 @@ let setContent: any;
 // ── Helpers to capture callbacks registered during boot ──────────
 
 /** Extracts the callback registered for a given event from a mock's calls */
-function getSubscribeCallback(mock: any, event: string): Function | undefined {
+function getSubscribeCallback(mock: any, event: string): ((...args: unknown[]) => unknown) | undefined {
   const call = mock.mock.calls.find((c: any[]) => c[0] === event);
   return call ? call[1] : undefined;
 }

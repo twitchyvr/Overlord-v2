@@ -13,14 +13,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /** Create a mock Socket.IO client with on/emit/disconnect */
 function createMockSocket() {
-  const handlers: Record<string, Function> = {};
+  const handlers: Record<string, (...args: unknown[]) => void> = {};
   return {
     id: 'mock-socket-id-abc123',
     handlers,
-    on(event: string, fn: Function) {
+    on(event: string, fn: (...args: unknown[]) => void) {
       handlers[event] = fn;
     },
-    emit: vi.fn((event: string, data?: any, ack?: Function) => {
+    emit: vi.fn((event: string, data?: any, ack?: (...args: unknown[]) => void) => {
       // If the last argument is a function, treat it as an acknowledgement callback
       if (typeof data === 'function') {
         // emit(event, ack) — no data
@@ -45,12 +45,12 @@ function createMockStore() {
     _data: data,
     set: vi.fn((key: string, value: any) => { data[key] = value; }),
     get: vi.fn((key: string) => data[key]),
-    update: vi.fn((key: string, fn: Function) => {
+    update: vi.fn((key: string, fn: (current: unknown) => unknown) => {
       const current = data[key];
       const next = fn(current);
       data[key] = next;
     }),
-    batch: vi.fn((fn: Function) => { fn(); }),
+    batch: vi.fn((fn: () => void) => { fn(); }),
     subscribe: vi.fn(),
   };
 }
@@ -158,7 +158,7 @@ describe('socket "connect" event', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
 
     // Override emit to invoke the ack callback immediately for system:status
-    mockSocket.emit.mockImplementation((event: string, data: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((event: string, data: any, ack?: (...args: unknown[]) => void) => {
       if (event === 'system:status' && ack) {
         ack({ ok: true, data: { isNewUser: true, buildings: [{ id: 'b1' }] } });
       }
@@ -176,7 +176,7 @@ describe('socket "connect" event', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
 
     const statusData = { isNewUser: false, buildings: [] };
-    mockSocket.emit.mockImplementation((event: string, data: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((event: string, data: any, ack?: (...args: unknown[]) => void) => {
       if (event === 'system:status' && ack) {
         ack({ ok: true, data: statusData });
       }
@@ -189,7 +189,7 @@ describe('socket "connect" event', () => {
   it('does not update store when system:status ack returns not ok', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
 
-    mockSocket.emit.mockImplementation((event: string, data: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((event: string, data: any, ack?: (...args: unknown[]) => void) => {
       if (event === 'system:status' && ack) {
         ack({ ok: false });
       }
@@ -202,7 +202,7 @@ describe('socket "connect" event', () => {
   it('does not update store when system:status ack returns null', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
 
-    mockSocket.emit.mockImplementation((event: string, data: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((event: string, data: any, ack?: (...args: unknown[]) => void) => {
       if (event === 'system:status' && ack) {
         ack(null);
       }
@@ -216,7 +216,7 @@ describe('socket "connect" event', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
 
     const healthData = { cpu: 50, memory: 70 };
-    mockSocket.emit.mockImplementation((event: string, data: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((event: string, data: any, ack?: (...args: unknown[]) => void) => {
       if (event === 'system:health' && ack) {
         ack({ ok: true, data: healthData });
       }
@@ -229,7 +229,7 @@ describe('socket "connect" event', () => {
   it('defaults buildings to empty array when not provided in status', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
 
-    mockSocket.emit.mockImplementation((event: string, data: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((event: string, data: any, ack?: (...args: unknown[]) => void) => {
       if (event === 'system:status' && ack) {
         ack({ ok: true, data: { isNewUser: false } });
       }
@@ -583,7 +583,7 @@ describe('window.overlordSocket.fetchBuilding()', () => {
     const api = (window as any).overlordSocket;
 
     const ackData = { ok: true, data: { id: 'b1', name: 'HQ' } };
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack(ackData);
     });
 
@@ -597,7 +597,7 @@ describe('window.overlordSocket.fetchBuilding()', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
 
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: false, error: 'not found' });
     });
 
@@ -613,7 +613,7 @@ describe('window.overlordSocket.fetchFloors()', () => {
     const api = (window as any).overlordSocket;
 
     const floors = [{ id: 'f1' }, { id: 'f2' }];
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true, data: floors });
     });
 
@@ -630,7 +630,7 @@ describe('window.overlordSocket.fetchFloor()', () => {
     const api = (window as any).overlordSocket;
 
     const response = { ok: true, data: { id: 'f1', rooms: [] } };
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack(response);
     });
 
@@ -646,7 +646,7 @@ describe('window.overlordSocket.fetchRoom()', () => {
     const api = (window as any).overlordSocket;
 
     const response = { ok: true, data: { id: 'r1', type: 'strategy' } };
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack(response);
     });
 
@@ -662,7 +662,7 @@ describe('window.overlordSocket.fetchRooms()', () => {
     const api = (window as any).overlordSocket;
 
     const rooms = [{ id: 'r1' }];
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true, data: rooms });
     });
 
@@ -679,7 +679,7 @@ describe('window.overlordSocket.fetchAgents()', () => {
     const api = (window as any).overlordSocket;
 
     const agents = [{ id: 'a1', name: 'Strategist' }];
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true, data: agents });
     });
 
@@ -693,7 +693,7 @@ describe('window.overlordSocket.fetchAgents()', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
 
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true, data: [] });
     });
 
@@ -708,7 +708,7 @@ describe('window.overlordSocket.fetchAgent()', () => {
     const api = (window as any).overlordSocket;
 
     const response = { ok: true, data: { id: 'a1' } };
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack(response);
     });
 
@@ -724,7 +724,7 @@ describe('window.overlordSocket.fetchGates()', () => {
     const api = (window as any).overlordSocket;
 
     const gates = [{ phase: 'design', passed: true }];
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true, data: gates });
     });
 
@@ -740,7 +740,7 @@ describe('window.overlordSocket.fetchCanAdvance()', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
 
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true, data: { canAdvance: true } });
     });
 
@@ -757,7 +757,7 @@ describe('window.overlordSocket.searchRaid()', () => {
     const api = (window as any).overlordSocket;
 
     const results = [{ id: 'r1', type: 'risk' }];
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true, data: results });
     });
 
@@ -774,7 +774,7 @@ describe('window.overlordSocket.fetchRaidEntries()', () => {
     const api = (window as any).overlordSocket;
 
     const entries = [{ id: 'e1' }, { id: 'e2' }];
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true, data: entries });
     });
 
@@ -791,7 +791,7 @@ describe('window.overlordSocket.createBuilding()', () => {
     const api = (window as any).overlordSocket;
 
     const newBuilding = { id: 'b-new', name: 'New HQ' };
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true, data: newBuilding });
     });
 
@@ -810,7 +810,7 @@ describe('window.overlordSocket.createBuilding()', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
 
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true, data: { id: 'b1' } });
     });
 
@@ -827,7 +827,7 @@ describe('window.overlordSocket.applyBlueprint()', () => {
     const api = (window as any).overlordSocket;
 
     const response = { ok: true };
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack(response);
     });
 
@@ -847,7 +847,7 @@ describe('window.overlordSocket.registerAgent()', () => {
     const api = (window as any).overlordSocket;
 
     const newAgent = { id: 'a-new', name: 'Builder' };
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true, data: newAgent });
     });
 
@@ -867,7 +867,7 @@ describe('window.overlordSocket.createRoom()', () => {
     const api = (window as any).overlordSocket;
 
     const response = { ok: true, data: { id: 'r-new' } };
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack(response);
     });
 
@@ -882,7 +882,7 @@ describe('window.overlordSocket.enterRoom()', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
 
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true });
     });
 
@@ -900,7 +900,7 @@ describe('window.overlordSocket.exitRoom()', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
 
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true });
     });
 
@@ -956,7 +956,7 @@ describe('window.overlordSocket.submitExitDoc()', () => {
     const api = (window as any).overlordSocket;
 
     const doc = { summary: 'Phase complete', artifacts: [] };
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true });
     });
 
@@ -975,7 +975,7 @@ describe('window.overlordSocket.submitGate()', () => {
     const api = (window as any).overlordSocket;
 
     const response = { ok: true, data: { passed: true } };
-    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: Function) => {
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack(response);
     });
 

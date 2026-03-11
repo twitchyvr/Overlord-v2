@@ -24,7 +24,7 @@ interface InitTransportParams {
   tools: ToolRegistryAPI;
 }
 
-export function initTransport({ io, bus, rooms, agents, tools }: InitTransportParams): void {
+export function initTransport({ io, bus, rooms, agents, tools: _tools }: InitTransportParams): void {
   io.on('connection', (socket: Socket) => {
     log.info({ id: socket.id }, 'Client connected');
 
