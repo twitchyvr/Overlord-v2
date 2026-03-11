@@ -4,10 +4,17 @@
  * Governance Floor — Go/no-go decisions.
  * Risk questionnaire with independent analysis.
  * Produces gate review exit document with citations.
+ *
+ * Active behavior:
+ * - validateExitDocumentValues: verdict must be GO/NO-GO/CONDITIONAL, evidence required
+ * - gateProtocol: enforces exit doc, RAID entry, and signoff requirements
  */
 
 import { BaseRoom } from './base-room.js';
-import type { RoomContract } from '../../core/contracts.js';
+import { ok, err } from '../../core/contracts.js';
+import type { Result, RoomContract } from '../../core/contracts.js';
+
+const VALID_VERDICTS = ['GO', 'NO-GO', 'CONDITIONAL'];
 
 export class ReviewRoom extends BaseRoom {
   static override contract: RoomContract = {
@@ -60,5 +67,39 @@ export class ReviewRoom extends BaseRoom {
       conditions: ['string'],
       riskQuestionnaire: [{ question: 'string', answer: 'string', risk: 'low | medium | high' }],
     };
+  }
+
+  override validateExitDocumentValues(document: Record<string, unknown>): Result {
+    const verdict = document.verdict as string;
+    const evidence = document.evidence as unknown[];
+    const riskQuestionnaire = document.riskQuestionnaire as unknown[];
+
+    if (typeof verdict !== 'string' || !VALID_VERDICTS.includes(verdict)) {
+      return err('EXIT_DOC_INVALID', `verdict must be one of: ${VALID_VERDICTS.join(', ')}`);
+    }
+    if (!Array.isArray(evidence) || evidence.length === 0) {
+      return err('EXIT_DOC_INVALID', 'evidence must be a non-empty array with citations');
+    }
+    if (!Array.isArray(riskQuestionnaire) || riskQuestionnaire.length === 0) {
+      return err('EXIT_DOC_INVALID', 'riskQuestionnaire must be a non-empty array');
+    }
+
+    return ok(document);
+  }
+
+  /**
+   * After tool call: if QA tools show failures, suggest escalation.
+   */
+  override onAfterToolCall(toolName: string, agentId: string, result: Result): void {
+    if ((toolName === 'qa_run_tests' || toolName === 'qa_check_lint') && !result.ok) {
+      this.bus?.emit('room:escalation:suggested', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+        condition: 'onNoGo',
+        targetRoom: this.escalation.onNoGo || 'code-lab',
+        reason: `QA check failed during review: ${result.error.message}`,
+      });
+    }
   }
 }

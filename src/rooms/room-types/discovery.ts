@@ -5,10 +5,14 @@
  * Define outcomes, constraints, unknowns.
  * Produces requirements doc, gap analysis, risk assessment.
  * Read-only — no code changes allowed.
+ *
+ * Active behavior:
+ * - validateExitDocumentValues: rejects empty outcomes/criteria/risks
  */
 
 import { BaseRoom } from './base-room.js';
-import type { RoomContract } from '../../core/contracts.js';
+import { ok, err } from '../../core/contracts.js';
+import type { Result, RoomContract } from '../../core/contracts.js';
 
 export class DiscoveryRoom extends BaseRoom {
   static override contract: RoomContract = {
@@ -40,7 +44,7 @@ export class DiscoveryRoom extends BaseRoom {
     escalation: {
       onComplete: 'architecture',
     },
-    provider: 'configurable', // Complex reasoning — Claude or equivalent
+    provider: 'configurable',
   };
 
   override getRules(): string[] {
@@ -62,5 +66,23 @@ export class DiscoveryRoom extends BaseRoom {
       riskAssessment: [{ risk: 'string', analysis: 'string', citation: 'string' }],
       acceptanceCriteria: ['string'],
     };
+  }
+
+  override validateExitDocumentValues(document: Record<string, unknown>): Result {
+    const businessOutcomes = document.businessOutcomes as unknown[];
+    const acceptanceCriteria = document.acceptanceCriteria as unknown[];
+    const riskAssessment = document.riskAssessment as unknown[];
+
+    if (!Array.isArray(businessOutcomes) || businessOutcomes.length === 0) {
+      return err('EXIT_DOC_INVALID', 'businessOutcomes must be a non-empty array');
+    }
+    if (!Array.isArray(acceptanceCriteria) || acceptanceCriteria.length === 0) {
+      return err('EXIT_DOC_INVALID', 'acceptanceCriteria must be a non-empty array');
+    }
+    if (!Array.isArray(riskAssessment) || riskAssessment.length === 0) {
+      return err('EXIT_DOC_INVALID', 'riskAssessment must be a non-empty array');
+    }
+
+    return ok(document);
   }
 }

@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { runConversationLoop } from '../../../src/agents/conversation-loop.js';
-import { ok } from '../../../src/core/contracts.js';
+import { ok, err } from '../../../src/core/contracts.js';
 import { EventEmitter } from 'eventemitter3';
 import type { AIProviderAPI, ToolRegistryAPI, BaseRoomLike, ToolDefinition, ToolContext } from '../../../src/core/contracts.js';
 
@@ -36,22 +36,34 @@ function createMockRoom(tools: string[] = ['bash', 'read_file']): BaseRoomLike {
       tools,
       fileScope: 'full',
       exitRequired: { type: 'test', fields: [] },
+      escalation: {},
       provider: 'test',
     },
     getAllowedTools: () => tools,
     hasTool: (name: string) => tools.includes(name),
     get fileScope() { return 'full' as const; },
     get exitRequired() { return { type: 'test', fields: [] }; },
+    get escalation() { return {}; },
     validateExitDocument: (doc: Record<string, unknown>) => ok(doc),
+    validateExitDocumentValues: (doc: Record<string, unknown>) => ok(doc),
     buildContextInjection: () => ({
       roomType: 'code-lab',
       rules: ['Test rule'],
       tools,
       fileScope: 'full',
       exitTemplate: { type: 'test', fields: [] },
+      outputFormat: null,
+      escalation: {},
     }),
     getRules: () => ['Test rule'],
     getOutputFormat: () => null,
+    // Lifecycle hooks
+    onAgentEnter: () => ok(null),
+    onAgentExit: () => ok(null),
+    onBeforeToolCall: () => ok(null),
+    onAfterToolCall: () => {},
+    onMessage: () => {},
+    setBus: () => {},
   };
 }
 
@@ -299,5 +311,71 @@ describe('Conversation Loop', () => {
     });
 
     expect(result.ok).toBe(false);
+  });
+
+  it('blocks tool execution when onBeforeToolCall returns err', async () => {
+    // AI requests a tool call, then gives a final text response
+    const ai = createMockAI([
+      {
+        id: 'msg_1',
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: 'tc_1',
+          name: 'bash',
+          input: { command: 'rm -rf /' },
+        }],
+        model: 'test',
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      },
+      {
+        id: 'msg_2',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Tool was blocked.' }],
+        model: 'test',
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 15, output_tokens: 10 },
+      },
+    ]);
+
+    // Room that blocks bash tool via onBeforeToolCall
+    const blockingRoom = createMockRoom(['bash', 'read_file']);
+    blockingRoom.onBeforeToolCall = (toolName: string, _agentId: string, _input: Record<string, unknown>) => {
+      if (toolName === 'bash') {
+        return err('TOOL_BLOCKED', 'Destructive commands are not allowed in this room');
+      }
+      return ok(null);
+    };
+
+    // Track whether bash tool actually executed
+    let bashExecuted = false;
+    const tools = createMockTools();
+    const originalExecuteInRoom = tools.executeInRoom;
+    tools.executeInRoom = async (params) => {
+      if (params.toolName === 'bash') {
+        bashExecuted = true;
+      }
+      return originalExecuteInRoom(params);
+    };
+
+    const result = await runConversationLoop({
+      provider: 'anthropic',
+      room: blockingRoom,
+      agentId: 'agent_1',
+      messages: [{ role: 'user', content: 'Delete everything' }],
+      ai,
+      tools,
+      bus: createMockBus(),
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.finalText).toBe('Tool was blocked.');
+      // The tool should NOT have been executed
+      expect(bashExecuted).toBe(false);
+      // Loop still completes — blocked tool counts as an iteration
+      expect(result.data.iterations).toBe(2);
+    }
   });
 });

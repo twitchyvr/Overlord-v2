@@ -3,10 +3,15 @@
  *
  * Collaboration Floor — Incident response.
  * All-hands troubleshooting. Elevated access. Time-boxed.
+ *
+ * Active behavior:
+ * - validateExitDocumentValues: rejects empty rootCause/resolution/preventionPlan
+ * - No escalation (war room IS the top escalation target)
  */
 
 import { BaseRoom } from './base-room.js';
-import type { RoomContract } from '../../core/contracts.js';
+import { ok, err } from '../../core/contracts.js';
+import type { Result, RoomContract } from '../../core/contracts.js';
 
 export class WarRoom extends BaseRoom {
   static override contract: RoomContract = {
@@ -27,7 +32,7 @@ export class WarRoom extends BaseRoom {
       'qa_check_lint',
       'github',
     ],
-    fileScope: 'full', // Elevated access during incidents
+    fileScope: 'full',
     exitRequired: {
       type: 'incident-report',
       fields: ['incidentSummary', 'rootCause', 'resolution', 'preventionPlan', 'timeToResolve'],
@@ -54,5 +59,23 @@ export class WarRoom extends BaseRoom {
       preventionPlan: ['string'],
       timeToResolve: 'string',
     };
+  }
+
+  override validateExitDocumentValues(document: Record<string, unknown>): Result {
+    const rootCause = document.rootCause as string;
+    const resolution = document.resolution as string;
+    const preventionPlan = document.preventionPlan as unknown[];
+
+    if (typeof rootCause !== 'string' || rootCause.trim().length === 0) {
+      return err('EXIT_DOC_INVALID', 'rootCause must be a non-empty string');
+    }
+    if (typeof resolution !== 'string' || resolution.trim().length === 0) {
+      return err('EXIT_DOC_INVALID', 'resolution must be a non-empty string');
+    }
+    if (!Array.isArray(preventionPlan) || preventionPlan.length === 0) {
+      return err('EXIT_DOC_INVALID', 'preventionPlan must be a non-empty array');
+    }
+
+    return ok(document);
   }
 }
