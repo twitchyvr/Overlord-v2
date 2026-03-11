@@ -51,7 +51,7 @@ export async function patchFileImpl(params: {
     return { path: fullPath, matched: false, occurrences: 0 };
   }
 
-  const patched = content.replace(params.search, params.replace);
+  const patched = content.replaceAll(params.search, params.replace);
   await writeFile(fullPath, patched, 'utf-8');
   return { path: fullPath, matched: true, occurrences };
 }

@@ -44,6 +44,11 @@ function setupDb(): Database.Database {
     provider TEXT DEFAULT 'configurable', config TEXT DEFAULT '{}',
     status TEXT DEFAULT 'idle', created_at TEXT DEFAULT (datetime('now'))
   )`).run();
+  memDb.prepare(`CREATE TABLE tables_v2 (
+    id TEXT PRIMARY KEY, room_id TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'focus',
+    chairs INTEGER DEFAULT 1, description TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run();
   memDb.prepare(`CREATE TABLE agents (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL,
     capabilities TEXT DEFAULT '[]', room_access TEXT DEFAULT '[]', badge TEXT,
@@ -159,14 +164,83 @@ describe('Room Manager', () => {
       if (result.ok) {
         expect(result.data.tools).toEqual(['read_file', 'write_file', 'patch_file', 'bash']);
         expect(result.data.fileScope).toBe('assigned');
+        expect(result.data.tableId).toBeDefined();
       }
     });
 
-    it('updates agent status to active', () => {
+    it('updates agent status to active and assigns table', () => {
       enterRoom({ roomId, agentId: 'agent_1' });
-      const agent = db.prepare('SELECT status, current_room_id FROM agents WHERE id = ?').get('agent_1') as { status: string; current_room_id: string };
+      const agent = db.prepare('SELECT status, current_room_id, current_table_id FROM agents WHERE id = ?').get('agent_1') as {
+        status: string;
+        current_room_id: string;
+        current_table_id: string;
+      };
       expect(agent.status).toBe('active');
       expect(agent.current_room_id).toBe(roomId);
+      expect(agent.current_table_id).toBeDefined();
+      expect(agent.current_table_id).toMatch(/^table_/);
+    });
+
+    it('creates a table_v2 row for the room', () => {
+      enterRoom({ roomId, agentId: 'agent_1', tableType: 'focus' });
+      const table = db.prepare('SELECT * FROM tables_v2 WHERE room_id = ?').get(roomId) as {
+        room_id: string;
+        type: string;
+        chairs: number;
+      };
+      expect(table).toBeDefined();
+      expect(table.type).toBe('focus');
+      expect(table.chairs).toBe(1);
+    });
+
+    it('rejects invalid table type', () => {
+      const result = enterRoom({ roomId, agentId: 'agent_1', tableType: 'nonexistent' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('INVALID_TABLE_TYPE');
+        expect(result.error.message).toContain('nonexistent');
+        expect(result.error.message).toContain('focus');
+        expect(result.error.message).toContain('pair');
+      }
+    });
+
+    it('enforces chair capacity on focus table (1 chair)', () => {
+      // First agent takes the only chair at the focus table
+      db.prepare(`INSERT INTO agents (id, name, role, room_access) VALUES ('agent_3', 'Coder2', 'developer', '["code-lab"]')`).run();
+      const first = enterRoom({ roomId, agentId: 'agent_1', tableType: 'focus' });
+      expect(first.ok).toBe(true);
+
+      // Second agent should be rejected — focus only has 1 chair
+      const second = enterRoom({ roomId, agentId: 'agent_3', tableType: 'focus' });
+      expect(second.ok).toBe(false);
+      if (!second.ok) {
+        expect(second.error.code).toBe('TABLE_FULL');
+        expect(second.error.message).toContain('1 chair');
+      }
+    });
+
+    it('allows multiple agents at pair table (2 chairs)', () => {
+      db.prepare(`INSERT INTO agents (id, name, role, room_access) VALUES ('agent_3', 'Coder2', 'developer', '["code-lab"]')`).run();
+      const first = enterRoom({ roomId, agentId: 'agent_1', tableType: 'pair' });
+      expect(first.ok).toBe(true);
+
+      const second = enterRoom({ roomId, agentId: 'agent_3', tableType: 'pair' });
+      expect(second.ok).toBe(true);
+    });
+
+    it('rejects third agent at pair table (2 chairs)', () => {
+      db.prepare(`INSERT INTO agents (id, name, role, room_access) VALUES ('agent_3', 'Coder2', 'developer', '["code-lab"]')`).run();
+      db.prepare(`INSERT INTO agents (id, name, role, room_access) VALUES ('agent_4', 'Coder3', 'developer', '["code-lab"]')`).run();
+
+      enterRoom({ roomId, agentId: 'agent_1', tableType: 'pair' });
+      enterRoom({ roomId, agentId: 'agent_3', tableType: 'pair' });
+
+      const third = enterRoom({ roomId, agentId: 'agent_4', tableType: 'pair' });
+      expect(third.ok).toBe(false);
+      if (!third.ok) {
+        expect(third.error.code).toBe('TABLE_FULL');
+        expect(third.error.message).toContain('2 chairs');
+      }
     });
 
     it('rejects agent without room access', () => {
@@ -213,20 +287,70 @@ describe('Room Manager', () => {
       enterRoom({ roomId, agentId: 'agent_1' });
     });
 
-    it('sets agent status to idle', () => {
-      exitRoom({ roomId, agentId: 'agent_1' });
-      const agent = db.prepare('SELECT status, current_room_id FROM agents WHERE id = ?').get('agent_1') as { status: string; current_room_id: string | null };
-      expect(agent.status).toBe('idle');
-      expect(agent.current_room_id).toBeNull();
+    it('rejects exit without exit document when room requires one', () => {
+      const result = exitRoom({ roomId, agentId: 'agent_1' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('EXIT_DOC_REQUIRED');
+        expect(result.error.message).toContain('filesChanged');
+        expect(result.error.message).toContain('testsAdded');
+        expect(result.error.message).toContain('summary');
+      }
     });
 
-    it('returns success result', () => {
+    it('allows exit after submitting valid exit document', () => {
+      // Submit exit document first
+      submitExitDocument({
+        roomId,
+        agentId: 'agent_1',
+        document: { filesChanged: ['a.ts'], testsAdded: 1, summary: 'Done' },
+      });
+
       const result = exitRoom({ roomId, agentId: 'agent_1' });
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.data.roomId).toBe(roomId);
         expect(result.data.agentId).toBe('agent_1');
       }
+    });
+
+    it('sets agent status to idle and clears table after valid exit', () => {
+      submitExitDocument({
+        roomId,
+        agentId: 'agent_1',
+        document: { filesChanged: ['a.ts'], testsAdded: 1, summary: 'Done' },
+      });
+      exitRoom({ roomId, agentId: 'agent_1' });
+
+      const agent = db.prepare('SELECT status, current_room_id, current_table_id FROM agents WHERE id = ?').get('agent_1') as {
+        status: string;
+        current_room_id: string | null;
+        current_table_id: string | null;
+      };
+      expect(agent.status).toBe('idle');
+      expect(agent.current_room_id).toBeNull();
+      expect(agent.current_table_id).toBeNull();
+    });
+
+    it('frees chair for next agent after exit', () => {
+      // Agent 1 takes the focus chair (1 chair limit)
+      db.prepare(`INSERT INTO agents (id, name, role, room_access) VALUES ('agent_3', 'Coder2', 'developer', '["code-lab"]')`).run();
+
+      // Agent 3 can't enter — focus table is full
+      const blocked = enterRoom({ roomId, agentId: 'agent_3', tableType: 'focus' });
+      expect(blocked.ok).toBe(false);
+
+      // Agent 1 submits exit doc and leaves
+      submitExitDocument({
+        roomId,
+        agentId: 'agent_1',
+        document: { filesChanged: ['a.ts'], testsAdded: 1, summary: 'Done' },
+      });
+      exitRoom({ roomId, agentId: 'agent_1' });
+
+      // Now agent 3 can enter
+      const allowed = enterRoom({ roomId, agentId: 'agent_3', tableType: 'focus' });
+      expect(allowed.ok).toBe(true);
     });
 
     it('rejects non-existent room', () => {
