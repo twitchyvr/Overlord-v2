@@ -7,9 +7,10 @@
  */
 
 import { BaseRoom } from './base-room.js';
+import type { RoomContract } from '../../core/contracts.js';
 
 export class CodeLab extends BaseRoom {
-  static contract = {
+  static override contract: RoomContract = {
     roomType: 'code-lab',
     floor: 'execution',
     tables: {
@@ -38,7 +39,7 @@ export class CodeLab extends BaseRoom {
     provider: 'configurable',
   };
 
-  getRules() {
+  override getRules(): string[] {
     return [
       'You are in the Code Lab. Implement the assigned task.',
       'Only modify files within your assigned scope.',
@@ -48,7 +49,7 @@ export class CodeLab extends BaseRoom {
     ];
   }
 
-  getOutputFormat() {
+  override getOutputFormat(): Record<string, unknown> {
     return {
       filesModified: ['string'],
       testsAdded: ['string'],

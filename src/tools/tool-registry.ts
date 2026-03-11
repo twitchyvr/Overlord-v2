@@ -9,40 +9,26 @@
 
 import { logger } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
+import { executeShell } from './providers/shell.js';
+import { readFileImpl, writeFileImpl, patchFileImpl, listDirImpl } from './providers/filesystem.js';
+import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
 
 const log = logger.child({ module: 'tool-registry' });
 
-/** @type {Map<string, ToolDefinition>} */
-const tools = new Map();
+const tools = new Map<string, ToolDefinition>();
 
-/**
- * @typedef {object} ToolDefinition
- * @property {string} name
- * @property {string} description
- * @property {object} inputSchema - JSON Schema for parameters
- * @property {Function} execute - (params, context) => Result
- * @property {string} category
- */
-
-export function initTools(config) {
-  // Register built-in tools
+export function initTools(_config: Config): ToolRegistryAPI {
   registerBuiltinTools();
   log.info({ count: tools.size }, 'Tool registry initialized');
   return { registerTool, getTool, getToolsForRoom, executeInRoom };
 }
 
-/**
- * Register a tool
- */
-export function registerTool(definition) {
+export function registerTool(definition: ToolDefinition): void {
   tools.set(definition.name, definition);
   log.debug({ name: definition.name, category: definition.category }, 'Tool registered');
 }
 
-/**
- * Get a tool definition by name
- */
-export function getTool(name) {
+export function getTool(name: string): ToolDefinition | null {
   return tools.get(name) || null;
 }
 
@@ -50,62 +36,88 @@ export function getTool(name) {
  * Get tools available for a specific room (filtered by room's allowed list)
  * This IS the access control — structural, not instructional
  */
-export function getToolsForRoom(allowedToolNames) {
+export function getToolsForRoom(allowedToolNames: string[]): ToolDefinition[] {
   return allowedToolNames
     .map((name) => tools.get(name))
-    .filter(Boolean);
+    .filter((t): t is ToolDefinition => t !== undefined);
 }
 
 /**
  * Execute a tool within a room context.
  * Validates the tool is allowed in the room before executing.
  */
-export async function executeInRoom({ toolName, params, roomAllowedTools, context }) {
-  // Structural enforcement: tool must be in room's allowed list
-  if (!roomAllowedTools.includes(toolName)) {
+export async function executeInRoom(params: {
+  toolName: string;
+  params: Record<string, unknown>;
+  roomAllowedTools: string[];
+  context: ToolContext;
+}): Promise<Result> {
+  if (!params.roomAllowedTools.includes(params.toolName)) {
     return err(
       'TOOL_NOT_AVAILABLE',
-      `Tool "${toolName}" is not available in this room. Available: ${roomAllowedTools.join(', ')}`
+      `Tool "${params.toolName}" is not available in this room. Available: ${params.roomAllowedTools.join(', ')}`,
     );
   }
 
-  const tool = tools.get(toolName);
+  const tool = tools.get(params.toolName);
   if (!tool) {
-    return err('TOOL_NOT_FOUND', `Tool "${toolName}" is not registered`);
+    return err('TOOL_NOT_FOUND', `Tool "${params.toolName}" is not registered`);
   }
 
   try {
-    const result = await tool.execute(params, context);
+    const result = await tool.execute(params.params, params.context);
     return ok(result);
   } catch (error) {
-    return err('TOOL_EXECUTION_ERROR', error.message, { retryable: true, context: { toolName } });
+    const message = error instanceof Error ? error.message : String(error);
+    return err('TOOL_EXECUTION_ERROR', message, {
+      retryable: true,
+      context: { toolName: params.toolName },
+    });
   }
 }
 
-/**
- * Register all built-in tools
- */
-function registerBuiltinTools() {
-  // Shell tools
+function registerBuiltinTools(): void {
+  // ─── Shell ───
   registerTool({
     name: 'bash',
     description: 'Execute a bash command',
     category: 'shell',
-    inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
-    execute: async (params) => {
-      // Delegated to providers/shell.js
-      return { output: 'Shell execution delegated to provider', command: params.command };
+    inputSchema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'The bash command to execute' },
+        timeout: { type: 'number', description: 'Timeout in milliseconds (default: 30000)' },
+      },
+      required: ['command'],
+    },
+    execute: async (p) => {
+      const result = await executeShell({
+        command: p.command as string,
+        timeout: p.timeout as number | undefined,
+      });
+      if (result.timedOut) {
+        return { output: `Command timed out.\nPartial stdout: ${result.stdout}\nPartial stderr: ${result.stderr}` };
+      }
+      if (result.exitCode !== 0) {
+        return { output: `Exit code ${result.exitCode}\nstdout: ${result.stdout}\nstderr: ${result.stderr}` };
+      }
+      return { output: result.stdout || '(no output)' };
     },
   });
 
-  // File tools
+  // ─── File Operations ───
   registerTool({
     name: 'read_file',
     description: 'Read a file from the filesystem',
     category: 'file',
-    inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
-    execute: async (params) => {
-      return { output: 'File read delegated to provider', path: params.path };
+    inputSchema: {
+      type: 'object',
+      properties: { path: { type: 'string', description: 'File path to read' } },
+      required: ['path'],
+    },
+    execute: async (p) => {
+      const result = await readFileImpl({ path: p.path as string });
+      return { output: result.content, path: result.path, size: result.size };
     },
   });
 
@@ -115,25 +127,41 @@ function registerBuiltinTools() {
     category: 'file',
     inputSchema: {
       type: 'object',
-      properties: { path: { type: 'string' }, content: { type: 'string' } },
+      properties: {
+        path: { type: 'string', description: 'File path to write' },
+        content: { type: 'string', description: 'Content to write' },
+      },
       required: ['path', 'content'],
     },
-    execute: async (params) => {
-      return { output: 'File write delegated to provider', path: params.path };
+    execute: async (p) => {
+      const result = await writeFileImpl({ path: p.path as string, content: p.content as string });
+      return { output: `Written ${result.bytesWritten} bytes to ${result.path}`, path: result.path };
     },
   });
 
   registerTool({
     name: 'patch_file',
-    description: 'Apply a patch/edit to a file',
+    description: 'Apply a search/replace patch to a file',
     category: 'file',
     inputSchema: {
       type: 'object',
-      properties: { path: { type: 'string' }, search: { type: 'string' }, replace: { type: 'string' } },
+      properties: {
+        path: { type: 'string', description: 'File path to patch' },
+        search: { type: 'string', description: 'Text to search for' },
+        replace: { type: 'string', description: 'Replacement text' },
+      },
       required: ['path', 'search', 'replace'],
     },
-    execute: async (params) => {
-      return { output: 'File patch delegated to provider', path: params.path };
+    execute: async (p) => {
+      const result = await patchFileImpl({
+        path: p.path as string,
+        search: p.search as string,
+        replace: p.replace as string,
+      });
+      if (!result.matched) {
+        return { output: `Search string not found in ${result.path}`, matched: false };
+      }
+      return { output: `Patched ${result.occurrences} occurrence(s) in ${result.path}`, matched: true };
     },
   });
 
@@ -141,90 +169,124 @@ function registerBuiltinTools() {
     name: 'list_dir',
     description: 'List contents of a directory',
     category: 'file',
-    inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
-    execute: async (params) => {
-      return { output: 'Directory listing delegated to provider', path: params.path };
+    inputSchema: {
+      type: 'object',
+      properties: { path: { type: 'string', description: 'Directory path to list' } },
+      required: ['path'],
+    },
+    execute: async (p) => {
+      const result = await listDirImpl({ path: p.path as string });
+      const listing = result.entries
+        .map((e) => `${e.type === 'directory' ? '[dir]' : `[${e.size}B]`} ${e.name}`)
+        .join('\n');
+      return { output: listing || '(empty directory)', entries: result.entries };
     },
   });
 
-  // Web tools
+  // ─── Web Tools (still delegated — require external API integration) ───
   registerTool({
     name: 'web_search',
     description: 'Search the web',
     category: 'web',
-    inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
-    execute: async (params) => {
-      return { output: 'Web search delegated to provider', query: params.query };
+    inputSchema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Search query' } },
+      required: ['query'],
     },
+    execute: async (p) => ({ output: `Web search not yet implemented. Query: ${p.query}` }),
   });
 
   registerTool({
     name: 'fetch_webpage',
     description: 'Fetch and parse a webpage',
     category: 'web',
-    inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
-    execute: async (params) => {
-      return { output: 'Web fetch delegated to provider', url: params.url };
+    inputSchema: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'URL to fetch' } },
+      required: ['url'],
     },
+    execute: async (p) => ({ output: `Webpage fetch not yet implemented. URL: ${p.url}` }),
   });
 
-  // QA tools
+  // ─── QA Tools ───
   for (const qa of ['qa_run_tests', 'qa_check_lint', 'qa_check_types', 'qa_check_coverage', 'qa_audit_deps']) {
+    const cmdMap: Record<string, string> = {
+      qa_run_tests: 'npm test',
+      qa_check_lint: 'npm run lint',
+      qa_check_types: 'npm run typecheck',
+      qa_check_coverage: 'npm run test:coverage',
+      qa_audit_deps: 'npm audit',
+    };
+
     registerTool({
       name: qa,
       description: `QA: ${qa.replace('qa_', '').replace(/_/g, ' ')}`,
       category: 'qa',
-      inputSchema: { type: 'object', properties: { args: { type: 'string' } } },
-      execute: async (params) => {
-        return { output: `QA tool ${qa} delegated to provider` };
+      inputSchema: {
+        type: 'object',
+        properties: { args: { type: 'string', description: 'Additional arguments' } },
+      },
+      execute: async (p) => {
+        const cmd = `${cmdMap[qa]}${p.args ? ` ${p.args}` : ''}`;
+        const result = await executeShell({ command: cmd, timeout: 120_000 });
+        return { output: result.stdout + (result.stderr ? `\n${result.stderr}` : ''), exitCode: result.exitCode };
       },
     });
   }
 
-  // GitHub
+  // ─── GitHub ───
   registerTool({
     name: 'github',
     description: 'GitHub CLI operations (commit, PR, issues)',
     category: 'github',
     inputSchema: {
       type: 'object',
-      properties: { action: { type: 'string' }, args: { type: 'object' } },
+      properties: {
+        action: { type: 'string', description: 'gh CLI command (e.g., "pr list", "issue create")' },
+        args: { type: 'object', description: 'Additional arguments' },
+      },
       required: ['action'],
     },
-    execute: async (params) => {
-      return { output: 'GitHub operation delegated to provider', action: params.action };
+    execute: async (p) => {
+      const result = await executeShell({ command: `gh ${p.action}`, timeout: 30_000 });
+      return { output: result.stdout + (result.stderr ? `\n${result.stderr}` : ''), exitCode: result.exitCode };
     },
   });
 
-  // Notes
+  // ─── Notes (DB-backed, basic for now) ───
   registerTool({
     name: 'record_note',
     description: 'Record a session note',
     category: 'notes',
-    inputSchema: { type: 'object', properties: { content: { type: 'string' } }, required: ['content'] },
-    execute: async (params) => {
-      return { output: 'Note recorded', content: params.content };
+    inputSchema: {
+      type: 'object',
+      properties: { content: { type: 'string', description: 'Note content' } },
+      required: ['content'],
     },
+    execute: async (p) => ({ output: 'Note recorded', content: p.content }),
   });
 
   registerTool({
     name: 'recall_notes',
     description: 'Recall session notes',
     category: 'notes',
-    inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
-    execute: async (params) => {
-      return { output: 'Notes recall delegated to provider' };
+    inputSchema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Search query for notes' } },
     },
+    execute: async () => ({ output: 'Notes recall not yet implemented' }),
   });
 
-  // User interaction
+  // ─── System ───
   registerTool({
     name: 'ask_user',
     description: 'Ask the user a question',
     category: 'system',
-    inputSchema: { type: 'object', properties: { question: { type: 'string' } }, required: ['question'] },
-    execute: async (params) => {
-      return { output: 'User question delegated to transport layer', question: params.question };
+    inputSchema: {
+      type: 'object',
+      properties: { question: { type: 'string', description: 'Question to ask' } },
+      required: ['question'],
     },
+    execute: async (p) => ({ output: 'User question delegated to transport layer', question: p.question }),
   });
 }

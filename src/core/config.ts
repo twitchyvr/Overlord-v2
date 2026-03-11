@@ -18,10 +18,12 @@ const ConfigSchema = z.object({
 
   // AI Providers
   ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_BASE_URL: z.string().optional(),
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-20250514'),
   MINIMAX_API_KEY: z.string().optional(),
+  MINIMAX_BASE_URL: z.string().default('https://api.minimax.io/anthropic'),
   MINIMAX_GROUP_ID: z.string().optional(),
-  MINIMAX_MODEL: z.string().default('MiniMax-Text-01'),
+  MINIMAX_MODEL: z.string().default('MiniMax-M2.5'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o'),
   OLLAMA_BASE_URL: z.string().default('http://localhost:11434'),
@@ -53,18 +55,21 @@ const ConfigSchema = z.object({
   PLUGIN_DIR: z.string().default('./plugins'),
 });
 
+type ConfigValues = z.infer<typeof ConfigSchema>;
+type ConfigKey = keyof ConfigValues;
+
 class Config {
-  #values = {};
+  #values: ConfigValues | null = null;
 
   constructor() {
     loadDotenv();
   }
 
-  validate() {
+  validate(): this {
     const result = ConfigSchema.safeParse(process.env);
     if (!result.success) {
       const errors = result.error.issues.map(
-        (i) => `  ${i.path.join('.')}: ${i.message}`
+        (i) => `  ${i.path.join('.')}: ${i.message}`,
       );
       throw new Error(`Config validation failed:\n${errors.join('\n')}`);
     }
@@ -72,13 +77,20 @@ class Config {
     return this;
   }
 
-  get(key) {
+  get<K extends ConfigKey>(key: K): ConfigValues[K] {
+    if (!this.#values) {
+      throw new Error('Config not validated. Call config.validate() first.');
+    }
     return this.#values[key];
   }
 
-  getAll() {
+  getAll(): ConfigValues {
+    if (!this.#values) {
+      throw new Error('Config not validated. Call config.validate() first.');
+    }
     return { ...this.#values };
   }
 }
 
 export const config = new Config();
+export type { Config, ConfigValues, ConfigKey };

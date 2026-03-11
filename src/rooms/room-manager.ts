@@ -11,46 +11,60 @@
 import { logger } from '../core/logger.js';
 import { getDb } from '../storage/db.js';
 import { ok, err } from '../core/contracts.js';
+import type {
+  Result,
+  RoomManagerAPI,
+  RoomRow,
+  AgentRow,
+  BaseRoomConstructor,
+  AgentRegistryAPI,
+  ToolRegistryAPI,
+  AIProviderAPI,
+} from '../core/contracts.js';
+import type { Bus } from '../core/bus.js';
+import { BaseRoom } from './room-types/base-room.js';
 
 const log = logger.child({ module: 'room-manager' });
 
-/** @type {Map<string, import('./room-types/base-room.js').BaseRoom>} */
-const activeRooms = new Map();
+const activeRooms = new Map<string, BaseRoom>();
+const roomTypeRegistry = new Map<string, typeof BaseRoom>();
 
-/** @type {Map<string, Function>} */
-const roomTypeRegistry = new Map();
+interface InitRoomsParams {
+  bus: Bus;
+  agents: AgentRegistryAPI;
+  tools: ToolRegistryAPI;
+  ai: AIProviderAPI;
+}
 
-export function initRooms({ bus, agents, tools, ai }) {
-  // Register built-in room types
-  // Each room type is loaded from room-types/ directory
-  bus.on('room:create', (data) => createRoom(data));
-  bus.on('room:enter', (data) => enterRoom(data));
-  bus.on('room:exit', (data) => exitRoom(data));
-  bus.on('room:submit-exit-doc', (data) => submitExitDocument(data));
+export function initRooms({ bus }: InitRoomsParams): RoomManagerAPI {
+  bus.on('room:create', (data: Record<string, unknown>) => createRoom(data as unknown as CreateRoomParams));
+  bus.on('room:enter', (data: Record<string, unknown>) => enterRoom(data as unknown as EnterRoomParams));
+  bus.on('room:exit', (data: Record<string, unknown>) => exitRoom(data as unknown as ExitRoomParams));
+  bus.on('room:submit-exit-doc', (data: Record<string, unknown>) => submitExitDocument(data as unknown as SubmitExitDocParams));
 
   log.info('Room manager initialized');
   return { createRoom, enterRoom, exitRoom, getRoom, listRooms, registerRoomType };
 }
 
+interface CreateRoomParams {
+  type: string;
+  floorId: string;
+  name: string;
+  config?: Record<string, unknown>;
+}
+
 /**
  * Register a room type (built-in or plugin)
- * @param {string} type - Room type identifier (e.g., 'code-lab', 'testing-lab')
- * @param {Function} factory - Room class or factory function
  */
-export function registerRoomType(type, factory) {
-  roomTypeRegistry.set(type, factory);
+export function registerRoomType(type: string, factory: BaseRoomConstructor): void {
+  roomTypeRegistry.set(type, factory as unknown as typeof BaseRoom);
   log.info({ type }, 'Room type registered');
 }
 
 /**
  * Create a new room instance
- * @param {object} params
- * @param {string} params.type - Room type
- * @param {string} params.floorId - Floor this room belongs to
- * @param {string} params.name - Display name
- * @param {object} [params.config] - Room-specific config overrides
  */
-export function createRoom({ type, floorId, name, config: roomConfig = {} }) {
+export function createRoom({ type, floorId, name, config: roomConfig = {} }: CreateRoomParams): Result {
   const Factory = roomTypeRegistry.get(type);
   if (!Factory) {
     return err('UNKNOWN_ROOM_TYPE', `Room type "${type}" is not registered`);
@@ -74,7 +88,7 @@ export function createRoom({ type, floorId, name, config: roomConfig = {} }) {
     JSON.stringify(contract.exitRequired),
     JSON.stringify(contract.escalation || {}),
     contract.provider || 'configurable',
-    JSON.stringify(roomConfig)
+    JSON.stringify(roomConfig),
   );
 
   const room = new Factory(id, { ...contract, ...roomConfig });
@@ -84,14 +98,16 @@ export function createRoom({ type, floorId, name, config: roomConfig = {} }) {
   return ok({ id, type, name });
 }
 
+interface EnterRoomParams {
+  roomId: string;
+  agentId: string;
+  tableType?: string;
+}
+
 /**
  * Agent enters a room — room's tools merge into agent's context
- * @param {object} params
- * @param {string} params.roomId
- * @param {string} params.agentId
- * @param {string} [params.tableType='focus'] - Table mode to sit at
  */
-export function enterRoom({ roomId, agentId, tableType = 'focus' }) {
+export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomParams): Result {
   const room = activeRooms.get(roomId);
   if (!room) {
     return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
@@ -99,12 +115,12 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }) {
 
   // Check agent has badge access to this room type
   const db = getDb();
-  const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId);
+  const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as AgentRow | undefined;
   if (!agent) {
     return err('AGENT_NOT_FOUND', `Agent ${agentId} does not exist`);
   }
 
-  const roomAccess = JSON.parse(agent.room_access || '[]');
+  const roomAccess = JSON.parse(agent.room_access || '[]') as string[];
   if (!roomAccess.includes(room.type) && !roomAccess.includes('*')) {
     return err('ACCESS_DENIED', `Agent ${agent.name} does not have access to ${room.type} rooms`);
   }
@@ -113,34 +129,45 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }) {
   db.prepare('UPDATE agents SET current_room_id = ?, status = ? WHERE id = ?').run(
     roomId,
     'active',
-    agentId
+    agentId,
   );
 
   log.info({ roomId, agentId, tableType }, 'Agent entered room');
   return ok({ roomId, agentId, tools: room.getAllowedTools(), fileScope: room.fileScope });
 }
 
+interface ExitRoomParams {
+  roomId: string;
+  agentId: string;
+}
+
 /**
  * Agent exits a room — requires exit document if room mandates it
  */
-export function exitRoom({ roomId, agentId }) {
+export function exitRoom({ roomId, agentId }: ExitRoomParams): Result {
   const room = activeRooms.get(roomId);
   if (!room) return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
 
   const db = getDb();
   db.prepare('UPDATE agents SET current_room_id = NULL, status = ? WHERE id = ?').run(
     'idle',
-    agentId
+    agentId,
   );
 
   log.info({ roomId, agentId }, 'Agent exited room');
   return ok({ roomId, agentId });
 }
 
+interface SubmitExitDocParams {
+  roomId: string;
+  agentId: string;
+  document: Record<string, unknown>;
+}
+
 /**
  * Submit a structured exit document for a room
  */
-export function submitExitDocument({ roomId, agentId, document }) {
+export function submitExitDocument({ roomId, agentId, document }: SubmitExitDocParams): Result {
   const room = activeRooms.get(roomId);
   if (!room) return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
 
@@ -159,18 +186,18 @@ export function submitExitDocument({ roomId, agentId, document }) {
     room.exitRequired?.type || 'generic',
     agentId,
     JSON.stringify(document),
-    JSON.stringify(document.artifacts || [])
+    JSON.stringify((document.artifacts as string[]) || []),
   );
 
   log.info({ id, roomId, agentId }, 'Exit document submitted');
   return ok({ id, roomId });
 }
 
-export function getRoom(roomId) {
+export function getRoom(roomId: string): BaseRoom | null {
   return activeRooms.get(roomId) || null;
 }
 
-export function listRooms() {
+export function listRooms(): RoomRow[] {
   const db = getDb();
-  return db.prepare('SELECT * FROM rooms ORDER BY created_at').all();
+  return db.prepare('SELECT * FROM rooms ORDER BY created_at').all() as RoomRow[];
 }

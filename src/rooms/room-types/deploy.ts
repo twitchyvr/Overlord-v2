@@ -6,9 +6,10 @@
  */
 
 import { BaseRoom } from './base-room.js';
+import type { RoomContract } from '../../core/contracts.js';
 
 export class DeployRoom extends BaseRoom {
-  static contract = {
+  static override contract: RoomContract = {
     roomType: 'deploy',
     floor: 'operations',
     tables: {
@@ -33,7 +34,7 @@ export class DeployRoom extends BaseRoom {
     provider: 'configurable',
   };
 
-  getRules() {
+  override getRules(): string[] {
     return [
       'You are in the Deploy Room. Execute the deployment plan.',
       'Verify Release Lounge sign-off before proceeding.',
@@ -43,7 +44,7 @@ export class DeployRoom extends BaseRoom {
     ];
   }
 
-  getOutputFormat() {
+  override getOutputFormat(): Record<string, unknown> {
     return {
       environment: 'string',
       version: 'string',

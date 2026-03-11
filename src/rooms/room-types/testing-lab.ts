@@ -9,9 +9,10 @@
  */
 
 import { BaseRoom } from './base-room.js';
+import type { RoomContract } from '../../core/contracts.js';
 
 export class TestingLab extends BaseRoom {
-  static contract = {
+  static override contract: RoomContract = {
     roomType: 'testing-lab',
     floor: 'execution',
     tables: {
@@ -45,10 +46,10 @@ export class TestingLab extends BaseRoom {
       onFailure: 'code-lab',
       onCritical: 'war-room',
     },
-    provider: 'cheap', // Repetitive test runs — use cost-effective model
+    provider: 'configurable', // Repetitive test runs — use cost-effective model
   };
 
-  getRules() {
+  override getRules(): string[] {
     return [
       'You are in the Testing Lab. You CANNOT modify source code.',
       'Run tests, analyze results, and report findings.',
@@ -58,7 +59,7 @@ export class TestingLab extends BaseRoom {
     ];
   }
 
-  getOutputFormat() {
+  override getOutputFormat(): Record<string, unknown> {
     return {
       testsRun: 'number',
       testsPassed: 'number',

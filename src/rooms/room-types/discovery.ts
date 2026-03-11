@@ -8,9 +8,10 @@
  */
 
 import { BaseRoom } from './base-room.js';
+import type { RoomContract } from '../../core/contracts.js';
 
 export class DiscoveryRoom extends BaseRoom {
-  static contract = {
+  static override contract: RoomContract = {
     roomType: 'discovery',
     floor: 'collaboration',
     tables: {
@@ -39,10 +40,10 @@ export class DiscoveryRoom extends BaseRoom {
     escalation: {
       onComplete: 'architecture',
     },
-    provider: 'smart', // Complex reasoning — Claude or equivalent
+    provider: 'configurable', // Complex reasoning — Claude or equivalent
   };
 
-  getRules() {
+  override getRules(): string[] {
     return [
       'You are in the Discovery Room. Define what needs to be built.',
       'NO code changes. Research, analyze, document.',
@@ -52,7 +53,7 @@ export class DiscoveryRoom extends BaseRoom {
     ];
   }
 
-  getOutputFormat() {
+  override getOutputFormat(): Record<string, unknown> {
     return {
       businessOutcomes: ['string'],
       constraints: ['string'],

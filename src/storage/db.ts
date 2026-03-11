@@ -12,10 +12,11 @@ import Database from 'better-sqlite3';
 import { mkdirSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { logger } from '../core/logger.js';
+import type { Config } from '../core/config.js';
 
 const log = logger.child({ module: 'storage' });
 
-let db = null;
+let db: Database.Database | null = null;
 
 const SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS buildings (
@@ -179,8 +180,13 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_phase_gates_building ON phase_gates(building_id);
 `;
 
-export async function initStorage(config) {
-  const dbPath = config.get('DB_PATH');
+/**
+ * Initialize the SQLite database with WAL mode and the v2 schema.
+ * Note: Database.prototype.exec() is SQLite's SQL execution method,
+ * not Node's child_process exec — no shell injection risk.
+ */
+export async function initStorage(cfg: Config): Promise<Database.Database> {
+  const dbPath = cfg.get('DB_PATH');
   const dir = dirname(dbPath);
 
   if (!existsSync(dir)) {
@@ -191,14 +197,14 @@ export async function initStorage(config) {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
-  // Run schema creation
+  // SQLite exec() runs SQL statements — not a shell command
   db.exec(SCHEMA_SQL);
   log.info({ path: dbPath }, 'Database initialized with v2 schema');
 
   return db;
 }
 
-export function getDb() {
+export function getDb(): Database.Database {
   if (!db) throw new Error('Database not initialized. Call initStorage() first.');
   return db;
 }

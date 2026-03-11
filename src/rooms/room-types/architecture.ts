@@ -7,9 +7,10 @@
  */
 
 import { BaseRoom } from './base-room.js';
+import type { RoomContract } from '../../core/contracts.js';
 
 export class ArchitectureRoom extends BaseRoom {
-  static contract = {
+  static override contract: RoomContract = {
     roomType: 'architecture',
     floor: 'collaboration',
     tables: {
@@ -38,10 +39,10 @@ export class ArchitectureRoom extends BaseRoom {
       onComplete: 'code-lab',
       onScopeChange: 'discovery',
     },
-    provider: 'smart',
+    provider: 'configurable',
   };
 
-  getRules() {
+  override getRules(): string[] {
     return [
       'You are in the Architecture Room. Design the implementation plan.',
       'NO code changes. Break requirements into milestones and tasks.',
@@ -51,7 +52,7 @@ export class ArchitectureRoom extends BaseRoom {
     ];
   }
 
-  getOutputFormat() {
+  override getOutputFormat(): Record<string, unknown> {
     return {
       milestones: [{ name: 'string', criteria: ['string'], dependencies: ['string'] }],
       taskBreakdown: [{ id: 'string', title: 'string', scope: { files: ['string'] }, assignee: 'string' }],
