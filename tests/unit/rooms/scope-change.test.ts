@@ -268,6 +268,33 @@ describe('initiateReEntry', () => {
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('BUILDING_NOT_FOUND');
   });
+
+  it('returns FLOOR_NOT_FOUND when target floor is missing from building', () => {
+    // Delete the collaboration floor so discovery room can't be placed
+    memDb.prepare('DELETE FROM floors WHERE building_id = ? AND type = ?').run(buildingId, 'collaboration');
+
+    const detect = detectScopeChange({
+      buildingId,
+      description: 'Re-entry needs collab floor',
+      affectedAreas: ['core'],
+      detectedBy: agentId,
+      currentPhase: 'execution',
+    });
+
+    const result = initiateReEntry({
+      buildingId,
+      targetRoomType: 'discovery',
+      agentId,
+      scopeChangeId: detect.data.raidId,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('FLOOR_NOT_FOUND');
+      expect(result.error.message).toContain('collaboration');
+      expect(result.error.message).toContain(buildingId);
+    }
+  });
 });
 
 // ─── Escalation Handler ───
