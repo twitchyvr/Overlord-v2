@@ -10,6 +10,15 @@ import { EventEmitter } from 'eventemitter3';
 import { initTransport } from '../../../src/transport/socket-handler.js';
 import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI } from '../../../src/core/contracts.js';
 
+// Mock building-manager — imported directly by socket-handler
+vi.mock('../../../src/rooms/building-manager.js', () => ({
+  createBuilding: vi.fn().mockReturnValue({ ok: true, data: { id: 'bld_1', name: 'Test Building' } }),
+  getBuilding: vi.fn().mockReturnValue({ ok: true, data: { id: 'bld_1', name: 'Test Building', floors: [] } }),
+  listBuildings: vi.fn().mockReturnValue({ ok: true, data: [] }),
+}));
+
+import { createBuilding, getBuilding, listBuildings } from '../../../src/rooms/building-manager.js';
+
 // Mock socket — emulates a Socket.IO socket with on/emit
 class MockSocket extends EventEmitter {
   id = 'socket_test_1';
@@ -98,6 +107,9 @@ describe('Socket Handler (Transport Layer)', () => {
   describe('connection lifecycle', () => {
     it('registers handlers on socket connection', () => {
       // The socket should now have listeners for all our events
+      expect(socket.listenerCount('building:create')).toBeGreaterThan(0);
+      expect(socket.listenerCount('building:get')).toBeGreaterThan(0);
+      expect(socket.listenerCount('building:list')).toBeGreaterThan(0);
       expect(socket.listenerCount('room:create')).toBeGreaterThan(0);
       expect(socket.listenerCount('room:enter')).toBeGreaterThan(0);
       expect(socket.listenerCount('room:exit')).toBeGreaterThan(0);
@@ -106,6 +118,7 @@ describe('Socket Handler (Transport Layer)', () => {
       expect(socket.listenerCount('agent:list')).toBeGreaterThan(0);
       expect(socket.listenerCount('chat:message')).toBeGreaterThan(0);
       expect(socket.listenerCount('system:health')).toBeGreaterThan(0);
+      expect(socket.listenerCount('system:status')).toBeGreaterThan(0);
       expect(socket.listenerCount('disconnect')).toBeGreaterThan(0);
     });
   });
@@ -258,6 +271,78 @@ describe('Socket Handler (Transport Layer)', () => {
       const event = bus.emitted.find((e) => e.event === 'raid:search');
       expect(event).toBeDefined();
       expect(ack).toHaveBeenCalledWith({ ok: true });
+    });
+  });
+
+  describe('building events', () => {
+    it('building:create calls createBuilding and acks', () => {
+      const ack = vi.fn();
+      socket.emit('building:create', { name: 'My Project' }, ack);
+
+      expect(createBuilding).toHaveBeenCalledWith({ name: 'My Project' });
+      expect(ack).toHaveBeenCalledWith({ ok: true, data: { id: 'bld_1', name: 'Test Building' } });
+    });
+
+    it('building:get calls getBuilding and acks', () => {
+      const ack = vi.fn();
+      socket.emit('building:get', { buildingId: 'bld_1' }, ack);
+
+      expect(getBuilding).toHaveBeenCalledWith('bld_1');
+      expect(ack).toHaveBeenCalledWith({ ok: true, data: { id: 'bld_1', name: 'Test Building', floors: [] } });
+    });
+
+    it('building:list calls listBuildings and acks', () => {
+      const ack = vi.fn();
+      socket.emit('building:list', {}, ack);
+
+      expect(listBuildings).toHaveBeenCalled();
+      expect(ack).toHaveBeenCalled();
+    });
+  });
+
+  describe('system:status (returning-user check)', () => {
+    it('returns isNewUser=true when no buildings exist', () => {
+      const ack = vi.fn();
+      socket.emit('system:status', {}, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: true,
+        data: { isNewUser: true, buildings: [] },
+      });
+    });
+
+    it('returns isNewUser=false when buildings exist', () => {
+      (listBuildings as ReturnType<typeof vi.fn>).mockReturnValue({
+        ok: true,
+        data: [{ id: 'bld_1', name: 'Project Alpha', active_phase: 'discovery' }],
+      });
+
+      const ack = vi.fn();
+      socket.emit('system:status', {}, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: true,
+        data: {
+          isNewUser: false,
+          buildings: [{ id: 'bld_1', name: 'Project Alpha', activePhase: 'discovery' }],
+        },
+      });
+    });
+  });
+
+  describe('Phase Zero bus → socket broadcasts', () => {
+    it('broadcasts phase-zero:complete from bus to all sockets', () => {
+      bus.emit('phase-zero:complete', { buildingId: 'bld_1', phase: 'strategy' });
+
+      const broadcast = io.broadcasted.find((b) => b.event === 'phase-zero:complete');
+      expect(broadcast).toBeDefined();
+    });
+
+    it('broadcasts scope-change:detected from bus to all sockets', () => {
+      bus.emit('scope-change:detected', { buildingId: 'bld_1', targetRoomType: 'discovery' });
+
+      const broadcast = io.broadcasted.find((b) => b.event === 'scope-change:detected');
+      expect(broadcast).toBeDefined();
     });
   });
 });
