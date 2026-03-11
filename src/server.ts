@@ -21,9 +21,11 @@ import { initAgents } from './agents/agent-registry.js';
 import { initRooms } from './rooms/room-manager.js';
 import { initTransport } from './transport/socket-handler.js';
 
+import type { Request, Response } from 'express';
+
 const log = logger.child({ module: 'server' });
 
-async function start() {
+async function start(): Promise<void> {
   log.info('Overlord v2 starting...');
 
   // 1. Validate config
@@ -61,7 +63,7 @@ async function start() {
   log.info('Transport layer initialized');
 
   // 5. Health check
-  app.get('/health', (_req, res) => {
+  app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok', version: '0.1.0', uptime: process.uptime() });
   });
 
@@ -73,7 +75,7 @@ async function start() {
   });
 
   // 7. Graceful shutdown
-  const shutdown = async (signal) => {
+  const shutdown = (signal: string): void => {
     log.info({ signal }, 'Shutting down...');
     bus.emit('server:shutdown');
     http.close();
@@ -84,7 +86,7 @@ async function start() {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
-start().catch((err) => {
-  log.fatal(err, 'Failed to start Overlord v2');
+start().catch((error: unknown) => {
+  log.fatal(error, 'Failed to start Overlord v2');
   process.exit(1);
 });

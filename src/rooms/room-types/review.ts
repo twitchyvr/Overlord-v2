@@ -7,9 +7,10 @@
  */
 
 import { BaseRoom } from './base-room.js';
+import type { RoomContract } from '../../core/contracts.js';
 
 export class ReviewRoom extends BaseRoom {
-  static contract = {
+  static override contract: RoomContract = {
     roomType: 'review',
     floor: 'governance',
     tables: {
@@ -32,7 +33,7 @@ export class ReviewRoom extends BaseRoom {
       onNoGo: 'code-lab',
       onCritical: 'war-room',
     },
-    provider: 'smart',
+    provider: 'configurable',
   };
 
   gateProtocol = {
@@ -42,7 +43,7 @@ export class ReviewRoom extends BaseRoom {
     signoffRoles: ['architect', 'user'],
   };
 
-  getRules() {
+  override getRules(): string[] {
     return [
       'You are in the Review Room. Make a go/no-go decision.',
       'Review ALL evidence — do not rubber-stamp.',
@@ -52,7 +53,7 @@ export class ReviewRoom extends BaseRoom {
     ];
   }
 
-  getOutputFormat() {
+  override getOutputFormat(): Record<string, unknown> {
     return {
       verdict: 'GO | NO-GO | CONDITIONAL',
       evidence: [{ claim: 'string', proof: 'string', citation: 'string' }],

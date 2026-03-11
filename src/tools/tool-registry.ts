@@ -9,40 +9,24 @@
 
 import { logger } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
+import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
 
 const log = logger.child({ module: 'tool-registry' });
 
-/** @type {Map<string, ToolDefinition>} */
-const tools = new Map();
+const tools = new Map<string, ToolDefinition>();
 
-/**
- * @typedef {object} ToolDefinition
- * @property {string} name
- * @property {string} description
- * @property {object} inputSchema - JSON Schema for parameters
- * @property {Function} execute - (params, context) => Result
- * @property {string} category
- */
-
-export function initTools(config) {
-  // Register built-in tools
+export function initTools(_config: Config): ToolRegistryAPI {
   registerBuiltinTools();
   log.info({ count: tools.size }, 'Tool registry initialized');
   return { registerTool, getTool, getToolsForRoom, executeInRoom };
 }
 
-/**
- * Register a tool
- */
-export function registerTool(definition) {
+export function registerTool(definition: ToolDefinition): void {
   tools.set(definition.name, definition);
   log.debug({ name: definition.name, category: definition.category }, 'Tool registered');
 }
 
-/**
- * Get a tool definition by name
- */
-export function getTool(name) {
+export function getTool(name: string): ToolDefinition | null {
   return tools.get(name) || null;
 }
 
@@ -50,63 +34,61 @@ export function getTool(name) {
  * Get tools available for a specific room (filtered by room's allowed list)
  * This IS the access control — structural, not instructional
  */
-export function getToolsForRoom(allowedToolNames) {
+export function getToolsForRoom(allowedToolNames: string[]): ToolDefinition[] {
   return allowedToolNames
     .map((name) => tools.get(name))
-    .filter(Boolean);
+    .filter((t): t is ToolDefinition => t !== undefined);
 }
 
 /**
  * Execute a tool within a room context.
  * Validates the tool is allowed in the room before executing.
  */
-export async function executeInRoom({ toolName, params, roomAllowedTools, context }) {
-  // Structural enforcement: tool must be in room's allowed list
-  if (!roomAllowedTools.includes(toolName)) {
+export async function executeInRoom(params: {
+  toolName: string;
+  params: Record<string, unknown>;
+  roomAllowedTools: string[];
+  context: ToolContext;
+}): Promise<Result> {
+  if (!params.roomAllowedTools.includes(params.toolName)) {
     return err(
       'TOOL_NOT_AVAILABLE',
-      `Tool "${toolName}" is not available in this room. Available: ${roomAllowedTools.join(', ')}`
+      `Tool "${params.toolName}" is not available in this room. Available: ${params.roomAllowedTools.join(', ')}`,
     );
   }
 
-  const tool = tools.get(toolName);
+  const tool = tools.get(params.toolName);
   if (!tool) {
-    return err('TOOL_NOT_FOUND', `Tool "${toolName}" is not registered`);
+    return err('TOOL_NOT_FOUND', `Tool "${params.toolName}" is not registered`);
   }
 
   try {
-    const result = await tool.execute(params, context);
+    const result = await tool.execute(params.params, params.context);
     return ok(result);
   } catch (error) {
-    return err('TOOL_EXECUTION_ERROR', error.message, { retryable: true, context: { toolName } });
+    const message = error instanceof Error ? error.message : String(error);
+    return err('TOOL_EXECUTION_ERROR', message, {
+      retryable: true,
+      context: { toolName: params.toolName },
+    });
   }
 }
 
-/**
- * Register all built-in tools
- */
-function registerBuiltinTools() {
-  // Shell tools
+function registerBuiltinTools(): void {
   registerTool({
     name: 'bash',
     description: 'Execute a bash command',
     category: 'shell',
     inputSchema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] },
-    execute: async (params) => {
-      // Delegated to providers/shell.js
-      return { output: 'Shell execution delegated to provider', command: params.command };
-    },
+    execute: async (p) => ({ output: 'Shell execution delegated to provider', command: p.command }),
   });
 
-  // File tools
   registerTool({
     name: 'read_file',
     description: 'Read a file from the filesystem',
     category: 'file',
     inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
-    execute: async (params) => {
-      return { output: 'File read delegated to provider', path: params.path };
-    },
+    execute: async (p) => ({ output: 'File read delegated to provider', path: p.path }),
   });
 
   registerTool({
@@ -118,9 +100,7 @@ function registerBuiltinTools() {
       properties: { path: { type: 'string' }, content: { type: 'string' } },
       required: ['path', 'content'],
     },
-    execute: async (params) => {
-      return { output: 'File write delegated to provider', path: params.path };
-    },
+    execute: async (p) => ({ output: 'File write delegated to provider', path: p.path }),
   });
 
   registerTool({
@@ -132,9 +112,7 @@ function registerBuiltinTools() {
       properties: { path: { type: 'string' }, search: { type: 'string' }, replace: { type: 'string' } },
       required: ['path', 'search', 'replace'],
     },
-    execute: async (params) => {
-      return { output: 'File patch delegated to provider', path: params.path };
-    },
+    execute: async (p) => ({ output: 'File patch delegated to provider', path: p.path }),
   });
 
   registerTool({
@@ -142,20 +120,15 @@ function registerBuiltinTools() {
     description: 'List contents of a directory',
     category: 'file',
     inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
-    execute: async (params) => {
-      return { output: 'Directory listing delegated to provider', path: params.path };
-    },
+    execute: async (p) => ({ output: 'Directory listing delegated to provider', path: p.path }),
   });
 
-  // Web tools
   registerTool({
     name: 'web_search',
     description: 'Search the web',
     category: 'web',
     inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
-    execute: async (params) => {
-      return { output: 'Web search delegated to provider', query: params.query };
-    },
+    execute: async (p) => ({ output: 'Web search delegated to provider', query: p.query }),
   });
 
   registerTool({
@@ -163,25 +136,19 @@ function registerBuiltinTools() {
     description: 'Fetch and parse a webpage',
     category: 'web',
     inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
-    execute: async (params) => {
-      return { output: 'Web fetch delegated to provider', url: params.url };
-    },
+    execute: async (p) => ({ output: 'Web fetch delegated to provider', url: p.url }),
   });
 
-  // QA tools
   for (const qa of ['qa_run_tests', 'qa_check_lint', 'qa_check_types', 'qa_check_coverage', 'qa_audit_deps']) {
     registerTool({
       name: qa,
       description: `QA: ${qa.replace('qa_', '').replace(/_/g, ' ')}`,
       category: 'qa',
       inputSchema: { type: 'object', properties: { args: { type: 'string' } } },
-      execute: async (params) => {
-        return { output: `QA tool ${qa} delegated to provider` };
-      },
+      execute: async () => ({ output: `QA tool ${qa} delegated to provider` }),
     });
   }
 
-  // GitHub
   registerTool({
     name: 'github',
     description: 'GitHub CLI operations (commit, PR, issues)',
@@ -191,20 +158,15 @@ function registerBuiltinTools() {
       properties: { action: { type: 'string' }, args: { type: 'object' } },
       required: ['action'],
     },
-    execute: async (params) => {
-      return { output: 'GitHub operation delegated to provider', action: params.action };
-    },
+    execute: async (p) => ({ output: 'GitHub operation delegated to provider', action: p.action }),
   });
 
-  // Notes
   registerTool({
     name: 'record_note',
     description: 'Record a session note',
     category: 'notes',
     inputSchema: { type: 'object', properties: { content: { type: 'string' } }, required: ['content'] },
-    execute: async (params) => {
-      return { output: 'Note recorded', content: params.content };
-    },
+    execute: async (p) => ({ output: 'Note recorded', content: p.content }),
   });
 
   registerTool({
@@ -212,19 +174,14 @@ function registerBuiltinTools() {
     description: 'Recall session notes',
     category: 'notes',
     inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
-    execute: async (params) => {
-      return { output: 'Notes recall delegated to provider' };
-    },
+    execute: async () => ({ output: 'Notes recall delegated to provider' }),
   });
 
-  // User interaction
   registerTool({
     name: 'ask_user',
     description: 'Ask the user a question',
     category: 'system',
     inputSchema: { type: 'object', properties: { question: { type: 'string' } }, required: ['question'] },
-    execute: async (params) => {
-      return { output: 'User question delegated to transport layer', question: params.question };
-    },
+    execute: async (p) => ({ output: 'User question delegated to transport layer', question: p.question }),
   });
 }

@@ -6,8 +6,292 @@
  */
 
 import { z } from 'zod';
+export type { Config } from './config.js';
 
-// ─── Base Result Envelope ───
+// ─── TypeScript Interfaces ───
+
+export interface ResultMetadata {
+  duration?: number;
+  roomId?: string;
+  agentId?: string;
+  phase?: string;
+}
+
+export interface ResultError {
+  code: string;
+  message: string;
+  retryable: boolean;
+  context?: Record<string, unknown>;
+}
+
+export interface OkResult<T = unknown> {
+  ok: true;
+  data: T;
+  metadata?: ResultMetadata;
+}
+
+export interface ErrResult {
+  ok: false;
+  error: ResultError;
+}
+
+export type Result<T = unknown> = OkResult<T> | ErrResult;
+
+export interface TableConfig {
+  chairs: number;
+  description: string;
+}
+
+export interface ExitTemplate {
+  type: string;
+  fields: string[];
+}
+
+export type FileScope = 'assigned' | 'read-only' | 'full';
+
+export interface RoomContract {
+  roomType: string;
+  floor: string;
+  tables: Record<string, TableConfig>;
+  tools: string[];
+  fileScope: FileScope;
+  exitRequired: ExitTemplate;
+  escalation?: Record<string, string>;
+  provider: string;
+}
+
+export interface AgentIdentity {
+  id: string;
+  name: string;
+  role: string;
+  capabilities: string[];
+  roomAccess: string[];
+  badge?: string;
+}
+
+export type RaidType = 'risk' | 'assumption' | 'issue' | 'decision';
+export type RaidStatus = 'active' | 'superseded' | 'closed';
+
+export interface RaidEntry {
+  id: string;
+  type: RaidType;
+  phase: string;
+  roomId: string;
+  summary: string;
+  rationale?: string;
+  decidedBy: string;
+  approvedBy?: string;
+  affectedAreas: string[];
+  timestamp: string;
+  status: RaidStatus;
+}
+
+export type GateStatus = 'pending' | 'go' | 'no-go' | 'conditional';
+export type GateVerdict = 'GO' | 'NO-GO' | 'CONDITIONAL';
+
+export interface PhaseGateSignoff {
+  reviewer: string;
+  verdict: GateVerdict;
+  conditions: string[];
+  timestamp: string;
+}
+
+export interface PhaseGate {
+  id: string;
+  phase: string;
+  status: GateStatus;
+  exitDocId?: string;
+  raidEntries: string[];
+  signoff?: PhaseGateSignoff;
+  nextPhaseInput?: Record<string, unknown>;
+}
+
+export interface ExitDocument {
+  id: string;
+  roomId: string;
+  type: string;
+  completedBy: string;
+  fields: Record<string, unknown>;
+  artifacts: string[];
+  raidEntries: string[];
+  timestamp: string;
+}
+
+// ─── DB Row Types (snake_case from SQLite) ───
+
+export interface AgentRow {
+  id: string;
+  name: string;
+  role: string;
+  capabilities: string;
+  room_access: string;
+  badge: string | null;
+  status: string;
+  current_room_id: string | null;
+  current_table_id: string | null;
+  config: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BuildingRow {
+  id: string;
+  project_id: string | null;
+  name: string;
+  config: string;
+  active_phase: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PhaseGateRow {
+  id: string;
+  building_id: string;
+  phase: string;
+  status: string;
+  exit_doc_id: string | null;
+  signoff_reviewer: string | null;
+  signoff_verdict: string | null;
+  signoff_conditions: string;
+  signoff_timestamp: string | null;
+  next_phase_input: string;
+  created_at: string;
+}
+
+export interface RaidEntryRow {
+  id: string;
+  building_id: string;
+  type: string;
+  phase: string;
+  room_id: string | null;
+  summary: string;
+  rationale: string | null;
+  decided_by: string | null;
+  approved_by: string | null;
+  affected_areas: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoomRow {
+  id: string;
+  floor_id: string;
+  type: string;
+  name: string;
+  allowed_tools: string;
+  file_scope: string;
+  exit_template: string;
+  escalation: string;
+  provider: string;
+  config: string;
+  status: string;
+  created_at: string;
+}
+
+// ─── Tool Types ───
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  category: string;
+  inputSchema: Record<string, unknown>;
+  execute: (params: Record<string, unknown>, context?: ToolContext) => Promise<unknown>;
+}
+
+export interface ToolContext {
+  roomId: string;
+  roomType: string;
+  agentId: string;
+  fileScope: string;
+}
+
+// ─── AI Types ───
+
+export interface AIAdapter {
+  name: string;
+  sendMessage: (
+    messages: unknown[],
+    tools: ToolDefinition[],
+    options: Record<string, unknown>,
+  ) => Promise<unknown>;
+  validateConfig: () => boolean;
+}
+
+// ─── Layer Init Return Types ───
+
+export interface RoomManagerAPI {
+  createRoom: (params: { type: string; floorId: string; name: string; config?: Record<string, unknown> }) => Result;
+  enterRoom: (params: { roomId: string; agentId: string; tableType?: string }) => Result;
+  exitRoom: (params: { roomId: string; agentId: string }) => Result;
+  getRoom: (roomId: string) => import('./contracts.js').BaseRoomLike | null;
+  listRooms: () => RoomRow[];
+  registerRoomType: (type: string, factory: BaseRoomConstructor) => void;
+}
+
+export interface AgentRegistryAPI {
+  registerAgent: (params: {
+    name: string; role: string; capabilities?: string[];
+    roomAccess?: string[]; badge?: string | null; config?: Record<string, unknown>;
+  }) => Result;
+  removeAgent: (agentId: string) => Result;
+  getAgent: (agentId: string) => ParsedAgent | null;
+  listAgents: (filters?: { status?: string; roomId?: string }) => ParsedAgent[];
+  updateAgent: (agentId: string, updates: Record<string, unknown>) => Result;
+}
+
+export interface ToolRegistryAPI {
+  registerTool: (def: ToolDefinition) => void;
+  getTool: (name: string) => ToolDefinition | null;
+  getToolsForRoom: (allowedToolNames: string[]) => ToolDefinition[];
+  executeInRoom: (params: {
+    toolName: string; params: Record<string, unknown>;
+    roomAllowedTools: string[]; context: ToolContext;
+  }) => Promise<Result>;
+}
+
+export interface AIProviderAPI {
+  getAdapter: (name: string) => AIAdapter | null;
+  sendMessage: (params: {
+    provider: string; messages: unknown[];
+    tools?: ToolDefinition[]; options?: Record<string, unknown>;
+  }) => Promise<Result>;
+  registerAdapter: (name: string, adapter: AIAdapter) => void;
+}
+
+export interface ParsedAgent {
+  id: string;
+  name: string;
+  role: string;
+  capabilities: string[];
+  room_access: string[];
+  badge: string | null;
+  status: string;
+  current_room_id: string | null;
+  current_table_id: string | null;
+  config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BaseRoomLike {
+  id: string;
+  type: string;
+  config: RoomContract;
+  getAllowedTools(): string[];
+  hasTool(toolName: string): boolean;
+  readonly fileScope: FileScope;
+  readonly exitRequired: ExitTemplate;
+  validateExitDocument(document: Record<string, unknown>): Result;
+  buildContextInjection(): Record<string, unknown>;
+  getRules(): string[];
+  getOutputFormat(): unknown;
+}
+
+export type BaseRoomConstructor = new (id: string, config?: Partial<RoomContract>) => BaseRoomLike;
+
+// ─── Base Result Envelope (Zod — for runtime validation at boundaries) ───
+
 export const ResultSchema = z.object({
   ok: z.boolean(),
   data: z.any().optional(),
@@ -29,26 +313,20 @@ export const ResultSchema = z.object({
     .optional(),
 });
 
-/**
- * Create a success result
- * @param {any} data
- * @param {object} [metadata]
- */
-export function ok(data, metadata) {
+export function ok<T>(data: T, metadata?: ResultMetadata): OkResult<T> {
   return { ok: true, data, metadata };
 }
 
-/**
- * Create an error result
- * @param {string} code
- * @param {string} message
- * @param {object} [options]
- */
-export function err(code, message, { retryable = false, context } = {}) {
+export function err(
+  code: string,
+  message: string,
+  { retryable = false, context }: { retryable?: boolean; context?: Record<string, unknown> } = {},
+): ErrResult {
   return { ok: false, error: { code, message, retryable, context } };
 }
 
-// ─── Room Contract Schema ───
+// ─── Zod Schemas (for runtime validation at system boundaries) ───
+
 export const RoomContractSchema = z.object({
   roomType: z.string(),
   floor: z.string(),
@@ -56,7 +334,7 @@ export const RoomContractSchema = z.object({
     z.object({
       chairs: z.number().int().positive(),
       description: z.string(),
-    })
+    }),
   ),
   tools: z.array(z.string()),
   fileScope: z.enum(['assigned', 'read-only', 'full']).default('assigned'),
@@ -68,7 +346,6 @@ export const RoomContractSchema = z.object({
   provider: z.string().default('configurable'),
 });
 
-// ─── Agent Identity Schema ───
 export const AgentIdentitySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -78,7 +355,6 @@ export const AgentIdentitySchema = z.object({
   badge: z.string().optional(),
 });
 
-// ─── RAID Entry Schema ───
 export const RaidEntrySchema = z.object({
   id: z.string(),
   type: z.enum(['risk', 'assumption', 'issue', 'decision']),
@@ -93,7 +369,6 @@ export const RaidEntrySchema = z.object({
   status: z.enum(['active', 'superseded', 'closed']).default('active'),
 });
 
-// ─── Exit Document Schema ───
 export const ExitDocumentSchema = z.object({
   id: z.string(),
   roomId: z.string(),
@@ -105,7 +380,6 @@ export const ExitDocumentSchema = z.object({
   timestamp: z.string().datetime(),
 });
 
-// ─── Phase Gate Schema ───
 export const PhaseGateSchema = z.object({
   id: z.string(),
   phase: z.string(),
