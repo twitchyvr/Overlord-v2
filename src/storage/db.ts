@@ -4,8 +4,9 @@
  * Swappable storage backend. SQLite by default, designed for
  * future migration to Postgres/Redis.
  *
- * Creates all v2 tables: buildings, floors, rooms, agents,
- * messages, tasks, todos, phase_gates, raid_entries, exit_documents.
+ * Creates all v2 tables: buildings, floors, rooms, tables_v2, agents,
+ * messages, tasks, todos, exit_documents, phase_gates, raid_entries,
+ * agent_sessions, migrations.
  */
 
 import Database from 'better-sqlite3';
@@ -160,6 +161,28 @@ const SCHEMA_SQL = `
     updated_at TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS notes (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT,
+    room_id TEXT,
+    content TEXT NOT NULL,
+    tags TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_sessions (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL REFERENCES agents(id),
+    room_id TEXT NOT NULL REFERENCES rooms(id),
+    table_type TEXT NOT NULL DEFAULT 'focus',
+    tools TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'active' CHECK(status IN ('active', 'ended')),
+    messages TEXT DEFAULT '[]',
+    started_at TEXT DEFAULT (datetime('now')),
+    ended_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS migrations (
     version INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
@@ -178,6 +201,9 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_raid_type ON raid_entries(type);
   CREATE INDEX IF NOT EXISTS idx_exit_docs_room ON exit_documents(room_id);
   CREATE INDEX IF NOT EXISTS idx_phase_gates_building ON phase_gates(building_id);
+  CREATE INDEX IF NOT EXISTS idx_notes_agent ON notes(agent_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_agent ON agent_sessions(agent_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_room ON agent_sessions(room_id);
 `;
 
 /**

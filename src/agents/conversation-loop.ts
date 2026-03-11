@@ -12,6 +12,7 @@
  */
 
 import { logger } from '../core/logger.js';
+import { AgentSession } from './agent-session.js';
 import type { Bus } from '../core/bus.js';
 import type {
   Result,
@@ -58,6 +59,7 @@ export interface ConversationResult {
   toolCalls: { name: string; input: Record<string, unknown>; result: unknown }[];
   totalTokens: { input: number; output: number };
   iterations: number;
+  sessionId: string;
 }
 
 interface ConversationParams {
@@ -80,6 +82,25 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   const toolCallLog: ConversationResult['toolCalls'] = [];
   const thinkingLog: string[] = [];
   const totalTokens = { input: 0, output: 0 };
+
+  // Create agent session for this conversation
+  const session = new AgentSession({
+    agentId,
+    roomId: room.id,
+    tableType: (options.tableType as string) || 'focus',
+    tools: room.getAllowedTools(),
+  });
+
+  // Record initial user messages in the session
+  for (const msg of params.messages) {
+    const content = typeof msg.content === 'string'
+      ? msg.content
+      : msg.content.filter((b) => b.type === 'text').map((b) => b.text || '').join('\n');
+    session.addMessage({ role: msg.role, content });
+  }
+
+  // Persist session to DB (initial save)
+  try { session.save(); } catch { /* DB may not be available in tests */ }
 
   // Get room's allowed tools as ToolDefinitions for the AI
   const allowedToolNames = room.getAllowedTools();
@@ -127,6 +148,15 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
     // Add assistant response to message history (MUST include all blocks including thinking)
     messages.push({ role: 'assistant', content: response.content });
+
+    // Record assistant response in session
+    const assistantText = response.content
+      .filter((b: ContentBlock) => b.type === 'text')
+      .map((b: ContentBlock) => b.text || '')
+      .join('\n');
+    if (assistantText) {
+      session.addMessage({ role: 'assistant', content: assistantText });
+    }
 
     bus.emit('chat:stream', {
       agentId,
@@ -222,6 +252,10 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     }
   }
 
+  // End session and persist final state
+  session.end();
+  try { session.save(); } catch { /* DB may not be available in tests */ }
+
   return {
     ok: true,
     data: {
@@ -231,6 +265,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       toolCalls: toolCallLog,
       totalTokens,
       iterations: iteration,
+      sessionId: session.id,
     },
   };
 }
