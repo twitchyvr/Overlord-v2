@@ -224,12 +224,16 @@ interface SubmitExitDocParams {
   roomId: string;
   agentId: string;
   document: Record<string, unknown>;
+  buildingId?: string;
+  phase?: string;
 }
 
 /**
- * Submit a structured exit document for a room
+ * Submit a structured exit document for a room.
+ * If buildingId and phase are provided, a RAID decision entry is automatically
+ * created linking this exit document to the project's decision log.
  */
-export function submitExitDocument({ roomId, agentId, document }: SubmitExitDocParams): Result {
+export function submitExitDocument({ roomId, agentId, document, buildingId, phase }: SubmitExitDocParams): Result {
   const room = activeRooms.get(roomId);
   if (!room) return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
 
@@ -238,10 +242,31 @@ export function submitExitDocument({ roomId, agentId, document }: SubmitExitDocP
 
   const db = getDb();
   const id = `exitdoc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const raidEntryIds: string[] = [];
+
+  // Auto-create RAID decision entry linking exit doc to project log
+  if (buildingId && phase) {
+    const raidId = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    db.prepare(`
+      INSERT INTO raid_entries (id, building_id, type, phase, room_id, summary, rationale, decided_by, affected_areas)
+      VALUES (?, ?, 'decision', ?, ?, ?, ?, ?, ?)
+    `).run(
+      raidId,
+      buildingId,
+      phase,
+      roomId,
+      `Exit document submitted: ${room.exitRequired?.type || 'generic'}`,
+      `Agent ${agentId} completed ${room.type} room work`,
+      agentId,
+      JSON.stringify([room.type]),
+    );
+    raidEntryIds.push(raidId);
+    log.info({ raidId, exitDocId: id, roomId }, 'RAID entry auto-created for exit document');
+  }
 
   db.prepare(`
-    INSERT INTO exit_documents (id, room_id, type, completed_by, fields, artifacts)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO exit_documents (id, room_id, type, completed_by, fields, artifacts, raid_entry_ids)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     roomId,
@@ -249,10 +274,11 @@ export function submitExitDocument({ roomId, agentId, document }: SubmitExitDocP
     agentId,
     JSON.stringify(document),
     JSON.stringify((document.artifacts as string[]) || []),
+    JSON.stringify(raidEntryIds),
   );
 
-  log.info({ id, roomId, agentId }, 'Exit document submitted');
-  return ok({ id, roomId });
+  log.info({ id, roomId, agentId, raidEntryIds }, 'Exit document submitted');
+  return ok({ id, roomId, raidEntryIds });
 }
 
 export function getRoom(roomId: string): BaseRoom | null {
