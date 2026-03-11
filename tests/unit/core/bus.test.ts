@@ -61,47 +61,73 @@ describe('Bus', () => {
   });
 
   describe('onNamespace', () => {
-    // NOTE: onNamespace subscribes to the literal '*' event.
-    // EventEmitter3 does NOT have built-in wildcard support,
-    // so onNamespace only fires when '*' is explicitly emitted.
-    // This is a known bug — regular emit('room:create') does NOT
-    // trigger onNamespace('room:') handlers.
-
-    it('onNamespace subscribes to the wildcard event', () => {
+    it('fires handler when event matches prefix', () => {
       const handler = vi.fn();
-      bus.onNamespace('ns-test-room:', handler);
+      bus.onNamespace('ns-room:', handler);
 
-      // Emitting the '*' event with matching prefix triggers handler
-      bus.emit('*', { event: 'ns-test-room:create', roomId: 'r1' });
+      bus.emit('ns-room:create', { roomId: 'r1' });
 
       expect(handler).toHaveBeenCalledOnce();
+      const payload = handler.mock.calls[0][0];
+      expect(payload.event).toBe('ns-room:create');
+      expect(payload.roomId).toBe('r1');
 
-      bus.off('*', handler);
+      bus.offNamespace('ns-room:', handler);
     });
 
-    it('onNamespace filters by prefix on wildcard events', () => {
+    it('does not fire for non-matching prefix', () => {
       const handler = vi.fn();
-      bus.onNamespace('ns-test-filter:', handler);
+      bus.onNamespace('ns-agent:', handler);
 
-      // Non-matching prefix should NOT trigger
-      bus.emit('*', { event: 'agent:update', agentId: 'a1' });
+      bus.emit('ns-room:create', { roomId: 'r1' });
 
       expect(handler).not.toHaveBeenCalled();
 
-      bus.off('*', handler);
+      bus.offNamespace('ns-agent:', handler);
     });
 
-    it('onNamespace does NOT fire on regular named events (known limitation)', () => {
+    it('fires for multiple events in same namespace', () => {
       const handler = vi.fn();
-      bus.onNamespace('ns-test-known:', handler);
+      bus.onNamespace('ns-multi:', handler);
 
-      // Regular emit does NOT trigger onNamespace — this is the known bug
-      bus.emit('ns-test-known:create', { roomId: 'r1' });
+      bus.emit('ns-multi:create', { id: '1' });
+      bus.emit('ns-multi:update', { id: '2' });
+      bus.emit('ns-multi:delete', { id: '3' });
 
-      // Handler should NOT have been called because EE3 has no wildcard routing
-      expect(handler).not.toHaveBeenCalled();
+      expect(handler).toHaveBeenCalledTimes(3);
 
-      bus.off('*', handler);
+      bus.offNamespace('ns-multi:', handler);
+    });
+
+    it('offNamespace removes the handler', () => {
+      const handler = vi.fn();
+      bus.onNamespace('ns-off:', handler);
+
+      bus.emit('ns-off:test');
+      expect(handler).toHaveBeenCalledOnce();
+
+      bus.offNamespace('ns-off:', handler);
+
+      bus.emit('ns-off:test');
+      expect(handler).toHaveBeenCalledOnce(); // Still 1, not 2
+    });
+
+    it('supports multiple namespace handlers', () => {
+      const roomHandler = vi.fn();
+      const agentHandler = vi.fn();
+      bus.onNamespace('ns-h-room:', roomHandler);
+      bus.onNamespace('ns-h-agent:', agentHandler);
+
+      bus.emit('ns-h-room:enter', {});
+      expect(roomHandler).toHaveBeenCalledOnce();
+      expect(agentHandler).not.toHaveBeenCalled();
+
+      bus.emit('ns-h-agent:registered', {});
+      expect(roomHandler).toHaveBeenCalledOnce();
+      expect(agentHandler).toHaveBeenCalledOnce();
+
+      bus.offNamespace('ns-h-room:', roomHandler);
+      bus.offNamespace('ns-h-agent:', agentHandler);
     });
   });
 });
