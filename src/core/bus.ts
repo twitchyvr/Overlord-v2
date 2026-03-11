@@ -6,15 +6,19 @@
  * No business logic. No socket handlers. Just emit/on/off.
  */
 
-import EventEmitter from 'eventemitter3';
+import { EventEmitter } from 'eventemitter3';
+
+export interface BusEventData {
+  event: string;
+  timestamp: number;
+  [key: string]: unknown;
+}
 
 class Bus extends EventEmitter {
   /**
    * Emit with structured event envelope
-   * @param {string} event - Dot-namespaced event name (e.g., 'room:agent:entered')
-   * @param {object} data - Event payload
    */
-  emit(event, data) {
+  override emit(event: string | symbol, data?: Record<string, unknown>): boolean {
     return super.emit(event, {
       event,
       timestamp: Date.now(),
@@ -24,11 +28,9 @@ class Bus extends EventEmitter {
 
   /**
    * Subscribe to events matching a namespace prefix
-   * @param {string} prefix - e.g., 'room:' matches 'room:created', 'room:agent:entered'
-   * @param {Function} handler
    */
-  onNamespace(prefix, handler) {
-    this.on('*', (data) => {
+  onNamespace(prefix: string, handler: (data: BusEventData) => void): void {
+    this.on('*', (data: BusEventData) => {
       if (data?.event?.startsWith(prefix)) {
         handler(data);
       }
@@ -37,3 +39,4 @@ class Bus extends EventEmitter {
 }
 
 export const bus = new Bus();
+export type { Bus };

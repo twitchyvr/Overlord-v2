@@ -7,9 +7,10 @@
  */
 
 import { BaseRoom } from './base-room.js';
+import type { RoomContract } from '../../core/contracts.js';
 
 export class StrategistOffice extends BaseRoom {
-  static contract = {
+  static override contract: RoomContract = {
     roomType: 'strategist',
     floor: 'strategy',
     tables: {
@@ -34,7 +35,7 @@ export class StrategistOffice extends BaseRoom {
       ],
     },
     escalation: {},
-    provider: 'smart',
+    provider: 'configurable',
   };
 
   modes = {
@@ -42,7 +43,7 @@ export class StrategistOffice extends BaseRoom {
     advanced: 'Drag-and-drop rooms into floors, custom agents',
   };
 
-  getRules() {
+  override getRules(): string[] {
     return [
       'You are the Strategist. Guide the user through project setup.',
       'Ask consultative questions: goals, success criteria, constraints.',
@@ -52,7 +53,7 @@ export class StrategistOffice extends BaseRoom {
     ];
   }
 
-  getOutputFormat() {
+  override getOutputFormat(): Record<string, unknown> {
     return {
       projectGoals: ['string'],
       successCriteria: ['string'],

@@ -6,9 +6,10 @@
  */
 
 import { BaseRoom } from './base-room.js';
+import type { RoomContract } from '../../core/contracts.js';
 
 export class WarRoom extends BaseRoom {
-  static contract = {
+  static override contract: RoomContract = {
     roomType: 'war-room',
     floor: 'collaboration',
     tables: {
@@ -32,10 +33,10 @@ export class WarRoom extends BaseRoom {
       fields: ['incidentSummary', 'rootCause', 'resolution', 'preventionPlan', 'timeToResolve'],
     },
     escalation: {},
-    provider: 'smart',
+    provider: 'configurable',
   };
 
-  getRules() {
+  override getRules(): string[] {
     return [
       'You are in the War Room. This is incident response.',
       'Focus on resolving the incident, not long-term fixes.',
@@ -45,7 +46,7 @@ export class WarRoom extends BaseRoom {
     ];
   }
 
-  getOutputFormat() {
+  override getOutputFormat(): Record<string, unknown> {
     return {
       incidentSummary: 'string',
       rootCause: 'string',

@@ -7,11 +7,37 @@
  */
 
 import { logger } from '../core/logger.js';
+import type { Bus } from '../core/bus.js';
 
 const log = logger.child({ module: 'agent-session' });
 
+interface SessionMessage {
+  role: string;
+  content: string;
+  timestamp?: number;
+  [key: string]: unknown;
+}
+
+interface AgentSessionParams {
+  agentId: string;
+  roomId: string;
+  tableType: string;
+  tools: string[];
+  bus: Bus;
+}
+
 export class AgentSession {
-  constructor({ agentId, roomId, tableType, tools, bus }) {
+  agentId: string;
+  roomId: string;
+  tableType: string;
+  tools: string[];
+  bus: Bus;
+  status: 'active' | 'ended';
+  startedAt: number;
+  endedAt: number | null;
+  messages: SessionMessage[];
+
+  constructor({ agentId, roomId, tableType, tools, bus }: AgentSessionParams) {
     this.agentId = agentId;
     this.roomId = roomId;
     this.tableType = tableType;
@@ -19,6 +45,7 @@ export class AgentSession {
     this.bus = bus;
     this.status = 'active';
     this.startedAt = Date.now();
+    this.endedAt = null;
     this.messages = [];
   }
 
@@ -26,14 +53,14 @@ export class AgentSession {
    * Get the tools available to this agent in this session
    * Structurally limited by the room — no overrides possible
    */
-  getAvailableTools() {
+  getAvailableTools(): string[] {
     return [...this.tools];
   }
 
   /**
    * Add a message to the session history
    */
-  addMessage(message) {
+  addMessage(message: SessionMessage): void {
     this.messages.push({
       ...message,
       timestamp: Date.now(),
@@ -43,7 +70,7 @@ export class AgentSession {
   /**
    * End the session
    */
-  end() {
+  end(): void {
     this.status = 'ended';
     this.endedAt = Date.now();
     log.info({
