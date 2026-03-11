@@ -134,3 +134,13 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Overlord v2 — Project-specific
+data/
+*.db
+*.db-journal
+*.db-wal
+plugins/
+tmp/
+temp/
+.DS_Store
