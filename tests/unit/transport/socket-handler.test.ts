@@ -15,9 +15,33 @@ vi.mock('../../../src/rooms/building-manager.js', () => ({
   createBuilding: vi.fn().mockReturnValue({ ok: true, data: { id: 'bld_1', name: 'Test Building' } }),
   getBuilding: vi.fn().mockReturnValue({ ok: true, data: { id: 'bld_1', name: 'Test Building', floors: [] } }),
   listBuildings: vi.fn().mockReturnValue({ ok: true, data: [] }),
+  listFloors: vi.fn().mockReturnValue({ ok: true, data: [] }),
+  getFloor: vi.fn().mockReturnValue({ ok: true, data: { id: 'floor_1', type: 'collaboration', rooms: [] } }),
 }));
 
-import { createBuilding, getBuilding, listBuildings } from '../../../src/rooms/building-manager.js';
+import { createBuilding, getBuilding, listBuildings, listFloors, getFloor } from '../../../src/rooms/building-manager.js';
+
+// Mock phase-gate — imported directly by socket-handler
+vi.mock('../../../src/rooms/phase-gate.js', () => ({
+  getGates: vi.fn().mockReturnValue({ ok: true, data: [] }),
+  canAdvance: vi.fn().mockReturnValue({ ok: true, data: { canAdvance: false, reason: 'No gate exists' } }),
+}));
+
+import { getGates, canAdvance } from '../../../src/rooms/phase-gate.js';
+
+// Mock raid-log — imported directly by socket-handler
+vi.mock('../../../src/rooms/raid-log.js', () => ({
+  searchRaid: vi.fn().mockReturnValue({ ok: true, data: [] }),
+}));
+
+import { searchRaid } from '../../../src/rooms/raid-log.js';
+
+// Mock phase-zero — imported directly by socket-handler
+vi.mock('../../../src/rooms/phase-zero.js', () => ({
+  handleBlueprintSubmission: vi.fn().mockReturnValue({ ok: true, data: { buildingId: 'bld_1', mode: 'quickStart', phaseAdvanced: true } }),
+}));
+
+import { handleBlueprintSubmission } from '../../../src/rooms/phase-zero.js';
 
 // Mock socket — emulates a Socket.IO socket with on/emit
 class MockSocket extends EventEmitter {
@@ -120,6 +144,31 @@ describe('Socket Handler (Transport Layer)', () => {
       expect(socket.listenerCount('system:health')).toBeGreaterThan(0);
       expect(socket.listenerCount('system:status')).toBeGreaterThan(0);
       expect(socket.listenerCount('disconnect')).toBeGreaterThan(0);
+      expect(socket.listenerCount('floor:list')).toBeGreaterThan(0);
+      expect(socket.listenerCount('floor:get')).toBeGreaterThan(0);
+      expect(socket.listenerCount('room:get')).toBeGreaterThan(0);
+      expect(socket.listenerCount('agent:get')).toBeGreaterThan(0);
+      expect(socket.listenerCount('phase:gates')).toBeGreaterThan(0);
+      expect(socket.listenerCount('phase:can-advance')).toBeGreaterThan(0);
+      expect(socket.listenerCount('raid:list')).toBeGreaterThan(0);
+      expect(socket.listenerCount('exit-doc:submit')).toBeGreaterThan(0);
+      expect(socket.listenerCount('building:apply-blueprint')).toBeGreaterThan(0);
+    });
+  });
+
+  describe('floor events', () => {
+    it('floor:list calls listFloors and acks result', () => {
+      const ack = vi.fn();
+      socket.emit('floor:list', { buildingId: 'bld_1' }, ack);
+      expect(listFloors).toHaveBeenCalledWith('bld_1');
+      expect(ack).toHaveBeenCalledWith({ ok: true, data: [] });
+    });
+
+    it('floor:get calls getFloor and acks result', () => {
+      const ack = vi.fn();
+      socket.emit('floor:get', { floorId: 'floor_1' }, ack);
+      expect(getFloor).toHaveBeenCalledWith('floor_1');
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
     });
   });
 
@@ -162,6 +211,43 @@ describe('Socket Handler (Transport Layer)', () => {
       expect(rooms.exitRoom).toHaveBeenCalledWith({ roomId: 'room_1', agentId: 'agent_1' });
       expect(ack).toHaveBeenCalled();
     });
+
+    it('room:get returns ROOM_NOT_FOUND when room does not exist', () => {
+      const ack = vi.fn();
+      socket.emit('room:get', { roomId: 'nonexistent' }, ack);
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: 'ROOM_NOT_FOUND' }),
+      }));
+    });
+
+    it('room:get returns room data when room exists', () => {
+      const mockRoom = {
+        id: 'room_1',
+        type: 'code-lab',
+        getAllowedTools: () => ['bash', 'read_file'],
+        fileScope: 'assigned',
+        exitRequired: { type: 'code-review', fields: ['summary'] },
+        escalation: { onComplete: 'review' },
+        config: { tables: { focus: { chairs: 1, description: 'Solo work' } } },
+      };
+      (rooms.getRoom as ReturnType<typeof vi.fn>).mockReturnValueOnce(mockRoom);
+
+      const ack = vi.fn();
+      socket.emit('room:get', { roomId: 'room_1' }, ack);
+      expect(ack).toHaveBeenCalledWith({
+        ok: true,
+        data: {
+          id: 'room_1',
+          type: 'code-lab',
+          tools: ['bash', 'read_file'],
+          fileScope: 'assigned',
+          exitRequired: { type: 'code-review', fields: ['summary'] },
+          escalation: { onComplete: 'review' },
+          tables: { focus: { chairs: 1, description: 'Solo work' } },
+        },
+      });
+    });
   });
 
   describe('agent events', () => {
@@ -186,6 +272,24 @@ describe('Socket Handler (Transport Layer)', () => {
         ok: true,
         data: [{ id: 'a1', name: 'Coder', status: 'idle' }],
       });
+    });
+
+    it('agent:get returns AGENT_NOT_FOUND when agent does not exist', () => {
+      const ack = vi.fn();
+      socket.emit('agent:get', { agentId: 'nonexistent' }, ack);
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: 'AGENT_NOT_FOUND' }),
+      }));
+    });
+
+    it('agent:get returns agent data when agent exists', () => {
+      const mockAgent = { id: 'a1', name: 'Coder', role: 'developer', status: 'idle' };
+      (agents.getAgent as ReturnType<typeof vi.fn>).mockReturnValueOnce(mockAgent);
+
+      const ack = vi.fn();
+      socket.emit('agent:get', { agentId: 'a1' }, ack);
+      expect(ack).toHaveBeenCalledWith({ ok: true, data: mockAgent });
     });
   });
 
@@ -288,6 +392,47 @@ describe('Socket Handler (Transport Layer)', () => {
     });
   });
 
+  describe('phase gate events', () => {
+    it('phase:gates calls getGates and acks result', () => {
+      const ack = vi.fn();
+      socket.emit('phase:gates', { buildingId: 'bld_1' }, ack);
+      expect(getGates).toHaveBeenCalledWith('bld_1');
+      expect(ack).toHaveBeenCalledWith({ ok: true, data: [] });
+    });
+
+    it('phase:can-advance calls canAdvance and acks result', () => {
+      const ack = vi.fn();
+      socket.emit('phase:can-advance', { buildingId: 'bld_1' }, ack);
+      expect(canAdvance).toHaveBeenCalledWith('bld_1');
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+    });
+  });
+
+  describe('RAID list events', () => {
+    it('raid:list calls searchRaid and acks result', () => {
+      const ack = vi.fn();
+      socket.emit('raid:list', { buildingId: 'bld_1' }, ack);
+      expect(searchRaid).toHaveBeenCalledWith({ buildingId: 'bld_1' });
+      expect(ack).toHaveBeenCalledWith({ ok: true, data: [] });
+    });
+  });
+
+  describe('exit document events', () => {
+    it('exit-doc:submit emits to bus and acks ok', () => {
+      const ack = vi.fn();
+      socket.emit('exit-doc:submit', { roomId: 'r1', agentId: 'a1', document: { summary: 'test' } }, ack);
+
+      const busEvent = bus.emitted.find((e) => e.event === 'exit-doc:submitted');
+      expect(busEvent).toBeDefined();
+      expect(busEvent!.data).toEqual(expect.objectContaining({
+        roomId: 'r1',
+        agentId: 'a1',
+        document: { summary: 'test' },
+      }));
+      expect(ack).toHaveBeenCalledWith({ ok: true });
+    });
+  });
+
   describe('building events', () => {
     it('building:create calls createBuilding and acks', () => {
       const ack = vi.fn();
@@ -311,6 +456,17 @@ describe('Socket Handler (Transport Layer)', () => {
 
       expect(listBuildings).toHaveBeenCalled();
       expect(ack).toHaveBeenCalled();
+    });
+
+    it('building:apply-blueprint calls handleBlueprintSubmission and acks', () => {
+      const ack = vi.fn();
+      socket.emit('building:apply-blueprint', { buildingId: 'bld_1', blueprint: { mode: 'quickStart' }, agentId: 'a1' }, ack);
+      expect(handleBlueprintSubmission).toHaveBeenCalledWith({
+        buildingId: 'bld_1',
+        blueprint: { mode: 'quickStart' },
+        agentId: 'a1',
+      });
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
     });
   });
 
@@ -356,6 +512,18 @@ describe('Socket Handler (Transport Layer)', () => {
       bus.emit('scope-change:detected', { buildingId: 'bld_1', targetRoomType: 'discovery' });
 
       const broadcast = io.broadcasted.find((b) => b.event === 'scope-change:detected');
+      expect(broadcast).toBeDefined();
+    });
+
+    it('broadcasts phase-zero:failed from bus to all sockets', () => {
+      bus.emit('phase-zero:failed', { buildingId: 'bld_1', error: 'test' });
+      const broadcast = io.broadcasted.find((b) => b.event === 'phase-zero:failed');
+      expect(broadcast).toBeDefined();
+    });
+
+    it('broadcasts exit-doc:submitted from bus to all sockets', () => {
+      bus.emit('exit-doc:submitted', { roomId: 'r1', agentId: 'a1' });
+      const broadcast = io.broadcasted.find((b) => b.event === 'exit-doc:submitted');
       expect(broadcast).toBeDefined();
     });
   });
