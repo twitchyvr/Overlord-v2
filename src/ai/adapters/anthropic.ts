@@ -39,7 +39,7 @@ export interface AnthropicResponse {
   content: AnthropicContentBlock[];
   model: string;
   stop_reason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | null;
-  usage: { input_tokens: number; output_tokens: number };
+  usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number };
 }
 
 export function createAnthropicAdapter(cfg: Config): AIAdapter {
@@ -49,7 +49,12 @@ export function createAnthropicAdapter(cfg: Config): AIAdapter {
     if (!client) {
       const apiKey = cfg.get('ANTHROPIC_API_KEY');
       if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured');
-      client = new Anthropic({ apiKey });
+
+      const baseURL = cfg.get('ANTHROPIC_BASE_URL');
+      client = new Anthropic({
+        apiKey,
+        ...(baseURL ? { baseURL } : {}),
+      });
     }
     return client;
   }
@@ -81,19 +86,35 @@ export function createAnthropicAdapter(cfg: Config): AIAdapter {
         ...(options.temperature !== undefined ? { temperature: options.temperature as number } : {}),
       };
 
+      const baseURL = cfg.get('ANTHROPIC_BASE_URL');
       log.info(
-        { model, messageCount: messages.length, toolCount: tools.length },
+        { model, messageCount: messages.length, toolCount: tools.length, ...(baseURL ? { baseURL } : {}) },
         'Sending Anthropic request',
       );
 
       const response = await anthropic.messages.create(requestParams) as Anthropic.Message;
 
+      // Extract cache usage if present (Anthropic + compatible providers like MiniMax)
+      const usage: AnthropicResponse['usage'] = {
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+      };
+      const extUsage = response.usage as unknown as Record<string, unknown>;
+      if (extUsage.cache_creation_input_tokens) {
+        usage.cache_creation_input_tokens = extUsage.cache_creation_input_tokens as number;
+      }
+      if (extUsage.cache_read_input_tokens) {
+        usage.cache_read_input_tokens = extUsage.cache_read_input_tokens as number;
+      }
+
       log.info(
         {
           id: response.id,
           stopReason: response.stop_reason,
-          inputTokens: response.usage.input_tokens,
-          outputTokens: response.usage.output_tokens,
+          inputTokens: usage.input_tokens,
+          outputTokens: usage.output_tokens,
+          ...(usage.cache_creation_input_tokens ? { cacheCreated: usage.cache_creation_input_tokens } : {}),
+          ...(usage.cache_read_input_tokens ? { cacheRead: usage.cache_read_input_tokens } : {}),
         },
         'Anthropic response received',
       );
@@ -104,7 +125,7 @@ export function createAnthropicAdapter(cfg: Config): AIAdapter {
         content: response.content as AnthropicContentBlock[],
         model: response.model,
         stop_reason: response.stop_reason,
-        usage: response.usage,
+        usage,
       };
     },
 

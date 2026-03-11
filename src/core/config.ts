@@ -18,10 +18,12 @@ const ConfigSchema = z.object({
 
   // AI Providers
   ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_BASE_URL: z.string().optional(),
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-20250514'),
   MINIMAX_API_KEY: z.string().optional(),
+  MINIMAX_BASE_URL: z.string().default('https://api.minimax.io/anthropic'),
   MINIMAX_GROUP_ID: z.string().optional(),
-  MINIMAX_MODEL: z.string().default('MiniMax-Text-01'),
+  MINIMAX_MODEL: z.string().default('MiniMax-M2.5'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o'),
   OLLAMA_BASE_URL: z.string().default('http://localhost:11434'),

@@ -1,17 +1,28 @@
 /**
- * MiniMax Adapter
+ * MiniMax Adapter — Anthropic-Compatible API
  *
- * Translates Anthropic-native format ↔ MiniMax Chat format.
- * MiniMax uses an OpenAI-compatible API with some quirks.
- * Strips emoji, repairs unicode, contains MiniMax-specific workarounds.
+ * MiniMax M2.5 exposes an Anthropic-compatible endpoint at:
+ *   https://api.minimax.io/anthropic
+ *
+ * This means we use the Anthropic SDK directly with a baseURL override.
+ * No format translation needed — MiniMax speaks Anthropic-native.
+ *
+ * Features:
+ * - 204,800 token context window
+ * - ~60 tokens/sec output
+ * - Tool use (Anthropic-native format)
+ * - Interleaved thinking (extended thinking support)
+ * - Prompt caching via cache_control (Anthropic-style)
+ * - Streaming support
  */
 
+import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../../core/logger.js';
 import type { AIAdapter, ToolDefinition, Config } from '../../core/contracts.js';
 
 const log = logger.child({ module: 'ai:minimax' });
 
-const MINIMAX_BASE_URL = 'https://api.minimaxi.chat/v1';
+const DEFAULT_MINIMAX_BASE_URL = 'https://api.minimax.io/anthropic';
 
 interface AnthropicContentBlock {
   type: 'text' | 'tool_use' | 'tool_result';
@@ -24,68 +35,33 @@ interface AnthropicContentBlock {
   is_error?: boolean;
 }
 
-interface MiniMaxMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content?: string;
-  name?: string;
-  tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[];
-  tool_call_id?: string;
-}
-
-/**
- * Strip emoji and fix unicode issues (MiniMax quirk)
- */
-function sanitizeForMiniMax(text: string): string {
-  // Strip emoji ranges
-  return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
-}
-
-function toMiniMaxMessages(
-  messages: { role: string; content: string | AnthropicContentBlock[] }[],
-  system?: string,
-): MiniMaxMessage[] {
-  const result: MiniMaxMessage[] = [];
-
-  if (system) {
-    result.push({ role: 'system', content: sanitizeForMiniMax(system) });
-  }
-
-  for (const msg of messages) {
-    if (typeof msg.content === 'string') {
-      result.push({ role: msg.role as MiniMaxMessage['role'], content: sanitizeForMiniMax(msg.content) });
-      continue;
-    }
-
-    for (const block of msg.content) {
-      if (block.type === 'text') {
-        result.push({ role: msg.role as MiniMaxMessage['role'], content: sanitizeForMiniMax(block.text || '') });
-      } else if (block.type === 'tool_use') {
-        result.push({
-          role: 'assistant',
-          content: '',
-          tool_calls: [{
-            id: block.id || `call_${Date.now()}`,
-            type: 'function',
-            function: {
-              name: block.name || '',
-              arguments: JSON.stringify(block.input || {}),
-            },
-          }],
-        });
-      } else if (block.type === 'tool_result') {
-        result.push({
-          role: 'tool',
-          tool_call_id: block.tool_use_id || '',
-          content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
-        });
-      }
-    }
-  }
-
-  return result;
+export interface MinimaxResponse {
+  id: string;
+  role: 'assistant';
+  content: AnthropicContentBlock[];
+  model: string;
+  stop_reason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | null;
+  usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number };
 }
 
 export function createMinimaxAdapter(cfg: Config): AIAdapter {
+  let client: Anthropic | null = null;
+
+  function getClient(): Anthropic {
+    if (!client) {
+      const apiKey = cfg.get('MINIMAX_API_KEY');
+      if (!apiKey) throw new Error('MINIMAX_API_KEY is not configured');
+
+      const baseURL = cfg.get('MINIMAX_BASE_URL');
+
+      client = new Anthropic({
+        apiKey,
+        baseURL,
+      });
+    }
+    return client;
+  }
+
   return {
     name: 'minimax',
 
@@ -93,102 +69,67 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
       messages: unknown[],
       tools: ToolDefinition[],
       options: Record<string, unknown>,
-    ): Promise<unknown> {
-      const apiKey = cfg.get('MINIMAX_API_KEY');
-      if (!apiKey) throw new Error('MINIMAX_API_KEY is not configured');
-
+    ): Promise<MinimaxResponse> {
+      const anthropic = getClient();
       const model = (options.model as string) || cfg.get('MINIMAX_MODEL');
-      const mmMessages = toMiniMaxMessages(
-        messages as { role: string; content: string | AnthropicContentBlock[] }[],
-        options.system as string | undefined,
-      );
 
-      const mmTools = tools.map((t) => ({
-        type: 'function' as const,
-        function: {
-          name: t.name,
-          description: t.description,
-          parameters: t.inputSchema,
-        },
+      // Convert tool definitions to Anthropic format
+      const anthropicTools: Anthropic.Tool[] = tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
       }));
 
-      log.info({ model, messageCount: messages.length, toolCount: tools.length }, 'Sending MiniMax request');
-
-      const body: Record<string, unknown> = {
+      // Build request — identical to Anthropic adapter since MiniMax is Anthropic-compatible
+      const requestParams: Anthropic.MessageCreateParams = {
         model,
-        messages: mmMessages,
-        max_tokens: (options.max_tokens as number) || 4096,
-      };
-      if (mmTools.length > 0) body.tools = mmTools;
-      if (options.temperature !== undefined) body.temperature = options.temperature;
-
-      const response = await fetch(`${MINIMAX_BASE_URL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`MiniMax API error ${response.status}: ${text}`);
-      }
-
-      const data = await response.json() as {
-        id: string;
-        model: string;
-        choices: {
-          message: { role: string; content?: string; tool_calls?: { id: string; function: { name: string; arguments: string } }[] };
-          finish_reason: string;
-        }[];
-        usage: { prompt_tokens: number; completion_tokens: number };
-      };
-
-      const choice = data.choices[0];
-      const content: AnthropicContentBlock[] = [];
-
-      if (choice.message.content) {
-        content.push({ type: 'text', text: choice.message.content });
-      }
-      if (choice.message.tool_calls) {
-        for (const tc of choice.message.tool_calls) {
-          content.push({
-            type: 'tool_use',
-            id: tc.id,
-            name: tc.function.name,
-            input: JSON.parse(tc.function.arguments || '{}'),
-          });
-        }
-      }
-
-      const stopMap: Record<string, string> = {
-        stop: 'end_turn',
-        tool_calls: 'tool_use',
-        length: 'max_tokens',
+        max_tokens: (options.max_tokens as number) || 8192,
+        messages: messages as Anthropic.MessageParam[],
+        ...(anthropicTools.length > 0 ? { tools: anthropicTools } : {}),
+        ...(options.system ? { system: options.system as string } : {}),
+        ...(options.temperature !== undefined ? { temperature: options.temperature as number } : {}),
       };
 
       log.info(
+        { model, messageCount: messages.length, toolCount: tools.length },
+        'Sending MiniMax request via Anthropic-compatible API',
+      );
+
+      const response = await anthropic.messages.create(requestParams) as Anthropic.Message;
+
+      // Extract cache usage if present (MiniMax supports Anthropic-style prompt caching)
+      const usage: MinimaxResponse['usage'] = {
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+      };
+
+      const extUsage = response.usage as unknown as Record<string, unknown>;
+      if (extUsage.cache_creation_input_tokens) {
+        usage.cache_creation_input_tokens = extUsage.cache_creation_input_tokens as number;
+      }
+      if (extUsage.cache_read_input_tokens) {
+        usage.cache_read_input_tokens = extUsage.cache_read_input_tokens as number;
+      }
+
+      log.info(
         {
-          id: data.id,
-          stopReason: stopMap[choice.finish_reason] || choice.finish_reason,
-          inputTokens: data.usage.prompt_tokens,
-          outputTokens: data.usage.completion_tokens,
+          id: response.id,
+          stopReason: response.stop_reason,
+          inputTokens: usage.input_tokens,
+          outputTokens: usage.output_tokens,
+          ...(usage.cache_creation_input_tokens ? { cacheCreated: usage.cache_creation_input_tokens } : {}),
+          ...(usage.cache_read_input_tokens ? { cacheRead: usage.cache_read_input_tokens } : {}),
         },
         'MiniMax response received',
       );
 
       return {
-        id: data.id,
-        role: 'assistant',
-        content,
-        model: data.model,
-        stop_reason: stopMap[choice.finish_reason] || null,
-        usage: {
-          input_tokens: data.usage.prompt_tokens,
-          output_tokens: data.usage.completion_tokens,
-        },
+        id: response.id,
+        role: response.role,
+        content: response.content as AnthropicContentBlock[],
+        model: response.model,
+        stop_reason: response.stop_reason,
+        usage,
       };
     },
 
