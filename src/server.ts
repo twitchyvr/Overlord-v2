@@ -19,6 +19,7 @@ import { initAI } from './ai/ai-provider.js';
 import { initTools } from './tools/tool-registry.js';
 import { initAgents } from './agents/agent-registry.js';
 import { initRooms } from './rooms/room-manager.js';
+import { registerBuiltInRoomTypes } from './rooms/room-types/index.js';
 import { initTransport } from './transport/socket-handler.js';
 
 import type { Request, Response } from 'express';
@@ -46,7 +47,8 @@ async function start(): Promise<void> {
   log.info('Agent registry initialized');
 
   const rooms = initRooms({ bus, agents, tools, ai });
-  log.info('Room manager initialized');
+  registerBuiltInRoomTypes(rooms.registerRoomType);
+  log.info('Room manager initialized (8 built-in room types registered)');
 
   // 3. HTTP + Socket.IO
   const app = express();

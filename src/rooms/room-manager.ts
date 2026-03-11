@@ -105,12 +105,24 @@ interface EnterRoomParams {
 }
 
 /**
- * Agent enters a room — room's tools merge into agent's context
+ * Agent enters a room — room's tools merge into agent's context.
+ * Validates table type exists in room's contract and checks chair capacity.
  */
 export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomParams): Result {
   const room = activeRooms.get(roomId);
   if (!room) {
     return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
+  }
+
+  // Validate table type exists in room's contract
+  const tableConfig = room.tables[tableType];
+  if (!tableConfig) {
+    const validTables = Object.keys(room.tables);
+    return err(
+      'INVALID_TABLE_TYPE',
+      `Table type "${tableType}" does not exist in ${room.type} room. Valid tables: ${validTables.join(', ')}`,
+      { context: { validTables, requestedTable: tableType } },
+    );
   }
 
   // Check agent has badge access to this room type
@@ -125,15 +137,46 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
     return err('ACCESS_DENIED', `Agent ${agent.name} does not have access to ${room.type} rooms`);
   }
 
-  // Update agent's current room
-  db.prepare('UPDATE agents SET current_room_id = ?, status = ? WHERE id = ?').run(
+  // Find or create the table row for this room+type
+  let tableRow = db
+    .prepare('SELECT id FROM tables_v2 WHERE room_id = ? AND type = ?')
+    .get(roomId, tableType) as { id: string } | undefined;
+
+  if (!tableRow) {
+    const tableId = `table_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    db.prepare('INSERT INTO tables_v2 (id, room_id, type, chairs, description) VALUES (?, ?, ?, ?, ?)').run(
+      tableId,
+      roomId,
+      tableType,
+      tableConfig.chairs,
+      tableConfig.description,
+    );
+    tableRow = { id: tableId };
+  }
+
+  // Check chair capacity — count agents already seated at this table
+  const seatedCount = db
+    .prepare('SELECT COUNT(*) as cnt FROM agents WHERE current_table_id = ?')
+    .get(tableRow.id) as { cnt: number };
+
+  if (seatedCount.cnt >= tableConfig.chairs) {
+    return err(
+      'TABLE_FULL',
+      `Table "${tableType}" in ${room.type} room is full (${tableConfig.chairs} chair${tableConfig.chairs === 1 ? '' : 's'})`,
+      { context: { tableType, maxChairs: tableConfig.chairs, currentOccupancy: seatedCount.cnt } },
+    );
+  }
+
+  // Update agent's current room and table
+  db.prepare('UPDATE agents SET current_room_id = ?, current_table_id = ?, status = ? WHERE id = ?').run(
     roomId,
+    tableRow.id,
     'active',
     agentId,
   );
 
-  log.info({ roomId, agentId, tableType }, 'Agent entered room');
-  return ok({ roomId, agentId, tools: room.getAllowedTools(), fileScope: room.fileScope });
+  log.info({ roomId, agentId, tableType, tableId: tableRow.id }, 'Agent entered room');
+  return ok({ roomId, agentId, tableId: tableRow.id, tools: room.getAllowedTools(), fileScope: room.fileScope });
 }
 
 interface ExitRoomParams {
@@ -142,14 +185,33 @@ interface ExitRoomParams {
 }
 
 /**
- * Agent exits a room — requires exit document if room mandates it
+ * Agent exits a room — requires exit document if room mandates it.
+ * If the room has required exit fields, the agent MUST have submitted
+ * an exit document before they can leave. Structural enforcement.
  */
 export function exitRoom({ roomId, agentId }: ExitRoomParams): Result {
   const room = activeRooms.get(roomId);
   if (!room) return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
 
+  // Enforce exit document requirement
+  const exitReq = room.exitRequired;
+  if (exitReq && exitReq.fields.length > 0) {
+    const db = getDb();
+    const exitDoc = db
+      .prepare('SELECT id FROM exit_documents WHERE room_id = ? AND completed_by = ? ORDER BY created_at DESC LIMIT 1')
+      .get(roomId, agentId) as { id: string } | undefined;
+
+    if (!exitDoc) {
+      return err(
+        'EXIT_DOC_REQUIRED',
+        `Room "${room.type}" requires an exit document before leaving. Required fields: ${exitReq.fields.join(', ')}`,
+        { context: { roomType: room.type, requiredFields: exitReq.fields } },
+      );
+    }
+  }
+
   const db = getDb();
-  db.prepare('UPDATE agents SET current_room_id = NULL, status = ? WHERE id = ?').run(
+  db.prepare('UPDATE agents SET current_room_id = NULL, current_table_id = NULL, status = ? WHERE id = ?').run(
     'idle',
     agentId,
   );
