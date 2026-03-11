@@ -23,6 +23,10 @@ export const OverlordUI = {
   /** Bootstrap the engine with the store */
   init(store) {
     this._store = store;
+    // Wire BroadcastChannel to store so store.set() can broadcast to pop-out windows
+    if (this._channel && store) {
+      store._channel = this._channel;
+    }
     this._setupBroadcastChannel();
     console.log('[OverlordUI] v2 Engine initialized');
     return this;

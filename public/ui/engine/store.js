@@ -382,6 +382,8 @@ export function createV2Store() {
     store.persist('ui.theme',              'overlord_v2_theme',          'dark');
     store.persist('panels.visibility',     'overlord_v2_panels',         {});
     store.persist('panels.width',          'overlord_v2_panel_width',    320);
+    // chat.history = persisted input history (survives refresh, used by TokenInput)
+    // chat.messages = active conversation messages (transient, loaded from server on connect)
     store.persist('chat.history',          'overlord_v2_chat_history',   []);
 
     // ── Non-persisted initial state ──

@@ -69,7 +69,19 @@ export async function navigateTo(viewName) {
 
   // Load view modules if not yet loaded
   if (!_viewModules) {
-    _viewModules = await _loadViewModules();
+    try {
+      _viewModules = await _loadViewModules();
+    } catch (err) {
+      console.error('[Router] Failed to load view modules:', err);
+      if (_centerPanel) {
+        _centerPanel.textContent = '';
+        _centerPanel.appendChild(h('div', { class: 'empty-state' },
+          h('p', { class: 'empty-state-title' }, 'Failed to load views'),
+          h('p', { class: 'empty-state-description' }, err.message || 'Module loading error')
+        ));
+      }
+      return;
+    }
   }
 
   // Unmount current view
@@ -105,14 +117,13 @@ export async function navigateTo(viewName) {
   const container = h('div', { class: `view-container view-${viewName}` });
   _centerPanel.appendChild(container);
 
-  // Create view instance if not cached
-  if (!_views[viewName]) {
-    _views[viewName] = new ViewClass(container);
-  } else {
-    // Re-attach to new container
-    _views[viewName].el = container;
+  // Destroy previous cached instance to prevent listener duplication on re-navigation
+  if (_views[viewName]) {
+    try { _views[viewName].destroy(); } catch (e) { /* already cleaned up */ }
   }
 
+  // Always create a fresh view instance
+  _views[viewName] = new ViewClass(container);
   _activeView = _views[viewName];
   _activeView.mount();
 

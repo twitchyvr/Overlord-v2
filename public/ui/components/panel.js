@@ -242,7 +242,7 @@ export class PanelComponent extends Component {
   _setupCollapse() {
     if (!this._headerEl) return;
 
-    this._headerEl.addEventListener('click', (e) => {
+    const clickHandler = (e) => {
       // Don't collapse if clicking a button inside the header
       if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
 
@@ -257,14 +257,18 @@ export class PanelComponent extends Component {
 
       this.toggleCollapse();
       this._persistCollapseState();
-    });
+    };
+    this._headerEl.addEventListener('click', clickHandler);
+    this._listeners.push(() => this._headerEl.removeEventListener('click', clickHandler));
 
-    this._headerEl.addEventListener('keydown', (e) => {
+    const keyHandler = (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         this._headerEl.click();
       }
-    });
+    };
+    this._headerEl.addEventListener('keydown', keyHandler);
+    this._listeners.push(() => this._headerEl.removeEventListener('keydown', keyHandler));
   }
 
   /** @private Wire up popout, maximize, and any other header buttons. */
@@ -272,20 +276,24 @@ export class PanelComponent extends Component {
     // Popout button
     const popoutBtn = this.$('.panel-btn-popout');
     if (popoutBtn) {
-      popoutBtn.addEventListener('click', (e) => {
+      const popoutHandler = (e) => {
         e.stopPropagation();
         if (this._poppedOut) this.pullBack();
         else this.popOut();
-      });
+      };
+      popoutBtn.addEventListener('click', popoutHandler);
+      this._listeners.push(() => popoutBtn.removeEventListener('click', popoutHandler));
     }
 
     // Maximize button
     const maxBtn = this.$('.panel-btn-max');
     if (maxBtn) {
-      maxBtn.addEventListener('click', (e) => {
+      const maxHandler = (e) => {
         e.stopPropagation();
         this.toggleMaximize();
-      });
+      };
+      maxBtn.addEventListener('click', maxHandler);
+      this._listeners.push(() => maxBtn.removeEventListener('click', maxHandler));
     }
   }
 
@@ -489,15 +497,23 @@ export function updateDividerVisibility() {
   }
 }
 
+// Track global listeners for cleanup
+let _dividerCleanups = [];
+let _resizeCleanups = [];
+
 /**
  * Initialize drag-resize behavior on all .panel-divider elements.
  */
 export function initPanelDividers() {
+  // Clean up previous listeners before re-initializing
+  _dividerCleanups.forEach(fn => fn());
+  _dividerCleanups = [];
+
   document.querySelectorAll('.panel-divider').forEach(divider => {
     let dragging = false, startY = 0, prevPanel = null, nextPanel = null;
     let prevStart = 0, nextStart = 0;
 
-    divider.addEventListener('mousedown', (e) => {
+    const mousedownHandler = (e) => {
       // Walk siblings to find surrounding visible, non-collapsed panels
       prevPanel = divider.previousElementSibling;
       while (prevPanel && (prevPanel.classList.contains('panel-divider') || prevPanel.classList.contains('collapsed') || prevPanel.classList.contains('panel-hidden')))
@@ -515,18 +531,18 @@ export function initPanelDividers() {
       document.body.style.cursor = 'ns-resize';
       document.body.style.userSelect = 'none';
       e.preventDefault();
-    });
+    };
 
-    document.addEventListener('mousemove', (e) => {
+    const mousemoveHandler = (e) => {
       if (!dragging || !prevPanel || !nextPanel) return;
       const delta = e.clientY - startY;
       const newPrev = Math.max(32, prevStart + delta);
       const newNext = Math.max(32, nextStart - delta);
       prevPanel.style.flexBasis = newPrev + 'px';
       nextPanel.style.flexBasis = newNext + 'px';
-    });
+    };
 
-    document.addEventListener('mouseup', () => {
+    const mouseupHandler = () => {
       if (dragging) {
         dragging = false;
         divider.classList.remove('dragging');
@@ -534,6 +550,16 @@ export function initPanelDividers() {
         document.body.style.userSelect = '';
         savePanelHeights();
       }
+    };
+
+    divider.addEventListener('mousedown', mousedownHandler);
+    document.addEventListener('mousemove', mousemoveHandler);
+    document.addEventListener('mouseup', mouseupHandler);
+
+    _dividerCleanups.push(() => {
+      divider.removeEventListener('mousedown', mousedownHandler);
+      document.removeEventListener('mousemove', mousemoveHandler);
+      document.removeEventListener('mouseup', mouseupHandler);
     });
   });
 }
@@ -542,13 +568,17 @@ export function initPanelDividers() {
  * Initialize the right-panel width resize handle.
  */
 export function initRightPanelResize() {
+  // Clean up previous listeners before re-initializing
+  _resizeCleanups.forEach(fn => fn());
+  _resizeCleanups = [];
+
   const handle = document.getElementById('panel-resize-handle');
   const rp = document.getElementById('right-panel');
   if (!handle || !rp) return;
 
   let startX = 0, startWidth = 0;
 
-  handle.addEventListener('mousedown', (e) => {
+  const mousedownHandler = (e) => {
     startX = e.clientX;
     startWidth = rp.offsetWidth;
     handle.classList.add('dragging');
@@ -557,15 +587,15 @@ export function initRightPanelResize() {
     rp.style.willChange = 'width';
     rp.style.transition = 'none';
     e.preventDefault();
-  });
+  };
 
-  document.addEventListener('mousemove', (e) => {
+  const mousemoveHandler = (e) => {
     if (!handle.classList.contains('dragging')) return;
     const delta = startX - e.clientX;
     rp.style.width = Math.min(700, Math.max(200, startWidth + delta)) + 'px';
-  });
+  };
 
-  document.addEventListener('mouseup', () => {
+  const mouseupHandler = () => {
     if (!handle.classList.contains('dragging')) return;
     handle.classList.remove('dragging');
     document.body.style.cursor = '';
@@ -575,6 +605,16 @@ export function initRightPanelResize() {
     if (OverlordUI._store) {
       OverlordUI._store.set('panels.width', rp.style.width);
     }
+  };
+
+  handle.addEventListener('mousedown', mousedownHandler);
+  document.addEventListener('mousemove', mousemoveHandler);
+  document.addEventListener('mouseup', mouseupHandler);
+
+  _resizeCleanups.push(() => {
+    handle.removeEventListener('mousedown', mousedownHandler);
+    document.removeEventListener('mousemove', mousemoveHandler);
+    document.removeEventListener('mouseup', mouseupHandler);
   });
 
   // Apply persisted width

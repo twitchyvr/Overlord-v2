@@ -283,12 +283,16 @@ export class TokenInput extends Component {
     // Replace trigger+query with the selected suggestion
     this._textareaEl.value = before + this._tokenTrigger.char + suggestion.label + ' ' + after;
 
+    // Save trigger info before clearing
+    const triggerType = this._tokenTrigger.type;
+    const triggerChar = this._tokenTrigger.char;
+
     // Record the token
     this._tokens.push({
-      type: this._tokenTrigger.type,
+      type: triggerType,
       id: suggestion.id,
       label: suggestion.label,
-      char: this._tokenTrigger.char
+      char: triggerChar
     });
 
     // Render chip
@@ -299,7 +303,7 @@ export class TokenInput extends Component {
     this._closeAutocomplete();
 
     // Set cursor after inserted text
-    const newPos = before.length + this._tokenTrigger?.char.length + suggestion.label.length + 1;
+    const newPos = before.length + triggerChar.length + suggestion.label.length + 1;
     this._textareaEl.setSelectionRange(newPos, newPos);
     this._textareaEl.focus();
     this._autoResize();

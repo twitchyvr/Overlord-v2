@@ -44,10 +44,12 @@ export class Dropdown extends Component {
 
   mount() {
     this._mounted = true;
-    this.el.addEventListener('click', (e) => {
+    const triggerClickHandler = (e) => {
       e.stopPropagation();
       this.toggle();
-    });
+    };
+    this.el.addEventListener('click', triggerClickHandler);
+    this._listeners.push(() => this.el.removeEventListener('click', triggerClickHandler));
   }
 
   destroy() {
@@ -225,9 +227,12 @@ export class Dropdown extends Component {
         this.close();
       }
     };
-    // Defer to avoid immediately closing from the trigger click
+    // Defer to avoid immediately closing from the trigger click.
+    // Guard against close() being called before rAF fires.
     requestAnimationFrame(() => {
-      document.addEventListener('mousedown', this._outsideClickHandler);
+      if (this._isOpen && this._outsideClickHandler) {
+        document.addEventListener('mousedown', this._outsideClickHandler);
+      }
     });
   }
 

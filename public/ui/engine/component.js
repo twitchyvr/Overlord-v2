@@ -23,7 +23,9 @@ export class Component {
   /* ── Lifecycle hooks (override in subclasses) ── */
 
   /** Called when the component enters the DOM. Set up subscriptions here. */
-  mount() {}
+  mount() {
+    this._mounted = true;
+  }
 
   /** Called when relevant state changes. */
   render() {}
