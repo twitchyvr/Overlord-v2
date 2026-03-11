@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { StrategistOffice } from '../../../src/rooms/room-types/strategist.js';
+import { StrategistOffice, QUICK_START_TEMPLATES } from '../../../src/rooms/room-types/strategist.js';
 
 describe('StrategistOffice', () => {
   describe('contract', () => {
@@ -53,8 +53,8 @@ describe('StrategistOffice', () => {
       ]);
     });
 
-    it('has empty escalation — strategist is the entry point', () => {
-      expect(contract.escalation).toEqual({});
+    it('escalates to discovery on completion — Phase Zero → Discovery transition', () => {
+      expect(contract.escalation).toEqual({ onComplete: 'discovery' });
     });
   });
 
@@ -64,8 +64,63 @@ describe('StrategistOffice', () => {
       expect(room.modes).toBeDefined();
       expect(room.modes.quickStart).toBeDefined();
       expect(room.modes.advanced).toBeDefined();
-      expect(room.modes.quickStart).toContain('template');
-      expect(room.modes.advanced).toContain('custom');
+    });
+  });
+
+  describe('Quick Start templates', () => {
+    it('provides at least 4 predefined templates', () => {
+      const templates = StrategistOffice.getTemplates();
+      expect(templates.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('each template has required fields', () => {
+      for (const template of QUICK_START_TEMPLATES) {
+        expect(template.id).toBeTruthy();
+        expect(template.name).toBeTruthy();
+        expect(template.description).toBeTruthy();
+        expect(template.floorsNeeded.length).toBeGreaterThan(0);
+        expect(template.roomConfig.length).toBeGreaterThan(0);
+        expect(template.agentRoster.length).toBeGreaterThan(0);
+        expect(template.estimatedPhases.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('getTemplate returns specific template by ID', () => {
+      const webApp = StrategistOffice.getTemplate('web-app');
+      expect(webApp).toBeDefined();
+      expect(webApp!.name).toBe('Web Application');
+    });
+
+    it('getTemplate returns undefined for unknown ID', () => {
+      expect(StrategistOffice.getTemplate('nonexistent')).toBeUndefined();
+    });
+
+    it('buildBlueprintFromTemplate merges user goals with template', () => {
+      const blueprint = StrategistOffice.buildBlueprintFromTemplate('web-app', {
+        projectGoals: ['Build a todo app'],
+        successCriteria: ['Users can manage tasks'],
+      });
+      expect(blueprint).not.toBeNull();
+      expect(blueprint!.projectGoals).toEqual(['Build a todo app']);
+      expect(blueprint!.successCriteria).toEqual(['Users can manage tasks']);
+      expect(blueprint!.floorsNeeded).toBeDefined();
+      expect(blueprint!.roomConfig).toBeDefined();
+      expect(blueprint!.agentRoster).toBeDefined();
+      expect(blueprint!.templateId).toBe('web-app');
+      expect(blueprint!.mode).toBe('quickStart');
+    });
+
+    it('buildBlueprintFromTemplate returns null for unknown template', () => {
+      expect(StrategistOffice.buildBlueprintFromTemplate('bad', {
+        projectGoals: ['x'],
+        successCriteria: ['y'],
+      })).toBeNull();
+    });
+
+    it('all templates include the strategy floor', () => {
+      for (const template of QUICK_START_TEMPLATES) {
+        expect(template.floorsNeeded).toContain('strategy');
+      }
     });
   });
 

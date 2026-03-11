@@ -7,11 +7,119 @@
  *
  * Active behavior:
  * - validateExitDocumentValues: rejects empty goals/criteria/phases
+ * - Quick Start templates: predefined building configs for common project types
+ * - Escalation: onComplete → discovery (Phase Zero → Discovery transition)
  */
 
 import { BaseRoom } from './base-room.js';
 import { ok, err } from '../../core/contracts.js';
 import type { Result, RoomContract } from '../../core/contracts.js';
+
+// ─── Quick Start Templates ───
+
+export interface BuildingTemplate {
+  id: string;
+  name: string;
+  description: string;
+  floorsNeeded: string[];
+  roomConfig: Array<{ floor: string; rooms: string[] }>;
+  agentRoster: Array<{ name: string; role: string; rooms: string[] }>;
+  estimatedPhases: string[];
+}
+
+export const QUICK_START_TEMPLATES: ReadonlyArray<BuildingTemplate> = [
+  {
+    id: 'web-app',
+    name: 'Web Application',
+    description: 'Full-stack web app with frontend, backend, and deployment',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'Lead Developer', role: 'developer', rooms: ['code-lab', 'testing-lab', 'architecture'] },
+      { name: 'QA Engineer', role: 'tester', rooms: ['testing-lab', 'review'] },
+      { name: 'DevOps Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+  {
+    id: 'microservices',
+    name: 'Microservices Architecture',
+    description: 'Distributed system with multiple services and integration testing',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations', 'integration'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+      { floor: 'integration', rooms: ['testing-lab'] },
+    ],
+    agentRoster: [
+      { name: 'System Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Backend Developer', role: 'developer', rooms: ['code-lab', 'testing-lab'] },
+      { name: 'Integration Tester', role: 'tester', rooms: ['testing-lab', 'review'] },
+      { name: 'Platform Engineer', role: 'operator', rooms: ['deploy', 'architecture'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+  {
+    id: 'data-pipeline',
+    name: 'Data Pipeline',
+    description: 'ETL/data processing pipeline with validation and monitoring',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'Data Engineer', role: 'developer', rooms: ['code-lab', 'architecture'] },
+      { name: 'Data Analyst', role: 'analyst', rooms: ['discovery', 'testing-lab', 'review'] },
+      { name: 'DevOps Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+  {
+    id: 'cli-tool',
+    name: 'CLI Tool',
+    description: 'Command-line application with focused scope',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+    ],
+    agentRoster: [
+      { name: 'Developer', role: 'developer', rooms: ['code-lab', 'testing-lab', 'architecture', 'discovery'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review'],
+  },
+  {
+    id: 'api-service',
+    name: 'API Service',
+    description: 'REST/GraphQL API with authentication and documentation',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'API Developer', role: 'developer', rooms: ['code-lab', 'testing-lab', 'architecture'] },
+      { name: 'Security Reviewer', role: 'reviewer', rooms: ['review', 'testing-lab'] },
+      { name: 'DevOps Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+];
+
+// ─── Room Definition ───
 
 export class StrategistOffice extends BaseRoom {
   static override contract: RoomContract = {
@@ -38,14 +146,58 @@ export class StrategistOffice extends BaseRoom {
         'estimatedPhases',
       ],
     },
-    escalation: {},
+    escalation: {
+      onComplete: 'discovery',
+    },
     provider: 'configurable',
   };
 
+  /**
+   * Available setup modes for Phase Zero.
+   * Quick Start: select from predefined templates.
+   * Advanced: route to Building Architect room for custom layout.
+   */
   modes = {
-    quickStart: 'Accept suggested template',
-    advanced: 'Drag-and-drop rooms into floors, custom agents',
+    quickStart: 'Select a predefined template and customize details',
+    advanced: 'Route to Building Architect room for custom floor/room layout',
   };
+
+  /**
+   * Get available Quick Start templates.
+   * Templates provide pre-configured building layouts for common project types.
+   */
+  static getTemplates(): ReadonlyArray<BuildingTemplate> {
+    return QUICK_START_TEMPLATES;
+  }
+
+  /**
+   * Get a specific template by ID.
+   */
+  static getTemplate(templateId: string): BuildingTemplate | undefined {
+    return QUICK_START_TEMPLATES.find((t) => t.id === templateId);
+  }
+
+  /**
+   * Build a blueprint from a template, merging user-provided goals and criteria.
+   */
+  static buildBlueprintFromTemplate(
+    templateId: string,
+    overrides: { projectGoals: string[]; successCriteria: string[] },
+  ): Record<string, unknown> | null {
+    const template = StrategistOffice.getTemplate(templateId);
+    if (!template) return null;
+
+    return {
+      projectGoals: overrides.projectGoals,
+      successCriteria: overrides.successCriteria,
+      floorsNeeded: template.floorsNeeded,
+      roomConfig: template.roomConfig,
+      agentRoster: template.agentRoster,
+      estimatedPhases: template.estimatedPhases,
+      templateId: template.id,
+      mode: 'quickStart',
+    };
+  }
 
   override getRules(): string[] {
     return [
@@ -53,7 +205,10 @@ export class StrategistOffice extends BaseRoom {
       'Ask consultative questions: goals, success criteria, constraints.',
       'Suggest a building layout based on answers.',
       'Offer Quick Start (template) or Advanced (custom) mode.',
+      'Quick Start templates: web-app, microservices, data-pipeline, cli-tool, api-service.',
+      'For Advanced mode, recommend routing to the Building Architect room.',
       'Your exit document configures the entire building.',
+      'On completion, the system transitions to the Discovery phase.',
     ];
   }
 
@@ -65,6 +220,8 @@ export class StrategistOffice extends BaseRoom {
       roomConfig: [{ floor: 'string', rooms: ['string'] }],
       agentRoster: [{ name: 'string', role: 'string', rooms: ['string'] }],
       estimatedPhases: ['string'],
+      templateId: 'string (optional — set if Quick Start was used)',
+      mode: 'quickStart | advanced',
     };
   }
 

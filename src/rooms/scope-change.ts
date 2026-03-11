@@ -25,6 +25,7 @@ const log = logger.child({ module: 'scope-change' });
 /** Map room types to their floor types for auto-floor lookup */
 const ROOM_FLOOR_MAP: Record<string, string> = {
   strategist: 'strategy',
+  'building-architect': 'strategy',
   discovery: 'collaboration',
   architecture: 'collaboration',
   'code-lab': 'execution',
@@ -78,13 +79,14 @@ export function detectScopeChange({
 
   if (!raidResult.ok) return raidResult;
 
+  const raidData = raidResult.data as { id: string };
   log.info(
-    { buildingId, raidId: raidResult.data.id, description, affectedAreas },
+    { buildingId, raidId: raidData.id, description, affectedAreas },
     'Scope change detected',
   );
 
   return ok({
-    raidId: raidResult.data.id,
+    raidId: raidData.id,
     buildingId,
     description,
     affectedAreas,
@@ -151,33 +153,37 @@ export function initiateReEntry({
 
   if (!roomResult.ok) return roomResult;
 
+  const roomData = roomResult.data as { id: string };
+
   // Determine table type — use first table if not specified
-  const room = getRoom(roomResult.data.id);
+  const room = getRoom(roomData.id);
   const resolvedTableType = tableType || (room ? Object.keys(room.tables)[0] : 'focus');
 
   // Enter agent into the new room
   const enterResult = enterRoom({
-    roomId: roomResult.data.id,
+    roomId: roomData.id,
     agentId,
     tableType: resolvedTableType,
   });
 
   if (!enterResult.ok) return enterResult;
 
+  const enterData = enterResult.data as { tools: string[]; fileScope: string };
+
   log.info(
-    { buildingId, targetRoomType, agentId, roomId: roomResult.data.id, scopeChangeId },
+    { buildingId, targetRoomType, agentId, roomId: roomData.id, scopeChangeId },
     'Scope change re-entry initiated',
   );
 
   return ok({
-    roomId: roomResult.data.id,
+    roomId: roomData.id,
     floorId: floor.id,
     agentId,
     scopeChangeId,
     tableType: resolvedTableType,
     contextBrief: briefResult.data,
-    tools: enterResult.data.tools,
-    fileScope: enterResult.data.fileScope,
+    tools: enterData.tools,
+    fileScope: enterData.fileScope,
   });
 }
 
@@ -226,17 +232,19 @@ export function initScopeChangeHandler(bus: Bus): void {
       return;
     }
 
+    const detectData = detectResult.data as { raidId: string };
+
     // Emit event for upstream consumers (UI, orchestrator)
     bus.emit('scope-change:detected', {
       buildingId: building.id,
-      scopeChangeId: detectResult.data.raidId,
+      scopeChangeId: detectData.raidId,
       targetRoomType: targetRoom,
       agentId,
       reason,
     });
 
     log.info(
-      { buildingId: building.id, targetRoom, agentId, scopeChangeId: detectResult.data.raidId },
+      { buildingId: building.id, targetRoom, agentId, scopeChangeId: detectData.raidId },
       'Scope change escalation handled',
     );
   });

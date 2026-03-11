@@ -16,6 +16,7 @@ import { ReviewRoom } from './review.js';
 import { DeployRoom } from './deploy.js';
 import { WarRoom } from './war-room.js';
 import { StrategistOffice } from './strategist.js';
+import { BuildingArchitect } from './building-architect.js';
 
 /**
  * All built-in room types, keyed by their contract roomType string.
@@ -25,6 +26,7 @@ import { StrategistOffice } from './strategist.js';
  */
 export const builtInRoomTypes: ReadonlyArray<{ type: string; factory: BaseRoomConstructor }> = [
   { type: 'strategist', factory: StrategistOffice as unknown as BaseRoomConstructor },
+  { type: 'building-architect', factory: BuildingArchitect as unknown as BaseRoomConstructor },
   { type: 'discovery', factory: DiscoveryRoom as unknown as BaseRoomConstructor },
   { type: 'architecture', factory: ArchitectureRoom as unknown as BaseRoomConstructor },
   { type: 'code-lab', factory: CodeLab as unknown as BaseRoomConstructor },
@@ -55,3 +57,4 @@ export { ReviewRoom } from './review.js';
 export { DeployRoom } from './deploy.js';
 export { WarRoom } from './war-room.js';
 export { StrategistOffice } from './strategist.js';
+export { BuildingArchitect } from './building-architect.js';
