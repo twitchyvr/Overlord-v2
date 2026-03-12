@@ -69,6 +69,7 @@ const SCHEMA_SQL = `
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     role TEXT NOT NULL,
+    building_id TEXT REFERENCES buildings(id),
     capabilities TEXT DEFAULT '[]',
     room_access TEXT DEFAULT '[]',
     badge TEXT,
@@ -205,6 +206,7 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id);
   CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id);
   CREATE INDEX IF NOT EXISTS idx_agents_room ON agents(current_room_id);
+  CREATE INDEX IF NOT EXISTS idx_agents_building ON agents(building_id);
   CREATE INDEX IF NOT EXISTS idx_tasks_building ON tasks(building_id);
   CREATE INDEX IF NOT EXISTS idx_todos_task ON todos(task_id);
   CREATE INDEX IF NOT EXISTS idx_raid_building ON raid_entries(building_id);

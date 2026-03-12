@@ -25,6 +25,7 @@ describe('Agent Registry', () => {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         role TEXT NOT NULL,
+        building_id TEXT,
         capabilities TEXT DEFAULT '[]',
         room_access TEXT DEFAULT '[]',
         badge TEXT,

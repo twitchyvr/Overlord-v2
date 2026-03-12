@@ -24,6 +24,9 @@ import { initTransport } from './transport/socket-handler.js';
 import { initPhaseZeroHandler } from './rooms/phase-zero.js';
 import { initScopeChangeHandler } from './rooms/scope-change.js';
 import { listBuildings } from './rooms/building-manager.js';
+import { initCommands } from './commands/index.js';
+import { initPlugins } from './plugins/index.js';
+import type { InitPluginsParams } from './plugins/index.js';
 
 import type { Request, Response } from 'express';
 
@@ -57,6 +60,13 @@ async function start(): Promise<void> {
   initPhaseZeroHandler(bus);
   initScopeChangeHandler(bus);
   log.info('Phase Zero + Scope Change bus handlers initialized');
+
+  // 2b. Init commands + plugins (after rooms/agents/tools, before transport)
+  initCommands({ bus, rooms, agents, tools });
+  log.info('Command system initialized');
+
+  await initPlugins({ bus, rooms, agents, tools } as InitPluginsParams);
+  log.info('Plugin system initialized');
 
   // 3. HTTP + Socket.IO
   const app = express();

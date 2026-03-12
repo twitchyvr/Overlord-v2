@@ -159,6 +159,7 @@ describe('Storage Layer', () => {
       expect(columnNames).toContain('id');
       expect(columnNames).toContain('name');
       expect(columnNames).toContain('role');
+      expect(columnNames).toContain('building_id');
       expect(columnNames).toContain('capabilities');
       expect(columnNames).toContain('room_access');
       expect(columnNames).toContain('badge');
@@ -205,13 +206,14 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 18 indexes', () => {
+  describe('schema — all 19 indexes', () => {
     const expectedIndexes = [
       'idx_rooms_floor',
       'idx_rooms_type',
       'idx_messages_room',
       'idx_messages_thread',
       'idx_agents_room',
+      'idx_agents_building',
       'idx_tasks_building',
       'idx_todos_task',
       'idx_raid_building',
@@ -227,7 +229,7 @@ describe('Storage Layer', () => {
       'idx_sessions_room',
     ];
 
-    it('creates all 18 custom indexes', async () => {
+    it('creates all 19 custom indexes', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -237,7 +239,7 @@ describe('Storage Layer', () => {
 
       const indexNames = indexes.map((i) => i.name).sort();
       expect(indexNames).toEqual(expectedIndexes.sort());
-      expect(indexNames).toHaveLength(18);
+      expect(indexNames).toHaveLength(19);
     });
 
     it.each(expectedIndexes)('creates index: %s', async (indexName) => {

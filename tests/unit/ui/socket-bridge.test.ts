@@ -119,6 +119,7 @@ describe('initSocketBridge() — initialization', () => {
       'tool:executed', 'phase:advanced',
       'raid:entry:added', 'phase-zero:complete', 'phase-zero:failed',
       'scope-change:detected', 'exit-doc:submitted',
+      'task:created', 'task:updated', 'phase:gate:signed-off',
     ];
     for (const evt of expected) {
       expect(mockSocket.handlers[evt]).toBeTypeOf('function');
@@ -956,14 +957,15 @@ describe('window.overlordSocket.submitExitDoc()', () => {
     const api = (window as any).overlordSocket;
 
     const doc = { summary: 'Phase complete', artifacts: [] };
+    const params = { roomId: 'r1', agentId: 'a1', document: doc };
     mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: true });
     });
 
-    await api.submitExitDoc('r1', 'a1', doc);
+    await api.submitExitDoc(params);
     expect(mockSocket.emit).toHaveBeenCalledWith(
       'exit-doc:submit',
-      { roomId: 'r1', agentId: 'a1', document: doc },
+      params,
       expect.any(Function)
     );
   });
