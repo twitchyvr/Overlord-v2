@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { addRaidEntry, searchRaid, buildContextBrief, updateRaidStatus } from '../../../src/rooms/raid-log.js';
+import { addRaidEntry, searchRaid, buildContextBrief, updateRaidEntry, updateRaidStatus } from '../../../src/rooms/raid-log.js';
 
 // Patch getDb to use in-memory database
 import * as dbModule from '../../../src/storage/db.js';
@@ -233,6 +233,61 @@ describe('RAID Log', () => {
         expect(result.data.assumptions).toHaveLength(0);
         expect(result.data.issues).toHaveLength(0);
         expect(result.data.summary).toContain('0 active RAID entries');
+      }
+    });
+  });
+
+  describe('updateRaidEntry', () => {
+    it('updates summary and rationale', () => {
+      const entry = addRaidEntry({ buildingId: 'bld_1', type: 'risk', phase: 'strategy', summary: 'Old summary', rationale: 'Old rationale' });
+      if (!entry.ok) throw new Error('failed');
+
+      const result = updateRaidEntry({ id: entry.data.id, summary: 'New summary', rationale: 'New rationale' });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.summary).toBe('New summary');
+        expect(result.data.rationale).toBe('New rationale');
+      }
+    });
+
+    it('updates decided_by field', () => {
+      const entry = addRaidEntry({ buildingId: 'bld_1', type: 'decision', phase: 'strategy', summary: 'Test' });
+      if (!entry.ok) throw new Error('failed');
+
+      const result = updateRaidEntry({ id: entry.data.id, decidedBy: 'architect' });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.decided_by).toBe('architect');
+      }
+    });
+
+    it('updates affected_areas', () => {
+      const entry = addRaidEntry({ buildingId: 'bld_1', type: 'risk', phase: 'strategy', summary: 'Test', affectedAreas: ['old'] });
+      if (!entry.ok) throw new Error('failed');
+
+      const result = updateRaidEntry({ id: entry.data.id, affectedAreas: ['api', 'auth'] });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.affected_areas).toEqual(['api', 'auth']);
+      }
+    });
+
+    it('returns error for non-existent entry', () => {
+      const result = updateRaidEntry({ id: 'nonexistent', summary: 'Test' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('RAID_NOT_FOUND');
+      }
+    });
+
+    it('returns error when no fields to update', () => {
+      const entry = addRaidEntry({ buildingId: 'bld_1', type: 'risk', phase: 'strategy', summary: 'Test' });
+      if (!entry.ok) throw new Error('failed');
+
+      const result = updateRaidEntry({ id: entry.data.id });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('NO_CHANGES');
       }
     });
   });
