@@ -200,8 +200,13 @@ export function initiateReEntry({
  * this handler auto-detects the scope change and initiates re-entry.
  */
 export function initScopeChangeHandler(bus: Bus): void {
+  // ── onError escalations → War Room ──
   bus.on('room:escalation:suggested', (data: Record<string, unknown>) => {
     const condition = data.condition as string;
+    if (condition === 'onError') {
+      handleErrorEscalation(bus, data);
+      return;
+    }
     if (condition !== 'onScopeChange') return;
 
     const roomId = data.roomId as string;
@@ -252,5 +257,146 @@ export function initScopeChangeHandler(bus: Bus): void {
     );
   });
 
-  log.info('Scope change handler initialized');
+  log.info('Scope change & error escalation handler initialized');
+}
+
+// ─── Error Escalation → War Room ───
+
+/**
+ * Handle onError escalations by creating/activating a War Room.
+ *
+ * Flow:
+ *   1. Resolve building from the source room
+ *   2. Check if a War Room already exists on the collaboration floor
+ *   3. If not, create one
+ *   4. Record a RAID issue entry for the incident
+ *   5. Enter the triggering agent into the War Room
+ *   6. Emit escalation:war-room event for the UI
+ */
+function handleErrorEscalation(bus: Bus, data: Record<string, unknown>): void {
+  const roomId = data.roomId as string;
+  const roomType = data.roomType as string;
+  const agentId = data.agentId as string;
+  const targetRoom = (data.targetRoom as string) || 'war-room';
+  const reason = (data.reason as string) || 'Error detected';
+
+  if (targetRoom !== 'war-room') {
+    // Non-war-room error escalation — log and skip
+    log.debug({ roomId, targetRoom, reason }, 'Non-war-room error escalation — skipping auto-routing');
+    return;
+  }
+
+  const db = getDb();
+
+  // Resolve building context
+  const roomRow = db.prepare('SELECT floor_id FROM rooms WHERE id = ?').get(roomId) as { floor_id: string } | undefined;
+  if (!roomRow) {
+    log.warn({ roomId }, 'Error escalation: source room not found in DB');
+    return;
+  }
+
+  const floor = db.prepare('SELECT building_id FROM floors WHERE id = ?').get(roomRow.floor_id) as { building_id: string } | undefined;
+  if (!floor) {
+    log.warn({ roomId, floorId: roomRow.floor_id }, 'Error escalation: floor not found');
+    return;
+  }
+
+  const buildingId = floor.building_id;
+
+  // Find collaboration floor for War Room
+  const collabFloor = db.prepare(
+    'SELECT id FROM floors WHERE building_id = ? AND type = ?',
+  ).get(buildingId, 'collaboration') as { id: string } | undefined;
+
+  if (!collabFloor) {
+    log.error({ buildingId }, 'Error escalation: no collaboration floor found — cannot create War Room');
+    bus.emit('escalation:failed', {
+      buildingId,
+      reason: 'No collaboration floor available for War Room',
+      sourceRoomId: roomId,
+      sourceRoomType: roomType,
+    });
+    return;
+  }
+
+  // Check if a War Room already exists on this floor
+  let warRoomId: string;
+  const existingWarRoom = db.prepare(
+    'SELECT id FROM rooms WHERE floor_id = ? AND type = ?',
+  ).get(collabFloor.id, 'war-room') as { id: string } | undefined;
+
+  if (existingWarRoom) {
+    warRoomId = existingWarRoom.id;
+    // Make sure it's an active room instance
+    const active = getRoom(warRoomId);
+    if (!active) {
+      const createResult = createRoom({
+        type: 'war-room',
+        floorId: collabFloor.id,
+        name: 'War Room',
+      });
+      if (createResult.ok) {
+        warRoomId = (createResult.data as { id: string }).id;
+      } else {
+        log.error({ error: createResult.error }, 'Failed to re-activate War Room');
+        return;
+      }
+    }
+    log.info({ warRoomId }, 'Reusing existing War Room');
+  } else {
+    // Create new War Room
+    const createResult = createRoom({
+      type: 'war-room',
+      floorId: collabFloor.id,
+      name: 'War Room',
+    });
+    if (!createResult.ok) {
+      log.error({ error: createResult.error }, 'Failed to create War Room');
+      return;
+    }
+    warRoomId = (createResult.data as { id: string }).id;
+    log.info({ warRoomId, buildingId }, 'War Room created for error escalation');
+  }
+
+  // Record RAID issue
+  const building = db.prepare('SELECT active_phase FROM buildings WHERE id = ?').get(buildingId) as { active_phase: string } | undefined;
+  addRaidEntry({
+    buildingId,
+    type: 'issue',
+    phase: building?.active_phase || 'unknown',
+    roomId,
+    summary: `Error escalation from ${roomType}: ${reason}`,
+    rationale: `Auto-escalated to War Room. Source room: ${roomId} (${roomType}).`,
+    decidedBy: 'system',
+    affectedAreas: [roomType],
+  });
+
+  // Enter agent into War Room
+  const enterResult = enterRoom({
+    roomId: warRoomId,
+    agentId,
+    tableType: 'boardroom',
+  });
+
+  if (!enterResult.ok) {
+    log.warn(
+      { warRoomId, agentId, error: enterResult.error },
+      'Agent could not enter War Room — room ready but agent not seated',
+    );
+  }
+
+  // Emit event for UI and other consumers
+  bus.emit('escalation:war-room', {
+    buildingId,
+    warRoomId,
+    agentId,
+    sourceRoomId: roomId,
+    sourceRoomType: roomType,
+    reason,
+  });
+
+  log.info(
+    { buildingId, warRoomId, agentId, sourceRoom: roomType, reason },
+    'Error escalation routed to War Room',
+  );
 }
