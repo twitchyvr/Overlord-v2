@@ -558,6 +558,18 @@ describe('Socket Handler (Transport Layer)', () => {
       const broadcast = io.broadcasted.find((b) => b.event === 'exit-doc:submitted');
       expect(broadcast).toBeDefined();
     });
+
+    it('broadcasts agent:status-changed from bus to all sockets', () => {
+      bus.emit('agent:status-changed', { agentId: 'a1', status: 'active', roomId: 'r1' });
+      const broadcast = io.broadcasted.find((b) => b.event === 'agent:status-changed');
+      expect(broadcast).toBeDefined();
+    });
+
+    it('broadcasts building:updated from bus to all sockets', () => {
+      bus.emit('building:updated', { id: 'b1', activePhase: 'discovery' });
+      const broadcast = io.broadcasted.find((b) => b.event === 'building:updated');
+      expect(broadcast).toBeDefined();
+    });
   });
 
   describe('error handling', () => {

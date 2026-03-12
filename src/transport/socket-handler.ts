@@ -757,6 +757,10 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
             to: advanceData.nextPhase,
             gateId: gateData.id,
           });
+          bus.emit('building:updated', {
+            id: buildingId,
+            activePhase: advanceData.nextPhase,
+          });
         }
 
         if (ack) ack(signoffResult);
@@ -799,6 +803,8 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   bus.on('exit-doc:submitted', (data: Record<string, unknown>) => io.emit('exit-doc:submitted', data));
   bus.on('scope-change:detected', (data: Record<string, unknown>) => io.emit('scope-change:detected', data));
   bus.on('agent:mentioned', (data: Record<string, unknown>) => io.emit('agent:mentioned', data));
+  bus.on('agent:status-changed', (data: Record<string, unknown>) => io.emit('agent:status-changed', data));
+  bus.on('building:updated', (data: Record<string, unknown>) => io.emit('building:updated', data));
   bus.on('deploy:check', (data: Record<string, unknown>) => io.emit('deploy:check', data));
   bus.on('task:created', (data: Record<string, unknown>) => io.emit('task:created', data));
   bus.on('task:updated', (data: Record<string, unknown>) => io.emit('task:updated', data));
