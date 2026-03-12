@@ -3,17 +3,19 @@
  *
  * Full task management interface with filterable task list,
  * task detail panel with todos, create/update workflows,
- * and real-time updates via store subscriptions.
+ * table/team assignment, and real-time updates via store subscriptions.
  *
  * Data shape (from DB):
  *   id, building_id, title, description, status, parent_id,
- *   milestone_id, assignee_id, room_id, phase, priority,
+ *   milestone_id, assignee_id, room_id, table_id, phase, priority,
  *   created_at, updated_at
  *
  * Store keys:
- *   tasks.list      — array of task objects
- *   building.active — current building id
- *   agents.list     — for assignee picker
+ *   tasks.list               — array of task objects
+ *   building.active          — current building id
+ *   agents.list              — for assignee picker
+ *   rooms.list               — for table assignment (rooms contain tables)
+ *   building.agentPositions  — agent location map (for table agent display)
  */
 
 import { Component } from '../engine/component.js';
@@ -44,8 +46,11 @@ export class TaskView extends Component {
     super(el, opts);
     this._tasks = [];
     this._agents = [];
+    this._rooms = [];
+    this._agentPositions = {};
     this._buildingId = null;
     this._activeFilter = 'all';
+    this._tableFilter = null;   // null = show all, string = filter by table_id
     this._searchQuery = '';
     this._selectedTask = null;
     this._tabs = null;
@@ -72,6 +77,15 @@ export class TaskView extends Component {
       this._agents = agents || [];
     });
 
+    this.subscribe(store, 'rooms.list', (rooms) => {
+      this._rooms = rooms || [];
+      this._updateTaskList();
+    });
+
+    this.subscribe(store, 'building.agentPositions', (positions) => {
+      this._agentPositions = positions || {};
+    });
+
     // Listen for real-time task events
     this._listeners.push(
       OverlordUI.subscribe('task:created', () => this._fetchTasks()),
@@ -87,6 +101,8 @@ export class TaskView extends Component {
     this._buildingId = store.get('building.active');
     this._tasks = store.get('tasks.list') || [];
     this._agents = store.get('agents.list') || [];
+    this._rooms = store.get('rooms.list') || [];
+    this._agentPositions = store.get('building.agentPositions') || {};
 
     this.render();
     this._fetchTasks();
@@ -111,7 +127,7 @@ export class TaskView extends Component {
     );
     this.el.appendChild(header);
 
-    // Search bar
+    // Search bar with table filter
     const searchRow = h('div', { class: 'task-search-row' });
     const searchInput = h('input', {
       class: 'form-input task-search-input',
@@ -123,6 +139,27 @@ export class TaskView extends Component {
       this._updateTaskList();
     });
     searchRow.appendChild(searchInput);
+
+    // Table filter dropdown
+    const tableFilterSelect = h('select', {
+      class: 'form-input task-table-filter-select',
+      id: 'task-table-filter'
+    });
+    tableFilterSelect.appendChild(h('option', { value: '' }, 'All Tables'));
+    tableFilterSelect.appendChild(h('option', { value: '__unassigned__' }, 'Unassigned'));
+    this._populateTableFilterOptions(tableFilterSelect);
+    tableFilterSelect.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (val === '') {
+        this._tableFilter = null;
+      } else if (val === '__unassigned__') {
+        this._tableFilter = '__unassigned__';
+      } else {
+        this._tableFilter = val;
+      }
+      this._updateTaskList();
+    });
+    searchRow.appendChild(tableFilterSelect);
     this.el.appendChild(searchRow);
 
     // Filter tabs
@@ -184,6 +221,13 @@ export class TaskView extends Component {
       tasks = tasks.filter(t => t.status === this._activeFilter);
     }
 
+    // Table filter
+    if (this._tableFilter === '__unassigned__') {
+      tasks = tasks.filter(t => !t.table_id);
+    } else if (this._tableFilter) {
+      tasks = tasks.filter(t => t.table_id === this._tableFilter);
+    }
+
     // Search filter
     if (this._searchQuery) {
       tasks = tasks.filter(t =>
@@ -240,6 +284,12 @@ export class TaskView extends Component {
         assignee: this._getAgentName(task.assignee_id),
         created: task.created_at ? formatTime(task.created_at) : null
       });
+
+      // Add table assignment row to the card
+      const tableInfo = this._buildCardTableRow(task);
+      if (tableInfo) {
+        card.appendChild(tableInfo);
+      }
 
       card.dataset.taskId = task.id;
       card.style.cursor = 'pointer';
@@ -345,9 +395,25 @@ export class TaskView extends Component {
       container.appendChild(infoSection);
     }
 
+    // Table/Team Assignment section
+    container.appendChild(this._buildDetailTableSection(task));
+
     // Todos section
-    const todoSection = h('div', { class: 'task-detail-section' },
+    const todoHeader = h('div', { class: 'todo-section-header' },
       h('h4', null, 'Checklist'),
+      Button.create('Add Item', {
+        variant: 'ghost',
+        size: 'sm',
+        icon: '+',
+        onClick: () => this._toggleAddTodoForm(task.id)
+      })
+    );
+    const todoAddForm = h('div', { class: 'todo-add-form todo-add-form-hidden', id: 'todo-add-form' });
+    this._buildAddTodoForm(todoAddForm, task.id);
+
+    const todoSection = h('div', { class: 'task-detail-section' },
+      todoHeader,
+      todoAddForm,
       h('div', { class: 'task-todo-list', id: 'task-detail-todos' },
         h('div', { class: 'empty-state-inline' }, 'Loading...')
       )
@@ -378,28 +444,217 @@ export class TaskView extends Component {
     todoContainer.textContent = '';
 
     if (!this._todos || this._todos.length === 0) {
-      todoContainer.appendChild(h('div', { class: 'empty-state-inline' }, 'No checklist items'));
+      todoContainer.appendChild(h('div', { class: 'empty-state-inline' }, 'No checklist items yet'));
       return;
     }
 
+    // Summary bar: X of Y complete
+    const doneCount = this._todos.filter(t => t.status === 'done' || t.status === 'completed').length;
+    const totalCount = this._todos.length;
+    const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+
+    const summaryBar = h('div', { class: 'todo-summary-bar' },
+      h('span', { class: 'todo-summary-text' }, `${doneCount} of ${totalCount} complete`),
+      h('div', { class: 'todo-progress-track' },
+        h('div', { class: 'todo-progress-fill', style: { width: `${pct}%` } })
+      )
+    );
+    todoContainer.appendChild(summaryBar);
+
     for (const todo of this._todos) {
       const isDone = todo.status === 'done' || todo.status === 'completed';
-      const row = h('div', { class: `todo-row ${isDone ? 'todo-done' : ''}` },
-        h('div', { class: `todo-checkbox ${isDone ? 'checked' : ''}`, 'data-todo-id': todo.id }),
+      const agentName = this._getAgentName(todo.agent_id);
+
+      // Build row contents
+      const rowChildren = [];
+
+      // Checkbox
+      const checkbox = h('div', {
+        class: `todo-checkbox ${isDone ? 'checked' : ''}`,
+        'data-todo-id': todo.id
+      });
+      checkbox.addEventListener('click', async () => {
+        try {
+          if (window.overlordSocket) {
+            await window.overlordSocket.toggleTodo(todo.id);
+          }
+        } catch (err) {
+          Toast.error('Failed to toggle todo');
+        }
+      });
+      rowChildren.push(checkbox);
+
+      // Description text
+      rowChildren.push(
         h('span', { class: 'todo-text' }, todo.description || 'Untitled todo')
       );
-      // Wire toggle click
-      const checkbox = row.querySelector('.todo-checkbox');
-      if (checkbox) {
-        checkbox.style.cursor = 'pointer';
-        checkbox.addEventListener('click', () => {
-          if (window.overlordSocket) {
-            window.overlordSocket.toggleTodo(todo.id);
+
+      // Agent assignment badge/dropdown
+      const agentControl = h('div', { class: 'todo-agent-control' });
+      const agentSelect = h('select', { class: 'todo-agent-select' });
+      agentSelect.appendChild(h('option', { value: '' }, 'Unassigned'));
+      for (const agent of this._agents) {
+        const opt = h('option', { value: agent.id }, agent.name || agent.id);
+        if (agent.id === todo.agent_id) opt.selected = true;
+        agentSelect.appendChild(opt);
+      }
+      agentSelect.addEventListener('change', async (e) => {
+        const newAgentId = e.target.value;
+        try {
+          if (!window.overlordSocket) return;
+          if (newAgentId) {
+            await window.overlordSocket.assignTodoToAgent(todo.id, newAgentId);
+            Toast.success('Agent assigned');
+          } else {
+            await window.overlordSocket.unassignTodoFromAgent(todo.id);
+            Toast.success('Agent unassigned');
+          }
+        } catch (err) {
+          Toast.error('Failed to update agent assignment');
+        }
+      });
+
+      // Show badge if assigned, click to reveal dropdown
+      if (agentName) {
+        const badge = h('span', { class: 'todo-agent-badge' }, agentName);
+        badge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          badge.style.display = 'none';
+          agentSelect.style.display = '';
+          agentSelect.focus();
+        });
+        agentSelect.style.display = 'none';
+        agentSelect.addEventListener('blur', () => {
+          agentSelect.style.display = 'none';
+          badge.style.display = '';
+          // Update badge text in case agent changed
+          const newId = agentSelect.value;
+          badge.textContent = this._getAgentName(newId) || 'Unassigned';
+          if (!newId) {
+            badge.textContent = '';
+            badge.style.display = 'none';
+            agentSelect.style.display = '';
           }
         });
+        agentControl.appendChild(badge);
+        agentControl.appendChild(agentSelect);
+      } else {
+        agentControl.appendChild(agentSelect);
       }
+      rowChildren.push(agentControl);
+
+      // Delete button
+      const deleteBtn = h('button', {
+        class: 'todo-delete-btn',
+        title: 'Delete todo'
+      }, '\u00D7');
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          if (window.overlordSocket) {
+            await window.overlordSocket.deleteTodo(todo.id);
+            Toast.success('Todo deleted');
+          }
+        } catch (err) {
+          Toast.error('Failed to delete todo');
+        }
+      });
+      rowChildren.push(deleteBtn);
+
+      const row = h('div', { class: `todo-row ${isDone ? 'todo-done' : ''}` }, ...rowChildren);
       todoContainer.appendChild(row);
     }
+  }
+
+  // ── Add Todo Form ─────────────────────────────────────────
+
+  _toggleAddTodoForm(taskId) {
+    const form = document.getElementById('todo-add-form');
+    if (!form) return;
+    form.classList.toggle('todo-add-form-hidden');
+    if (!form.classList.contains('todo-add-form-hidden')) {
+      const input = form.querySelector('.todo-add-input');
+      if (input) input.focus();
+    }
+  }
+
+  _buildAddTodoForm(container, taskId) {
+    container.textContent = '';
+
+    const inputRow = h('div', { class: 'todo-add-input-row' });
+
+    const descInput = h('input', {
+      class: 'form-input todo-add-input',
+      type: 'text',
+      placeholder: 'New checklist item...'
+    });
+    inputRow.appendChild(descInput);
+
+    // Agent dropdown for new todo
+    const agentSelect = h('select', { class: 'form-input todo-add-agent-select' });
+    agentSelect.appendChild(h('option', { value: '' }, 'No agent'));
+    for (const agent of this._agents) {
+      agentSelect.appendChild(h('option', { value: agent.id }, agent.name || agent.id));
+    }
+    inputRow.appendChild(agentSelect);
+
+    const submitBtn = Button.create('Add', {
+      variant: 'primary',
+      size: 'sm',
+      onClick: async () => {
+        const description = descInput.value.trim();
+        if (!description) {
+          descInput.classList.add('input-error');
+          return;
+        }
+        descInput.classList.remove('input-error');
+
+        const agentId = agentSelect.value || null;
+
+        try {
+          if (!window.overlordSocket) return;
+          const res = await window.overlordSocket.createTodo({
+            taskId,
+            description,
+            agentId,
+            status: 'pending'
+          });
+          if (res && res.ok) {
+            Toast.success('Todo added');
+            descInput.value = '';
+            agentSelect.value = '';
+            // Re-fetch todos for this task
+            this._refreshTodos(taskId);
+          } else {
+            Toast.error(res?.error?.message || 'Failed to create todo');
+          }
+        } catch (err) {
+          Toast.error('Failed to create todo');
+        }
+      }
+    });
+    inputRow.appendChild(submitBtn);
+
+    container.appendChild(inputRow);
+
+    // Allow Enter key to submit
+    descInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitBtn.click();
+      }
+    });
+  }
+
+  async _refreshTodos(taskId) {
+    if (!window.overlordSocket) return;
+    try {
+      const res = await window.overlordSocket.fetchTodos(taskId);
+      if (res && res.ok) {
+        this._todos = res.data || [];
+        this._renderDetailTodos();
+      }
+    } catch { /* swallow */ }
   }
 
   // ── Create Task Form ───────────────────────────────────────
@@ -542,6 +797,305 @@ export class TaskView extends Component {
 
     // Close detail drawer if open
     Drawer.close();
+  }
+
+  // ── Table Assignment ──────────────────────────────────────
+
+  /**
+   * Gather all active tables from all rooms in the current building.
+   * Returns flat array of { tableId, tableType, roomId, roomName, roomType, description, agents }.
+   */
+  _getAllTables() {
+    const tables = [];
+    for (const room of this._rooms) {
+      const activeTables = room.activeTables || [];
+      for (const table of activeTables) {
+        // Find agents currently seated at this table
+        const seatedAgents = Object.values(this._agentPositions)
+          .filter(a => a.tableId === table.id || a.current_table_id === table.id);
+        tables.push({
+          tableId: table.id,
+          tableType: table.type || 'focus',
+          roomId: room.id,
+          roomName: room.name || this._formatRoomType(room.type),
+          roomType: room.type,
+          description: table.description || '',
+          chairs: table.chairs || 1,
+          agents: seatedAgents
+        });
+      }
+    }
+    return tables;
+  }
+
+  /**
+   * Find table info for a given table_id.
+   */
+  _getTableInfo(tableId) {
+    if (!tableId) return null;
+    return this._getAllTables().find(t => t.tableId === tableId) || null;
+  }
+
+  /**
+   * Format a room type slug as a title (e.g., "code-lab" -> "Code Lab").
+   */
+  _formatRoomType(type) {
+    if (!type) return 'Room';
+    return type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+
+  /**
+   * Build a compact table assignment row shown on each task card.
+   * Shows the table type + room name, or "Unassigned" with an assign button.
+   */
+  _buildCardTableRow(task) {
+    const row = h('div', { class: 'task-card-table-row' });
+
+    if (task.table_id) {
+      const info = this._getTableInfo(task.table_id);
+      const label = info
+        ? `${info.tableType} in ${info.roomName}`
+        : `Table: ${task.table_id.slice(0, 8)}`;
+
+      row.appendChild(h('span', { class: 'task-card-table-badge task-card-table-badge-assigned' }, label));
+
+      // Unassign button (small x icon)
+      const unassignBtn = h('button', {
+        class: 'task-card-table-unassign',
+        title: 'Unassign from table'
+      }, '\u2715');
+      unassignBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._unassignTaskFromTable(task.id);
+      });
+      row.appendChild(unassignBtn);
+    } else {
+      // Assign button
+      const assignBtn = h('button', {
+        class: 'task-card-table-assign-btn',
+        title: 'Assign to table'
+      }, 'Assign Table');
+      assignBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._openTableAssignModal(task);
+      });
+      row.appendChild(assignBtn);
+    }
+
+    return row;
+  }
+
+  /**
+   * Build the Table/Team section for the task detail drawer.
+   * Shows current assignment with agents or an assign dropdown.
+   */
+  _buildDetailTableSection(task) {
+    const section = h('div', { class: 'task-detail-section task-detail-team-section' });
+    section.appendChild(h('h4', null, 'Table / Team'));
+
+    const content = h('div', { class: 'task-detail-team-content', id: 'task-detail-team' });
+
+    if (task.table_id) {
+      const info = this._getTableInfo(task.table_id);
+
+      // Table info card
+      const tableCard = h('div', { class: 'task-detail-team-card' });
+
+      const tableHeader = h('div', { class: 'task-detail-team-header' },
+        h('span', { class: 'task-detail-team-type' }, info ? info.tableType : 'Table'),
+        h('span', { class: 'task-detail-team-room text-muted' },
+          info ? `in ${info.roomName}` : '')
+      );
+      tableCard.appendChild(tableHeader);
+
+      if (info && info.description) {
+        tableCard.appendChild(h('div', { class: 'task-detail-team-desc text-muted' }, info.description));
+      }
+
+      // Show seated agents at this table
+      if (info && info.agents.length > 0) {
+        const agentList = h('div', { class: 'task-detail-team-agents' });
+        agentList.appendChild(h('span', { class: 'task-detail-team-agents-label' }, 'Team Members:'));
+        for (const agent of info.agents) {
+          const name = agent.name || this._getAgentName(agent.agentId) || agent.agentId;
+          agentList.appendChild(h('span', { class: 'task-detail-team-agent-chip' }, name));
+        }
+        tableCard.appendChild(agentList);
+      }
+
+      content.appendChild(tableCard);
+
+      // Unassign button
+      const unassignBtn = Button.create('Unassign from Table', {
+        variant: 'ghost',
+        size: 'sm',
+        onClick: () => this._unassignTaskFromTable(task.id)
+      });
+      content.appendChild(h('div', { class: 'task-detail-team-actions' }, unassignBtn));
+
+    } else {
+      // No table assigned — show assignment dropdown
+      content.appendChild(h('div', { class: 'task-detail-team-empty text-muted' },
+        'Not assigned to any table.'));
+
+      const allTables = this._getAllTables();
+      if (allTables.length > 0) {
+        const selectRow = h('div', { class: 'task-detail-team-assign-row' });
+
+        const tableSelect = h('select', { class: 'form-input task-detail-team-select' });
+        tableSelect.appendChild(h('option', { value: '' }, 'Select a table...'));
+
+        for (const t of allTables) {
+          const agentCount = t.agents.length;
+          const label = `${t.tableType} in ${t.roomName}${agentCount > 0 ? ` (${agentCount} agent${agentCount !== 1 ? 's' : ''})` : ''}`;
+          tableSelect.appendChild(h('option', { value: t.tableId }, label));
+        }
+        selectRow.appendChild(tableSelect);
+
+        const assignBtn = Button.create('Assign', {
+          variant: 'primary',
+          size: 'sm',
+          onClick: async () => {
+            const selectedTableId = tableSelect.value;
+            if (!selectedTableId) {
+              Toast.warning('Please select a table');
+              return;
+            }
+            await this._assignTaskToTable(task.id, selectedTableId);
+          }
+        });
+        selectRow.appendChild(assignBtn);
+        content.appendChild(selectRow);
+      } else {
+        content.appendChild(h('div', { class: 'task-detail-team-empty text-muted' },
+          'No tables available. Create tables in rooms first.'));
+      }
+    }
+
+    section.appendChild(content);
+    return section;
+  }
+
+  /**
+   * Open a modal to pick a table for task assignment.
+   * Used when clicking "Assign Table" on a task card.
+   */
+  _openTableAssignModal(task) {
+    const allTables = this._getAllTables();
+
+    if (allTables.length === 0) {
+      Toast.warning('No tables available. Create tables in rooms first.');
+      return;
+    }
+
+    const container = h('div', { class: 'task-assign-table-modal' });
+
+    container.appendChild(h('p', { class: 'text-muted' },
+      `Assign "${task.title}" to a table/team.`));
+
+    // Table list
+    const tableList = h('div', { class: 'task-assign-table-list' });
+
+    for (const t of allTables) {
+      const agentNames = t.agents.map(a => a.name || this._getAgentName(a.agentId) || a.agentId);
+
+      const tableItem = h('div', { class: 'task-assign-table-item' });
+
+      const itemInfo = h('div', { class: 'task-assign-table-item-info' },
+        h('div', { class: 'task-assign-table-item-name' }, `${t.tableType} in ${t.roomName}`),
+        t.description ? h('div', { class: 'task-assign-table-item-desc text-muted' }, t.description) : null,
+        agentNames.length > 0
+          ? h('div', { class: 'task-assign-table-item-agents text-muted' }, `Agents: ${agentNames.join(', ')}`)
+          : h('div', { class: 'task-assign-table-item-agents text-muted' }, 'No agents seated')
+      );
+      tableItem.appendChild(itemInfo);
+
+      const selectBtn = Button.create('Assign', {
+        variant: 'secondary',
+        size: 'sm',
+        onClick: async () => {
+          await this._assignTaskToTable(task.id, t.tableId);
+          Modal.close('task-assign-table');
+        }
+      });
+      tableItem.appendChild(selectBtn);
+
+      tableList.appendChild(tableItem);
+    }
+
+    container.appendChild(tableList);
+
+    // Cancel button
+    container.appendChild(h('div', { class: 'task-assign-table-actions' },
+      Button.create('Cancel', {
+        variant: 'ghost',
+        onClick: () => Modal.close('task-assign-table')
+      })
+    ));
+
+    Modal.open('task-assign-table', {
+      title: 'Assign Task to Table',
+      content: container,
+      size: 'md',
+      position: 'center'
+    });
+  }
+
+  /**
+   * Assign a task to a table via the socket bridge.
+   */
+  async _assignTaskToTable(taskId, tableId) {
+    if (!window.overlordSocket) return;
+    try {
+      const res = await window.overlordSocket.assignTaskToTable(taskId, tableId);
+      if (res && res.ok) {
+        Toast.success('Task assigned to table');
+        // Re-open detail if this task is selected
+        if (this._selectedTask && this._selectedTask.id === taskId) {
+          this._selectedTask = { ...this._selectedTask, table_id: tableId };
+          Drawer.close();
+          this._openTaskDetail(taskId);
+        }
+      } else {
+        Toast.error(res?.error?.message || 'Failed to assign task');
+      }
+    } catch (err) {
+      Toast.error('Failed to assign task to table');
+    }
+  }
+
+  /**
+   * Unassign a task from its table via the socket bridge.
+   */
+  async _unassignTaskFromTable(taskId) {
+    if (!window.overlordSocket) return;
+    try {
+      const res = await window.overlordSocket.unassignTaskFromTable(taskId);
+      if (res && res.ok) {
+        Toast.success('Task unassigned from table');
+        // Re-open detail if this task is selected
+        if (this._selectedTask && this._selectedTask.id === taskId) {
+          this._selectedTask = { ...this._selectedTask, table_id: null };
+          Drawer.close();
+          this._openTaskDetail(taskId);
+        }
+      } else {
+        Toast.error(res?.error?.message || 'Failed to unassign task');
+      }
+    } catch (err) {
+      Toast.error('Failed to unassign task from table');
+    }
+  }
+
+  /**
+   * Populate the table filter <select> with available tables from rooms.
+   */
+  _populateTableFilterOptions(selectEl) {
+    const allTables = this._getAllTables();
+    for (const t of allTables) {
+      const label = `${t.tableType} in ${t.roomName}`;
+      selectEl.appendChild(h('option', { value: t.tableId }, label));
+    }
   }
 
   // ── Helpers ────────────────────────────────────────────────
