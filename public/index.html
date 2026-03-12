@@ -55,6 +55,37 @@
       </div>
     </header>
 
+    <!-- Navigation toolbar -->
+    <nav id="app-toolbar" class="app-toolbar">
+      <div class="toolbar-left">
+        <button class="toolbar-btn active" data-view="dashboard" title="Dashboard">
+          <span class="toolbar-icon">&#9632;</span>
+          <span class="toolbar-label">Dashboard</span>
+        </button>
+        <button class="toolbar-btn" data-view="chat" title="Chat">
+          <span class="toolbar-icon">&#9993;</span>
+          <span class="toolbar-label">Chat</span>
+        </button>
+        <button class="toolbar-btn" data-view="tasks" title="Tasks">
+          <span class="toolbar-icon">&#9745;</span>
+          <span class="toolbar-label">Tasks</span>
+        </button>
+        <button class="toolbar-btn" data-view="raid-log" title="RAID Log">
+          <span class="toolbar-icon">&#9888;</span>
+          <span class="toolbar-label">RAID Log</span>
+        </button>
+        <button class="toolbar-btn" data-view="strategist" title="New Project">
+          <span class="toolbar-icon">&#9733;</span>
+          <span class="toolbar-label">Strategist</span>
+        </button>
+      </div>
+      <div class="toolbar-right">
+        <span id="toolbar-connection" class="toolbar-connection connected" title="Connected">
+          <span class="connection-dot"></span>
+        </span>
+      </div>
+    </nav>
+
     <!-- Main layout: 3-column -->
     <main id="main-layout">
       <!-- Left: Building visualization -->
@@ -134,17 +165,17 @@
     <nav id="mobile-nav">
       <div class="mobile-nav-item active" data-view="dashboard">
         <span class="mobile-nav-icon">&#9632;</span>
-        <span>Dashboard</span>
-      </div>
-      <div class="mobile-nav-item" data-view="building">
-        <span class="mobile-nav-icon">&#9962;</span>
-        <span>Building</span>
+        <span>Home</span>
       </div>
       <div class="mobile-nav-item" data-view="chat">
         <span class="mobile-nav-icon">&#9993;</span>
         <span>Chat</span>
       </div>
-      <div class="mobile-nav-item" data-view="raid">
+      <div class="mobile-nav-item" data-view="tasks">
+        <span class="mobile-nav-icon">&#9745;</span>
+        <span>Tasks</span>
+      </div>
+      <div class="mobile-nav-item" data-view="raid-log">
         <span class="mobile-nav-icon">&#9888;</span>
         <span>RAID</span>
       </div>

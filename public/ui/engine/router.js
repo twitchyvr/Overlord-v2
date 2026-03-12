@@ -133,6 +133,10 @@ export async function navigateTo(viewName) {
 
   // Update phase bar highlight
   _updatePhaseBarForView(viewName);
+
+  // Update toolbar + mobile nav active states
+  _updateToolbar(viewName);
+  _updateMobileNav(viewName);
 }
 
 /**
@@ -195,6 +199,12 @@ async function _loadViewModules() {
     tasks:      TaskView,
     'raid-log': RaidLogView
   };
+}
+
+function _updateToolbar(viewName) {
+  document.querySelectorAll('#app-toolbar .toolbar-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === viewName);
+  });
 }
 
 function _updateMobileNav(viewName) {
