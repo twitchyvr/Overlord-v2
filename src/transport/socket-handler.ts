@@ -1098,15 +1098,23 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
     handle(socket, 'task:list', TaskListSchema, (parsed, ack) => {
       const db = getDb();
-      let sql = 'SELECT * FROM tasks WHERE building_id = ?';
+      let sql = `SELECT t.*,
+        tb.type AS table_type,
+        tb.description AS table_description,
+        r.name AS room_name,
+        r.type AS room_type
+        FROM tasks t
+        LEFT JOIN tables tb ON t.table_id = tb.id
+        LEFT JOIN rooms r ON tb.room_id = r.id
+        WHERE t.building_id = ?`;
       const params: unknown[] = [parsed.buildingId];
 
-      if (parsed.status) { sql += ' AND status = ?'; params.push(parsed.status); }
-      if (parsed.phase) { sql += ' AND phase = ?'; params.push(parsed.phase); }
-      if (parsed.assigneeId) { sql += ' AND assignee_id = ?'; params.push(parsed.assigneeId); }
-      if (parsed.tableId) { sql += ' AND table_id = ?'; params.push(parsed.tableId); }
-      if (parsed.roomId) { sql += ' AND room_id = ?'; params.push(parsed.roomId); }
-      sql += ' ORDER BY created_at DESC';
+      if (parsed.status) { sql += ' AND t.status = ?'; params.push(parsed.status); }
+      if (parsed.phase) { sql += ' AND t.phase = ?'; params.push(parsed.phase); }
+      if (parsed.assigneeId) { sql += ' AND t.assignee_id = ?'; params.push(parsed.assigneeId); }
+      if (parsed.tableId) { sql += ' AND t.table_id = ?'; params.push(parsed.tableId); }
+      if (parsed.roomId) { sql += ' AND t.room_id = ?'; params.push(parsed.roomId); }
+      sql += ' ORDER BY t.created_at DESC';
 
       if (ack) ack({ ok: true, data: db.prepare(sql).all(...params) });
     });
