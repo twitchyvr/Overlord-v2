@@ -1400,7 +1400,7 @@ export class AgentsView extends Component {
 /* ── Card Grid ── */
 .agents-view-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--sp-4);
 }
 
@@ -1420,6 +1420,7 @@ export class AgentsView extends Component {
   gap: var(--sp-3);
   position: relative;
   outline: none;
+  min-width: 0; /* Allow grid items to shrink below content size */
 }
 .agents-view-card:hover {
   transform: translateY(-2px);
@@ -1899,20 +1900,12 @@ export class AgentsView extends Component {
    RESPONSIVE — Agents View
    ══════════════════════════════════════════════════ */
 
-/* Medium screens: 2 columns */
-@media (max-width: 1200px) {
-  .agents-view-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
+/* auto-fill with minmax(320px, 1fr) handles column count automatically */
 
-/* Narrow screens: 1 column */
+/* Narrow screens: layout adjustments */
 @media (max-width: 768px) {
   .agents-view {
     padding: var(--sp-4);
-  }
-  .agents-view-grid {
-    grid-template-columns: 1fr;
   }
   .agents-view-header {
     flex-direction: column;
