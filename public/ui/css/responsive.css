@@ -71,6 +71,9 @@
   font-size: 10px;
   cursor: pointer;
   transition: color var(--duration-fast);
+  background: none;
+  border: none;
+  font-family: inherit;
 }
 .mobile-nav-item.active {
   color: var(--accent-blue);

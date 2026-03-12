@@ -108,4 +108,97 @@ describe('navigateTo()', () => {
 
     expect(centerPanel.textContent).toContain('Unknown view');
   });
+
+  it('sets aria-current="page" on active toolbar button', async () => {
+    const centerPanel = document.createElement('section');
+    centerPanel.id = 'center-panel';
+    const buildingPanel = document.createElement('aside');
+    buildingPanel.id = 'building-panel';
+    document.body.appendChild(centerPanel);
+    document.body.appendChild(buildingPanel);
+
+    // Create toolbar
+    const toolbar = document.createElement('nav');
+    toolbar.id = 'app-toolbar';
+    const dashBtn = document.createElement('button');
+    dashBtn.className = 'toolbar-btn';
+    dashBtn.dataset.view = 'dashboard';
+    const chatBtn = document.createElement('button');
+    chatBtn.className = 'toolbar-btn';
+    chatBtn.dataset.view = 'chat';
+    toolbar.appendChild(dashBtn);
+    toolbar.appendChild(chatBtn);
+    document.body.appendChild(toolbar);
+
+    initRouter({ centerPanel, buildingPanel });
+    // Navigate to chat first to ensure we can navigate to dashboard
+    await navigateTo('chat');
+    await navigateTo('dashboard');
+
+    expect(dashBtn.getAttribute('aria-current')).toBe('page');
+    expect(chatBtn.getAttribute('aria-current')).toBe('false');
+  });
+
+  it('sets aria-current="page" on active mobile nav item', async () => {
+    const centerPanel = document.createElement('section');
+    centerPanel.id = 'center-panel';
+    const buildingPanel = document.createElement('aside');
+    buildingPanel.id = 'building-panel';
+    document.body.appendChild(centerPanel);
+    document.body.appendChild(buildingPanel);
+
+    // Create mobile nav
+    const mobileNav = document.createElement('nav');
+    mobileNav.id = 'mobile-nav';
+    const homeItem = document.createElement('button');
+    homeItem.className = 'mobile-nav-item';
+    homeItem.dataset.view = 'dashboard';
+    const chatItem = document.createElement('button');
+    chatItem.className = 'mobile-nav-item';
+    chatItem.dataset.view = 'chat';
+    mobileNav.appendChild(homeItem);
+    mobileNav.appendChild(chatItem);
+    document.body.appendChild(mobileNav);
+
+    initRouter({ centerPanel, buildingPanel });
+    // Navigate to chat first to ensure we can navigate to dashboard
+    await navigateTo('chat');
+    await navigateTo('dashboard');
+
+    expect(homeItem.getAttribute('aria-current')).toBe('page');
+    expect(chatItem.getAttribute('aria-current')).toBe('false');
+  });
+
+  it('updates aria-current when navigating between views', async () => {
+    const centerPanel = document.createElement('section');
+    centerPanel.id = 'center-panel';
+    const buildingPanel = document.createElement('aside');
+    buildingPanel.id = 'building-panel';
+    document.body.appendChild(centerPanel);
+    document.body.appendChild(buildingPanel);
+
+    // Create toolbar
+    const toolbar = document.createElement('nav');
+    toolbar.id = 'app-toolbar';
+    const dashBtn = document.createElement('button');
+    dashBtn.className = 'toolbar-btn';
+    dashBtn.dataset.view = 'dashboard';
+    const chatBtn = document.createElement('button');
+    chatBtn.className = 'toolbar-btn';
+    chatBtn.dataset.view = 'chat';
+    toolbar.appendChild(dashBtn);
+    toolbar.appendChild(chatBtn);
+    document.body.appendChild(toolbar);
+
+    initRouter({ centerPanel, buildingPanel });
+
+    // Navigate to chat first (since previous tests may have left _activeViewName as dashboard)
+    await navigateTo('chat');
+    expect(chatBtn.getAttribute('aria-current')).toBe('page');
+    expect(dashBtn.getAttribute('aria-current')).toBe('false');
+
+    await navigateTo('dashboard');
+    expect(dashBtn.getAttribute('aria-current')).toBe('page');
+    expect(chatBtn.getAttribute('aria-current')).toBe('false');
+  });
 });
