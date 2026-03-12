@@ -24,6 +24,9 @@ import type {
 const log = logger.child({ module: 'conversation-loop' });
 
 const MAX_TOOL_ITERATIONS = 20;
+const TOOL_TIMEOUT_MS = 60_000; // 60 seconds per tool execution
+const AI_MAX_RETRIES = 2;
+const AI_RETRY_DELAY_MS = 1_000; // 1 second base delay (doubles each retry)
 
 interface ContentBlock {
   type: 'text' | 'thinking' | 'tool_use' | 'tool_result';
@@ -74,6 +77,30 @@ interface ConversationParams {
 }
 
 /**
+ * Wrap a promise with a timeout — rejects with a descriptive error if the
+ * promise doesn't settle within `ms` milliseconds.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
+/**
+ * Determine if an AI error is likely transient (worth retrying).
+ */
+function isTransientError(error: { code?: string; message?: string; retryable?: boolean }): boolean {
+  if (error.retryable) return true;
+  const msg = (error.message || '').toLowerCase();
+  return msg.includes('rate limit') || msg.includes('timeout') || msg.includes('econnreset')
+    || msg.includes('econnrefused') || msg.includes('529') || msg.includes('overloaded');
+}
+
+/**
  * Run a conversation loop: send → (tool_use → execute → result)* → done
  */
 export async function runConversationLoop(params: ConversationParams): Promise<Result<ConversationResult>> {
@@ -101,7 +128,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   }
 
   // Persist session to DB (initial save)
-  try { session.save(); } catch { /* DB may not be available in tests */ }
+  try { session.save(); } catch (e) { log.warn({ err: e, sessionId: session.id }, 'Failed to save session'); }
 
   // Get room's allowed tools as ToolDefinitions for the AI
   const allowedToolNames = room.getAllowedTools();
@@ -121,16 +148,37 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       'Conversation loop iteration',
     );
 
-    // Send to AI
-    const aiResult = await ai.sendMessage({
-      provider,
-      messages,
-      tools: roomTools,
-      options: { ...options, system: systemPrompt },
-    });
+    // Send to AI with retry for transient failures
+    let aiResult: Result;
+    let retries = 0;
 
-    if (!aiResult.ok) {
-      log.error({ error: aiResult.error }, 'AI request failed');
+    while (true) {
+      aiResult = await ai.sendMessage({
+        provider,
+        messages,
+        tools: roomTools,
+        options: { ...options, system: systemPrompt },
+      });
+
+      if (aiResult.ok) break;
+
+      const aiError = aiResult.error;
+      if (retries < AI_MAX_RETRIES && isTransientError(aiError)) {
+        retries++;
+        const delay = AI_RETRY_DELAY_MS * Math.pow(2, retries - 1);
+        log.warn({ error: aiError, retry: retries, delayMs: delay, agentId, roomId: room.id }, 'Retrying AI request after transient failure');
+        bus.emit('chat:stream', { agentId, roomId: room.id, content: [{ type: 'text', text: `[Retrying AI request (attempt ${retries + 1})...]` }], iteration });
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+
+      log.error({ error: aiError, agentId, roomId: room.id, retries }, 'AI request failed');
+      bus.emit('chat:response', {
+        agentId,
+        roomId: room.id,
+        type: 'error',
+        error: { code: aiError.code || 'AI_FAILURE', message: aiError.message || 'AI provider failed' },
+      });
       return aiResult as Result<ConversationResult>;
     }
 
@@ -213,18 +261,38 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         input: toolInput,
       });
 
-      // Execute through the tool registry (which enforces room access)
-      const toolResult = await tools.executeInRoom({
-        toolName,
-        params: toolInput,
-        roomAllowedTools: allowedToolNames,
-        context: {
-          roomId: room.id,
-          roomType: room.type,
-          agentId,
-          fileScope: room.fileScope,
-        },
-      });
+      // Execute through the tool registry with timeout
+      let toolResult: Result;
+      try {
+        toolResult = await withTimeout(
+          tools.executeInRoom({
+            toolName,
+            params: toolInput,
+            roomAllowedTools: allowedToolNames,
+            context: {
+              roomId: room.id,
+              roomType: room.type,
+              agentId,
+              fileScope: room.fileScope,
+            },
+          }),
+          TOOL_TIMEOUT_MS,
+          `Tool "${toolName}"`,
+        );
+      } catch (toolError) {
+        const errorMsg = toolError instanceof Error ? toolError.message : String(toolError);
+        log.error({ tool: toolName, agentId, roomId: room.id, error: errorMsg }, 'Tool execution failed');
+        bus.emit('tool:executed', { toolName, roomId: room.id, agentId, success: false, error: errorMsg });
+
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content: `Error: ${errorMsg}`,
+          is_error: true,
+        });
+        toolCallLog.push({ name: toolName, input: toolInput, result: { error: errorMsg } });
+        continue;
+      }
 
       // Room-level observation: onAfterToolCall can trigger escalation
       room.onAfterToolCall(toolName, agentId, toolResult);
@@ -260,6 +328,12 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
   if (iteration >= MAX_TOOL_ITERATIONS) {
     log.warn({ iterations: iteration, agentId, roomId: room.id }, 'Max tool iterations reached');
+    bus.emit('chat:response', {
+      agentId,
+      roomId: room.id,
+      type: 'warning',
+      content: [{ type: 'text', text: `[Warning: maximum tool iterations (${MAX_TOOL_ITERATIONS}) reached. Response may be incomplete.]` }],
+    });
   }
 
   // Extract final text from last assistant message
@@ -278,7 +352,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
   // End session and persist final state
   session.end();
-  try { session.save(); } catch { /* DB may not be available in tests */ }
+  try { session.save(); } catch (e) { log.warn({ err: e, sessionId: session.id }, 'Failed to save session'); }
 
   return {
     ok: true,

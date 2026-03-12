@@ -290,13 +290,13 @@ describe('Conversation Loop', () => {
     }
   });
 
-  it('propagates AI errors', async () => {
+  it('propagates non-retryable AI errors immediately', async () => {
     const ai: AIProviderAPI = {
       getAdapter: () => null,
       registerAdapter: () => {},
       sendMessage: async () => ({
         ok: false as const,
-        error: { code: 'AI_ERROR', message: 'API down', retryable: true },
+        error: { code: 'AI_ERROR', message: 'Invalid API key', retryable: false },
       }),
     };
 
@@ -311,6 +311,126 @@ describe('Conversation Loop', () => {
     });
 
     expect(result.ok).toBe(false);
+  });
+
+  it('retries transient AI failures before giving up', async () => {
+    let callCount = 0;
+    const ai: AIProviderAPI = {
+      getAdapter: () => null,
+      registerAdapter: () => {},
+      sendMessage: async () => {
+        callCount++;
+        // Fail first 3 calls (1 initial + 2 retries), never succeed
+        return {
+          ok: false as const,
+          error: { code: 'RATE_LIMIT', message: 'rate limit exceeded', retryable: true },
+        };
+      },
+    };
+
+    const result = await runConversationLoop({
+      provider: 'anthropic',
+      room: createMockRoom(),
+      agentId: 'agent_1',
+      messages: [{ role: 'user', content: 'Hello' }],
+      ai,
+      tools: createMockTools(),
+      bus: createMockBus(),
+    });
+
+    expect(result.ok).toBe(false);
+    // Should have been called 3 times: 1 initial + 2 retries
+    expect(callCount).toBe(3);
+  });
+
+  it('succeeds after transient AI failure on retry', async () => {
+    let callCount = 0;
+    const ai: AIProviderAPI = {
+      getAdapter: () => null,
+      registerAdapter: () => {},
+      sendMessage: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            ok: false as const,
+            error: { code: 'OVERLOADED', message: 'overloaded', retryable: true },
+          };
+        }
+        return ok({
+          id: 'msg_1',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Recovered!' }],
+          model: 'test',
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        });
+      },
+    };
+
+    const result = await runConversationLoop({
+      provider: 'anthropic',
+      room: createMockRoom(),
+      agentId: 'agent_1',
+      messages: [{ role: 'user', content: 'Hello' }],
+      ai,
+      tools: createMockTools(),
+      bus: createMockBus(),
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.finalText).toBe('Recovered!');
+    }
+    expect(callCount).toBe(2);
+  });
+
+  it('handles tool execution exceptions gracefully', async () => {
+    const ai = createMockAI([
+      {
+        id: 'msg_1',
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: 'tc_1',
+          name: 'bash',
+          input: { command: 'crash' },
+        }],
+        model: 'test',
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      },
+      {
+        id: 'msg_2',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Tool failed, continuing.' }],
+        model: 'test',
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 20, output_tokens: 10 },
+      },
+    ]);
+
+    // Tools registry that throws on execution
+    const throwingTools = createMockTools();
+    throwingTools.executeInRoom = async () => {
+      throw new Error('Segfault in tool execution');
+    };
+
+    const result = await runConversationLoop({
+      provider: 'anthropic',
+      room: createMockRoom(),
+      agentId: 'agent_1',
+      messages: [{ role: 'user', content: 'Crash it' }],
+      ai,
+      tools: throwingTools,
+      bus: createMockBus(),
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.finalText).toBe('Tool failed, continuing.');
+      expect(result.data.toolCalls.length).toBe(1);
+      expect(result.data.toolCalls[0].result).toEqual({ error: 'Segfault in tool execution' });
+    }
   });
 
   it('blocks tool execution when onBeforeToolCall returns err', async () => {
