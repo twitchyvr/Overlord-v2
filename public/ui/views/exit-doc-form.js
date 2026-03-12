@@ -70,9 +70,9 @@ const FIELD_HINTS = {
 
   // Review / gate-review
   verdict: 'GO / NO-GO / CONDITIONAL verdict.',
-  evidence: 'Evidence supporting the verdict.',
-  conditions: 'Conditions that must be met (if CONDITIONAL).',
-  riskQuestionnaire: 'Responses to the risk questionnaire.',
+  evidence: 'Evidence supporting the verdict. One item per line, or JSON: [{"claim":"...","proof":"...","citation":"file:line"}]',
+  conditions: 'Conditions that must be met (if CONDITIONAL). One per line.',
+  riskQuestionnaire: 'Risk questionnaire responses. One per line, or JSON: [{"question":"...","answer":"...","risk":"low|medium|high"}]',
 
   // Deploy / deployment-report
   environment: 'Target deployment environment (staging, production, etc.).',
@@ -144,6 +144,21 @@ function isStructuredField(field) {
     'configuredPlugins', 'removedPlugins', 'transformationsApplied',
     'validationResults', 'testResults', 'comparisonResults',
     'configurationChanges', 'activeProviders', 'fallbackChains',
+    // Review room
+    'evidence', 'conditions', 'riskQuestionnaire',
+    // Architecture room
+    'techDecisions', 'dependencyGraph', 'fileAssignments',
+    // Discovery room
+    'businessOutcomes', 'constraints', 'unknowns', 'acceptanceCriteria',
+    'gapAnalysis', 'riskAssessment',
+    // Testing Lab
+    'failures', 'coverage', 'recommendations',
+    // War Room
+    'preventionPlan',
+    // Deploy
+    'healthCheck',
+    // Strategist
+    'projectGoals', 'successCriteria', 'estimatedPhases',
   ];
   return structuredPatterns.some(p => field === p || field.toLowerCase().includes(p.toLowerCase()));
 }
@@ -273,13 +288,14 @@ export class ExitDocForm extends Component {
       // Input element
       let inputEl;
       if (isLong || isStruct) {
+        const structPlaceholder = isStruct && hint !== `Provide the ${label.toLowerCase()} for this document.`
+          ? hint
+          : `Enter ${label.toLowerCase()} (JSON array or one item per line)`;
         inputEl = h('textarea', {
           class: `form-input exit-doc-textarea${isStruct ? ' exit-doc-structured' : ''}`,
           id: `exit-field-${field}`,
           rows: isStruct ? '6' : '4',
-          placeholder: isStruct
-            ? `Enter ${label.toLowerCase()} (JSON array or one item per line)`
-            : `Enter ${label.toLowerCase()}...`,
+          placeholder: isStruct ? structPlaceholder : `Enter ${label.toLowerCase()}...`,
           'data-field': field
         });
       } else {
@@ -375,7 +391,9 @@ export class ExitDocForm extends Component {
           if (raw.includes('\n')) {
             exitDoc[field] = raw.split('\n').map(l => l.trim()).filter(Boolean);
           } else {
-            exitDoc[field] = raw;
+            // Wrap single plain-text values in an array so server
+            // validation doesn't reject them for non-array type
+            exitDoc[field] = [raw];
           }
         }
       } else {
