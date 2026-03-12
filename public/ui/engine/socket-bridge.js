@@ -598,7 +598,7 @@ export function initSocketBridge(socket, store, engine) {
       const messageText = text || content || '';
       const activeRoom = roomId || store.get('rooms.active') || '';
       const activeBuilding = buildingId || store.get('building.active') || '';
-      store.update('chat.messages', (msgs) => [...(msgs || []), { content: messageText, agentId, type: 'user', timestamp: Date.now() }]);
+      store.update('chat.messages', (msgs) => [...(msgs || []), { id: Date.now().toString(), role: 'user', content: messageText, agentId, type: 'user', timestamp: Date.now() }]);
       store.set('ui.processing', true);
       socket.emit('chat:message', { text: messageText, agentId: agentId || '', tokens: tokens || [], buildingId: activeBuilding, roomId: activeRoom });
     },

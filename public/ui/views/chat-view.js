@@ -581,26 +581,14 @@ export class ChatView extends Component {
   _sendMessage(text, tokens) {
     if (!text.trim() && tokens.length === 0) return;
 
-    // Add to local messages
-    const store = OverlordUI.getStore();
-    if (store) {
-      store.update('chat.messages', messages => {
-        return [...(messages || []), {
-          id: Date.now().toString(),
-          role: 'user',
-          content: text,
-          tokens,
-          timestamp: new Date().toISOString()
-        }];
-      });
-    }
-
-    // Send via socket
+    // Send via socket — the socket bridge handles adding the user message
+    // to the store, so we don't duplicate it here
     if (window.overlordSocket) {
+      const store = OverlordUI.getStore();
       window.overlordSocket.sendMessage({
-        content: text,
+        text,
         tokens,
-        buildingId: store?.get('building.active')
+        buildingId: store?.get('building.active'),
       });
     }
   }
