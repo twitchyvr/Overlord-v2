@@ -240,7 +240,8 @@ export class ChatView extends Component {
     if (msg.content) {
       // Render markdown if marked is available
       if (typeof marked !== 'undefined' && this._looksLikeMarkdown(msg.content)) {
-        const parsed = marked.parse(msg.content, { breaks: true, gfm: true });
+        const text = this._wrapJsonBlocks(msg.content);
+        const parsed = marked.parse(text, { breaks: true, gfm: true });
         setTrustedContent(content, parsed);
         Table.styleMarkdownTables(content);
       } else {
@@ -624,5 +625,37 @@ export class ChatView extends Component {
 
   _looksLikeMarkdown(text) {
     return /[*_`#\[\]|>-]/.test(text) || text.includes('\n');
+  }
+
+  /**
+   * Detect bare JSON blocks in message text and wrap them in markdown
+   * code fences so marked renders them as formatted code blocks.
+   * Handles: entire message is JSON, or JSON embedded between prose.
+   */
+  _wrapJsonBlocks(text) {
+    const trimmed = text.trim();
+
+    // Entire message is a single JSON value
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const obj = JSON.parse(trimmed);
+        return '```json\n' + JSON.stringify(obj, null, 2) + '\n```';
+      } catch { /* not valid JSON — continue */ }
+    }
+
+    // Look for JSON objects/arrays embedded between text.
+    // Match lines starting with { or [ that form valid JSON spanning multiple lines.
+    return text.replace(
+      /^(\{[\s\S]*?\n\}|\[[\s\S]*?\n\])/gm,
+      (match) => {
+        try {
+          const obj = JSON.parse(match);
+          return '```json\n' + JSON.stringify(obj, null, 2) + '\n```';
+        } catch {
+          return match;
+        }
+      }
+    );
   }
 }
