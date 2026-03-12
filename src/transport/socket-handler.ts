@@ -15,7 +15,7 @@ import type { Bus } from '../core/bus.js';
 import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI } from '../core/contracts.js';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { createBuilding, getBuilding, listBuildings, listFloors, getFloor } from '../rooms/building-manager.js';
-import { getGates, canAdvance, signoffGate, createGate } from '../rooms/phase-gate.js';
+import { getGates, canAdvance, signoffGate, createGate, getPendingGates, resolveConditions, getStalePendingGates, getPhaseOrder } from '../rooms/phase-gate.js';
 import { searchRaid, addRaidEntry, updateRaidStatus } from '../rooms/raid-log.js';
 import { submitExitDocument } from '../rooms/room-manager.js';
 import { getDb } from '../storage/db.js';
@@ -395,6 +395,60 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       } catch (e) {
         log.error({ event: 'phase:can-advance', err: e, socketId: socket.id }, 'Handler threw');
         if (ack) ack(errorResponse('phase:can-advance', e));
+      }
+    });
+
+    socket.on('phase:pending-gates', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+      try {
+        const result = getPendingGates(data.buildingId as string | undefined);
+        if (ack) ack(result);
+      } catch (e) {
+        log.error({ event: 'phase:pending-gates', err: e, socketId: socket.id }, 'Handler threw');
+        if (ack) ack(errorResponse('phase:pending-gates', e));
+      }
+    });
+
+    socket.on('phase:resolve-conditions', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+      try {
+        const result = resolveConditions({
+          gateId: data.gateId as string,
+          resolvedConditions: (data.resolvedConditions as string[]) || [],
+          resolver: (data.resolver as string) || 'system',
+        });
+        if (result.ok) {
+          const resultData = result.data as Record<string, unknown>;
+          if (resultData.verdict === 'GO') {
+            // All conditions resolved — gate advanced
+            bus.emit('phase:gate:signed-off', resultData);
+            bus.emit('phase:advanced', resultData);
+          } else {
+            bus.emit('phase:conditions:resolved', { gateId: data.gateId, ...resultData });
+          }
+        }
+        if (ack) ack(result);
+      } catch (e) {
+        log.error({ event: 'phase:resolve-conditions', err: e, socketId: socket.id }, 'Handler threw');
+        if (ack) ack(errorResponse('phase:resolve-conditions', e));
+      }
+    });
+
+    socket.on('phase:stale-gates', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+      try {
+        const thresholdMs = (data.thresholdMs as number) || 30 * 60 * 1000;
+        const result = getStalePendingGates(thresholdMs);
+        if (ack) ack(result);
+      } catch (e) {
+        log.error({ event: 'phase:stale-gates', err: e, socketId: socket.id }, 'Handler threw');
+        if (ack) ack(errorResponse('phase:stale-gates', e));
+      }
+    });
+
+    socket.on('phase:order', (_data: unknown, ack?: (res: unknown) => void) => {
+      try {
+        if (ack) ack({ ok: true, data: getPhaseOrder() });
+      } catch (e) {
+        log.error({ event: 'phase:order', err: e, socketId: socket.id }, 'Handler threw');
+        if (ack) ack(errorResponse('phase:order', e));
       }
     });
 
@@ -809,6 +863,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   bus.on('task:created', (data: Record<string, unknown>) => io.emit('task:created', data));
   bus.on('task:updated', (data: Record<string, unknown>) => io.emit('task:updated', data));
   bus.on('phase:gate:signed-off', (data: Record<string, unknown>) => io.emit('phase:gate:signed-off', data));
+  bus.on('phase:conditions:resolved', (data: Record<string, unknown>) => io.emit('phase:conditions:resolved', data));
 
   log.info('Transport layer initialized');
 }

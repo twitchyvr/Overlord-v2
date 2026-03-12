@@ -123,3 +123,103 @@ export function getGates(buildingId: string): Result {
   const db = getDb();
   return ok(db.prepare('SELECT * FROM phase_gates WHERE building_id = ? ORDER BY created_at').all(buildingId));
 }
+
+/**
+ * Get pending gates across all buildings (for UI "pending approvals" view).
+ * Returns gates with status 'pending' or 'conditional'.
+ */
+export function getPendingGates(buildingId?: string): Result {
+  const db = getDb();
+  if (buildingId) {
+    const rows = db.prepare(`
+      SELECT pg.*, b.name as building_name, b.active_phase
+      FROM phase_gates pg
+      JOIN buildings b ON pg.building_id = b.id
+      WHERE pg.building_id = ? AND pg.status IN ('pending', 'conditional')
+      ORDER BY pg.created_at
+    `).all(buildingId);
+    return ok(rows);
+  }
+  const rows = db.prepare(`
+    SELECT pg.*, b.name as building_name, b.active_phase
+    FROM phase_gates pg
+    JOIN buildings b ON pg.building_id = b.id
+    WHERE pg.status IN ('pending', 'conditional')
+    ORDER BY pg.created_at
+  `).all();
+  return ok(rows);
+}
+
+/**
+ * Resolve conditions on a CONDITIONAL gate.
+ * Once all conditions are resolved, the gate can be re-signed as GO.
+ *
+ * @param gateId — the conditional gate
+ * @param resolvedConditions — conditions that have been met (subset of original)
+ */
+export function resolveConditions({ gateId, resolvedConditions, resolver }: {
+  gateId: string;
+  resolvedConditions: string[];
+  resolver: string;
+}): Result {
+  const db = getDb();
+  const gate = db.prepare('SELECT * FROM phase_gates WHERE id = ?').get(gateId) as PhaseGateRow | undefined;
+  if (!gate) return err('GATE_NOT_FOUND', `Phase gate ${gateId} does not exist`);
+  if (gate.status !== 'conditional') {
+    return err('GATE_NOT_CONDITIONAL', `Gate ${gateId} is not in CONDITIONAL status (current: ${gate.status})`);
+  }
+
+  const originalConditions: string[] = JSON.parse(gate.signoff_conditions || '[]');
+  const remaining = originalConditions.filter((c) => !resolvedConditions.includes(c));
+
+  if (remaining.length === 0) {
+    // All conditions resolved — auto-advance by re-signing as GO
+    log.info({ gateId, resolver }, 'All conditions resolved — advancing gate to GO');
+    return signoffGate({
+      gateId,
+      reviewer: resolver,
+      verdict: 'GO',
+      conditions: [],
+      exitDocId: gate.exit_doc_id || undefined,
+      nextPhaseInput: JSON.parse(gate.next_phase_input || '{}'),
+    });
+  }
+
+  // Update with remaining conditions
+  db.prepare(`
+    UPDATE phase_gates SET signoff_conditions = ? WHERE id = ?
+  `).run(JSON.stringify(remaining), gateId);
+
+  log.info({ gateId, resolved: resolvedConditions.length, remaining: remaining.length, resolver }, 'Conditions partially resolved');
+  return ok({
+    gateId,
+    resolvedCount: resolvedConditions.length,
+    remainingConditions: remaining,
+    allResolved: false,
+  });
+}
+
+/**
+ * Check for stale pending gates that have been waiting too long.
+ * Returns gates older than the specified threshold (ms).
+ * Used by the orchestrator to trigger escalation.
+ */
+export function getStalePendingGates(thresholdMs: number = 30 * 60 * 1000): Result {
+  const db = getDb();
+  const cutoff = new Date(Date.now() - thresholdMs).toISOString();
+  const rows = db.prepare(`
+    SELECT pg.*, b.name as building_name, b.active_phase
+    FROM phase_gates pg
+    JOIN buildings b ON pg.building_id = b.id
+    WHERE pg.status = 'pending' AND pg.created_at < datetime(?)
+    ORDER BY pg.created_at
+  `).all(cutoff);
+  return ok(rows);
+}
+
+/**
+ * Get the phase order (useful for UI display)
+ */
+export function getPhaseOrder(): string[] {
+  return [...PHASE_ORDER];
+}

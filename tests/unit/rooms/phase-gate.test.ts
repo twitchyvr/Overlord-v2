@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { createGate, signoffGate, canAdvance, getGates } from '../../../src/rooms/phase-gate.js';
+import { createGate, signoffGate, canAdvance, getGates, getPendingGates, resolveConditions, getStalePendingGates, getPhaseOrder } from '../../../src/rooms/phase-gate.js';
 
 // Patch getDb to use in-memory database
 import * as dbModule from '../../../src/storage/db.js';
@@ -255,6 +255,194 @@ describe('Phase Gate System', () => {
       if (result.ok) {
         expect(result.data).toHaveLength(0);
       }
+    });
+  });
+
+  describe('getPendingGates', () => {
+    it('returns pending gates for a building', () => {
+      createGate({ buildingId: 'bld_1', phase: 'strategy' });
+
+      const result = getPendingGates('bld_1');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const gates = result.data as unknown[];
+        expect(gates).toHaveLength(1);
+        expect((gates[0] as Record<string, unknown>).status).toBe('pending');
+      }
+    });
+
+    it('returns conditional gates as pending approvals', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('failed');
+
+      signoffGate({
+        gateId: gate.data.id,
+        reviewer: 'pm',
+        verdict: 'CONDITIONAL',
+        conditions: ['Fix tests'],
+      });
+
+      const result = getPendingGates('bld_1');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const gates = result.data as unknown[];
+        expect(gates).toHaveLength(1);
+        expect((gates[0] as Record<string, unknown>).status).toBe('conditional');
+      }
+    });
+
+    it('excludes GO gates from pending', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('failed');
+
+      signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'GO' });
+
+      const result = getPendingGates('bld_1');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data).toHaveLength(0);
+      }
+    });
+
+    it('returns all pending gates when no buildingId specified', () => {
+      // Add a second building
+      db.prepare(`INSERT INTO buildings (id, name, active_phase) VALUES ('bld_2', 'Other Project', 'strategy')`).run();
+
+      createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      createGate({ buildingId: 'bld_2', phase: 'strategy' });
+
+      const result = getPendingGates();
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data).toHaveLength(2);
+      }
+    });
+  });
+
+  describe('resolveConditions', () => {
+    it('partially resolves conditions and returns remaining', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('failed');
+
+      signoffGate({
+        gateId: gate.data.id,
+        reviewer: 'pm',
+        verdict: 'CONDITIONAL',
+        conditions: ['Fix auth', 'Add rate limiting', 'Update docs'],
+      });
+
+      const result = resolveConditions({
+        gateId: gate.data.id,
+        resolvedConditions: ['Fix auth'],
+        resolver: 'dev-agent',
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.allResolved).toBe(false);
+        expect(result.data.remainingConditions).toEqual(['Add rate limiting', 'Update docs']);
+        expect(result.data.resolvedCount).toBe(1);
+      }
+    });
+
+    it('auto-advances gate to GO when all conditions resolved', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('failed');
+
+      signoffGate({
+        gateId: gate.data.id,
+        reviewer: 'pm',
+        verdict: 'CONDITIONAL',
+        conditions: ['Fix auth'],
+      });
+
+      const result = resolveConditions({
+        gateId: gate.data.id,
+        resolvedConditions: ['Fix auth'],
+        resolver: 'dev-agent',
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        // Should have been re-signed as GO
+        expect(result.data.verdict).toBe('GO');
+      }
+
+      // Building should have advanced
+      const building = db.prepare('SELECT active_phase FROM buildings WHERE id = ?').get('bld_1') as { active_phase: string };
+      expect(building.active_phase).toBe('discovery');
+    });
+
+    it('rejects resolve on non-conditional gate', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('failed');
+
+      // Gate is still pending (not conditional)
+      const result = resolveConditions({
+        gateId: gate.data.id,
+        resolvedConditions: ['something'],
+        resolver: 'agent',
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('GATE_NOT_CONDITIONAL');
+      }
+    });
+
+    it('rejects resolve on non-existent gate', () => {
+      const result = resolveConditions({
+        gateId: 'gate_nonexistent',
+        resolvedConditions: ['something'],
+        resolver: 'agent',
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('GATE_NOT_FOUND');
+      }
+    });
+  });
+
+  describe('getStalePendingGates', () => {
+    it('returns gates older than threshold', () => {
+      // Insert a gate with a timestamp in the past
+      db.prepare(`
+        INSERT INTO phase_gates (id, building_id, phase, status, created_at)
+        VALUES ('gate_old', 'bld_1', 'strategy', 'pending', datetime('now', '-1 hour'))
+      `).run();
+
+      const result = getStalePendingGates(30 * 60 * 1000); // 30 min threshold
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const gates = result.data as unknown[];
+        expect(gates).toHaveLength(1);
+        expect((gates[0] as Record<string, unknown>).id).toBe('gate_old');
+      }
+    });
+
+    it('excludes recent gates', () => {
+      createGate({ buildingId: 'bld_1', phase: 'strategy' }); // just created
+
+      const result = getStalePendingGates(30 * 60 * 1000);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data).toHaveLength(0);
+      }
+    });
+  });
+
+  describe('getPhaseOrder', () => {
+    it('returns the phase order array', () => {
+      const order = getPhaseOrder();
+      expect(order).toEqual(['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy']);
+    });
+
+    it('returns a copy (not the original array)', () => {
+      const order1 = getPhaseOrder();
+      const order2 = getPhaseOrder();
+      order1.push('extra');
+      expect(order2).toHaveLength(6);
     });
   });
 
