@@ -378,9 +378,20 @@ export class RaidLogView extends Component {
       container.appendChild(infoSection);
     }
 
-    // Status actions
+    // Action buttons
     const actions = h('div', { class: 'raid-detail-actions' });
 
+    // Edit button
+    actions.appendChild(Button.create('Edit', {
+      variant: 'secondary',
+      size: 'sm',
+      onClick: () => {
+        Modal.close(`raid-detail-${entry.id}`);
+        this._openEditForm(entry);
+      }
+    }));
+
+    // Status change buttons
     for (const status of RAID_STATUSES) {
       if (status === entry.status) continue;
       actions.appendChild(Button.create(`Mark ${status}`, {
@@ -533,17 +544,133 @@ export class RaidLogView extends Component {
     }
   }
 
-  // ── Status Updates ─────────────────────────────────────────
+  // ── Edit Entry Form ──────────────────────────────────────────
 
-  _updateEntryStatus(entryId, status) {
+  _openEditForm(entry) {
+    const form = h('div', { class: 'raid-create-form' });
+
+    // Summary
+    form.appendChild(h('div', { class: 'form-group' },
+      h('label', { class: 'form-label' }, 'Summary'),
+      h('input', {
+        class: 'form-input',
+        type: 'text',
+        id: 'raid-edit-summary',
+        value: entry.summary || ''
+      })
+    ));
+
+    // Rationale
+    const rationaleTextarea = h('textarea', {
+      class: 'form-input form-textarea',
+      id: 'raid-edit-rationale'
+    });
+    rationaleTextarea.value = entry.rationale || '';
+    form.appendChild(h('div', { class: 'form-group' },
+      h('label', { class: 'form-label' }, 'Rationale'),
+      rationaleTextarea
+    ));
+
+    // Decided by
+    form.appendChild(h('div', { class: 'form-group' },
+      h('label', { class: 'form-label' }, 'Decided By'),
+      h('input', {
+        class: 'form-input',
+        type: 'text',
+        id: 'raid-edit-decided-by',
+        value: entry.decided_by || ''
+      })
+    ));
+
+    // Affected areas
+    const areas = Array.isArray(entry.affected_areas)
+      ? entry.affected_areas
+      : (typeof entry.affected_areas === 'string' ? JSON.parse(entry.affected_areas || '[]') : []);
+    form.appendChild(h('div', { class: 'form-group' },
+      h('label', { class: 'form-label' }, 'Affected Areas'),
+      h('input', {
+        class: 'form-input',
+        type: 'text',
+        id: 'raid-edit-areas',
+        value: areas.join(', '),
+        placeholder: 'Comma-separated areas'
+      })
+    ));
+
+    // Actions
+    form.appendChild(h('div', { class: 'raid-create-actions' },
+      Button.create('Cancel', {
+        variant: 'ghost',
+        onClick: () => Modal.close('raid-edit')
+      }),
+      Button.create('Save Changes', {
+        variant: 'primary',
+        onClick: () => this._submitEditForm(entry.id)
+      })
+    ));
+
+    Modal.open('raid-edit', {
+      title: `Edit ${RAID_TYPE_LABELS[entry.type] || 'RAID'} Entry`,
+      content: form,
+      size: 'md',
+      position: 'center'
+    });
+  }
+
+  async _submitEditForm(entryId) {
+    const existingErrors = document.querySelectorAll('.raid-create-form .form-error');
+    existingErrors.forEach(el => el.remove());
+
+    const summaryInput = document.getElementById('raid-edit-summary');
+    const summary = summaryInput?.value?.trim();
+
+    if (!summary) {
+      if (summaryInput) {
+        summaryInput.classList.add('input-error');
+        summaryInput.parentElement?.appendChild(
+          h('div', { class: 'form-error' }, 'Summary is required')
+        );
+      }
+      return;
+    }
+    if (summaryInput) summaryInput.classList.remove('input-error');
+
+    const rationale = document.getElementById('raid-edit-rationale')?.value?.trim() || '';
+    const decidedBy = document.getElementById('raid-edit-decided-by')?.value?.trim() || '';
+    const areasRaw = document.getElementById('raid-edit-areas')?.value?.trim() || '';
+    const affectedAreas = areasRaw ? areasRaw.split(',').map(a => a.trim()).filter(Boolean) : [];
+
     if (!window.overlordSocket) return;
 
-    window.overlordSocket.updateRaidStatus({ id: entryId, status });
+    const result = await window.overlordSocket.editRaidEntry({
+      id: entryId,
+      summary,
+      rationale,
+      decidedBy,
+      affectedAreas
+    });
 
-    // Close detail modal
-    Modal.close(`raid-detail-${entryId}`);
+    if (result && result.ok) {
+      Toast.success('RAID entry updated');
+      Modal.close('raid-edit');
+    } else {
+      Toast.error(result?.error?.message || 'Failed to update RAID entry');
+    }
+  }
 
-    // Refresh entries
-    this._fetchEntries();
+  // ── Status Updates ─────────────────────────────────────────
+
+  async _updateEntryStatus(entryId, status) {
+    if (!window.overlordSocket) return;
+
+    const result = await window.overlordSocket.updateRaidStatus({ id: entryId, status });
+
+    if (result && result.ok) {
+      Toast.success(`Entry marked as ${status}`);
+      Modal.close(`raid-detail-${entryId}`);
+      this._fetchEntries();
+    } else {
+      Toast.error(result?.error?.message || 'Failed to update status');
+    }
   }
 }

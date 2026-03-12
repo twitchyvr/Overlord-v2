@@ -16,7 +16,7 @@ import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI } from '../core/
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { createBuilding, getBuilding, listBuildings, listFloors, getFloor } from '../rooms/building-manager.js';
 import { getGates, canAdvance, signoffGate, createGate, getPendingGates, resolveConditions, getStalePendingGates, getPhaseOrder } from '../rooms/phase-gate.js';
-import { searchRaid, addRaidEntry, updateRaidStatus } from '../rooms/raid-log.js';
+import { searchRaid, addRaidEntry, updateRaidEntry, updateRaidStatus } from '../rooms/raid-log.js';
 import { submitExitDocument } from '../rooms/room-manager.js';
 import { getDb } from '../storage/db.js';
 import { handleBlueprintSubmission } from '../rooms/phase-zero.js';
@@ -494,6 +494,22 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       } catch (e) {
         log.error({ event: 'raid:update', err: e, socketId: socket.id }, 'Handler threw');
         if (ack) ack(errorResponse('raid:update', e));
+      }
+    });
+
+    socket.on('raid:edit', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+      try {
+        const result = updateRaidEntry({
+          id: data.id as string,
+          summary: data.summary as string | undefined,
+          rationale: data.rationale as string | undefined,
+          decidedBy: data.decidedBy as string | undefined,
+          affectedAreas: data.affectedAreas as string[] | undefined,
+        });
+        if (ack) ack(result);
+      } catch (e) {
+        log.error({ event: 'raid:edit', err: e, socketId: socket.id }, 'Handler threw');
+        if (ack) ack(errorResponse('raid:edit', e));
       }
     });
 

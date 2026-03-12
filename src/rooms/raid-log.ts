@@ -90,6 +90,42 @@ export function buildContextBrief(buildingId: string): Result {
   return ok(brief);
 }
 
+interface UpdateRaidEntryParams {
+  id: string;
+  summary?: string;
+  rationale?: string;
+  decidedBy?: string;
+  affectedAreas?: string[];
+}
+
+/**
+ * Update RAID entry fields (summary, rationale, decided_by, affected_areas)
+ */
+export function updateRaidEntry({ id, summary, rationale, decidedBy, affectedAreas }: UpdateRaidEntryParams): Result {
+  const db = getDb();
+  const existing = db.prepare('SELECT * FROM raid_entries WHERE id = ?').get(id) as RaidEntryRow | undefined;
+  if (!existing) return err('RAID_NOT_FOUND', `RAID entry ${id} does not exist`);
+
+  const updates: string[] = [];
+  const params: unknown[] = [];
+
+  if (summary !== undefined) { updates.push('summary = ?'); params.push(summary); }
+  if (rationale !== undefined) { updates.push('rationale = ?'); params.push(rationale); }
+  if (decidedBy !== undefined) { updates.push('decided_by = ?'); params.push(decidedBy); }
+  if (affectedAreas !== undefined) { updates.push('affected_areas = ?'); params.push(JSON.stringify(affectedAreas)); }
+
+  if (updates.length === 0) return err('NO_CHANGES', 'No fields to update');
+
+  updates.push("updated_at = datetime('now')");
+  params.push(id);
+
+  db.prepare(`UPDATE raid_entries SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+  const updated = db.prepare('SELECT * FROM raid_entries WHERE id = ?').get(id) as RaidEntryRow;
+  log.info({ id, updatedFields: updates.length - 1 }, 'RAID entry updated');
+  return ok({ ...updated, affected_areas: JSON.parse(updated.affected_areas || '[]') as string[] });
+}
+
 /**
  * Update RAID entry status
  */

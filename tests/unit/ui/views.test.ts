@@ -992,3 +992,84 @@ describe('RaidLogView — create form validation', () => {
     delete (window as any).overlordSocket;
   });
 });
+
+// ─── RaidLogView edit form ────────────────────────────────────
+
+describe('RaidLogView — edit form', () => {
+  it('opens edit form pre-filled with entry data', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const { Modal } = await import('../../../public/ui/components/modal.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    const entry = {
+      id: 'r1',
+      type: 'risk',
+      summary: 'API risk',
+      rationale: 'Rate limits',
+      decided_by: 'architect',
+      affected_areas: ['api', 'auth'],
+      status: 'active',
+      phase: 'strategy'
+    };
+
+    (view as any)._openEditForm(entry);
+    await new Promise(r => setTimeout(r, 50));
+
+    expect(Modal.isOpen('raid-edit')).toBe(true);
+    expect((document.getElementById('raid-edit-summary') as HTMLInputElement).value).toBe('API risk');
+    expect((document.getElementById('raid-edit-decided-by') as HTMLInputElement).value).toBe('architect');
+    expect((document.getElementById('raid-edit-areas') as HTMLInputElement).value).toBe('api, auth');
+
+    Modal.closeAll();
+  });
+
+  it('calls editRaidEntry and closes modal on valid submit', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const { Modal } = await import('../../../public/ui/components/modal.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    (window as any).overlordSocket = {
+      editRaidEntry: vi.fn().mockResolvedValue({ ok: true, data: { id: 'r1', summary: 'Updated' } }),
+      fetchRaidEntries: vi.fn(),
+    };
+
+    const entry = { id: 'r1', type: 'risk', summary: 'Old', rationale: '', decided_by: '', affected_areas: [], status: 'active', phase: 'strategy' };
+    (view as any)._openEditForm(entry);
+    await new Promise(r => setTimeout(r, 50));
+
+    (document.getElementById('raid-edit-summary') as HTMLInputElement).value = 'Updated summary';
+    await (view as any)._submitEditForm('r1');
+
+    expect((window as any).overlordSocket.editRaidEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'r1', summary: 'Updated summary' })
+    );
+    expect(Modal.isOpen('raid-edit')).toBe(false);
+
+    Modal.closeAll();
+    delete (window as any).overlordSocket;
+  });
+
+  it('shows validation error when summary is empty on edit submit', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const { Modal } = await import('../../../public/ui/components/modal.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    const entry = { id: 'r1', type: 'risk', summary: 'Test', rationale: '', decided_by: '', affected_areas: [], status: 'active', phase: 'strategy' };
+    (view as any)._openEditForm(entry);
+    await new Promise(r => setTimeout(r, 50));
+
+    (document.getElementById('raid-edit-summary') as HTMLInputElement).value = '';
+    await (view as any)._submitEditForm('r1');
+
+    const summaryInput = document.getElementById('raid-edit-summary');
+    expect(summaryInput?.classList.contains('input-error')).toBe(true);
+
+    Modal.closeAll();
+  });
+});
