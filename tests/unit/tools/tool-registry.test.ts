@@ -1,12 +1,17 @@
 /**
  * Tool Registry Tests
  *
- * Tests: registration, room-scoped access, real tool execution
+ * Tests: registration, room-scoped access, real tool execution,
+ * command injection prevention, bash timeout validation
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { registerTool, getTool, getToolsForRoom, executeInRoom } from '../../../src/tools/tool-registry.js';
-import type { ToolDefinition } from '../../../src/core/contracts.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { initTools, registerTool, getTool, getToolsForRoom, executeInRoom } from '../../../src/tools/tool-registry.js';
+import type { Config, ToolDefinition } from '../../../src/core/contracts.js';
+
+// Initialize builtin tools (github, qa_*, bash, etc.) so injection tests can run
+const mockConfig = { get: () => undefined, validate: () => mockConfig, getAll: () => ({}) } as unknown as Config;
+initTools(mockConfig);
 
 describe('Tool Registry', () => {
   const mockTool: ToolDefinition = {
@@ -113,6 +118,139 @@ describe('Tool Registry', () => {
         expect(result.error.message).toBe('boom');
         expect(result.error.retryable).toBe(true);
       }
+    });
+  });
+
+  describe('command injection prevention', () => {
+    const ctx = { roomId: 'r1', roomType: 'test', agentId: 'a1', fileScope: 'full' as const };
+
+    describe('github tool', () => {
+      it('rejects action with semicolon (command chaining)', async () => {
+        const result = await executeInRoom({
+          toolName: 'github',
+          params: { action: 'pr list; rm -rf /' },
+          roomAllowedTools: ['github'],
+          context: ctx,
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.message).toContain('Unsafe characters');
+      });
+
+      it('rejects action with pipe', async () => {
+        const result = await executeInRoom({
+          toolName: 'github',
+          params: { action: 'pr list | cat /etc/passwd' },
+          roomAllowedTools: ['github'],
+          context: ctx,
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.message).toContain('Unsafe characters');
+      });
+
+      it('rejects action with dollar sign (command substitution)', async () => {
+        const result = await executeInRoom({
+          toolName: 'github',
+          params: { action: 'pr list $(whoami)' },
+          roomAllowedTools: ['github'],
+          context: ctx,
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.message).toContain('Unsafe characters');
+      });
+
+      it('rejects action with backticks', async () => {
+        const result = await executeInRoom({
+          toolName: 'github',
+          params: { action: 'pr list `whoami`' },
+          roomAllowedTools: ['github'],
+          context: ctx,
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.message).toContain('Unsafe characters');
+      });
+
+      it('rejects action with ampersand (background exec)', async () => {
+        const result = await executeInRoom({
+          toolName: 'github',
+          params: { action: 'pr list & malicious' },
+          roomAllowedTools: ['github'],
+          context: ctx,
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.message).toContain('Unsafe characters');
+      });
+
+      it('rejects action with newline', async () => {
+        const result = await executeInRoom({
+          toolName: 'github',
+          params: { action: 'pr list\nrm -rf /' },
+          roomAllowedTools: ['github'],
+          context: ctx,
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.message).toContain('Unsafe characters');
+      });
+    });
+
+    describe('qa tools', () => {
+      it('rejects args with semicolon', async () => {
+        const result = await executeInRoom({
+          toolName: 'qa_run_tests',
+          params: { args: '-- --verbose; rm -rf /' },
+          roomAllowedTools: ['qa_run_tests'],
+          context: ctx,
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.message).toContain('Unsafe characters');
+      });
+
+      it('rejects args with command substitution', async () => {
+        const result = await executeInRoom({
+          toolName: 'qa_check_lint',
+          params: { args: '$(cat /etc/passwd)' },
+          roomAllowedTools: ['qa_check_lint'],
+          context: ctx,
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.message).toContain('Unsafe characters');
+      });
+    });
+  });
+
+  describe('bash timeout validation', () => {
+    const ctx = { roomId: 'r1', roomType: 'test', agentId: 'a1', fileScope: 'full' as const };
+
+    it('rejects negative timeout', async () => {
+      const result = await executeInRoom({
+        toolName: 'bash',
+        params: { command: 'echo hi', timeout: -1 },
+        roomAllowedTools: ['bash'],
+        context: ctx,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.message).toContain('Timeout must be between');
+    });
+
+    it('rejects zero timeout', async () => {
+      const result = await executeInRoom({
+        toolName: 'bash',
+        params: { command: 'echo hi', timeout: 0 },
+        roomAllowedTools: ['bash'],
+        context: ctx,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.message).toContain('Timeout must be between');
+    });
+
+    it('rejects timeout exceeding 5 minutes', async () => {
+      const result = await executeInRoom({
+        toolName: 'bash',
+        params: { command: 'echo hi', timeout: 999_999 },
+        roomAllowedTools: ['bash'],
+        context: ctx,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.message).toContain('Timeout must be between');
     });
   });
 });

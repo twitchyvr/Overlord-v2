@@ -19,6 +19,18 @@ const log = logger.child({ module: 'tool-registry' });
 
 const tools = new Map<string, ToolDefinition>();
 
+/**
+ * Reject strings containing shell metacharacters that could enable injection.
+ * Allows alphanumeric, spaces, hyphens, underscores, dots, slashes, colons,
+ * equals signs, at-signs, and quotes (for passing quoted arguments to gh/npm).
+ */
+const SHELL_META_RE = /[;|&$`\\(){}<>!\n\r]/;
+function rejectShellMeta(input: string, context: string): void {
+  if (SHELL_META_RE.test(input)) {
+    throw new Error(`Unsafe characters in ${context}: shell metacharacters are not allowed`);
+  }
+}
+
 export function initTools(_config: Config): ToolRegistryAPI {
   registerBuiltinTools();
   log.info({ count: tools.size }, 'Tool registry initialized');
@@ -93,9 +105,13 @@ function registerBuiltinTools(): void {
       required: ['command'],
     },
     execute: async (p) => {
+      const timeout = p.timeout as number | undefined;
+      if (timeout !== undefined && (timeout <= 0 || timeout > 300_000)) {
+        throw new Error('Timeout must be between 1 and 300000 ms');
+      }
       const result = await executeShell({
         command: p.command as string,
-        timeout: p.timeout as number | undefined,
+        timeout,
       });
       if (result.timedOut) {
         return { output: `Command timed out.\nPartial stdout: ${result.stdout}\nPartial stderr: ${result.stderr}` };
@@ -247,7 +263,9 @@ function registerBuiltinTools(): void {
         properties: { args: { type: 'string', description: 'Additional arguments' } },
       },
       execute: async (p) => {
-        const cmd = `${cmdMap[qa]}${p.args ? ` ${p.args}` : ''}`;
+        const args = p.args as string | undefined;
+        if (args) rejectShellMeta(args, `${qa} args`);
+        const cmd = `${cmdMap[qa]}${args ? ` ${args}` : ''}`;
         const result = await executeShell({ command: cmd, timeout: 120_000 });
         return { output: result.stdout + (result.stderr ? `\n${result.stderr}` : ''), exitCode: result.exitCode };
       },
@@ -268,7 +286,9 @@ function registerBuiltinTools(): void {
       required: ['action'],
     },
     execute: async (p) => {
-      const result = await executeShell({ command: `gh ${p.action}`, timeout: 30_000 });
+      const action = p.action as string;
+      rejectShellMeta(action, 'github action');
+      const result = await executeShell({ command: `gh ${action}`, timeout: 30_000 });
       return { output: result.stdout + (result.stderr ? `\n${result.stderr}` : ''), exitCode: result.exitCode };
     },
   });
