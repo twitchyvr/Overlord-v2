@@ -13,6 +13,9 @@ import { executeShell } from './providers/shell.js';
 import { readFileImpl, writeFileImpl, patchFileImpl, listDirImpl } from './providers/filesystem.js';
 import { recordNote, recallNotes } from './providers/notes.js';
 import { webSearch, fetchWebpage } from './providers/web.js';
+import { fetchUrl, transformData, exportData, validateSchema } from './providers/data-exchange.js';
+import { switchProvider, compareModels, configureFallback, testProvider } from './providers/provider-hub.js';
+import { installPlugin, uninstallPlugin, configurePlugin, testPlugin, listPlugins } from './providers/plugin-bay.js';
 import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
 
 const log = logger.child({ module: 'tool-registry' });
@@ -376,6 +379,348 @@ function registerBuiltinTools(): void {
         requestId,
         question: p.question,
         pending: true,
+      };
+    },
+  });
+
+  // ─── Data Exchange Tools ───
+  registerTool({
+    name: 'fetch_url',
+    description: 'Fetch data from a URL and parse it (supports JSON, CSV, text)',
+    category: 'data',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'URL to fetch data from' },
+        format: { type: 'string', description: 'Expected format: json, csv, text, auto (default: auto)' },
+        maxLength: { type: 'number', description: 'Max content length (default: 50000)' },
+      },
+      required: ['url'],
+    },
+    execute: async (p) => {
+      const result = await fetchUrl({
+        url: p.url as string,
+        format: (p.format as 'json' | 'csv' | 'text' | 'auto') || 'auto',
+        maxLength: (p.maxLength as number) || 50000,
+      });
+      return {
+        output: `Fetched ${result.recordCount} records from ${result.url} (format: ${result.format}, ${result.rawLength} bytes)`,
+        ...result,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'transform_data',
+    description: 'Apply transformation operations to data (filter, sort, pick, rename, deduplicate, flatten, group)',
+    category: 'data',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { description: 'Array of records to transform' },
+        operations: {
+          type: 'array',
+          description: 'Array of operations: {type: "filter"|"sort"|"pick"|"rename"|"deduplicate"|"flatten"|"group"|"map", field?, value?, fields?, direction?, mapping?}',
+        },
+      },
+      required: ['data', 'operations'],
+    },
+    execute: async (p) => {
+      const result = transformData({
+        data: p.data as unknown,
+        operations: p.operations as Array<{ type: 'filter' | 'sort' | 'pick' | 'rename' | 'deduplicate' | 'flatten' | 'group' | 'map'; field?: string; value?: unknown; fields?: string[]; direction?: 'asc' | 'desc'; mapping?: Record<string, string> }>,
+      });
+      return {
+        output: `Applied ${result.operationsApplied} operations → ${result.recordCount} records\n${result.transformLog.join('\n')}`,
+        ...result,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'export_data',
+    description: 'Export data to a file in JSON, CSV, or text format',
+    category: 'data',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { description: 'Data to export' },
+        format: { type: 'string', description: 'Output format: json, csv, text' },
+        path: { type: 'string', description: 'File path to write' },
+      },
+      required: ['data', 'format', 'path'],
+    },
+    execute: async (p) => {
+      const result = await exportData({
+        data: p.data as unknown,
+        format: p.format as 'json' | 'csv' | 'text',
+        path: p.path as string,
+      });
+      return {
+        output: `Exported ${result.recordCount} records to ${result.path} (${result.format}, ${result.bytesWritten} bytes)`,
+        ...result,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'validate_schema',
+    description: 'Validate data against a JSON schema (checks types, required fields)',
+    category: 'data',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { description: 'Data to validate (single record or array)' },
+        schema: { type: 'object', description: 'JSON schema with properties and required fields' },
+      },
+      required: ['data', 'schema'],
+    },
+    execute: async (p) => {
+      const result = validateSchema({
+        data: p.data as unknown,
+        schema: p.schema as Record<string, unknown>,
+      });
+      const summary = result.valid
+        ? `All ${result.recordsChecked} records valid`
+        : `${result.failed}/${result.recordsChecked} records failed validation:\n${result.errors.map((e) => `  ${e.path}: ${e.message}`).join('\n')}`;
+      return { output: summary, ...result };
+    },
+  });
+
+  // ─── Provider Hub Tools ───
+  registerTool({
+    name: 'switch_provider',
+    description: 'Switch the active AI provider for a room type',
+    category: 'provider',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        roomType: { type: 'string', description: 'Room type to switch provider for' },
+        provider: { type: 'string', description: 'Provider: anthropic, minimax, openai, ollama' },
+      },
+      required: ['roomType', 'provider'],
+    },
+    execute: async (p) => {
+      const result = switchProvider({
+        roomType: p.roomType as string,
+        provider: p.provider as string,
+      });
+      return {
+        output: result.status === 'switched'
+          ? `Switched ${result.roomType} from ${result.previousProvider} to ${result.newProvider}`
+          : `${result.roomType} already using ${result.newProvider}`,
+        ...result,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'compare_models',
+    description: 'Run a prompt against multiple AI providers and compare responses',
+    category: 'provider',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'Prompt to send to each provider' },
+        providers: { type: 'array', items: { type: 'string' }, description: 'Providers to compare' },
+        maxTokens: { type: 'number', description: 'Max tokens per response (default: 200)' },
+      },
+      required: ['prompt', 'providers'],
+    },
+    execute: async (p) => {
+      const result = await compareModels({
+        prompt: p.prompt as string,
+        providers: p.providers as string[],
+        maxTokens: (p.maxTokens as number) || 200,
+      });
+      const lines = result.comparisons.map((c) =>
+        c.error
+          ? `${c.provider} (${c.model}): ERROR — ${c.error}`
+          : `${c.provider} (${c.model}): ${c.responseTime}ms, ${c.outputLength} chars`,
+      );
+      return {
+        output: `Comparison results:\n${lines.join('\n')}\nFastest: ${result.fastest} | Longest output: ${result.longestOutput}`,
+        ...result,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'configure_fallback',
+    description: 'Set up a fallback provider chain for a room type',
+    category: 'provider',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        roomType: { type: 'string', description: 'Room type' },
+        primary: { type: 'string', description: 'Primary provider' },
+        fallbacks: { type: 'array', items: { type: 'string' }, description: 'Fallback providers in order' },
+        priority: { type: 'number', description: 'Priority (default: 1)' },
+      },
+      required: ['roomType', 'primary', 'fallbacks'],
+    },
+    execute: async (p) => {
+      const result = configureFallback({
+        roomType: p.roomType as string,
+        primary: p.primary as string,
+        fallbacks: p.fallbacks as string[],
+        priority: (p.priority as number) || 1,
+      });
+      return {
+        output: `Fallback chain ${result.status} for ${result.roomType}: ${result.chain.primary} → ${result.chain.fallbacks.join(' → ')}`,
+        ...result,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'test_provider',
+    description: 'Test connectivity and response from an AI provider',
+    category: 'provider',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        provider: { type: 'string', description: 'Provider to test: anthropic, minimax, openai, ollama' },
+      },
+      required: ['provider'],
+    },
+    execute: async (p) => {
+      const result = await testProvider({ provider: p.provider as string });
+      return {
+        output: result.reachable
+          ? `${result.provider} (${result.model}): OK — ${result.responseTime}ms`
+          : `${result.provider} (${result.model}): FAILED — ${result.error}`,
+        ...result,
+      };
+    },
+  });
+
+  // ─── Plugin Bay Tools ───
+  registerTool({
+    name: 'install_plugin',
+    description: 'Install a plugin from a file path or builtin registry',
+    category: 'plugin',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Plugin name' },
+        source: { type: 'string', description: 'File path or "builtin:name"' },
+        version: { type: 'string', description: 'Version (default: 0.0.0)' },
+        config: { type: 'object', description: 'Plugin configuration' },
+      },
+      required: ['name', 'source'],
+    },
+    execute: async (p) => {
+      const result = await installPlugin({
+        name: p.name as string,
+        source: p.source as string,
+        version: (p.version as string) || '0.0.0',
+        config: (p.config as Record<string, unknown>) || {},
+      });
+      return {
+        output: `Plugin "${result.name}" ${result.status} (id: ${result.pluginId}, hooks: ${result.hooks.length})`,
+        ...result,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'uninstall_plugin',
+    description: 'Remove/unload a plugin',
+    category: 'plugin',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Plugin name' },
+        pluginId: { type: 'string', description: 'Plugin ID (alternative to name)' },
+      },
+    },
+    execute: async (p) => {
+      const result = await uninstallPlugin({
+        name: p.name as string | undefined,
+        pluginId: p.pluginId as string | undefined,
+      });
+      return {
+        output: result.status === 'uninstalled'
+          ? `Plugin "${result.name}" uninstalled`
+          : `Plugin not found: ${p.name || p.pluginId}`,
+        ...result,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'configure_plugin',
+    description: 'Update plugin configuration settings',
+    category: 'plugin',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Plugin name' },
+        pluginId: { type: 'string', description: 'Plugin ID (alternative to name)' },
+        config: { type: 'object', description: 'Configuration key-value pairs to update' },
+      },
+      required: ['config'],
+    },
+    execute: async (p) => {
+      const result = configurePlugin({
+        name: p.name as string | undefined,
+        pluginId: p.pluginId as string | undefined,
+        config: p.config as Record<string, unknown>,
+      });
+      return {
+        output: `Plugin "${result.name}" configured — ${Object.keys(result.newConfig).length} settings`,
+        ...result,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'test_plugin',
+    description: 'Test a plugin by running a hook in the sandbox',
+    category: 'plugin',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Plugin name' },
+        pluginId: { type: 'string', description: 'Plugin ID (alternative to name)' },
+        hook: { type: 'string', description: 'Hook to test (default: onLoad)' },
+      },
+    },
+    execute: async (p) => {
+      const result = await testPlugin({
+        name: p.name as string | undefined,
+        pluginId: p.pluginId as string | undefined,
+        hook: (p.hook as string) || 'onLoad',
+      });
+      return {
+        output: result.passed
+          ? `Plugin "${result.name}" hook "${result.hookTested}": PASS (${result.responseTime}ms)`
+          : `Plugin "${result.name}" hook "${result.hookTested}": FAIL — ${result.details}`,
+        ...result,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'list_plugins',
+    description: 'List all installed plugins with their status',
+    category: 'plugin',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+    execute: async () => {
+      const result = listPlugins();
+      if (result.total === 0) {
+        return { output: 'No plugins installed', ...result };
+      }
+      const lines = result.plugins.map((p) =>
+        `${p.name} v${p.version} [${p.status}] — hooks: ${p.hooks.length}, tested: ${p.lastTestResult || 'never'}`,
+      );
+      return {
+        output: `${result.total} plugins (${result.active} active):\n${lines.join('\n')}`,
+        ...result,
       };
     },
   });
