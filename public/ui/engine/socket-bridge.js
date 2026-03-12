@@ -187,6 +187,33 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'task:updated', ...data });
   });
 
+  socket.on('todo:created', (data) => {
+    store.update('todos.list', (todos) => [...(todos || []), data]);
+    engine.dispatch('todo:created', data);
+  });
+
+  socket.on('todo:updated', (data) => {
+    store.update('todos.list', (todos) => {
+      const list = todos || [];
+      const idx = list.findIndex((t) => t.id === data.id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = data;
+        return next;
+      }
+      return list;
+    });
+    engine.dispatch('todo:updated', data);
+  });
+
+  socket.on('todo:deleted', (data) => {
+    store.update('todos.list', (todos) => {
+      const list = todos || [];
+      return list.filter((t) => t.id !== data.id);
+    });
+    engine.dispatch('todo:deleted', data);
+  });
+
   socket.on('agent:mentioned', (data) => {
     store.update('activity.items', (items) => [{ event: 'agent:mentioned', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('agent:mentioned', data);
@@ -586,6 +613,17 @@ export function initSocketBridge(socket, store, engine) {
             return next;
           }
           return list;
+        });
+      }
+      return res;
+    },
+
+    async deleteTodo(todoId) {
+      const res = await _emitWithFeedback('todo:delete', { id: todoId });
+      if (res && res.ok) {
+        store.update('todos.list', (todos) => {
+          const list = todos || [];
+          return list.filter((t) => t.id !== todoId);
         });
       }
       return res;
