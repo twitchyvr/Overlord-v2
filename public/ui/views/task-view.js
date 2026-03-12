@@ -609,7 +609,7 @@ export class TaskView extends Component {
         }
         descInput.classList.remove('input-error');
 
-        const agentId = agentSelect.value || null;
+        const agentId = agentSelect.value || undefined;
 
         try {
           if (!window.overlordSocket) return;
@@ -756,7 +756,7 @@ export class TaskView extends Component {
 
     const description = document.getElementById('task-create-desc')?.value?.trim() || '';
     const priority = document.getElementById('task-create-priority')?.value || 'normal';
-    const assigneeId = document.getElementById('task-create-assignee')?.value || null;
+    const assigneeId = document.getElementById('task-create-assignee')?.value || undefined;
 
     if (!window.overlordSocket || !this._buildingId) return;
 
