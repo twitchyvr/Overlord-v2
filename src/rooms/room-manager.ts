@@ -23,6 +23,7 @@ import type {
 } from '../core/contracts.js';
 import type { Bus } from '../core/bus.js';
 import { BaseRoom } from './room-types/base-room.js';
+import { parseBadge, checkRoomAccess } from '../agents/security-badge.js';
 
 const log = logger.child({ module: 'room-manager' });
 
@@ -137,7 +138,7 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
   }
 
   try {
-    // Check agent has badge access to this room type
+    // Check agent has badge/access to this room type
     const db = getDb();
     const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as AgentRow | undefined;
     if (!agent) {
@@ -151,8 +152,12 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
       log.warn({ agentId, raw: (agent.room_access || '').slice(0, 100) }, 'Malformed room_access JSON — defaulting to empty');
       roomAccess = [];
     }
-    if (!roomAccess.includes(room.type) && !roomAccess.includes('*')) {
-      return err('ACCESS_DENIED', `Agent ${agent.name} does not have access to ${room.type} rooms`);
+
+    // Security badge check — badge takes priority, falls back to roomAccess
+    const badge = parseBadge(agent.badge);
+    const accessResult = checkRoomAccess(agentId, room.type, badge, roomAccess);
+    if (!accessResult.ok) {
+      return accessResult;
     }
 
     // Find or create the table row for this room+type

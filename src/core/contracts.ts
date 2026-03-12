@@ -60,6 +60,12 @@ export interface RoomContract {
   provider: string;
 }
 
+export interface SecurityBadge {
+  rooms: string[];
+  clearance: 'standard' | 'elevated' | 'admin';
+  canExport: boolean;
+}
+
 export interface AgentIdentity {
   id: string;
   name: string;
@@ -67,6 +73,7 @@ export interface AgentIdentity {
   capabilities: string[];
   roomAccess: string[];
   badge?: string;
+  parsedBadge?: SecurityBadge | null;
 }
 
 export type RaidType = 'risk' | 'assumption' | 'issue' | 'decision';
@@ -386,6 +393,12 @@ export const RoomContractSchema = z.object({
   provider: z.string().default('configurable'),
 });
 
+export const SecurityBadgeSchema = z.object({
+  rooms: z.array(z.string()),
+  clearance: z.enum(['standard', 'elevated', 'admin']),
+  canExport: z.boolean(),
+});
+
 export const AgentIdentitySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -393,6 +406,7 @@ export const AgentIdentitySchema = z.object({
   capabilities: z.array(z.string()),
   roomAccess: z.array(z.string()),
   badge: z.string().optional(),
+  parsedBadge: SecurityBadgeSchema.nullable().optional(),
 });
 
 export const RaidEntrySchema = z.object({

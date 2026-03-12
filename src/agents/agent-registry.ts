@@ -12,6 +12,8 @@ import { logger } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
 import type { Result, AgentRow, ParsedAgent, AgentRegistryAPI, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Bus } from '../core/bus.js';
+import { parseBadge, serializeBadge, validateBadge } from './security-badge.js';
+import type { SecurityBadge } from './security-badge.js';
 
 const log = logger.child({ module: 'agent-registry' });
 
@@ -40,7 +42,7 @@ interface RegisterAgentParams {
   role: string;
   capabilities?: string[];
   roomAccess?: string[];
-  badge?: string | null;
+  badge?: string | SecurityBadge | null;
   config?: Record<string, unknown>;
   buildingId?: string | null;
 }
@@ -50,7 +52,7 @@ interface AgentUpdates {
   role?: string;
   capabilities?: string[];
   roomAccess?: string[];
-  badge?: string | null;
+  badge?: string | SecurityBadge | null;
   config?: Record<string, unknown>;
 }
 
@@ -69,6 +71,16 @@ export function registerAgent({ name, role, capabilities = [], roomAccess = [], 
   const db = getDb();
   const id = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+  // Serialize badge: accept structured object or raw string
+  let badgeStr: string | null = null;
+  if (badge && typeof badge === 'object') {
+    const validation = validateBadge(badge);
+    if (!validation.ok) return validation;
+    badgeStr = serializeBadge(badge as SecurityBadge);
+  } else if (typeof badge === 'string') {
+    badgeStr = badge;
+  }
+
   db.prepare(`
     INSERT INTO agents (id, name, role, building_id, capabilities, room_access, badge, config)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -79,11 +91,11 @@ export function registerAgent({ name, role, capabilities = [], roomAccess = [], 
     buildingId || null,
     JSON.stringify(capabilities),
     JSON.stringify(roomAccess),
-    badge,
+    badgeStr,
     JSON.stringify(config),
   );
 
-  log.info({ id, name, role, buildingId, roomAccess }, 'Agent registered');
+  log.info({ id, name, role, buildingId, roomAccess, hasBadge: !!badgeStr }, 'Agent registered');
   return ok({ id, name, role });
 }
 
@@ -140,7 +152,15 @@ export function updateAgent(agentId: string, updates: AgentUpdates): Result {
   if (updates.role) { fields.push('role = ?'); params.push(updates.role); }
   if (updates.capabilities) { fields.push('capabilities = ?'); params.push(JSON.stringify(updates.capabilities)); }
   if (updates.roomAccess) { fields.push('room_access = ?'); params.push(JSON.stringify(updates.roomAccess)); }
-  if (updates.badge !== undefined) { fields.push('badge = ?'); params.push(updates.badge ?? null); }
+  if (updates.badge !== undefined) {
+    if (updates.badge && typeof updates.badge === 'object') {
+      const validation = validateBadge(updates.badge);
+      if (!validation.ok) return validation;
+      fields.push('badge = ?'); params.push(serializeBadge(updates.badge as SecurityBadge));
+    } else {
+      fields.push('badge = ?'); params.push((updates.badge as string) ?? null);
+    }
+  }
   if (updates.config) { fields.push('config = ?'); params.push(JSON.stringify(updates.config)); }
 
   if (fields.length === 0) return ok({ id: agentId, message: 'No updates provided' });
