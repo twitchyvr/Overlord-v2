@@ -41,6 +41,8 @@ const ACTIVITY_ICONS = {
   'phase-zero:complete':      '\u{1F3C1}',
   'task:created':             '\u{1F4CB}',
   'task:updated':             '\u{1F4DD}',
+  'agent:status-changed':     '\u{1F504}',
+  'agent:mentioned':          '\u{1F4AC}',
   'error':                    '\u274C',
   'system':                   '\u2139'
 };
@@ -370,6 +372,18 @@ export class ActivityView extends Component {
       const agentName = item.agentName ||
         (item.agentId ? resolveAgent(item.agentId)?.name : null) || 'Agent';
       return `${agentName} exited room`;
+    }
+
+    if (event === 'agent:status-changed') {
+      const agentName = item.agentName ||
+        (item.agentId ? resolveAgent(item.agentId)?.name : null) || 'Agent';
+      return `${agentName} status changed to ${item.status || 'unknown'}`;
+    }
+
+    if (event === 'agent:mentioned') {
+      const agentName = item.agentName ||
+        (item.agentId ? resolveAgent(item.agentId)?.name : null) || 'Agent';
+      return `${agentName} was mentioned`;
     }
 
     if (event === 'raid:entry:added') {

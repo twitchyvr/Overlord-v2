@@ -277,7 +277,9 @@ export function initSocketBridge(socket, store, engine) {
       }
       return list;
     });
+    store.update('activity.items', (items) => [{ event: 'agent:status-changed', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('agent:status-changed', data);
+    engine.dispatch('activity:new', { event: 'agent:status-changed', ...data });
   });
 
   socket.on('building:updated', (data) => {
