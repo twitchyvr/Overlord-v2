@@ -55,6 +55,7 @@ export class TaskView extends Component {
     this._selectedTask = null;
     this._tabs = null;
     this._todos = [];
+    this._loading = true;
   }
 
   mount() {
@@ -64,6 +65,7 @@ export class TaskView extends Component {
 
     this.subscribe(store, 'tasks.list', (tasks) => {
       this._tasks = tasks || [];
+      this._loading = false;
       this._updateTaskList();
       this._updateTabBadges();
     });
@@ -261,13 +263,20 @@ export class TaskView extends Component {
     const tasks = this._getFilteredTasks();
 
     if (tasks.length === 0) {
-      container.appendChild(h('div', { class: 'empty-state' },
-        h('p', { class: 'empty-state-title' }, this._searchQuery ? 'No matching tasks' : 'No tasks yet'),
-        h('p', { class: 'empty-state-description' },
-          this._searchQuery
-            ? 'Try adjusting your search or filters.'
-            : 'Create a task to get started tracking work.')
-      ));
+      if (this._loading) {
+        container.appendChild(h('div', { class: 'loading-state' },
+          h('div', { class: 'loading-spinner' }),
+          h('p', { class: 'loading-text' }, 'Loading tasks...')
+        ));
+      } else {
+        container.appendChild(h('div', { class: 'empty-state' },
+          h('p', { class: 'empty-state-title' }, this._searchQuery ? 'No matching tasks' : 'No tasks yet'),
+          h('p', { class: 'empty-state-description' },
+            this._searchQuery
+              ? 'Try adjusting your search or filters.'
+              : 'Create a task to get started tracking work.')
+        ));
+      }
       return;
     }
 
