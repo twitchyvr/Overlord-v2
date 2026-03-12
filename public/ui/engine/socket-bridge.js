@@ -207,7 +207,12 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('task:created', (data) => {
-    store.update('tasks.list', (tasks) => [data, ...(tasks || [])]);
+    store.update('tasks.list', (tasks) => {
+      const list = tasks || [];
+      // Deduplicate — createTask() callback may have already added this
+      if (data.id && list.some((t) => t.id === data.id)) return list;
+      return [data, ...list];
+    });
     store.update('activity.items', (items) => [{ event: 'task:created', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('task:created', data);
     engine.dispatch('activity:new', { event: 'task:created', ...data });

@@ -52,6 +52,8 @@ export class TaskView extends Component {
     this._activeFilter = 'all';
     this._tableFilter = null;   // null = show all, string = filter by table_id
     this._searchQuery = '';
+    this._viewMode = 'list';    // 'list' | 'kanban'
+    this._dragTaskId = null;    // task id being dragged
     this._selectedTask = null;
     this._tabs = null;
     this._todos = [];
@@ -119,6 +121,18 @@ export class TaskView extends Component {
       h('div', { class: 'task-view-title-row' },
         h('h2', { class: 'task-view-title' }, 'Tasks'),
         h('div', { class: 'task-view-actions' },
+          h('div', { class: 'task-view-mode-toggle' },
+            h('button', {
+              class: `btn btn-ghost btn-sm task-mode-btn ${this._viewMode === 'list' ? 'active' : ''}`,
+              title: 'List view',
+              onClick: () => this._setViewMode('list')
+            }, '\u2630'),
+            h('button', {
+              class: `btn btn-ghost btn-sm task-mode-btn ${this._viewMode === 'kanban' ? 'active' : ''}`,
+              title: 'Kanban board',
+              onClick: () => this._setViewMode('kanban')
+            }, '\u25A6')
+          ),
           Button.create('New Task', {
             variant: 'primary',
             icon: '+',
@@ -260,6 +274,12 @@ export class TaskView extends Component {
     if (!container) return;
 
     container.textContent = '';
+
+    if (this._viewMode === 'kanban') {
+      this._renderKanbanBoard(container);
+      return;
+    }
+
     const tasks = this._getFilteredTasks();
 
     if (tasks.length === 0) {
@@ -1110,6 +1130,191 @@ export class TaskView extends Component {
       const label = `${t.tableType} in ${t.roomName}`;
       selectEl.appendChild(h('option', { value: t.tableId }, label));
     }
+  }
+
+  // ── View Mode ─────────────────────────────────────────────
+
+  _setViewMode(mode) {
+    if (this._viewMode === mode) return;
+    this._viewMode = mode;
+
+    // Update toggle button active states
+    this.el.querySelectorAll('.task-mode-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.title.toLowerCase().includes(mode));
+    });
+
+    this._updateTaskList();
+  }
+
+  // ── Kanban Board ────────────────────────────────────────────
+
+  _renderKanbanBoard(container) {
+    const board = h('div', { class: 'kanban-board' });
+
+    // Apply search/table filters but NOT status filter (kanban shows all statuses as columns)
+    let tasks = [...this._tasks];
+    if (this._tableFilter === '__unassigned__') {
+      tasks = tasks.filter(t => !t.table_id);
+    } else if (this._tableFilter) {
+      tasks = tasks.filter(t => t.table_id === this._tableFilter);
+    }
+    if (this._searchQuery) {
+      tasks = tasks.filter(t =>
+        (t.title || '').toLowerCase().includes(this._searchQuery) ||
+        (t.description || '').toLowerCase().includes(this._searchQuery)
+      );
+    }
+
+    // Group by status
+    const grouped = {};
+    for (const status of STATUS_ORDER) {
+      grouped[status] = [];
+    }
+    for (const task of tasks) {
+      const status = task.status || 'pending';
+      if (!grouped[status]) grouped[status] = [];
+      grouped[status].push(task);
+    }
+
+    // Sort each column by priority
+    for (const status of STATUS_ORDER) {
+      grouped[status].sort((a, b) => {
+        const pa = PRIORITY_ORDER.indexOf(a.priority || 'normal');
+        const pb = PRIORITY_ORDER.indexOf(b.priority || 'normal');
+        if (pa !== pb) return pa - pb;
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      });
+    }
+
+    // Render columns
+    for (const status of STATUS_ORDER) {
+      const colTasks = grouped[status] || [];
+      const column = this._renderKanbanColumn(status, colTasks);
+      board.appendChild(column);
+    }
+
+    container.appendChild(board);
+
+    // If actively loading with a building selected, show overlay
+    if (this._loading && this._buildingId && tasks.length === 0) {
+      const overlay = h('div', { class: 'kanban-loading-overlay' },
+        h('div', { class: 'loading-spinner' }),
+        h('p', { class: 'loading-text' }, 'Loading tasks...')
+      );
+      container.appendChild(overlay);
+    }
+  }
+
+  _renderKanbanColumn(status, tasks) {
+    const column = h('div', {
+      class: `kanban-column kanban-col-${status}`,
+      'data-status': status
+    });
+
+    // Column header
+    const header = h('div', { class: 'kanban-column-header' },
+      h('div', { class: 'kanban-column-title-row' },
+        h('span', { class: `kanban-column-dot status-dot-${status}` }),
+        h('span', { class: 'kanban-column-title' }, STATUS_LABELS[status] || status),
+        h('span', { class: 'kanban-column-count' }, String(tasks.length))
+      )
+    );
+    column.appendChild(header);
+
+    // Drop zone
+    const dropZone = h('div', { class: 'kanban-drop-zone' });
+
+    // Drag-and-drop handlers on the drop zone
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      dropZone.classList.add('kanban-drop-active');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('kanban-drop-active');
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('kanban-drop-active');
+      const taskId = e.dataTransfer.getData('text/plain');
+      if (taskId && window.overlordSocket) {
+        window.overlordSocket.updateTask({ id: taskId, status });
+      }
+    });
+
+    // Render task cards
+    for (const task of tasks) {
+      const card = this._renderKanbanCard(task);
+      dropZone.appendChild(card);
+    }
+
+    // Empty state for column
+    if (tasks.length === 0) {
+      dropZone.appendChild(h('div', { class: 'kanban-empty' }, 'Drop tasks here'));
+    }
+
+    column.appendChild(dropZone);
+    return column;
+  }
+
+  _renderKanbanCard(task) {
+    const card = h('div', {
+      class: `kanban-card priority-${task.priority || 'normal'}`,
+      draggable: 'true',
+      'data-task-id': task.id
+    });
+
+    // Drag handlers
+    card.addEventListener('dragstart', (e) => {
+      this._dragTaskId = task.id;
+      e.dataTransfer.setData('text/plain', task.id);
+      e.dataTransfer.effectAllowed = 'move';
+      card.classList.add('kanban-card-dragging');
+    });
+    card.addEventListener('dragend', () => {
+      this._dragTaskId = null;
+      card.classList.remove('kanban-card-dragging');
+      // Remove all drop-active highlights
+      this.el.querySelectorAll('.kanban-drop-active').forEach(el => el.classList.remove('kanban-drop-active'));
+    });
+
+    // Click to open detail
+    card.addEventListener('click', () => this._openTaskDetail(task.id));
+
+    // Priority indicator bar
+    card.appendChild(h('div', { class: `kanban-card-priority-bar priority-bar-${task.priority || 'normal'}` }));
+
+    // Title
+    card.appendChild(h('div', { class: 'kanban-card-title' }, task.title || 'Untitled'));
+
+    // Description snippet
+    if (task.description) {
+      const snippet = task.description.length > 80
+        ? task.description.slice(0, 80) + '...'
+        : task.description;
+      card.appendChild(h('div', { class: 'kanban-card-desc' }, snippet));
+    }
+
+    // Footer: assignee + metadata
+    const footer = h('div', { class: 'kanban-card-footer' });
+
+    if (task.assignee_id) {
+      const agentName = this._getAgentName(task.assignee_id);
+      footer.appendChild(h('span', { class: 'kanban-card-assignee' },
+        h('span', { class: 'kanban-card-avatar' }, (agentName || '?')[0].toUpperCase()),
+        h('span', null, agentName || task.assignee_id)
+      ));
+    }
+
+    if (task.phase) {
+      footer.appendChild(h('span', { class: 'kanban-card-phase' }, task.phase));
+    }
+
+    if (footer.children.length > 0) {
+      card.appendChild(footer);
+    }
+
+    return card;
   }
 
   // ── Helpers ────────────────────────────────────────────────

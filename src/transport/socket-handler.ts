@@ -1189,7 +1189,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         r.name AS room_name,
         r.type AS room_type
         FROM tasks t
-        LEFT JOIN tables tb ON t.table_id = tb.id
+        LEFT JOIN tables_v2 tb ON t.table_id = tb.id
         LEFT JOIN rooms r ON tb.room_id = r.id
         WHERE t.building_id = ?`;
       const params: unknown[] = [parsed.buildingId];
