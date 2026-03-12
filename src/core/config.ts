@@ -49,6 +49,9 @@ const ConfigSchema = z.object({
   SESSION_SECRET: z.string().default('dev-secret-change-in-production'),
   CORS_ORIGIN: z.string().default('http://localhost:4000'),
 
+  // AI Request Timeout
+  AI_REQUEST_TIMEOUT_MS: z.coerce.number().positive().default(60_000),
+
   // Features
   ENABLE_PLUGINS: z.coerce.boolean().default(false),
   ENABLE_LUA_SCRIPTING: z.coerce.boolean().default(false),

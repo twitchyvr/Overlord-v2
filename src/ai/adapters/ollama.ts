@@ -89,20 +89,38 @@ export function createOllamaAdapter(cfg: Config): AIAdapter {
         });
       }
 
-      log.info({ model, baseUrl, messageCount: messages.length }, 'Sending Ollama request');
+      const timeoutMs = cfg.get('AI_REQUEST_TIMEOUT_MS');
+      log.info({ model, baseUrl, messageCount: messages.length, timeoutMs }, 'Sending Ollama request');
 
-      const response = await fetch(`${baseUrl}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          messages: ollamaMessages,
-          stream: false,
-          options: {
-            ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
-          },
-        }),
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      let response: Response;
+      try {
+        response = await fetch(`${baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model,
+            messages: ollamaMessages,
+            stream: false,
+            options: {
+              ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+            },
+          }),
+        });
+      } catch (fetchError) {
+        clearTimeout(timer);
+        // Convert AbortError to a timeout error with a clear message
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          const timeoutErr = new Error(`Ollama request timed out after ${timeoutMs}ms`);
+          timeoutErr.name = 'TimeoutError';
+          throw timeoutErr;
+        }
+        throw fetchError;
+      }
+      clearTimeout(timer);
 
       if (!response.ok) {
         const text = await response.text();

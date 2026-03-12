@@ -54,9 +54,11 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
       if (!apiKey) throw new Error('MINIMAX_API_KEY is not configured');
 
       const baseURL = cfg.get('MINIMAX_BASE_URL');
+      const timeoutMs = cfg.get('AI_REQUEST_TIMEOUT_MS');
 
       client = new Anthropic({
         apiKey,
+        timeout: timeoutMs,
         baseURL,
       });
     }
