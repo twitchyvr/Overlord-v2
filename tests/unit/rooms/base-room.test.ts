@@ -509,17 +509,26 @@ describe('ReviewRoom', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('accepts NO-GO and CONDITIONAL verdicts', () => {
+  it('accepts NO-GO verdict', () => {
     const room = new ReviewRoom('review_1');
-    for (const verdict of ['NO-GO', 'CONDITIONAL']) {
-      const result = room.validateExitDocumentValues({
-        verdict,
-        evidence: [{ claim: 'c' }],
-        conditions: [],
-        riskQuestionnaire: [{ q: 'q' }],
-      });
-      expect(result.ok).toBe(true);
-    }
+    const result = room.validateExitDocumentValues({
+      verdict: 'NO-GO',
+      evidence: [{ claim: 'c' }],
+      conditions: [],
+      riskQuestionnaire: [{ q: 'q' }],
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('accepts CONDITIONAL verdict with non-empty conditions', () => {
+    const room = new ReviewRoom('review_1');
+    const result = room.validateExitDocumentValues({
+      verdict: 'CONDITIONAL',
+      evidence: [{ claim: 'c' }],
+      conditions: ['Fix lint errors before deploy'],
+      riskQuestionnaire: [{ q: 'q' }],
+    });
+    expect(result.ok).toBe(true);
   });
 
   it('onAfterToolCall emits escalation on QA failure', () => {

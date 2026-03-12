@@ -68,6 +68,33 @@ export class DiscoveryRoom extends BaseRoom {
     };
   }
 
+  /**
+   * Block write operations — Discovery is read-only research.
+   */
+  override onBeforeToolCall(toolName: string, _agentId: string, _input: Record<string, unknown>): Result {
+    const WRITE_TOOLS = ['write_file', 'patch_file'];
+    if (WRITE_TOOLS.includes(toolName)) {
+      return err('TOOL_BLOCKED', `${toolName} is not allowed in the Discovery Room — no code changes permitted`);
+    }
+    return ok(null);
+  }
+
+  /**
+   * After tool call: detect research tool failures.
+   */
+  override onAfterToolCall(toolName: string, agentId: string, result: Result): void {
+    if ((toolName === 'web_search' || toolName === 'fetch_webpage') && !result.ok) {
+      this.bus?.emit('room:escalation:suggested', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+        condition: 'onComplete',
+        targetRoom: this.escalation.onComplete || 'architecture',
+        reason: `Research tool ${toolName} failed: ${result.error.message}`,
+      });
+    }
+  }
+
   override validateExitDocumentValues(document: Record<string, unknown>): Result {
     const businessOutcomes = document.businessOutcomes as unknown[];
     const acceptanceCriteria = document.acceptanceCriteria as unknown[];

@@ -84,7 +84,51 @@ export class ReviewRoom extends BaseRoom {
       return err('EXIT_DOC_INVALID', 'riskQuestionnaire must be a non-empty array');
     }
 
+    // CONDITIONAL verdicts must have non-empty conditions
+    if (verdict === 'CONDITIONAL') {
+      const conditions = document.conditions as unknown[];
+      if (!Array.isArray(conditions) || conditions.length === 0) {
+        return err('EXIT_DOC_INVALID', 'CONDITIONAL verdict requires a non-empty conditions array');
+      }
+    }
+
     return ok(document);
+  }
+
+  /**
+   * After exit document is validated, route based on verdict.
+   * NO-GO → code-lab, CONDITIONAL → emit conditions for tracking.
+   */
+  routeVerdict(document: Record<string, unknown>, agentId: string): void {
+    const verdict = document.verdict as string;
+
+    if (verdict === 'NO-GO') {
+      this.bus?.emit('room:escalation:suggested', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+        condition: 'onNoGo',
+        targetRoom: this.escalation.onNoGo || 'code-lab',
+        reason: 'Gate review verdict: NO-GO',
+      });
+    }
+
+    if (verdict === 'CONDITIONAL') {
+      this.bus?.emit('room:gate:conditional', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+        conditions: document.conditions,
+      });
+    }
+
+    if (verdict === 'GO') {
+      this.bus?.emit('room:gate:passed', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+      });
+    }
   }
 
   /**

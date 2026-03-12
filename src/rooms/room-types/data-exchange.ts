@@ -99,9 +99,34 @@ export class DataExchangeRoom extends BaseRoom {
   }
 
   /**
+   * Track whether schema validation has been run in this session.
+   * Export operations should be preceded by validation.
+   */
+  private schemaValidated = false;
+
+  /**
+   * Before tool call: warn if exporting data without prior schema validation.
+   */
+  override onBeforeToolCall(toolName: string, agentId: string, _input: Record<string, unknown>): Result {
+    if (toolName === 'export_data' && !this.schemaValidated) {
+      this.bus?.emit('room:warning', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+        warning: 'Exporting data without prior schema validation. Consider running validate_schema first.',
+      });
+    }
+    return ok(null);
+  }
+
+  /**
    * After tool call: detect data validation failures and suggest escalation.
+   * Also track successful schema validations.
    */
   override onAfterToolCall(toolName: string, agentId: string, result: Result): void {
+    if (toolName === 'validate_schema' && result.ok) {
+      this.schemaValidated = true;
+    }
     if (toolName === 'validate_schema' && !result.ok) {
       this.bus?.emit('room:escalation:suggested', {
         roomId: this.id,
