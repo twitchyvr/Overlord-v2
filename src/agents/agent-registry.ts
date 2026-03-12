@@ -15,6 +15,20 @@ import type { Bus } from '../core/bus.js';
 
 const log = logger.child({ module: 'agent-registry' });
 
+/**
+ * Safely parse a JSON string from the database.
+ * Returns the fallback value if parsing fails (corrupted DB data).
+ */
+function safeJsonParse<T>(raw: string | null | undefined, fallback: T, context: string): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    log.warn({ raw: raw.slice(0, 100), context }, 'Malformed JSON in database — using fallback');
+    return fallback;
+  }
+}
+
 interface InitAgentsParams {
   bus: Bus;
   tools: ToolRegistryAPI;
@@ -83,9 +97,9 @@ export function getAgent(agentId: string): ParsedAgent | null {
 
   return {
     ...agent,
-    capabilities: JSON.parse(agent.capabilities || '[]') as string[],
-    room_access: JSON.parse(agent.room_access || '[]') as string[],
-    config: JSON.parse(agent.config || '{}') as Record<string, unknown>,
+    capabilities: safeJsonParse<string[]>(agent.capabilities, [], `agent.capabilities[${agentId}]`),
+    room_access: safeJsonParse<string[]>(agent.room_access, [], `agent.room_access[${agentId}]`),
+    config: safeJsonParse<Record<string, unknown>>(agent.config, {}, `agent.config[${agentId}]`),
   };
 }
 
@@ -105,9 +119,9 @@ export function listAgents({ status, roomId, buildingId }: { status?: string; ro
 
   return (db.prepare(sql).all(...params) as AgentRow[]).map((a) => ({
     ...a,
-    capabilities: JSON.parse(a.capabilities || '[]') as string[],
-    room_access: JSON.parse(a.room_access || '[]') as string[],
-    config: JSON.parse(a.config || '{}') as Record<string, unknown>,
+    capabilities: safeJsonParse<string[]>(a.capabilities, [], `agent.capabilities[${a.id}]`),
+    room_access: safeJsonParse<string[]>(a.room_access, [], `agent.room_access[${a.id}]`),
+    config: safeJsonParse<Record<string, unknown>>(a.config, {}, `agent.config[${a.id}]`),
   }));
 }
 

@@ -144,7 +144,13 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
       return err('AGENT_NOT_FOUND', `Agent ${agentId} does not exist`);
     }
 
-    const roomAccess = JSON.parse(agent.room_access || '[]') as string[];
+    let roomAccess: string[];
+    try {
+      roomAccess = JSON.parse(agent.room_access || '[]') as string[];
+    } catch {
+      log.warn({ agentId, raw: (agent.room_access || '').slice(0, 100) }, 'Malformed room_access JSON — defaulting to empty');
+      roomAccess = [];
+    }
     if (!roomAccess.includes(room.type) && !roomAccess.includes('*')) {
       return err('ACCESS_DENIED', `Agent ${agent.name} does not have access to ${room.type} rooms`);
     }
