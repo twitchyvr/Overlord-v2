@@ -33,6 +33,35 @@ const log = logger.child({ module: 'chat-orchestrator' });
 /** Track active conversations to prevent duplicate processing */
 const activeConversations = new Set<string>();
 
+/** Save a message to the messages table. */
+function persistMessage(
+  roomId: string,
+  agentId: string | null,
+  role: string,
+  content: string,
+  threadId: string,
+  toolCalls?: Array<{ name: string; input: unknown }>,
+): string {
+  const db = getDb();
+  const id = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  db.prepare(`
+    INSERT INTO messages (id, room_id, agent_id, role, content, tool_calls, thread_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `).run(id, roomId, agentId, role, content, toolCalls ? JSON.stringify(toolCalls) : null, threadId);
+  return id;
+}
+
+/** Load conversation history for a thread. */
+function loadConversationHistory(threadId: string): Array<{ role: 'user' | 'assistant'; content: string }> {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT role, content FROM messages WHERE thread_id = ? ORDER BY created_at ASC',
+  ).all(threadId) as Array<{ role: string; content: string }>;
+  return rows
+    .filter((r) => r.content && (r.role === 'user' || r.role === 'assistant'))
+    .map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }));
+}
+
 interface ChatOrchestratorDeps {
   bus: Bus;
   rooms: RoomManagerAPI;
@@ -77,6 +106,7 @@ async function handleChatMessage(
   const roomId = data.roomId as string || '';
   const agentId = data.agentId as string || '';
   const buildingId = data.buildingId as string || '';
+  const threadId = (data.threadId as string) || `thread_${roomId || 'default'}_${socketId}`;
 
   // Skip empty messages
   if (!text) {
@@ -226,12 +256,27 @@ async function handleChatMessage(
       }
     }
 
-    // 9. Run the conversation loop — this is where the AI magic happens
+    // 9. Persist user message and load conversation history
+    try {
+      persistMessage(room.id, null, 'user', text, threadId);
+    } catch (persistErr) {
+      log.warn({ persistErr }, 'Failed to persist user message — continuing without history');
+    }
+
+    let historyMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    try {
+      historyMessages = loadConversationHistory(threadId);
+    } catch (histErr) {
+      log.warn({ histErr }, 'Failed to load conversation history — using single message');
+      historyMessages = [{ role: 'user' as const, content: text }];
+    }
+
+    // 10. Run the conversation loop with full history
     const result = await runConversationLoop({
       provider,
       room,
       agentId: resolvedAgentId,
-      messages: [{ role: 'user', content: text }],
+      messages: historyMessages.length > 0 ? historyMessages : [{ role: 'user' as const, content: text }],
       ai,
       tools,
       bus,
@@ -242,7 +287,7 @@ async function handleChatMessage(
       },
     });
 
-    // 9. Emit the final response
+    // 11. Emit the final response and persist assistant message
     if (result.ok) {
       const data = result.data;
       log.info(
@@ -272,7 +317,18 @@ async function handleChatMessage(
         iterations: data.iterations,
         sessionId: data.sessionId,
         maxIterationsReached: data.maxIterationsReached,
+        threadId,
       });
+
+      // Persist assistant response
+      try {
+        persistMessage(
+          room.id, resolvedAgentId, 'assistant', content, threadId,
+          data.toolCalls.map((tc) => ({ name: tc.name, input: tc.input })),
+        );
+      } catch (persistErr) {
+        log.warn({ persistErr }, 'Failed to persist assistant message');
+      }
     } else {
       log.error({ socketId, error: result.error }, 'Conversation loop failed');
       bus.emit('chat:response', {

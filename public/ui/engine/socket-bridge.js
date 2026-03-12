@@ -960,9 +960,79 @@ export function initSocketBridge(socket, store, engine) {
       const messageText = text || content || '';
       const activeRoom = roomId || store.get('rooms.active') || '';
       const activeBuilding = buildingId || store.get('building.active') || '';
+      const threadId = store.get('conversations.active') || '';
       store.update('chat.messages', (msgs) => [...(msgs || []), { id: Date.now().toString(), role: 'user', content: messageText, agentId, type: 'user', timestamp: Date.now() }]);
       store.set('ui.processing', true);
-      socket.emit('chat:message', { text: messageText, agentId: agentId || '', tokens: tokens || [], buildingId: activeBuilding, roomId: activeRoom });
+      socket.emit('chat:message', { text: messageText, agentId: agentId || '', tokens: tokens || [], buildingId: activeBuilding, roomId: activeRoom, threadId });
+    },
+
+    // ── Conversation methods ──
+
+    fetchConversations(buildingId) {
+      return new Promise((resolve) => {
+        socket.emit('conversation:list', { buildingId: buildingId || store.get('building.active') || '' }, (res) => {
+          if (res && res.ok) {
+            store.set('conversations.list', res.data);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    loadConversation(threadId) {
+      return new Promise((resolve) => {
+        socket.emit('conversation:load', { threadId }, (res) => {
+          if (res && res.ok) {
+            store.set('conversations.active', threadId);
+            // Convert loaded messages to chat format
+            const messages = (res.data || []).map((m) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              agentId: m.agentId,
+              toolCalls: m.toolCalls,
+              type: m.role === 'user' ? 'user' : 'response',
+              timestamp: m.timestamp,
+            }));
+            store.set('chat.messages', messages);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    createConversation(title) {
+      return new Promise((resolve) => {
+        const roomId = store.get('rooms.active') || '';
+        const buildingId = store.get('building.active') || '';
+        socket.emit('conversation:create', { title, roomId, buildingId }, (res) => {
+          if (res && res.ok) {
+            store.set('conversations.active', res.data.threadId);
+            store.set('chat.messages', []);
+            // Refresh conversation list
+            this.fetchConversations(buildingId);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    deleteConversation(threadId) {
+      return new Promise((resolve) => {
+        socket.emit('conversation:delete', { threadId }, (res) => {
+          if (res && res.ok) {
+            // If we deleted the active conversation, clear it
+            if (store.get('conversations.active') === threadId) {
+              store.set('conversations.active', '');
+              store.set('chat.messages', []);
+            }
+            // Refresh list
+            const buildingId = store.get('building.active') || '';
+            this.fetchConversations(buildingId);
+          }
+          resolve(res);
+        });
+      });
     },
 
     submitExitDoc(params) {
