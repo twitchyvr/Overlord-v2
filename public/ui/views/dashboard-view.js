@@ -50,6 +50,13 @@ export class DashboardView extends Component {
       this.render();
     });
 
+    // Hydrate from store — data may have arrived before this view mounted
+    // (navigateTo is async, so store updates can land before subscriptions)
+    this._buildings = store.get('building.list') || [];
+    this._agents = store.get('agents.list') || [];
+    this._raidEntries = store.get('raid.entries') || [];
+    this._activeBuilding = store.get('building.active');
+
     this.render();
   }
 
