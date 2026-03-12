@@ -9,6 +9,18 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+const mockLog = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+};
+
+vi.mock('../../../public/ui/engine/logger.js', () => ({
+  createLogger: vi.fn(() => mockLog),
+  setLogLevel: vi.fn(),
+}));
+
 // ── Helpers ──────────────────────────────────────────────────
 
 /** Create a mock Socket.IO client with on/emit/disconnect */
@@ -71,6 +83,10 @@ beforeEach(async () => {
   mockSocket = createMockSocket();
   mockStore = createMockStore();
   mockEngine = createMockEngine();
+  mockLog.debug.mockClear();
+  mockLog.info.mockClear();
+  mockLog.warn.mockClear();
+  mockLog.error.mockClear();
 
   // Clean up window.overlordSocket from previous tests
   delete (window as any).overlordSocket;
@@ -129,10 +145,8 @@ describe('initSocketBridge() — initialization', () => {
   });
 
   it('logs initialization message', () => {
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     initSocketBridge(mockSocket, mockStore, mockEngine);
-    expect(spy).toHaveBeenCalledWith('[SocketBridge] v2 bridge initialized');
-    spy.mockRestore();
+    expect(mockLog.info).toHaveBeenCalledWith('v2 bridge initialized');
   });
 });
 
@@ -259,19 +273,15 @@ describe('socket "disconnect" event', () => {
 
 describe('socket "connect_error" event', () => {
   it('dispatches connection:error with error message to engine', () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     initSocketBridge(mockSocket, mockStore, mockEngine);
     mockSocket._trigger('connect_error', { message: 'timeout' });
     expect(mockEngine.dispatch).toHaveBeenCalledWith('connection:error', { message: 'timeout' });
-    spy.mockRestore();
   });
 
-  it('logs the error message to console.error', () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('logs the error message via logger', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     mockSocket._trigger('connect_error', { message: 'refused' });
-    expect(spy).toHaveBeenCalledWith('[SocketBridge] Connection error:', 'refused');
-    spy.mockRestore();
+    expect(mockLog.error).toHaveBeenCalledWith('Connection error:', 'refused');
   });
 });
 
@@ -1011,11 +1021,9 @@ describe('connection state (ui.connectionState)', () => {
   });
 
   it('sets connectionState to "reconnecting" on connect_error', () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     initSocketBridge(mockSocket, mockStore, mockEngine);
     mockSocket._trigger('connect_error', { message: 'timeout' });
     expect(mockStore.set).toHaveBeenCalledWith('ui.connectionState', 'reconnecting');
-    spy.mockRestore();
   });
 });
 
@@ -1096,7 +1104,6 @@ describe('operation error feedback (_emitWithFeedback)', () => {
   it('dispatches operation:error when emit callback returns ok=false', async () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: false, error: { code: 'ROOM_NOT_FOUND', message: 'Room does not exist' } });
@@ -1109,14 +1116,11 @@ describe('operation error feedback (_emitWithFeedback)', () => {
       code: 'ROOM_NOT_FOUND',
       message: 'Room does not exist'
     });
-
-    warnSpy.mockRestore();
   });
 
   it('handles string error in response', async () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
       if (ack) ack({ ok: false, error: 'Something went wrong' });
@@ -1129,8 +1133,6 @@ describe('operation error feedback (_emitWithFeedback)', () => {
       code: 'UNKNOWN',
       message: 'Something went wrong'
     });
-
-    warnSpy.mockRestore();
   });
 
   it('does not dispatch error when emit callback returns ok=true', async () => {
@@ -1278,7 +1280,6 @@ describe('window.overlordSocket.deleteTodo()', () => {
   it('does not modify store on failed delete', async () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     mockStore._data['todos.list'] = [{ id: 'td1' }, { id: 'td2' }];
 
     mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
@@ -1289,7 +1290,6 @@ describe('window.overlordSocket.deleteTodo()', () => {
     // store.update for deleteTodo should NOT have been called (only _emitWithFeedback triggers)
     // The todos.list should still have 2 items
     expect(mockStore._data['todos.list']).toHaveLength(2);
-    warnSpy.mockRestore();
   });
 });
 

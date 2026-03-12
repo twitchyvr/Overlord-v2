@@ -120,6 +120,16 @@ vi.mock('../../../public/ui/panels/tasks-panel.js', () => ({
   TasksPanel: vi.fn(),
 }));
 
+vi.mock('../../../public/ui/engine/logger.js', () => ({
+  createLogger: vi.fn((tag: string) => ({
+    debug: (...args: any[]) => console.debug(`[${tag}]`, ...args),
+    info: (...args: any[]) => console.info(`[${tag}]`, ...args),
+    warn: (...args: any[]) => console.warn(`[${tag}]`, ...args),
+    error: (...args: any[]) => console.error(`[${tag}]`, ...args),
+  })),
+  setLogLevel: vi.fn(),
+}));
+
 // ── Deferred imports (grabbed after mocks are in place) ──────────
 
 let createV2Store: any;
@@ -334,11 +344,11 @@ describe('boot.js — core initialization', () => {
   });
 
   it('logs boot complete message to console', async () => {
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
     setupDOM({ withSocket: true, withPanelEls: true });
     await importBoot();
-    const msgs = spy.mock.calls.map((c: any[]) => c[0]);
-    expect(msgs).toContain('[Overlord v2] Boot complete');
+    const bootCall = spy.mock.calls.find((c: any[]) => c[0] === '[Overlord]' && c[1] === 'Boot complete');
+    expect(bootCall).toBeTruthy();
     spy.mockRestore();
   });
 });
@@ -866,11 +876,11 @@ describe('boot.js — no socket.io fallback', () => {
   });
 
   it('still logs boot complete even without socket', async () => {
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
     setupDOM({ withSocket: false });
     await importBoot();
-    const msgs = spy.mock.calls.map((c: any[]) => c[0]);
-    expect(msgs).toContain('[Overlord v2] Boot complete');
+    const bootCall = spy.mock.calls.find((c: any[]) => c[0] === '[Overlord]' && c[1] === 'Boot complete');
+    expect(bootCall).toBeTruthy();
     spy.mockRestore();
   });
 });
