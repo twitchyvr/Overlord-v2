@@ -32,17 +32,40 @@ const MAX_ITEMS = 200;
 const ACTIVITY_ICONS = {
   'tool:executed':            '\u{1F527}',
   'phase:advanced':           '\u{1F6A7}',
+  'phase:gate:created':       '\u{1F3C1}',
   'phase:gate:signed-off':    '\u{1F3C6}',
+  'phase:conditions:resolved':'\u2705',
+  'phase:room-provisioned':   '\u{1F3E0}',
   'room:agent:entered':       '\u{1F6AA}',
   'room:agent:exited':        '\u{1F6B6}',
+  'room:updated':             '\u{1F3E2}',
+  'room:deleted':             '\u{1F5D1}',
   'raid:entry:added':         '\u26A0',
   'exit-doc:submitted':       '\u{1F4C4}',
   'scope-change':             '\u{1F504}',
   'phase-zero:complete':      '\u{1F3C1}',
   'task:created':             '\u{1F4CB}',
   'task:updated':             '\u{1F4DD}',
+  'task:assigned':            '\u{1F4CC}',
   'agent:status-changed':     '\u{1F504}',
   'agent:mentioned':          '\u{1F4AC}',
+  'agent:profile-updated':    '\u{1F464}',
+  'agent:profile-generated':  '\u{1F5BC}',
+  'floor:created':            '\u{1F3D7}',
+  'floor:updated':            '\u{1F3D7}',
+  'floor:deleted':            '\u{1F5D1}',
+  'table:created':            '\u{1FA91}',
+  'table:updated':            '\u{1FA91}',
+  'table:deleted':            '\u{1F5D1}',
+  'table:work-divided':       '\u2702',
+  'building:onboarded':       '\u{1F3E2}',
+  'building:onboard-failed':  '\u274C',
+  'building:created':         '\u{1F3D7}',
+  'deploy:check':             '\u{1F680}',
+  'citation:added':           '\u{1F4CE}',
+  'escalation:stale-gate':    '\u23F0',
+  'escalation:war-room':      '\u{1F6A8}',
+  'escalation:failed':        '\u274C',
   'error':                    '\u274C',
   'system':                   '\u2139'
 };
@@ -61,7 +84,15 @@ const FILTER_PREDICATES = {
     event.startsWith('room:agent:') ||
     event.includes('agent') ||
     event === 'room:agent:entered' ||
-    event === 'room:agent:exited'
+    event === 'room:agent:exited',
+  building: (event) =>
+    event.startsWith('building:') ||
+    event.startsWith('floor:') ||
+    event.startsWith('room:') ||
+    event.startsWith('table:'),
+  tasks: (event) =>
+    event.startsWith('task:') ||
+    event.startsWith('todo:')
 };
 
 
@@ -405,6 +436,89 @@ export class ActivityView extends Component {
 
     if (event === 'task:updated') {
       return `Task updated: ${item.title || 'Untitled'} \u2192 ${item.status || ''}`;
+    }
+
+    if (event === 'task:assigned') {
+      return `Task assigned: ${item.title || item.taskId || 'Task'}`;
+    }
+
+    if (event === 'agent:profile-updated') {
+      const agentName = item.agentName ||
+        (item.agentId ? resolveAgent(item.agentId)?.name : null) || 'Agent';
+      return `${agentName} profile updated`;
+    }
+
+    if (event === 'agent:profile-generated') {
+      const agentName = item.agentName ||
+        (item.agentId ? resolveAgent(item.agentId)?.name : null) || 'Agent';
+      return `${agentName} profile generated`;
+    }
+
+    if (event === 'floor:created') {
+      return `Floor created: ${item.name || item.type || 'New floor'}`;
+    }
+
+    if (event === 'floor:updated' || event === 'floor:deleted') {
+      const action = event === 'floor:updated' ? 'updated' : 'deleted';
+      return `Floor ${action}: ${item.name || item.floorId || 'Floor'}`;
+    }
+
+    if (event === 'room:updated' || event === 'room:deleted') {
+      const action = event === 'room:updated' ? 'updated' : 'deleted';
+      return `Room ${action}: ${item.name || item.roomType || item.roomId || 'Room'}`;
+    }
+
+    if (event === 'table:created' || event === 'table:updated' || event === 'table:deleted') {
+      const action = event.split(':')[1];
+      return `Table ${action}: ${item.type || item.tableId || 'Table'}`;
+    }
+
+    if (event === 'table:work-divided') {
+      return `Work divided at table: ${item.type || item.tableId || 'Table'}`;
+    }
+
+    if (event === 'building:onboarded') {
+      return `Building onboarded: ${item.name || item.buildingId || 'Building'}`;
+    }
+
+    if (event === 'building:onboard-failed') {
+      return `Building onboard failed: ${item.error || item.reason || 'Unknown error'}`;
+    }
+
+    if (event === 'building:created') {
+      return `Building created: ${item.name || 'New building'}`;
+    }
+
+    if (event === 'citation:added') {
+      return `Citation added: ${item.source || item.title || 'Reference'}`;
+    }
+
+    if (event === 'escalation:failed') {
+      return `Escalation failed: ${item.error || item.reason || 'Unknown'}`;
+    }
+
+    if (event === 'deploy:check') {
+      return `Deploy check: ${item.status || item.result || 'Running'}`;
+    }
+
+    if (event === 'phase:gate:created') {
+      return `Phase gate created for ${item.phase || 'phase'}`;
+    }
+
+    if (event === 'phase:conditions:resolved') {
+      return `Gate conditions resolved: ${item.gateId || 'gate'}`;
+    }
+
+    if (event === 'phase:room-provisioned') {
+      return `Room provisioned for phase: ${item.phase || ''} (${item.roomType || ''})`;
+    }
+
+    if (event === 'escalation:stale-gate') {
+      return `Stale gate escalation: ${item.phase || item.gateId || 'gate'}`;
+    }
+
+    if (event === 'escalation:war-room') {
+      return `War room activated: ${item.reason || item.warRoomId || 'Escalation'}`;
     }
 
     // Default: use whatever text fields are available

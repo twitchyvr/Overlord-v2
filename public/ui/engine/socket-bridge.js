@@ -418,6 +418,185 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'escalation:war-room', ...data });
   });
 
+  // ── Floor events ──
+
+  socket.on('floor:created', (data) => {
+    const buildingId = store.get('building.active');
+    if (buildingId && window.overlordSocket) window.overlordSocket.fetchFloors(buildingId);
+    store.update('activity.items', (items) => [{ event: 'floor:created', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('floor:created', data);
+    engine.dispatch('activity:new', { event: 'floor:created', ...data });
+  });
+
+  socket.on('floor:updated', (data) => {
+    const buildingId = store.get('building.active');
+    if (buildingId && window.overlordSocket) window.overlordSocket.fetchFloors(buildingId);
+    store.update('activity.items', (items) => [{ event: 'floor:updated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('floor:updated', data);
+    engine.dispatch('activity:new', { event: 'floor:updated', ...data });
+  });
+
+  socket.on('floor:deleted', (data) => {
+    const buildingId = store.get('building.active');
+    if (buildingId && window.overlordSocket) window.overlordSocket.fetchFloors(buildingId);
+    store.update('activity.items', (items) => [{ event: 'floor:deleted', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('floor:deleted', data);
+    engine.dispatch('activity:new', { event: 'floor:deleted', ...data });
+  });
+
+  socket.on('floor:sorted', (data) => {
+    const buildingId = store.get('building.active');
+    if (buildingId && window.overlordSocket) window.overlordSocket.fetchFloors(buildingId);
+    engine.dispatch('floor:sorted', data);
+  });
+
+  // ── Room events ──
+
+  socket.on('room:updated', (data) => {
+    store.update('rooms.list', (rooms) => {
+      const list = rooms || [];
+      const idx = list.findIndex((r) => r.id === data.id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], ...data };
+        return next;
+      }
+      return list;
+    });
+    store.update('activity.items', (items) => [{ event: 'room:updated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('room:updated', data);
+    engine.dispatch('activity:new', { event: 'room:updated', ...data });
+  });
+
+  socket.on('room:deleted', (data) => {
+    store.update('rooms.list', (rooms) => (rooms || []).filter((r) => r.id !== data.id && r.id !== data.roomId));
+    const buildingId = store.get('building.active');
+    if (buildingId && window.overlordSocket) window.overlordSocket.fetchFloors(buildingId);
+    store.update('activity.items', (items) => [{ event: 'room:deleted', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('room:deleted', data);
+    engine.dispatch('activity:new', { event: 'room:deleted', ...data });
+  });
+
+  // ── Table events ──
+
+  socket.on('table:created', (data) => {
+    store.update('activity.items', (items) => [{ event: 'table:created', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('table:created', data);
+    engine.dispatch('activity:new', { event: 'table:created', ...data });
+  });
+
+  socket.on('table:updated', (data) => {
+    store.update('activity.items', (items) => [{ event: 'table:updated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('table:updated', data);
+    engine.dispatch('activity:new', { event: 'table:updated', ...data });
+  });
+
+  socket.on('table:deleted', (data) => {
+    store.update('activity.items', (items) => [{ event: 'table:deleted', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('table:deleted', data);
+    engine.dispatch('activity:new', { event: 'table:deleted', ...data });
+  });
+
+  socket.on('table:context-updated', (data) => {
+    engine.dispatch('table:context-updated', data);
+  });
+
+  socket.on('table:work-divided', (data) => {
+    store.update('activity.items', (items) => [{ event: 'table:work-divided', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('table:work-divided', data);
+    engine.dispatch('activity:new', { event: 'table:work-divided', ...data });
+  });
+
+  // ── Agent profile events ──
+
+  socket.on('agent:profile-updated', (data) => {
+    store.update('agents.list', (agents) => {
+      const list = agents || [];
+      const idx = list.findIndex((a) => a.id === data.agentId || a.id === data.id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], ...data };
+        return next;
+      }
+      return list;
+    });
+    store.update('activity.items', (items) => [{ event: 'agent:profile-updated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('agent:profile-updated', data);
+    engine.dispatch('activity:new', { event: 'agent:profile-updated', ...data });
+  });
+
+  socket.on('agent:profile-generated', (data) => {
+    store.update('agents.list', (agents) => {
+      const list = agents || [];
+      const idx = list.findIndex((a) => a.id === data.agentId || a.id === data.id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], ...data };
+        return next;
+      }
+      return list;
+    });
+    store.update('activity.items', (items) => [{ event: 'agent:profile-generated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('agent:profile-generated', data);
+    engine.dispatch('activity:new', { event: 'agent:profile-generated', ...data });
+  });
+
+  // ── Task/Todo assignment events ──
+
+  socket.on('task:assigned', (data) => {
+    store.update('tasks.list', (tasks) => {
+      const list = tasks || [];
+      const idx = list.findIndex((t) => t.id === data.taskId || t.id === data.id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], ...data };
+        return next;
+      }
+      return list;
+    });
+    store.update('activity.items', (items) => [{ event: 'task:assigned', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('task:assigned', data);
+    engine.dispatch('activity:new', { event: 'task:assigned', ...data });
+  });
+
+  socket.on('todo:assigned', (data) => {
+    store.update('todos.list', (todos) => {
+      const list = todos || [];
+      const idx = list.findIndex((t) => t.id === data.todoId || t.id === data.id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], agent_id: data.agentId };
+        return next;
+      }
+      return list;
+    });
+    engine.dispatch('todo:assigned', data);
+  });
+
+  // ── Error/failure events ──
+
+  socket.on('building:onboard-failed', (data) => {
+    log.error('Building onboard failed:', data);
+    store.update('activity.items', (items) => [{ event: 'building:onboard-failed', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('building:onboard-failed', data);
+    engine.dispatch('activity:new', { event: 'building:onboard-failed', ...data });
+  });
+
+  socket.on('escalation:failed', (data) => {
+    log.error('Escalation failed:', data);
+    store.update('activity.items', (items) => [{ event: 'escalation:failed', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('escalation:failed', data);
+    engine.dispatch('activity:new', { event: 'escalation:failed', ...data });
+  });
+
+  // ── Citation events ──
+
+  socket.on('citation:added', (data) => {
+    store.update('activity.items', (items) => [{ event: 'citation:added', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('citation:added', data);
+    engine.dispatch('activity:new', { event: 'citation:added', ...data });
+  });
+
   // ── Client emit wrappers (convenience for components) ──
 
   /**
