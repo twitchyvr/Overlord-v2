@@ -68,6 +68,7 @@ vi.mock('../../../public/ui/engine/router.js', () => ({
 
 vi.mock('../../../public/ui/components/panel.js', () => ({
   initPanelSystem: vi.fn(),
+  PanelComponent: vi.fn(),
 }));
 
 vi.mock('../../../public/ui/components/toast.js', () => ({
@@ -99,6 +100,22 @@ vi.mock('../../../public/ui/panels/activity-panel.js', () => ({
   ActivityPanel: vi.fn(),
 }));
 
+vi.mock('../../../public/ui/panels/projects-panel.js', () => ({
+  ProjectsPanel: vi.fn(),
+}));
+
+vi.mock('../../../public/ui/panels/tools-panel.js', () => ({
+  ToolsPanel: vi.fn(),
+}));
+
+vi.mock('../../../public/ui/panels/logs-panel.js', () => ({
+  LogsPanel: vi.fn(),
+}));
+
+vi.mock('../../../public/ui/panels/team-panel.js', () => ({
+  TeamPanel: vi.fn(),
+}));
+
 // ── Deferred imports (grabbed after mocks are in place) ──────────
 
 let createV2Store: any;
@@ -115,6 +132,10 @@ let PhasePanel: any;
 let AgentsPanel: any;
 let RaidPanel: any;
 let ActivityPanel: any;
+let ProjectsPanel: any;
+let ToolsPanel: any;
+let LogsPanel: any;
+let TeamPanel: any;
 let hFn: any;
 let setContent: any;
 
@@ -154,7 +175,7 @@ function setupDOM(opts: { withSocket?: boolean; withPanelEls?: boolean; withLoad
   document.body.appendChild(rightPanel);
 
   if (opts.withPanelEls) {
-    for (const id of ['panel-phase', 'panel-agents', 'panel-raid', 'panel-activity']) {
+    for (const id of ['panel-phase', 'panel-agents', 'panel-raid', 'panel-activity', 'panel-projects', 'panel-tools', 'panel-logs', 'panel-team']) {
       const el = document.createElement('div');
       el.id = id;
       document.body.appendChild(el);
@@ -227,6 +248,18 @@ beforeEach(async () => {
 
   const acMod = await import('../../../public/ui/panels/activity-panel.js');
   ActivityPanel = (acMod as any).ActivityPanel;
+
+  const prjMod = await import('../../../public/ui/panels/projects-panel.js');
+  ProjectsPanel = (prjMod as any).ProjectsPanel;
+
+  const tlMod = await import('../../../public/ui/panels/tools-panel.js');
+  ToolsPanel = (tlMod as any).ToolsPanel;
+
+  const lgMod = await import('../../../public/ui/panels/logs-panel.js');
+  LogsPanel = (lgMod as any).LogsPanel;
+
+  const tmMod = await import('../../../public/ui/panels/team-panel.js');
+  TeamPanel = (tmMod as any).TeamPanel;
 
   const helpersMod = await import('../../../public/ui/engine/helpers.js');
   hFn = (helpersMod as any).h;
@@ -386,6 +419,38 @@ describe('boot.js — panel construction', () => {
     expect(arg.id).toBe('panel-activity');
   });
 
+  it('constructs ProjectsPanel when #panel-projects exists', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true });
+    await importBoot();
+    expect(ProjectsPanel).toHaveBeenCalledTimes(1);
+    const arg = ProjectsPanel.mock.calls[0][0];
+    expect(arg.id).toBe('panel-projects');
+  });
+
+  it('constructs ToolsPanel when #panel-tools exists', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true });
+    await importBoot();
+    expect(ToolsPanel).toHaveBeenCalledTimes(1);
+    const arg = ToolsPanel.mock.calls[0][0];
+    expect(arg.id).toBe('panel-tools');
+  });
+
+  it('constructs LogsPanel when #panel-logs exists', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true });
+    await importBoot();
+    expect(LogsPanel).toHaveBeenCalledTimes(1);
+    const arg = LogsPanel.mock.calls[0][0];
+    expect(arg.id).toBe('panel-logs');
+  });
+
+  it('constructs TeamPanel when #panel-team exists', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true });
+    await importBoot();
+    expect(TeamPanel).toHaveBeenCalledTimes(1);
+    const arg = TeamPanel.mock.calls[0][0];
+    expect(arg.id).toBe('panel-team');
+  });
+
   it('skips panel construction when panel elements are missing from DOM', async () => {
     setupDOM({ withSocket: true, withPanelEls: false });
     await importBoot();
@@ -393,6 +458,10 @@ describe('boot.js — panel construction', () => {
     expect(AgentsPanel).not.toHaveBeenCalled();
     expect(RaidPanel).not.toHaveBeenCalled();
     expect(ActivityPanel).not.toHaveBeenCalled();
+    expect(ProjectsPanel).not.toHaveBeenCalled();
+    expect(ToolsPanel).not.toHaveBeenCalled();
+    expect(LogsPanel).not.toHaveBeenCalled();
+    expect(TeamPanel).not.toHaveBeenCalled();
   });
 
   it('still calls initPanelSystem even when no panel elements exist', async () => {
@@ -727,6 +796,10 @@ describe('boot.js — no socket.io fallback', () => {
     expect(AgentsPanel).not.toHaveBeenCalled();
     expect(RaidPanel).not.toHaveBeenCalled();
     expect(ActivityPanel).not.toHaveBeenCalled();
+    expect(ProjectsPanel).not.toHaveBeenCalled();
+    expect(ToolsPanel).not.toHaveBeenCalled();
+    expect(LogsPanel).not.toHaveBeenCalled();
+    expect(TeamPanel).not.toHaveBeenCalled();
   });
 
   it('does not call initPanelSystem when io is undefined', async () => {
