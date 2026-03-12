@@ -228,6 +228,15 @@ export const AgentUpdateProfileSchema = z.object({
   profileGenerated: z.boolean().optional(),
 });
 
+export const AgentUpdateSchema = z.object({
+  agentId: id(),
+  name: optionalName(),
+  role: optionalName(),
+  capabilities: z.array(z.string().max(200)).max(50).optional(),
+  roomAccess: z.array(z.string().max(200)).max(50).optional(),
+  config: z.record(z.unknown()).optional(),
+});
+
 export const AgentGenerateProfileSchema = z.object({
   agentId: id(),
   /** Override the role used for generation (defaults to agent's registered role) */

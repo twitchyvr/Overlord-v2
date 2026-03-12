@@ -32,7 +32,7 @@ import {
   FloorListSchema, FloorGetSchema, FloorCreateSchema, FloorUpdateSchema, FloorDeleteSchema, FloorSortSchema,
   RoomCreateSchema, RoomGetSchema, RoomEnterSchema, RoomExitSchema, RoomUpdateSchema, RoomDeleteSchema,
   TableCreateSchema, TableListSchema, TableUpdateSchema, TableDeleteSchema, AgentMoveSchema,
-  AgentRegisterSchema, AgentGetSchema, AgentListSchema, AgentUpdateProfileSchema,
+  AgentRegisterSchema, AgentGetSchema, AgentListSchema, AgentUpdateSchema, AgentUpdateProfileSchema,
   AgentGenerateProfileSchema,
   AgentGeneratePhotoSchema,
   ChatMessageSchema,
@@ -675,6 +675,16 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         const updatedAgent = agents.getAgent(parsed.agentId);
         bus.emit('agent:profile-updated', { agentId: parsed.agentId, profile: updatedAgent });
         broadcastLog('info', `Agent profile updated: ${parsed.agentId}`, 'agents');
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'agent:update', AgentUpdateSchema, (parsed, ack) => {
+      const { agentId, ...updates } = parsed;
+      const result = agents.updateAgent(agentId, updates);
+      if (result.ok) {
+        bus.emit('agent:updated', { agentId, updates: Object.keys(updates) });
+        broadcastLog('info', `Agent updated: ${agentId}`, 'agents');
       }
       if (ack) ack(result);
     });

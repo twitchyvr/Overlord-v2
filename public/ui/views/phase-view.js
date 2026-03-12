@@ -755,7 +755,8 @@ export class PhaseView extends Component {
 .phase-view {
   padding: var(--sp-6);
   overflow-y: auto;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   background: var(--bg-primary);
 }
 
