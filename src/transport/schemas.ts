@@ -467,3 +467,34 @@ export const CitationBacklinksSchema = z.object({
   roomId: id(),
   entryId: optionalId(),
 });
+
+// ─── Table Context Schemas (Fleet Coordination) ───
+
+export const TableSetContextSchema = z.object({
+  tableId: id(),
+  key: z.string().min(1).max(MAX_NAME),
+  value: z.unknown(),
+});
+
+export const TableGetContextSchema = z.object({
+  tableId: id(),
+});
+
+export const TableClearContextSchema = z.object({
+  tableId: id(),
+});
+
+// ─── Table Work Division Schemas (Fleet Coordination) ───
+
+export const TableGetAssignmentsSchema = z.object({
+  tableId: id(),
+});
+
+export const TableDivideWorkSchema = z.object({
+  tableId: id(),
+  taskId: id(),
+  todoDescriptions: z.array(z.object({
+    agentId: id(),
+    description: z.string().min(1).max(MAX_DESCRIPTION),
+  })).min(1).max(50),
+});
