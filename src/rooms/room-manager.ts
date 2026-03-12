@@ -74,33 +74,39 @@ export function createRoom({ type, floorId, name, config: roomConfig = {} }: Cre
     return err('UNKNOWN_ROOM_TYPE', `Room type "${type}" is not registered`);
   }
 
-  const id = `room_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    const id = `room_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-  const db = getDb();
-  const contract = Factory.contract;
+    const db = getDb();
+    const contract = Factory.contract;
 
-  db.prepare(`
-    INSERT INTO rooms (id, floor_id, type, name, allowed_tools, file_scope, exit_template, escalation, provider, config)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    id,
-    floorId,
-    type,
-    name,
-    JSON.stringify(contract.tools),
-    contract.fileScope || 'assigned',
-    JSON.stringify(contract.exitRequired),
-    JSON.stringify(contract.escalation || {}),
-    contract.provider || 'configurable',
-    JSON.stringify(roomConfig),
-  );
+    db.prepare(`
+      INSERT INTO rooms (id, floor_id, type, name, allowed_tools, file_scope, exit_template, escalation, provider, config)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      floorId,
+      type,
+      name,
+      JSON.stringify(contract.tools),
+      contract.fileScope || 'assigned',
+      JSON.stringify(contract.exitRequired),
+      JSON.stringify(contract.escalation || {}),
+      contract.provider || 'configurable',
+      JSON.stringify(roomConfig),
+    );
 
-  const room = new Factory(id, { ...contract, ...roomConfig });
-  if (moduleBus) room.setBus(moduleBus);
-  activeRooms.set(id, room);
+    const room = new Factory(id, { ...contract, ...roomConfig });
+    if (moduleBus) room.setBus(moduleBus);
+    activeRooms.set(id, room);
 
-  log.info({ id, type, name, floor: floorId }, 'Room created');
-  return ok({ id, type, name });
+    log.info({ id, type, name, floor: floorId }, 'Room created');
+    return ok({ id, type, name });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.error({ type, name, err: msg }, 'Failed to create room');
+    return err('DB_ERROR', `Failed to create room: ${msg}`);
+  }
 }
 
 interface EnterRoomParams {
@@ -130,69 +136,75 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
     );
   }
 
-  // Check agent has badge access to this room type
-  const db = getDb();
-  const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as AgentRow | undefined;
-  if (!agent) {
-    return err('AGENT_NOT_FOUND', `Agent ${agentId} does not exist`);
-  }
+  try {
+    // Check agent has badge access to this room type
+    const db = getDb();
+    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as AgentRow | undefined;
+    if (!agent) {
+      return err('AGENT_NOT_FOUND', `Agent ${agentId} does not exist`);
+    }
 
-  const roomAccess = JSON.parse(agent.room_access || '[]') as string[];
-  if (!roomAccess.includes(room.type) && !roomAccess.includes('*')) {
-    return err('ACCESS_DENIED', `Agent ${agent.name} does not have access to ${room.type} rooms`);
-  }
+    const roomAccess = JSON.parse(agent.room_access || '[]') as string[];
+    if (!roomAccess.includes(room.type) && !roomAccess.includes('*')) {
+      return err('ACCESS_DENIED', `Agent ${agent.name} does not have access to ${room.type} rooms`);
+    }
 
-  // Find or create the table row for this room+type
-  let tableRow = db
-    .prepare('SELECT id FROM tables_v2 WHERE room_id = ? AND type = ?')
-    .get(roomId, tableType) as { id: string } | undefined;
+    // Find or create the table row for this room+type
+    let tableRow = db
+      .prepare('SELECT id FROM tables_v2 WHERE room_id = ? AND type = ?')
+      .get(roomId, tableType) as { id: string } | undefined;
 
-  if (!tableRow) {
-    const tableId = `table_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    db.prepare('INSERT INTO tables_v2 (id, room_id, type, chairs, description) VALUES (?, ?, ?, ?, ?)').run(
-      tableId,
+    if (!tableRow) {
+      const tableId = `table_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      db.prepare('INSERT INTO tables_v2 (id, room_id, type, chairs, description) VALUES (?, ?, ?, ?, ?)').run(
+        tableId,
+        roomId,
+        tableType,
+        tableConfig.chairs,
+        tableConfig.description,
+      );
+      tableRow = { id: tableId };
+    }
+
+    // Check chair capacity — count agents already seated at this table
+    const seatedCount = db
+      .prepare('SELECT COUNT(*) as cnt FROM agents WHERE current_table_id = ?')
+      .get(tableRow.id) as { cnt: number };
+
+    if (seatedCount.cnt >= tableConfig.chairs) {
+      return err(
+        'TABLE_FULL',
+        `Table "${tableType}" in ${room.type} room is full (${tableConfig.chairs} chair${tableConfig.chairs === 1 ? '' : 's'})`,
+        { context: { tableType, maxChairs: tableConfig.chairs, currentOccupancy: seatedCount.cnt } },
+      );
+    }
+
+    // Update agent's current room and table
+    db.prepare('UPDATE agents SET current_room_id = ?, current_table_id = ?, status = ? WHERE id = ?').run(
       roomId,
-      tableType,
-      tableConfig.chairs,
-      tableConfig.description,
-    );
-    tableRow = { id: tableId };
-  }
-
-  // Check chair capacity — count agents already seated at this table
-  const seatedCount = db
-    .prepare('SELECT COUNT(*) as cnt FROM agents WHERE current_table_id = ?')
-    .get(tableRow.id) as { cnt: number };
-
-  if (seatedCount.cnt >= tableConfig.chairs) {
-    return err(
-      'TABLE_FULL',
-      `Table "${tableType}" in ${room.type} room is full (${tableConfig.chairs} chair${tableConfig.chairs === 1 ? '' : 's'})`,
-      { context: { tableType, maxChairs: tableConfig.chairs, currentOccupancy: seatedCount.cnt } },
-    );
-  }
-
-  // Update agent's current room and table
-  db.prepare('UPDATE agents SET current_room_id = ?, current_table_id = ?, status = ? WHERE id = ?').run(
-    roomId,
-    tableRow.id,
-    'active',
-    agentId,
-  );
-
-  // Fire lifecycle hook — room can track agent, emit bus events, run setup logic
-  const enterResult = room.onAgentEnter(agentId, tableType);
-  if (!enterResult.ok) {
-    // Roll back DB change if room rejects entry
-    db.prepare('UPDATE agents SET current_room_id = NULL, current_table_id = NULL, status = ? WHERE id = ?').run(
-      'idle',
+      tableRow.id,
+      'active',
       agentId,
     );
-    return enterResult;
-  }
 
-  log.info({ roomId, agentId, tableType, tableId: tableRow.id }, 'Agent entered room');
-  return ok({ roomId, agentId, tableId: tableRow.id, tools: room.getAllowedTools(), fileScope: room.fileScope });
+    // Fire lifecycle hook — room can track agent, emit bus events, run setup logic
+    const enterResult = room.onAgentEnter(agentId, tableType);
+    if (!enterResult.ok) {
+      // Roll back DB change if room rejects entry
+      db.prepare('UPDATE agents SET current_room_id = NULL, current_table_id = NULL, status = ? WHERE id = ?').run(
+        'idle',
+        agentId,
+      );
+      return enterResult;
+    }
+
+    log.info({ roomId, agentId, tableType, tableId: tableRow.id }, 'Agent entered room');
+    return ok({ roomId, agentId, tableId: tableRow.id, tools: room.getAllowedTools(), fileScope: room.fileScope });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.error({ roomId, agentId, tableType, err: msg }, 'Failed to enter room');
+    return err('DB_ERROR', `Failed to enter room: ${msg}`);
+  }
 }
 
 interface ExitRoomParams {
@@ -209,37 +221,43 @@ export function exitRoom({ roomId, agentId }: ExitRoomParams): Result {
   const room = activeRooms.get(roomId);
   if (!room) return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
 
-  // Enforce exit document requirement
-  const exitReq = room.exitRequired;
-  if (exitReq && exitReq.fields.length > 0) {
-    const db = getDb();
-    const exitDoc = db
-      .prepare('SELECT id FROM exit_documents WHERE room_id = ? AND completed_by = ? ORDER BY created_at DESC LIMIT 1')
-      .get(roomId, agentId) as { id: string } | undefined;
+  try {
+    // Enforce exit document requirement
+    const exitReq = room.exitRequired;
+    if (exitReq && exitReq.fields.length > 0) {
+      const db = getDb();
+      const exitDoc = db
+        .prepare('SELECT id FROM exit_documents WHERE room_id = ? AND completed_by = ? ORDER BY created_at DESC LIMIT 1')
+        .get(roomId, agentId) as { id: string } | undefined;
 
-    if (!exitDoc) {
-      return err(
-        'EXIT_DOC_REQUIRED',
-        `Room "${room.type}" requires an exit document before leaving. Required fields: ${exitReq.fields.join(', ')}`,
-        { context: { roomType: room.type, requiredFields: exitReq.fields } },
-      );
+      if (!exitDoc) {
+        return err(
+          'EXIT_DOC_REQUIRED',
+          `Room "${room.type}" requires an exit document before leaving. Required fields: ${exitReq.fields.join(', ')}`,
+          { context: { roomType: room.type, requiredFields: exitReq.fields } },
+        );
+      }
     }
+
+    // Fire lifecycle hook — room can clean up agent state, emit bus events
+    const exitResult = room.onAgentExit(agentId);
+    if (!exitResult.ok) {
+      return exitResult;
+    }
+
+    const db = getDb();
+    db.prepare('UPDATE agents SET current_room_id = NULL, current_table_id = NULL, status = ? WHERE id = ?').run(
+      'idle',
+      agentId,
+    );
+
+    log.info({ roomId, agentId }, 'Agent exited room');
+    return ok({ roomId, agentId });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.error({ roomId, agentId, err: msg }, 'Failed to exit room');
+    return err('DB_ERROR', `Failed to exit room: ${msg}`);
   }
-
-  // Fire lifecycle hook — room can clean up agent state, emit bus events
-  const exitResult = room.onAgentExit(agentId);
-  if (!exitResult.ok) {
-    return exitResult;
-  }
-
-  const db = getDb();
-  db.prepare('UPDATE agents SET current_room_id = NULL, current_table_id = NULL, status = ? WHERE id = ?').run(
-    'idle',
-    agentId,
-  );
-
-  log.info({ roomId, agentId }, 'Agent exited room');
-  return ok({ roomId, agentId });
 }
 
 interface SubmitExitDocParams {
@@ -262,45 +280,51 @@ export function submitExitDocument({ roomId, agentId, document, buildingId, phas
   const validation = room.validateExitDocument(document);
   if (!validation.ok) return validation;
 
-  const db = getDb();
-  const id = `exitdoc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const raidEntryIds: string[] = [];
+  try {
+    const db = getDb();
+    const id = `exitdoc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const raidEntryIds: string[] = [];
 
-  // Auto-create RAID decision entry linking exit doc to project log
-  if (buildingId && phase) {
-    const raidId = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    // Auto-create RAID decision entry linking exit doc to project log
+    if (buildingId && phase) {
+      const raidId = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      db.prepare(`
+        INSERT INTO raid_entries (id, building_id, type, phase, room_id, summary, rationale, decided_by, affected_areas)
+        VALUES (?, ?, 'decision', ?, ?, ?, ?, ?, ?)
+      `).run(
+        raidId,
+        buildingId,
+        phase,
+        roomId,
+        `Exit document submitted: ${room.exitRequired?.type || 'generic'}`,
+        `Agent ${agentId} completed ${room.type} room work`,
+        agentId,
+        JSON.stringify([room.type]),
+      );
+      raidEntryIds.push(raidId);
+      log.info({ raidId, exitDocId: id, roomId }, 'RAID entry auto-created for exit document');
+    }
+
     db.prepare(`
-      INSERT INTO raid_entries (id, building_id, type, phase, room_id, summary, rationale, decided_by, affected_areas)
-      VALUES (?, ?, 'decision', ?, ?, ?, ?, ?, ?)
+      INSERT INTO exit_documents (id, room_id, type, completed_by, fields, artifacts, raid_entry_ids)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
-      raidId,
-      buildingId,
-      phase,
+      id,
       roomId,
-      `Exit document submitted: ${room.exitRequired?.type || 'generic'}`,
-      `Agent ${agentId} completed ${room.type} room work`,
+      room.exitRequired?.type || 'generic',
       agentId,
-      JSON.stringify([room.type]),
+      JSON.stringify(document),
+      JSON.stringify((document.artifacts as string[]) || []),
+      JSON.stringify(raidEntryIds),
     );
-    raidEntryIds.push(raidId);
-    log.info({ raidId, exitDocId: id, roomId }, 'RAID entry auto-created for exit document');
+
+    log.info({ id, roomId, agentId, raidEntryIds }, 'Exit document submitted');
+    return ok({ id, roomId, raidEntryIds });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.error({ roomId, agentId, err: msg }, 'Failed to submit exit document');
+    return err('DB_ERROR', `Failed to submit exit document: ${msg}`);
   }
-
-  db.prepare(`
-    INSERT INTO exit_documents (id, room_id, type, completed_by, fields, artifacts, raid_entry_ids)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    id,
-    roomId,
-    room.exitRequired?.type || 'generic',
-    agentId,
-    JSON.stringify(document),
-    JSON.stringify((document.artifacts as string[]) || []),
-    JSON.stringify(raidEntryIds),
-  );
-
-  log.info({ id, roomId, agentId, raidEntryIds }, 'Exit document submitted');
-  return ok({ id, roomId, raidEntryIds });
 }
 
 export function getRoom(roomId: string): BaseRoom | null {
@@ -308,6 +332,12 @@ export function getRoom(roomId: string): BaseRoom | null {
 }
 
 export function listRooms(): RoomRow[] {
-  const db = getDb();
-  return db.prepare('SELECT * FROM rooms ORDER BY created_at').all() as RoomRow[];
+  try {
+    const db = getDb();
+    return db.prepare('SELECT * FROM rooms ORDER BY created_at').all() as RoomRow[];
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.error({ err: msg }, 'Failed to list rooms');
+    return [];
+  }
 }

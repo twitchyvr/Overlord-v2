@@ -487,6 +487,74 @@ describe('Room Manager', () => {
     });
   });
 
+  describe('error handling — DB failures', () => {
+    it('createRoom returns DB_ERROR when insert fails', () => {
+      // Drop the rooms table to force a DB error
+      db.prepare('DROP TABLE rooms').run();
+      const result = createRoom({ type: 'code-lab', floorId: 'floor_exec', name: 'Broken Lab' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('DB_ERROR');
+        expect(result.error.message).toContain('Failed to create room');
+      }
+    });
+
+    it('enterRoom returns DB_ERROR when agent lookup fails', () => {
+      const room = createRoom({ type: 'code-lab', floorId: 'floor_exec', name: 'Lab' });
+      if (!room.ok) throw new Error('room creation failed');
+
+      // Drop agents table to force DB error
+      db.prepare('DROP TABLE agents').run();
+      const result = enterRoom({ roomId: room.data.id, agentId: 'agent_1' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('DB_ERROR');
+        expect(result.error.message).toContain('Failed to enter room');
+      }
+    });
+
+    it('exitRoom returns DB_ERROR when exit doc lookup fails', () => {
+      const room = createRoom({ type: 'code-lab', floorId: 'floor_exec', name: 'Lab' });
+      if (!room.ok) throw new Error('room creation failed');
+
+      db.prepare(`INSERT INTO agents (id, name, role, room_access) VALUES ('agent_1', 'Coder', 'developer', '["code-lab"]')`).run();
+      enterRoom({ roomId: room.data.id, agentId: 'agent_1' });
+
+      // Drop exit_documents table to force DB error on exit doc check
+      db.prepare('DROP TABLE exit_documents').run();
+      const result = exitRoom({ roomId: room.data.id, agentId: 'agent_1' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('DB_ERROR');
+        expect(result.error.message).toContain('Failed to exit room');
+      }
+    });
+
+    it('submitExitDocument returns DB_ERROR when insert fails', () => {
+      const room = createRoom({ type: 'code-lab', floorId: 'floor_exec', name: 'Lab' });
+      if (!room.ok) throw new Error('room creation failed');
+
+      // Drop exit_documents table to force DB error
+      db.prepare('DROP TABLE exit_documents').run();
+      const result = submitExitDocument({
+        roomId: room.data.id,
+        agentId: 'agent_1',
+        document: { filesChanged: ['a.ts'], testsAdded: 1, summary: 'Done' },
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('DB_ERROR');
+        expect(result.error.message).toContain('Failed to submit exit document');
+      }
+    });
+
+    it('listRooms returns empty array on DB failure', () => {
+      db.prepare('DROP TABLE rooms').run();
+      const rooms = listRooms();
+      expect(rooms).toEqual([]);
+    });
+  });
+
   describe('room tool scoping', () => {
     it('room only exposes its contracted tools', () => {
       const created = createRoom({ type: 'code-lab', floorId: 'floor_exec', name: 'Scoped Lab' });
