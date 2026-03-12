@@ -93,13 +93,17 @@ export class LogsPanel extends PanelComponent {
     console.warn = function(...args) {
       origWarn.apply(console, args);
       const msg = args.join(' ');
-      self._addLog({ level: 'warn', message: msg, source: 'client' });
+      if (msg.startsWith('[Overlord') || msg.startsWith('[OverlordUI')) {
+        self._addLog({ level: 'warn', message: msg, source: 'client' });
+      }
     };
 
     console.error = function(...args) {
       origError.apply(console, args);
       const msg = args.join(' ');
-      self._addLog({ level: 'error', message: msg, source: 'client' });
+      if (msg.startsWith('[Overlord') || msg.startsWith('[OverlordUI')) {
+        self._addLog({ level: 'error', message: msg, source: 'client' });
+      }
     };
 
     // Restore on destroy

@@ -181,7 +181,9 @@ export function getFloor(floorId: string): Result {
 }
 
 /**
- * List all floors in a building
+ * List all floors in a building, each with its rooms attached.
+ * This is the primary query the UI uses — building-view needs floor.rooms
+ * to render room cards inside each floor bar.
  */
 export function listFloors(buildingId: string): Result {
   const db = getDb();
@@ -189,7 +191,44 @@ export function listFloors(buildingId: string): Result {
     'SELECT * FROM floors WHERE building_id = ? ORDER BY sort_order',
   ).all(buildingId) as FloorRow[];
 
-  return ok(floors.map((f) => ({ ...f, config: safeJsonParse(f.config, {}) })));
+  // Attach rooms to each floor so the building-view can render them
+  const roomsByFloor = new Map<string, Record<string, unknown>[]>();
+  const allRooms = db.prepare(
+    'SELECT * FROM rooms WHERE floor_id IN (SELECT id FROM floors WHERE building_id = ?) ORDER BY created_at',
+  ).all(buildingId) as Array<Record<string, unknown>>;
+
+  for (const room of allRooms) {
+    const floorId = room.floor_id as string;
+    if (!roomsByFloor.has(floorId)) {
+      roomsByFloor.set(floorId, []);
+    }
+    roomsByFloor.get(floorId)!.push({
+      ...room,
+      config: safeJsonParse(room.config as string, {}),
+      allowed_tools: safeJsonParse(room.allowed_tools as string, []),
+      exit_template: safeJsonParse(room.exit_template as string, {}),
+      escalation: safeJsonParse(room.escalation as string, {}),
+    });
+  }
+
+  // Also attach agent counts per room for the building-view badges
+  const agentCounts = db.prepare(`
+    SELECT current_room_id, COUNT(*) as count
+    FROM agents
+    WHERE building_id = ? AND current_room_id IS NOT NULL
+    GROUP BY current_room_id
+  `).all(buildingId) as Array<{ current_room_id: string; count: number }>;
+
+  const agentCountMap = new Map(agentCounts.map(r => [r.current_room_id, r.count]));
+
+  return ok(floors.map((f) => ({
+    ...f,
+    config: safeJsonParse(f.config, {}),
+    rooms: (roomsByFloor.get(f.id) || []).map(r => ({
+      ...r,
+      agentCount: agentCountMap.get(r.id as string) || 0,
+    })),
+  })));
 }
 
 /**

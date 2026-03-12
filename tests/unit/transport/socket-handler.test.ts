@@ -141,6 +141,7 @@ describe('Socket Handler (Transport Layer)', () => {
       getRoom: vi.fn().mockReturnValue(null),
       listRooms: vi.fn().mockReturnValue([]),
       registerRoomType: vi.fn(),
+      hydrateRoomsFromDb: vi.fn().mockReturnValue({ activated: 0, skipped: 0, failed: 0 }),
     };
 
     // Mock agent registry
@@ -263,6 +264,7 @@ describe('Socket Handler (Transport Layer)', () => {
         id: 'room_1',
         type: 'code-lab',
         getAllowedTools: () => ['bash', 'read_file'],
+        getRules: () => ['Only modify assigned files'],
         fileScope: 'assigned',
         exitRequired: { type: 'code-review', fields: ['summary'] },
         escalation: { onComplete: 'review' },
@@ -272,9 +274,9 @@ describe('Socket Handler (Transport Layer)', () => {
 
       const ack = vi.fn();
       socket.emit('room:get', { roomId: 'room_1' }, ack);
-      expect(ack).toHaveBeenCalledWith({
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({
         ok: true,
-        data: {
+        data: expect.objectContaining({
           id: 'room_1',
           type: 'code-lab',
           tools: ['bash', 'read_file'],
@@ -282,8 +284,9 @@ describe('Socket Handler (Transport Layer)', () => {
           exitRequired: { type: 'code-review', fields: ['summary'] },
           escalation: { onComplete: 'review' },
           tables: { focus: { chairs: 1, description: 'Solo work' } },
-        },
-      });
+          rules: ['Only modify assigned files'],
+        }),
+      }));
     });
   });
 

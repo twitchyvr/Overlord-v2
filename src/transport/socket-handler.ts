@@ -166,6 +166,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         blueprint: parsed.blueprint,
         agentId: parsed.agentId,
       });
+      // Blueprint creates room DB records — hydrate them into active instances
+      // so they're immediately usable (getRoom works, room detail views load)
+      if (result.ok) {
+        rooms.hydrateRoomsFromDb();
+      }
       if (ack) ack(result);
     });
 
@@ -203,16 +208,35 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         if (ack) ack({ ok: false, error: { code: 'ROOM_NOT_FOUND', message: `Room ${parsed.roomId} does not exist`, retryable: false } });
         return;
       }
+      // Fetch agents currently seated in this room from DB
+      const roomDb = getDb();
+      const seatedAgents = roomDb.prepare(
+        'SELECT id, name, role, status, current_table_id FROM agents WHERE current_room_id = ?',
+      ).all(parsed.roomId) as Array<Record<string, unknown>>;
+
+      // Fetch tables for this room
+      const roomTables = roomDb.prepare(
+        'SELECT id, type, chairs, description FROM tables_v2 WHERE room_id = ?',
+      ).all(parsed.roomId) as Array<Record<string, unknown>>;
+
+      // Get room name from DB
+      const roomRow = roomDb.prepare('SELECT name, floor_id FROM rooms WHERE id = ?').get(parsed.roomId) as { name: string; floor_id: string } | undefined;
+
       if (ack) ack({
         ok: true,
         data: {
           id: room.id,
           type: room.type,
+          name: roomRow?.name || room.type,
+          floorId: roomRow?.floor_id,
           tools: room.getAllowedTools(),
           fileScope: room.fileScope,
           exitRequired: room.exitRequired,
           escalation: room.escalation,
           tables: room.config.tables,
+          activeTables: roomTables,
+          agents: seatedAgents,
+          rules: room.getRules(),
         },
       });
     });
