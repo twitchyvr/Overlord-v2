@@ -166,8 +166,17 @@ export class RoomView extends Component {
   _openModal() {
     if (!this._roomData) return;
     const content = this._buildContent();
+    const modalId = `room-${this._roomData.id}`;
 
-    Modal.open(`room-${this._roomData.id}`, {
+    // If modal is already open, replace body content with fresh data
+    const existingBody = Modal.getBody(modalId);
+    if (existingBody) {
+      existingBody.textContent = '';
+      existingBody.appendChild(content);
+      return;
+    }
+
+    Modal.open(modalId, {
       title: this._buildModalTitle(),
       content,
       size: 'lg',
