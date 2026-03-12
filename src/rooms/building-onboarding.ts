@@ -245,12 +245,30 @@ function provisionPhaseRoom({
     roomId = (createResult.data as { id: string }).id;
   }
 
-  // 4. Register the agent
+  // 4. Register the agent (with dedup check)
+  const existingAgents = agents.listAgents({ roomId });
+  const alreadyRegistered = existingAgents.find(
+    (a) => a.name === mapping.agentName && a.role === mapping.agentRole,
+  );
+
+  if (alreadyRegistered) {
+    log.info(
+      { agentId: alreadyRegistered.id, name: mapping.agentName },
+      'Agent already exists for this room — reusing',
+    );
+    return {
+      success: true,
+      roomId,
+      agentId: alreadyRegistered.id,
+      roomType: mapping.roomType,
+    };
+  }
+
   const agentResult = agents.registerAgent({
     name: mapping.agentName,
     role: mapping.agentRole,
     capabilities: ['chat', 'analysis'],
-    roomAccess: [mapping.roomType, '*'], // Access to this room type + wildcard
+    roomAccess: [mapping.roomType], // Scoped to this room type only
     buildingId,
   });
 
@@ -264,7 +282,7 @@ function provisionPhaseRoom({
   const enterResult = rooms.enterRoom({
     roomId,
     agentId,
-    tableType: Object.keys(PHASE_ROOM_MAP[phase] ? getDefaultTable(mapping.roomType) : { focus: true })[0] || 'focus',
+    tableType: Object.keys(getDefaultTable(mapping.roomType))[0] || 'focus',
   });
 
   if (!enterResult.ok) {

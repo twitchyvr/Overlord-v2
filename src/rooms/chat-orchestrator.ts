@@ -83,18 +83,25 @@ async function handleChatMessage(
   }
 
   // Build a conversation key to prevent duplicate processing
-  const conversationKey = `${socketId}:${roomId}:${Date.now()}`;
+  const conversationKey = `${socketId}:${roomId}`;
   if (activeConversations.has(conversationKey)) {
-    log.warn({ conversationKey }, 'Duplicate conversation — skipping');
+    log.warn({ conversationKey }, 'Duplicate conversation in progress — skipping');
     return;
   }
+
+  // Safety cap: prevent unbounded growth if cleanup fails
+  if (activeConversations.size > 500) {
+    log.warn({ size: activeConversations.size }, 'Active conversations set exceeded cap — clearing stale entries');
+    activeConversations.clear();
+  }
+
   activeConversations.add(conversationKey);
 
   try {
     // 1. Resolve the room — find the active room instance
     let room: BaseRoomLike | null = null;
     let resolvedAgentId = agentId;
-    let provider = 'minimax'; // Default provider
+    let provider = ''; // Resolved below from room config or API key detection
 
     if (roomId) {
       room = rooms.getRoom(roomId);

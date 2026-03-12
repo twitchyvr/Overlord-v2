@@ -173,12 +173,8 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       }
 
       log.error({ error: aiError, agentId, roomId: room.id, retries }, 'AI request failed');
-      bus.emit('chat:response', {
-        agentId,
-        roomId: room.id,
-        type: 'error',
-        error: { code: aiError.code || 'AI_FAILURE', message: aiError.message || 'AI provider failed' },
-      });
+      // Don't emit chat:response here — the orchestrator handles error emission
+      // to avoid duplicate error messages reaching the frontend
       return aiResult as Result<ConversationResult>;
     }
 
