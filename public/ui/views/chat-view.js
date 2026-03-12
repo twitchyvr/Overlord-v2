@@ -10,9 +10,77 @@
 
 import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
-import { h, setTrustedContent, escapeHtml, formatTime } from '../engine/helpers.js';
+import { h, setTrustedContent, escapeHtml, formatTime, debounce } from '../engine/helpers.js';
 import { TokenInput } from '../components/token-input.js';
 import { Table } from '../components/table.js';
+
+
+/**
+ * Fuzzy-match scorer.  Returns a score ≥ 0 if needle matches haystack,
+ * or -1 if it doesn't.  Higher scores = better match.
+ *
+ * Scoring:
+ *   +10  exact match (haystack === needle)
+ *   +5   prefix match (haystack starts with needle)
+ *   +3   consecutive character run bonus (per consecutive char after first)
+ *   +1   per matched character
+ *   -0   characters that aren't matched don't penalize (they just don't add)
+ */
+function fuzzyScore(needle, haystack) {
+  if (!needle) return 1;                    // empty query matches everything
+  const n = needle.toLowerCase();
+  const h2 = haystack.toLowerCase();
+  if (h2 === n) return 100;                 // exact
+  if (h2.startsWith(n)) return 50 + n.length; // prefix
+
+  let score = 0;
+  let hi = 0;
+  let consecutive = 0;
+  for (let ni = 0; ni < n.length; ni++) {
+    const ch = n[ni];
+    let found = false;
+    while (hi < h2.length) {
+      if (h2[hi] === ch) {
+        score += 1 + (consecutive > 0 ? 3 : 0);
+        consecutive++;
+        hi++;
+        found = true;
+        break;
+      }
+      consecutive = 0;
+      hi++;
+    }
+    if (!found) return -1;                  // needle char not in haystack
+  }
+  return score;
+}
+
+/**
+ * Filter + rank an array of suggestion objects by fuzzy match.
+ * Each object must have a `label` string.
+ * Optionally matches against `description` as a secondary signal.
+ */
+function fuzzyFilter(items, query, labelKey = 'label') {
+  if (!query) return items;
+  const scored = [];
+  for (const item of items) {
+    let best = fuzzyScore(query, item[labelKey] || '');
+    // Also check aliases (commands) or description as fallback
+    if (best < 0 && item.aliases) {
+      for (const alias of item.aliases) {
+        const s = fuzzyScore(query, alias);
+        if (s > best) best = s;
+      }
+    }
+    if (best < 0 && item.description) {
+      const ds = fuzzyScore(query, item.description);
+      if (ds >= 0) best = Math.max(0, ds - 5);  // description match scored lower
+    }
+    if (best >= 0) scored.push({ item, score: best });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map(s => s.item);
+}
 
 
 export class ChatView extends Component {
@@ -24,6 +92,16 @@ export class ChatView extends Component {
     this._scrollLocked = true;   // auto-scroll when at bottom
     this._streamingMessage = null; // element being streamed into
     this._streamBuffer = '';      // accumulated stream text
+
+    // Token suggestion caches (populated on first fetch, cleared on reconnect)
+    this._cmdCache = null;
+    this._agentCache = null;
+    this._refCache = null;
+
+    // Debounced trigger handler (150 ms)
+    this._debouncedTrigger = debounce((type, query) => {
+      this._resolveTokenSuggestions(type, query);
+    }, 150);
   }
 
   mount() {
@@ -53,6 +131,12 @@ export class ChatView extends Component {
         this._handleResponse(data);
       })
     );
+
+    // Invalidate suggestion caches when underlying data changes
+    this.subscribe(store, 'commands.list', () => { this._cmdCache = null; });
+    this.subscribe(store, 'agents.list', () => { this._agentCache = null; });
+    this.subscribe(store, 'rooms.list', () => { this._refCache = null; });
+    this.subscribe(store, 'raid.entries', () => { this._refCache = null; });
   }
 
   _render() {
@@ -343,74 +427,150 @@ export class ChatView extends Component {
 
   // ── Token Handling ───────────────────────────────────────────
 
-  async _handleTokenTrigger(type, query) {
+  /**
+   * Called by TokenInput on every keystroke after a trigger char.
+   * Delegates to the debounced resolver so rapid typing doesn't
+   * fire excessive server fetches.
+   */
+  _handleTokenTrigger(type, query) {
+    this._debouncedTrigger(type, query);
+  }
+
+  /**
+   * Resolve suggestions for a token trigger.
+   *
+   * Strategy per type:
+   *   1. On first invocation, fetch from server and cache.
+   *   2. On subsequent invocations, filter the cache with fuzzy matching.
+   *   3. If the server returns empty, fall back to a static list.
+   */
+  async _resolveTokenSuggestions(type, query) {
     const store = OverlordUI.getStore();
     if (!store || !this._tokenInput) return;
 
     let suggestions = [];
-    const q = query.toLowerCase();
 
     if (type === 'command') {
-      // Try to use server commands, fall back to static list
-      let commands = store.get('commands.list');
-      if (!commands && window.overlordSocket) {
-        await window.overlordSocket.fetchCommands();
-        commands = store.get('commands.list');
-      }
+      // ── Fetch + cache commands ──────────────────────────
+      if (!this._cmdCache) {
+        let commands = store.get('commands.list');
+        if (!commands && window.overlordSocket) {
+          await window.overlordSocket.fetchCommands();
+          commands = store.get('commands.list');
+        }
 
-      if (commands && commands.length > 0) {
-        suggestions = commands
-          .filter(c => c.name.startsWith(q) || (c.aliases || []).some(a => a.startsWith(q)))
-          .map(c => ({
+        if (commands && commands.length > 0) {
+          this._cmdCache = commands.map(c => ({
             id: c.id || c.name,
             label: c.name,
-            description: c.description,
-            icon: '/'
+            description: c.description || '',
+            aliases: c.aliases || [],
+            icon: this._commandIcon(c.name)
           }));
-      } else {
-        // Static fallback
-        const staticCmds = [
-          { id: 'help', label: 'help', description: 'Show available commands', icon: '/' },
-          { id: 'status', label: 'status', description: 'Show project status', icon: '/' },
-          { id: 'phase', label: 'phase', description: 'Show current phase info', icon: '/' },
-          { id: 'agents', label: 'agents', description: 'List all agents', icon: '/' },
-          { id: 'raid', label: 'raid', description: 'Show RAID log summary', icon: '/' },
-          { id: 'rooms', label: 'rooms', description: 'List active rooms', icon: '/' },
-          { id: 'deploy', label: 'deploy', description: 'Start deploy phase', icon: '/' },
-          { id: 'review', label: 'review', description: 'Start review phase', icon: '/' }
-        ];
-        suggestions = staticCmds.filter(c => c.label.startsWith(q));
+        } else {
+          // Static fallback
+          this._cmdCache = [
+            { id: 'help',    label: 'help',    description: 'Show available commands',  icon: '\u2753' },
+            { id: 'status',  label: 'status',  description: 'Show project status',      icon: '\u{1F4CA}' },
+            { id: 'phase',   label: 'phase',   description: 'Show current phase info',  icon: '\u{1F3AF}' },
+            { id: 'agents',  label: 'agents',  description: 'List all agents',          icon: '\u{1F916}' },
+            { id: 'raid',    label: 'raid',    description: 'Show RAID log summary',    icon: '\u26A0\uFE0F' },
+            { id: 'rooms',   label: 'rooms',   description: 'List active rooms',        icon: '\u{1F3E0}' },
+            { id: 'deploy',  label: 'deploy',  description: 'Start deploy phase',       icon: '\u{1F680}' },
+            { id: 'review',  label: 'review',  description: 'Start review phase',       icon: '\u{1F50D}' },
+            { id: 'build',   label: 'build',   description: 'Start build process',      icon: '\u{1F528}' },
+            { id: 'test',    label: 'test',     description: 'Run tests',               icon: '\u2705' }
+          ];
+        }
       }
+      suggestions = fuzzyFilter(this._cmdCache, query);
 
     } else if (type === 'agent') {
-      // Agent list from store
-      const agents = store.get('agents.list') || [];
-      suggestions = agents
-        .filter(a => (a.name || '').toLowerCase().startsWith(q))
-        .map(a => ({ id: a.id, label: a.name, description: a.role, icon: '\u{1F916}' }));
+      // ── Fetch + cache agents ────────────────────────────
+      if (!this._agentCache) {
+        const agents = store.get('agents.list') || [];
+        this._agentCache = agents.map(a => ({
+          id: a.id,
+          label: a.name || a.id,
+          description: a.role || a.specialization || '',
+          icon: this._agentIcon(a)
+        }));
+        // If store was empty, try to trigger a fetch for next time
+        if (this._agentCache.length === 0 && window.overlordSocket && window.overlordSocket.fetchAgents) {
+          window.overlordSocket.fetchAgents();
+          // Don't await — the cache will repopulate on next trigger
+          this._agentCache = null;
+        }
+      }
+      suggestions = fuzzyFilter(this._agentCache || [], query);
+
+      // Graceful fallback if still empty
+      if (suggestions.length === 0 && !query) {
+        suggestions = [{ id: '_no_agents', label: 'No agents loaded', description: 'Start a project to spawn agents', icon: '\u{1F916}' }];
+      }
 
     } else if (type === 'reference') {
-      // Room references from store
-      const rooms = store.get('rooms.list') || [];
-      suggestions = rooms
-        .filter(r => (r.type || r.name || '').toLowerCase().startsWith(q))
-        .map(r => ({ id: r.id, label: r.name || r.type, description: `Room: ${r.type}`, icon: '\u{1F3E0}' }));
+      // ── Fetch + cache references ────────────────────────
+      if (!this._refCache) {
+        const rooms = store.get('rooms.list') || [];
+        const raidEntries = store.get('raid.entries') || [];
 
-      // Add RAID entries as references
-      const raidEntries = store.get('raid.entries') || [];
-      const raidSuggestions = raidEntries
-        .filter(e => (e.title || e.summary || '').toLowerCase().includes(q) || (e.id || '').includes(q))
-        .slice(0, 5)
-        .map(e => ({ id: e.id, label: e.id, description: `${e.type}: ${e.title || e.summary || ''}`, icon: '\u26A0' }));
-      suggestions = [...suggestions, ...raidSuggestions];
-
-      // Add RAID log as a general reference
-      if ('raid-log'.startsWith(q) || 'raid'.startsWith(q)) {
-        suggestions.push({ id: 'raid-log', label: 'raid-log', description: 'RAID Log', icon: '\u26A0' });
+        this._refCache = [
+          // Rooms
+          ...rooms.map(r => ({
+            id: r.id,
+            label: r.name || r.type,
+            description: `Room: ${r.type}`,
+            icon: '\u{1F3E0}'
+          })),
+          // RAID entries
+          ...raidEntries.slice(0, 20).map(e => ({
+            id: e.id,
+            label: e.id,
+            description: `${e.type}: ${e.title || e.summary || ''}`,
+            icon: '\u26A0\uFE0F'
+          })),
+          // Static references
+          { id: 'raid-log', label: 'raid-log', description: 'RAID Log', icon: '\u{1F4D3}' }
+        ];
       }
+      suggestions = fuzzyFilter(this._refCache, query);
     }
 
     this._tokenInput.setSuggestions(suggestions);
+  }
+
+  /** Map a command name to a contextual icon. */
+  _commandIcon(name) {
+    const map = {
+      help: '\u2753', status: '\u{1F4CA}', phase: '\u{1F3AF}',
+      agents: '\u{1F916}', raid: '\u26A0\uFE0F', rooms: '\u{1F3E0}',
+      deploy: '\u{1F680}', review: '\u{1F50D}', build: '\u{1F528}',
+      test: '\u2705', config: '\u2699\uFE0F', clear: '\u{1F9F9}',
+      history: '\u{1F4DC}', export: '\u{1F4E4}', import: '\u{1F4E5}'
+    };
+    return map[name] || '\u{1F4BB}';
+  }
+
+  /** Choose an icon for an agent based on role/specialization. */
+  _agentIcon(agent) {
+    const role = (agent.role || agent.specialization || '').toLowerCase();
+    if (role.includes('architect'))  return '\u{1F3D7}\uFE0F';
+    if (role.includes('strateg'))   return '\u{1F9E0}';
+    if (role.includes('code') || role.includes('develop')) return '\u{1F4BB}';
+    if (role.includes('test') || role.includes('qa'))      return '\u{1F9EA}';
+    if (role.includes('deploy') || role.includes('ops'))   return '\u{1F680}';
+    if (role.includes('design') || role.includes('ux'))    return '\u{1F3A8}';
+    if (role.includes('security'))  return '\u{1F6E1}\uFE0F';
+    if (role.includes('review'))    return '\u{1F50D}';
+    return '\u{1F916}';
+  }
+
+  /** Invalidate suggestion caches (call on reconnect or data refresh). */
+  invalidateSuggestionCaches() {
+    this._cmdCache = null;
+    this._agentCache = null;
+    this._refCache = null;
   }
 
   // ── Send ─────────────────────────────────────────────────────

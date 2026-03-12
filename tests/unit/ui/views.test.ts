@@ -305,6 +305,139 @@ describe('ChatView', () => {
     expect(messageEls[0].classList.contains('chat-message-user')).toBe(true);
     expect(messageEls[1].classList.contains('chat-message-assistant')).toBe(true);
   });
+  it('uses fuzzy matching for command suggestions', async () => {
+    const { ChatView } = await import('../../../public/ui/views/chat-view.js');
+    const el = document.createElement('div');
+    const view = new ChatView(el);
+    view.mount();
+
+    // Pre-populate the command cache with known commands
+    (view as any)._cmdCache = [
+      { id: 'deploy', label: 'deploy', description: 'Start deploy phase', icon: '🚀' },
+      { id: 'status', label: 'status', description: 'Show project status', icon: '📊' },
+      { id: 'agents', label: 'agents', description: 'List all agents', icon: '🤖' },
+      { id: 'raid',   label: 'raid',   description: 'Show RAID log summary', icon: '⚠️' }
+    ];
+
+    // Call the internal resolver directly (bypass debounce)
+    await (view as any)._resolveTokenSuggestions('command', 'dpl');
+
+    // Fuzzy match: "dpl" should match "deploy" (d-e-p-l-o-y contains d, p, l in order)
+    const tokenInput = (view as any)._tokenInput;
+    const suggestions = tokenInput._suggestions;
+    expect(suggestions.length).toBeGreaterThan(0);
+    expect(suggestions[0].label).toBe('deploy');
+  });
+
+  it('fuzzy-matches agent suggestions by role/description', async () => {
+    const { ChatView } = await import('../../../public/ui/views/chat-view.js');
+    const el = document.createElement('div');
+    const view = new ChatView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('agents.list', [
+      { id: 'a1', name: 'strategist', role: 'Strategic planning', specialization: '' },
+      { id: 'a2', name: 'coder', role: 'Code development', specialization: '' },
+      { id: 'a3', name: 'tester', role: 'Quality assurance', specialization: '' }
+    ]);
+
+    // Force cache rebuild
+    (view as any)._agentCache = null;
+    await (view as any)._resolveTokenSuggestions('agent', 'str');
+
+    const suggestions = (view as any)._tokenInput._suggestions;
+    expect(suggestions.length).toBeGreaterThan(0);
+    expect(suggestions[0].label).toBe('strategist');
+  });
+
+  it('debounces token trigger calls', async () => {
+    const { ChatView } = await import('../../../public/ui/views/chat-view.js');
+    const el = document.createElement('div');
+    const view = new ChatView(el);
+    view.mount();
+
+    // Pre-populate cache
+    (view as any)._cmdCache = [
+      { id: 'help', label: 'help', description: 'Help', icon: '❓' }
+    ];
+
+    // Rapid-fire calls should be debounced
+    (view as any)._handleTokenTrigger('command', 'h');
+    (view as any)._handleTokenTrigger('command', 'he');
+    (view as any)._handleTokenTrigger('command', 'hel');
+
+    // Suggestions shouldn't be set yet (debounce is 150ms)
+    const immediateCount = (view as any)._tokenInput._suggestions.length;
+    expect(immediateCount).toBe(0);
+
+    // Wait for debounce to fire
+    await new Promise(r => setTimeout(r, 200));
+
+    // Now the suggestions should be populated
+    const afterDebounce = (view as any)._tokenInput._suggestions;
+    expect(afterDebounce.length).toBeGreaterThan(0);
+    expect(afterDebounce[0].label).toBe('help');
+  });
+
+  it('invalidates caches when store data changes', async () => {
+    const { ChatView } = await import('../../../public/ui/views/chat-view.js');
+    const el = document.createElement('div');
+    const view = new ChatView(el);
+    view.mount();
+
+    // Manually set caches
+    (view as any)._cmdCache = [{ id: 'old', label: 'old' }];
+    (view as any)._agentCache = [{ id: 'old', label: 'old' }];
+    (view as any)._refCache = [{ id: 'old', label: 'old' }];
+
+    const store = OverlordUI.getStore();
+
+    // Changing commands.list should clear command cache
+    store.set('commands.list', []);
+    expect((view as any)._cmdCache).toBeNull();
+
+    // Changing agents.list should clear agent cache
+    store.set('agents.list', []);
+    expect((view as any)._agentCache).toBeNull();
+
+    // Changing rooms.list should clear reference cache
+    store.set('rooms.list', []);
+    expect((view as any)._refCache).toBeNull();
+  });
+
+  it('uses contextual icons for commands', async () => {
+    const { ChatView } = await import('../../../public/ui/views/chat-view.js');
+    const el = document.createElement('div');
+    const view = new ChatView(el);
+
+    expect((view as any)._commandIcon('deploy')).toBe('\u{1F680}');
+    expect((view as any)._commandIcon('agents')).toBe('\u{1F916}');
+    expect((view as any)._commandIcon('unknown_cmd')).toBe('\u{1F4BB}');
+  });
+
+  it('provides static fallback when server returns empty commands', async () => {
+    const { ChatView } = await import('../../../public/ui/views/chat-view.js');
+    const el = document.createElement('div');
+    const view = new ChatView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('commands.list', null);
+
+    // No socket available — should use static fallback
+    (view as any)._cmdCache = null;
+    const origSocket = window.overlordSocket;
+    (window as any).overlordSocket = null;
+    await (view as any)._resolveTokenSuggestions('command', '');
+    (window as any).overlordSocket = origSocket;
+
+    const suggestions = (view as any)._tokenInput._suggestions;
+    expect(suggestions.length).toBeGreaterThanOrEqual(8);
+    // Should include well-known commands
+    expect(suggestions.some((s: any) => s.label === 'help')).toBe(true);
+    expect(suggestions.some((s: any) => s.label === 'deploy')).toBe(true);
+  });
 });
 
 // ─── DashboardView ──────────────────────────────────────────
