@@ -18,6 +18,7 @@
 /* ── Floor bar ── */
 .floor-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
@@ -645,6 +646,182 @@
   color: var(--text-muted);
   margin-left: auto;
   white-space: nowrap;
+}
+
+/* ── Building header layout (updated for management controls) ── */
+.building-header {
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.building-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.building-header-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+/* ── Floor action bar ── */
+.floor-action-bar {
+  display: flex;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  padding-left: var(--sp-4);
+  border-top: 1px solid var(--border-secondary);
+  margin-top: var(--sp-2);
+}
+
+/* Danger ghost button */
+.btn-danger-ghost {
+  color: var(--accent-red, #ef4444) !important;
+}
+.btn-danger-ghost:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
+/* Danger solid button */
+.btn-danger {
+  background: var(--accent-red, #ef4444);
+  color: white;
+  border: none;
+}
+.btn-danger:hover {
+  background: color-mix(in srgb, var(--accent-red, #ef4444) 85%, black);
+}
+
+/* ── Room card action buttons ── */
+.room-card-actions {
+  position: absolute;
+  top: var(--sp-1);
+  right: var(--sp-1);
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-default);
+  z-index: 2;
+}
+.room-card:hover .room-card-actions {
+  opacity: 1;
+}
+.room-action-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  border: none;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.room-action-btn:hover {
+  background: var(--bg-tertiary);
+}
+.room-action-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+/* ── Management modal shared styles ── */
+.edit-floor-modal,
+.edit-room-modal,
+.edit-building-modal,
+.add-floor-modal,
+.confirm-delete-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+}
+
+.form-input-readonly {
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.form-input-readonly.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  word-break: break-all;
+}
+.form-hint {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: var(--sp-1);
+}
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* Edit floor room summary */
+.edit-floor-rooms-summary {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-secondary);
+}
+.edit-floor-room-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--sp-2) 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.edit-floor-room-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+.edit-floor-room-type {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+/* Confirm delete styling */
+.confirm-delete-message {
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  margin: 0;
+}
+.confirm-delete-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--accent-red, #ef4444);
+}
+.confirm-delete-warning-icon {
+  flex-shrink: 0;
+  font-size: var(--text-base);
+}
+
+/* Edit building summary */
+.edit-building-summary {
+  display: flex;
+  justify-content: space-around;
+  padding: var(--sp-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
 }
 
 /* Building foundation */

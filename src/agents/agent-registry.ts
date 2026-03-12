@@ -8,14 +8,20 @@
  */
 
 import { getDb } from '../storage/db.js';
-import { logger } from '../core/logger.js';
+import { logger, broadcastLog } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
 import type { Result, AgentRow, ParsedAgent, AgentRegistryAPI, AgentProfileFields, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Bus } from '../core/bus.js';
 import { parseBadge, serializeBadge, validateBadge } from './security-badge.js';
 import type { SecurityBadge } from './security-badge.js';
+import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
+import { isImageGenerationAvailable } from '../ai/minimax-image.js';
+import { writeAgentPhoto } from '../ai/agent-photo-store.js';
 
 const log = logger.child({ module: 'agent-registry' });
+
+/** Bus reference for emitting events from async operations (e.g., photo generation) */
+let _bus: Bus | null = null;
 
 /**
  * Safely parse a JSON string from the database.
@@ -63,6 +69,8 @@ interface AgentUpdates {
 }
 
 export function initAgents({ bus }: InitAgentsParams): AgentRegistryAPI {
+  _bus = bus;
+
   bus.on('agent:register', (data: Record<string, unknown>) => registerAgent(data as unknown as RegisterAgentParams));
   bus.on('agent:remove', (data: Record<string, unknown>) => removeAgent(data.agentId as string));
 
@@ -124,6 +132,13 @@ export function registerAgent({
   );
 
   log.info({ id, name, role, buildingId, roomAccess, hasBadge: !!badgeStr }, 'Agent registered');
+
+  // Auto-generate profile photo if MiniMax API is configured and no photo was provided.
+  // Runs asynchronously — does not block registration.
+  if (!photoUrl && isImageGenerationAvailable()) {
+    scheduleProfilePhotoGeneration(id, name, role, specialization ?? undefined);
+  }
+
   return ok({ id, name, role });
 }
 
@@ -255,4 +270,76 @@ export function removeAgent(agentId: string): Result {
   db.prepare('DELETE FROM agents WHERE id = ?').run(agentId);
   log.info({ agentId }, 'Agent removed');
   return ok({ id: agentId });
+}
+
+// ─── Auto Profile Photo Generation ───
+
+/**
+ * Schedule asynchronous profile photo generation for a newly registered agent.
+ * Runs in the background — does not block the registration call.
+ * On success, updates the agent's photo_url and emits agent:profile-updated.
+ * On failure, logs a warning but does not affect agent registration.
+ */
+function scheduleProfilePhotoGeneration(
+  agentId: string,
+  agentName: string,
+  role: string,
+  specialization?: string,
+): void {
+  // Use void to explicitly discard the promise (fire-and-forget)
+  void (async () => {
+    try {
+      log.info({ agentId, agentName, role }, 'Starting auto profile photo generation');
+
+      const result = await generateAgentProfilePhoto(agentName, role, specialization);
+
+      if (!result.ok) {
+        log.warn(
+          { agentId, agentName, error: result.error },
+          'Auto profile photo generation failed — agent registered without photo',
+        );
+        return;
+      }
+
+      // Write the photo to disk and get the serving URL
+      const writeResult = writeAgentPhoto(agentId, result.data.base64);
+      if (!writeResult.ok) {
+        log.warn(
+          { agentId, error: writeResult.error },
+          'Failed to write agent photo to disk',
+        );
+        return;
+      }
+
+      const photoUrl = (writeResult.data as { photoUrl: string }).photoUrl;
+
+      // Update the agent's profile with the photo URL
+      const updateResult = updateAgentProfile(agentId, {
+        photoUrl,
+        profileGenerated: true,
+      });
+
+      if (updateResult.ok) {
+        log.info({ agentId, agentName, photoUrl }, 'Auto-generated profile photo saved');
+        broadcastLog('info', `Profile photo auto-generated for "${agentName}"`, 'agent-registry');
+
+        // Emit profile-updated event so connected clients update in real-time
+        if (_bus) {
+          const updatedAgent = getAgent(agentId);
+          _bus.emit('agent:profile-updated', { agentId, profile: updatedAgent });
+        }
+      } else {
+        log.warn(
+          { agentId, error: updateResult.error },
+          'Auto profile photo generated but failed to update agent profile',
+        );
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      log.error(
+        { agentId, agentName, error: message },
+        'Unexpected error during auto profile photo generation',
+      );
+    }
+  })();
 }

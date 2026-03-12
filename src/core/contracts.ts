@@ -254,6 +254,24 @@ export interface RoomManagerAPI {
   listRooms: () => RoomRow[];
   registerRoomType: (type: string, factory: BaseRoomConstructor) => void;
   hydrateRoomsFromDb: () => { activated: number; skipped: number; failed: number };
+  updateRoom: (roomId: string, updates: { name?: string; config?: Record<string, unknown>; allowedTools?: string[]; fileScope?: string; exitTemplate?: Record<string, unknown>; provider?: string }) => Result;
+  deleteRoom: (roomId: string) => Result;
+  updateTable: (tableId: string, updates: { type?: string; chairs?: number; description?: string }) => Result;
+  deleteTable: (tableId: string) => Result;
+}
+
+export interface BuildingManagerAPI {
+  createBuilding: (params: { name: string; projectId?: string; config?: Record<string, unknown>; provisionFloors?: boolean }) => Result;
+  getBuilding: (buildingId: string) => Result;
+  listBuildings: (projectId?: string) => Result;
+  updateBuilding: (buildingId: string, updates: { name?: string; config?: Record<string, unknown> }) => Result;
+  createFloor: (params: { buildingId: string; type: string; name: string; sortOrder?: number; config?: Record<string, unknown> }) => Result;
+  getFloor: (floorId: string) => Result;
+  listFloors: (buildingId: string) => Result;
+  getFloorByType: (buildingId: string, floorType: string) => Result;
+  updateFloor: (floorId: string, updates: { name?: string; sortOrder?: number; config?: Record<string, unknown>; isActive?: boolean }) => Result;
+  deleteFloor: (floorId: string) => Result;
+  sortFloors: (buildingId: string, floorIds: string[]) => Result;
 }
 
 export interface AgentProfileFields {

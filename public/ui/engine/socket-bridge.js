@@ -638,6 +638,26 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithFeedback('room:create', params);
     },
 
+    async updateRoom(roomId, updates) {
+      const res = await _emitWithFeedback('room:update', { roomId, ...updates });
+      if (res && res.ok) {
+        this.fetchRooms();
+        const buildingId = store.get('building.active');
+        if (buildingId) this.fetchFloors(buildingId);
+      }
+      return res;
+    },
+
+    async deleteRoom(roomId) {
+      const res = await _emitWithFeedback('room:delete', { roomId });
+      if (res && res.ok) {
+        store.update('rooms.list', (rooms) => (rooms || []).filter((r) => r.id !== roomId));
+        const buildingId = store.get('building.active');
+        if (buildingId) this.fetchFloors(buildingId);
+      }
+      return res;
+    },
+
     enterRoom(roomId, agentId, tableType) {
       return _emitWithFeedback('room:enter', { roomId, agentId, tableType });
     },
@@ -654,14 +674,98 @@ export function initSocketBridge(socket, store, engine) {
       return res;
     },
 
+    // ── Floor methods ──
+
+    async createFloor(buildingId, type, name, opts = {}) {
+      const res = await _emitWithFeedback('floor:create', { buildingId, type, name, ...opts });
+      if (res && res.ok) {
+        this.fetchFloors(buildingId);
+      }
+      return res;
+    },
+
+    async updateFloor(floorId, updates) {
+      const res = await _emitWithFeedback('floor:update', { floorId, ...updates });
+      if (res && res.ok) {
+        const buildingId = store.get('building.active');
+        if (buildingId) this.fetchFloors(buildingId);
+      }
+      return res;
+    },
+
+    async deleteFloor(floorId) {
+      const res = await _emitWithFeedback('floor:delete', { floorId });
+      if (res && res.ok) {
+        const buildingId = store.get('building.active');
+        if (buildingId) this.fetchFloors(buildingId);
+      }
+      return res;
+    },
+
+    async sortFloors(buildingId, floorIds) {
+      const res = await _emitWithFeedback('floor:sort', { buildingId, floorIds });
+      if (res && res.ok) {
+        this.fetchFloors(buildingId);
+      }
+      return res;
+    },
+
+    // ── Building update ──
+
+    async updateBuilding(buildingId, updates) {
+      const res = await _emitWithFeedback('building:update', { buildingId, ...updates });
+      if (res && res.ok) {
+        store.update('building.data', (data) => data ? { ...data, ...updates } : data);
+        store.update('building.list', (list) => {
+          const arr = list || [];
+          const idx = arr.findIndex((b) => b.id === buildingId);
+          if (idx >= 0) {
+            const next = [...arr];
+            next[idx] = { ...next[idx], ...updates };
+            return next;
+          }
+          return arr;
+        });
+      }
+      return res;
+    },
+
+    // ── Table methods ──
+
     async createTable(roomId, type, chairs = 1, description) {
       return _emitWithFeedback('table:create', { roomId, type, chairs, description });
+    },
+
+    async updateTable(tableId, updates) {
+      return _emitWithFeedback('table:update', { tableId, ...updates });
+    },
+
+    async deleteTable(tableId) {
+      return _emitWithFeedback('table:delete', { tableId });
     },
 
     fetchTables(roomId) {
       return new Promise((resolve) => {
         socket.emit('table:list', { roomId }, (res) => resolve(res));
       });
+    },
+
+    // ── Agent profile methods ──
+
+    async updateAgentProfile(agentId, profile) {
+      const res = await _emitWithFeedback('agent:update-profile', { agentId, ...profile });
+      if (res && res.ok) {
+        this.fetchAgents({});
+      }
+      return res;
+    },
+
+    async generateAgentPhoto(agentId) {
+      return _emitWithFeedback('agent:generate-photo', { agentId });
+    },
+
+    async generateAgentProfile(agentId) {
+      return _emitWithFeedback('agent:generate-profile', { agentId });
     },
 
     sendMessage(params) {
