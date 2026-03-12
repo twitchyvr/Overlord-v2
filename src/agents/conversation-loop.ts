@@ -63,6 +63,7 @@ export interface ConversationResult {
   totalTokens: { input: number; output: number };
   iterations: number;
   sessionId: string;
+  maxIterationsReached?: boolean;
 }
 
 interface ConversationParams {
@@ -348,12 +349,8 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
   if (iteration >= MAX_TOOL_ITERATIONS) {
     log.warn({ iterations: iteration, agentId, roomId: room.id }, 'Max tool iterations reached');
-    bus.emit('chat:response', {
-      agentId,
-      roomId: room.id,
-      type: 'warning',
-      content: [{ type: 'text', text: `[Warning: maximum tool iterations (${MAX_TOOL_ITERATIONS}) reached. Response may be incomplete.]` }],
-    });
+    // Don't emit chat:response here — the orchestrator handles all response emission
+    // to avoid double-sending messages to the frontend
   }
 
   // Extract final text from last assistant message
@@ -384,6 +381,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       totalTokens,
       iterations: iteration,
       sessionId: session.id,
+      maxIterationsReached: iteration >= MAX_TOOL_ITERATIONS,
     },
   };
 }

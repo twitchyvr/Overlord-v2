@@ -282,7 +282,7 @@ function provisionPhaseRoom({
   const enterResult = rooms.enterRoom({
     roomId,
     agentId,
-    tableType: Object.keys(getDefaultTable(mapping.roomType))[0] || 'focus',
+    tableType: Object.keys(getDefaultTable(mapping.roomType))[0],
   });
 
   if (!enterResult.ok) {

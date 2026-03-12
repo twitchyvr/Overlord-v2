@@ -616,14 +616,11 @@ describe('Conversation Loop', () => {
       expect(result.data.toolCalls.length).toBe(20);
     }
 
-    // Should emit a chat:response warning about max iterations
-    const warningEvent = busEvents.find(
-      (e) => e.event === 'chat:response' && (e.data as Record<string, unknown>)?.type === 'warning',
-    );
-    expect(warningEvent).toBeDefined();
-    const content = (warningEvent!.data as Record<string, unknown>).content as Array<{ text: string }>;
-    expect(content[0].text).toContain('maximum tool iterations');
-    expect(content[0].text).toContain('20');
+    // Should set maxIterationsReached flag instead of emitting its own chat:response
+    // (orchestrator handles all response emission to avoid double-sending)
+    if (result.ok) {
+      expect(result.data.maxIterationsReached).toBe(true);
+    }
   });
 
   it('calls onAfterToolCall after successful tool execution', async () => {
