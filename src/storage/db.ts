@@ -77,6 +77,13 @@ const SCHEMA_SQL = `
     current_room_id TEXT REFERENCES rooms(id),
     current_table_id TEXT REFERENCES tables_v2(id),
     config TEXT DEFAULT '{}',
+    first_name TEXT,
+    last_name TEXT,
+    display_name TEXT,
+    bio TEXT,
+    photo_url TEXT,
+    specialization TEXT,
+    profile_generated INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
@@ -230,6 +237,13 @@ const SCHEMA_SQL = `
  */
 const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['agents', 'building_id', 'TEXT REFERENCES buildings(id)'],
+  ['agents', 'first_name', 'TEXT'],
+  ['agents', 'last_name', 'TEXT'],
+  ['agents', 'display_name', 'TEXT'],
+  ['agents', 'bio', 'TEXT'],
+  ['agents', 'photo_url', 'TEXT'],
+  ['agents', 'specialization', 'TEXT'],
+  ['agents', 'profile_generated', 'INTEGER DEFAULT 0'],
 ];
 
 /**

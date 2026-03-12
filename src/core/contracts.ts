@@ -138,6 +138,13 @@ export interface AgentRow {
   current_room_id: string | null;
   current_table_id: string | null;
   config: string;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string | null;
+  bio: string | null;
+  photo_url: string | null;
+  specialization: string | null;
+  profile_generated: number;
   created_at: string;
   updated_at: string;
 }
@@ -249,16 +256,29 @@ export interface RoomManagerAPI {
   hydrateRoomsFromDb: () => { activated: number; skipped: number; failed: number };
 }
 
+export interface AgentProfileFields {
+  firstName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null;
+  bio?: string | null;
+  photoUrl?: string | null;
+  specialization?: string | null;
+  profileGenerated?: boolean;
+}
+
 export interface AgentRegistryAPI {
   registerAgent: (params: {
     name: string; role: string; capabilities?: string[];
     roomAccess?: string[]; badge?: string | null; config?: Record<string, unknown>;
     buildingId?: string | null;
+    firstName?: string | null; lastName?: string | null; displayName?: string | null;
+    bio?: string | null; photoUrl?: string | null; specialization?: string | null;
   }) => Result;
   removeAgent: (agentId: string) => Result;
   getAgent: (agentId: string) => ParsedAgent | null;
   listAgents: (filters?: { status?: string; roomId?: string; buildingId?: string }) => ParsedAgent[];
   updateAgent: (agentId: string, updates: Record<string, unknown>) => Result;
+  updateAgentProfile: (agentId: string, profile: AgentProfileFields) => Result;
 }
 
 export interface ToolRegistryAPI {
@@ -292,6 +312,13 @@ export interface ParsedAgent {
   current_room_id: string | null;
   current_table_id: string | null;
   config: Record<string, unknown>;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string | null;
+  bio: string | null;
+  photo_url: string | null;
+  specialization: string | null;
+  profile_generated: boolean;
   created_at: string;
   updated_at: string;
 }

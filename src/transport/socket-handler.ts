@@ -32,7 +32,7 @@ import {
   FloorListSchema, FloorGetSchema,
   RoomCreateSchema, RoomGetSchema, RoomEnterSchema, RoomExitSchema,
   TableCreateSchema, TableListSchema, AgentMoveSchema,
-  AgentRegisterSchema, AgentGetSchema, AgentListSchema,
+  AgentRegisterSchema, AgentGetSchema, AgentListSchema, AgentUpdateProfileSchema,
   ChatMessageSchema,
   EmptyPayloadSchema, PhaseStatusSchema, PhaseGateSchema,
   PhaseGatesSchema, PhaseCanAdvanceSchema, PhasePendingGatesSchema,
@@ -354,6 +354,24 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
     handle(socket, 'agent:list', AgentListSchema, (parsed, ack) => {
       if (ack) ack({ ok: true, data: agents.listAgents(parsed as Parameters<typeof agents.listAgents>[0]) });
+    });
+
+    handle(socket, 'agent:update-profile', AgentUpdateProfileSchema, (parsed, ack) => {
+      const result = agents.updateAgentProfile(parsed.agentId, {
+        firstName: parsed.firstName,
+        lastName: parsed.lastName,
+        displayName: parsed.displayName,
+        bio: parsed.bio,
+        photoUrl: parsed.photoUrl,
+        specialization: parsed.specialization,
+        profileGenerated: parsed.profileGenerated,
+      });
+      if (result.ok) {
+        const updatedAgent = agents.getAgent(parsed.agentId);
+        bus.emit('agent:profile-updated', { agentId: parsed.agentId, profile: updatedAgent });
+        broadcastLog('info', `Agent profile updated: ${parsed.agentId}`, 'agents');
+      }
+      if (ack) ack(result);
     });
 
     // ─── Command List ───
@@ -968,6 +986,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   forward('scope-change:detected');
   forward('agent:mentioned');
   forward('agent:status-changed');
+  forward('agent:profile-updated');
   forward('building:updated');
   forward('deploy:check');
   forward('task:created');
