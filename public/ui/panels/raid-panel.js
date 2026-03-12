@@ -11,6 +11,7 @@ import { OverlordUI } from '../engine/engine.js';
 import { h, formatTime } from '../engine/helpers.js';
 import { DrillItem } from '../components/drill-item.js';
 import { SearchInput } from '../components/search-input.js';
+import { Toast } from '../components/toast.js';
 
 
 const RAID_TYPES = [
@@ -34,6 +35,7 @@ export class RaidPanel extends PanelComponent {
     this._searchQuery = '';
     this._activeFilters = [];
     this._buildingId = null;
+    this._showCreateForm = false;
   }
 
   mount() {
@@ -71,6 +73,23 @@ export class RaidPanel extends PanelComponent {
     const body = this.$('.panel-body');
     if (!body) return;
     body.textContent = '';
+
+    // New Entry button
+    if (this._buildingId) {
+      const headerRow = h('div', { class: 'raid-header-row' });
+      const newBtn = h('button', { class: 'btn btn-primary btn-xs' }, '+ New Entry');
+      newBtn.addEventListener('click', () => {
+        this._showCreateForm = !this._showCreateForm;
+        this._renderContent();
+      });
+      headerRow.appendChild(newBtn);
+      body.appendChild(headerRow);
+    }
+
+    // Create form
+    if (this._showCreateForm) {
+      body.appendChild(this._buildCreateForm());
+    }
 
     // Search + filter
     const searchContainer = h('div', null);
@@ -170,6 +189,110 @@ export class RaidPanel extends PanelComponent {
     }
 
     body.appendChild(list);
+  }
+
+  _buildCreateForm() {
+    const form = h('div', { class: 'raid-create-form' });
+
+    // Type selector
+    const typeRow = h('div', { class: 'form-row' },
+      h('label', null, 'Type')
+    );
+    const typeSelect = h('select', { class: 'form-input' });
+    for (const t of RAID_TYPES) {
+      typeSelect.appendChild(h('option', { value: t.id }, t.label.slice(0, -1)));
+    }
+    typeRow.appendChild(typeSelect);
+    form.appendChild(typeRow);
+
+    // Summary
+    const summaryRow = h('div', { class: 'form-row' },
+      h('label', null, 'Summary')
+    );
+    const summaryInput = h('textarea', {
+      class: 'form-input',
+      rows: '3',
+      placeholder: 'Describe the risk, assumption, issue, or dependency...'
+    });
+    summaryRow.appendChild(summaryInput);
+    form.appendChild(summaryRow);
+
+    // Rationale
+    const rationaleRow = h('div', { class: 'form-row' },
+      h('label', null, 'Rationale')
+    );
+    const rationaleInput = h('input', {
+      type: 'text',
+      class: 'form-input',
+      placeholder: 'Why is this important? (optional)'
+    });
+    rationaleRow.appendChild(rationaleInput);
+    form.appendChild(rationaleRow);
+
+    // Affected areas
+    const areasRow = h('div', { class: 'form-row' },
+      h('label', null, 'Affected Areas')
+    );
+    const areasInput = h('input', {
+      type: 'text',
+      class: 'form-input',
+      placeholder: 'Comma-separated areas (optional)'
+    });
+    areasRow.appendChild(areasInput);
+    form.appendChild(areasRow);
+
+    // Buttons
+    const btnRow = h('div', { class: 'form-row form-actions' });
+    const submitBtn = h('button', { class: 'btn btn-primary btn-sm' }, 'Add Entry');
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-sm' }, 'Cancel');
+
+    submitBtn.addEventListener('click', () => {
+      this._handleCreate({
+        type: typeSelect.value,
+        summary: summaryInput.value.trim(),
+        rationale: rationaleInput.value.trim(),
+        affectedAreas: areasInput.value.trim().split(',').map(s => s.trim()).filter(Boolean),
+      });
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      this._showCreateForm = false;
+      this._renderContent();
+    });
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(submitBtn);
+    form.appendChild(btnRow);
+
+    return form;
+  }
+
+  async _handleCreate({ type, summary, rationale, affectedAreas }) {
+    if (!summary) {
+      Toast.error('Summary is required');
+      return;
+    }
+    if (!this._buildingId || !window.overlordSocket) return;
+
+    const store = OverlordUI.getStore();
+    const phase = store ? store.get('building.activePhase') || 'strategy' : 'strategy';
+
+    const result = await window.overlordSocket.addRaidEntry({
+      buildingId: this._buildingId,
+      type,
+      phase,
+      summary,
+      rationale: rationale || undefined,
+      affectedAreas: affectedAreas.length > 0 ? affectedAreas : undefined,
+    });
+
+    if (result && result.ok) {
+      Toast.success(`${type} entry added`);
+      this._showCreateForm = false;
+      window.overlordSocket.fetchRaidEntries(this._buildingId);
+    } else {
+      Toast.error(result?.error?.message || 'Failed to add entry');
+    }
   }
 
   _applyFilters() {
