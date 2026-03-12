@@ -1996,10 +1996,7 @@
 .floor-expanded-content {
   padding: var(--sp-3) 0 var(--sp-2);
   animation: fadeIn 0.2s ease;
-}
-.floor-add-room-btn {
-  margin-top: var(--sp-3);
-  width: 100%;
+  flex-basis: 100%;
 }
 .floor-empty-guidance {
   display: flex;

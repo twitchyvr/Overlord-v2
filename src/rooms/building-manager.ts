@@ -244,6 +244,118 @@ export function getFloorByType(buildingId: string, floorType: string): Result {
   return ok({ ...floor, config: safeJsonParse((floor as any).config, {}) });
 }
 
+/**
+ * Update a floor's properties (name, sortOrder, config, isActive).
+ * Does NOT allow changing the floor's type or building — those are identity.
+ */
+export function updateFloor(
+  floorId: string,
+  updates: { name?: string; sortOrder?: number; config?: Record<string, unknown>; isActive?: boolean },
+): Result {
+  const db = getDb();
+  const floor = db.prepare('SELECT * FROM floors WHERE id = ?').get(floorId) as FloorRow | undefined;
+  if (!floor) return err('FLOOR_NOT_FOUND', `Floor ${floorId} does not exist`);
+
+  const fields: string[] = [];
+  const values: unknown[] = [];
+
+  if (updates.name !== undefined) {
+    fields.push('name = ?');
+    values.push(updates.name);
+  }
+  if (updates.sortOrder !== undefined) {
+    fields.push('sort_order = ?');
+    values.push(updates.sortOrder);
+  }
+  if (updates.config !== undefined) {
+    fields.push('config = ?');
+    values.push(JSON.stringify(updates.config));
+  }
+  if (updates.isActive !== undefined) {
+    fields.push('is_active = ?');
+    values.push(updates.isActive ? 1 : 0);
+  }
+
+  if (fields.length === 0) {
+    return ok({ floorId, message: 'No fields to update' });
+  }
+
+  values.push(floorId);
+  db.prepare(`UPDATE floors SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+
+  log.info({ floorId, updates: Object.keys(updates) }, 'Floor updated');
+  return ok({ floorId });
+}
+
+/**
+ * Delete a floor after verifying it has no rooms.
+ * If the floor still has rooms, the caller must move or delete them first.
+ */
+export function deleteFloor(floorId: string): Result {
+  const db = getDb();
+  const floor = db.prepare('SELECT * FROM floors WHERE id = ?').get(floorId) as FloorRow | undefined;
+  if (!floor) return err('FLOOR_NOT_FOUND', `Floor ${floorId} does not exist`);
+
+  // Cascade check — refuse to delete a floor that still has rooms
+  const roomCount = db.prepare(
+    'SELECT COUNT(*) as count FROM rooms WHERE floor_id = ?',
+  ).get(floorId) as { count: number };
+
+  if (roomCount.count > 0) {
+    return err(
+      'FLOOR_HAS_ROOMS',
+      `Floor ${floorId} still has ${roomCount.count} room(s). Move or delete them first.`,
+      { context: { floorId, roomCount: roomCount.count } },
+    );
+  }
+
+  db.prepare('DELETE FROM floors WHERE id = ?').run(floorId);
+
+  log.info({ floorId, buildingId: floor.building_id }, 'Floor deleted');
+  return ok({ floorId });
+}
+
+/**
+ * Reorder floors within a building by updating sort_order based on array position.
+ * The floorIds array defines the new order — index 0 gets sort_order 0, etc.
+ * All provided floor IDs must belong to the specified building.
+ */
+export function sortFloors(buildingId: string, floorIds: string[]): Result {
+  const db = getDb();
+
+  // Verify building exists
+  const building = db.prepare('SELECT id FROM buildings WHERE id = ?').get(buildingId) as { id: string } | undefined;
+  if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
+
+  // Verify all floor IDs belong to this building
+  const existingFloors = db.prepare(
+    'SELECT id FROM floors WHERE building_id = ?',
+  ).all(buildingId) as Array<{ id: string }>;
+  const existingIds = new Set(existingFloors.map(f => f.id));
+
+  for (const fid of floorIds) {
+    if (!existingIds.has(fid)) {
+      return err(
+        'FLOOR_NOT_IN_BUILDING',
+        `Floor ${fid} does not belong to building ${buildingId}`,
+        { context: { floorId: fid, buildingId } },
+      );
+    }
+  }
+
+  // Update sort_order for each floor based on position in the array
+  const updateStmt = db.prepare('UPDATE floors SET sort_order = ? WHERE id = ?');
+  const runAll = db.transaction(() => {
+    for (let i = 0; i < floorIds.length; i++) {
+      updateStmt.run(i, floorIds[i]);
+    }
+  });
+  runAll();
+
+  log.info({ buildingId, floorCount: floorIds.length }, 'Floors reordered');
+  return ok({ buildingId, order: floorIds });
+}
+
 // ─── Blueprint Application Pipeline ───
 
 interface BlueprintData {

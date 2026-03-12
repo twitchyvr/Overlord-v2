@@ -48,7 +48,7 @@ export function initRooms({ bus }: InitRoomsParams): RoomManagerAPI {
   bus.on('room:submit-exit-doc', (data: Record<string, unknown>) => submitExitDocument(data as unknown as SubmitExitDocParams));
 
   log.info('Room manager initialized');
-  return { createRoom, enterRoom, exitRoom, getRoom, listRooms, registerRoomType, hydrateRoomsFromDb };
+  return { createRoom, enterRoom, exitRoom, getRoom, listRooms, registerRoomType, hydrateRoomsFromDb, updateRoom, deleteRoom, updateTable, deleteTable };
 }
 
 interface CreateRoomParams {
@@ -406,5 +406,174 @@ export function listRooms(): RoomRow[] {
     const msg = e instanceof Error ? e.message : String(e);
     log.error({ err: msg }, 'Failed to list rooms');
     return [];
+  }
+}
+
+/**
+ * Update a room's mutable properties.
+ * Does NOT allow changing the room's type or floor — those are identity.
+ */
+export function updateRoom(
+  roomId: string,
+  updates: {
+    name?: string;
+    config?: Record<string, unknown>;
+    allowedTools?: string[];
+    fileScope?: string;
+    exitTemplate?: Record<string, unknown>;
+    provider?: string;
+  },
+): Result {
+  const db = getDb();
+  const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId) as RoomRow | undefined;
+  if (!room) return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
+
+  const fields: string[] = [];
+  const values: unknown[] = [];
+
+  if (updates.name !== undefined) {
+    fields.push('name = ?');
+    values.push(updates.name);
+  }
+  if (updates.config !== undefined) {
+    fields.push('config = ?');
+    values.push(JSON.stringify(updates.config));
+  }
+  if (updates.allowedTools !== undefined) {
+    fields.push('allowed_tools = ?');
+    values.push(JSON.stringify(updates.allowedTools));
+  }
+  if (updates.fileScope !== undefined) {
+    fields.push('file_scope = ?');
+    values.push(updates.fileScope);
+  }
+  if (updates.exitTemplate !== undefined) {
+    fields.push('exit_template = ?');
+    values.push(JSON.stringify(updates.exitTemplate));
+  }
+  if (updates.provider !== undefined) {
+    fields.push('provider = ?');
+    values.push(updates.provider);
+  }
+
+  if (fields.length === 0) {
+    return ok({ roomId, message: 'No fields to update' });
+  }
+
+  values.push(roomId);
+  db.prepare(`UPDATE rooms SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+
+  log.info({ roomId, updates: Object.keys(updates) }, 'Room updated');
+  return ok({ roomId });
+}
+
+/**
+ * Delete a room after exiting all seated agents and destroying the active instance.
+ * Also removes all tables associated with this room.
+ */
+export function deleteRoom(roomId: string): Result {
+  const db = getDb();
+  const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId) as RoomRow | undefined;
+  if (!room) return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
+
+  try {
+    // 1. Exit all agents currently seated in this room
+    const seatedAgents = db.prepare(
+      'SELECT id FROM agents WHERE current_room_id = ?',
+    ).all(roomId) as Array<{ id: string }>;
+
+    for (const agent of seatedAgents) {
+      db.prepare(
+        'UPDATE agents SET current_room_id = NULL, current_table_id = NULL, status = ? WHERE id = ?',
+      ).run('idle', agent.id);
+      log.info({ agentId: agent.id, roomId }, 'Agent force-exited for room deletion');
+    }
+
+    // 2. Delete all tables in this room
+    db.prepare('DELETE FROM tables_v2 WHERE room_id = ?').run(roomId);
+
+    // 3. Remove from active rooms map
+    activeRooms.delete(roomId);
+
+    // 4. Delete the room row
+    db.prepare('DELETE FROM rooms WHERE id = ?').run(roomId);
+
+    log.info({ roomId, agentsExited: seatedAgents.length }, 'Room deleted');
+    return ok({ roomId, agentsExited: seatedAgents.length });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.error({ roomId, err: msg }, 'Failed to delete room');
+    return err('DB_ERROR', `Failed to delete room: ${msg}`);
+  }
+}
+
+/**
+ * Update a table's mutable properties (type, chairs, description).
+ */
+export function updateTable(
+  tableId: string,
+  updates: { type?: string; chairs?: number; description?: string },
+): Result {
+  const db = getDb();
+  const table = db.prepare('SELECT * FROM tables_v2 WHERE id = ?').get(tableId) as Record<string, unknown> | undefined;
+  if (!table) return err('TABLE_NOT_FOUND', `Table ${tableId} does not exist`);
+
+  const fields: string[] = [];
+  const values: unknown[] = [];
+
+  if (updates.type !== undefined) {
+    fields.push('type = ?');
+    values.push(updates.type);
+  }
+  if (updates.chairs !== undefined) {
+    fields.push('chairs = ?');
+    values.push(updates.chairs);
+  }
+  if (updates.description !== undefined) {
+    fields.push('description = ?');
+    values.push(updates.description);
+  }
+
+  if (fields.length === 0) {
+    return ok({ tableId, message: 'No fields to update' });
+  }
+
+  values.push(tableId);
+  db.prepare(`UPDATE tables_v2 SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+
+  log.info({ tableId, updates: Object.keys(updates) }, 'Table updated');
+  return ok({ tableId });
+}
+
+/**
+ * Delete a table after unseating all agents currently at it.
+ */
+export function deleteTable(tableId: string): Result {
+  const db = getDb();
+  const table = db.prepare('SELECT * FROM tables_v2 WHERE id = ?').get(tableId) as Record<string, unknown> | undefined;
+  if (!table) return err('TABLE_NOT_FOUND', `Table ${tableId} does not exist`);
+
+  try {
+    // 1. Unseat all agents currently at this table
+    const seatedAgents = db.prepare(
+      'SELECT id FROM agents WHERE current_table_id = ?',
+    ).all(tableId) as Array<{ id: string }>;
+
+    for (const agent of seatedAgents) {
+      db.prepare(
+        'UPDATE agents SET current_table_id = NULL WHERE id = ?',
+      ).run(agent.id);
+      log.info({ agentId: agent.id, tableId }, 'Agent unseated for table deletion');
+    }
+
+    // 2. Delete the table row
+    db.prepare('DELETE FROM tables_v2 WHERE id = ?').run(tableId);
+
+    log.info({ tableId, roomId: table.room_id, agentsUnseated: seatedAgents.length }, 'Table deleted');
+    return ok({ tableId, agentsUnseated: seatedAgents.length });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.error({ tableId, err: msg }, 'Failed to delete table');
+    return err('DB_ERROR', `Failed to delete table: ${msg}`);
   }
 }

@@ -83,6 +83,14 @@ export const BuildingApplyBlueprintSchema = z.object({
   agentId: id(),
 });
 
+// ─── Building Update Schema ───
+
+export const BuildingUpdateSchema = z.object({
+  buildingId: id(),
+  name: optionalName(),
+  config: z.record(z.unknown()).optional(),
+});
+
 // ─── Floor Schemas ───
 
 export const FloorListSchema = z.object({
@@ -91,6 +99,31 @@ export const FloorListSchema = z.object({
 
 export const FloorGetSchema = z.object({
   floorId: id(),
+});
+
+export const FloorCreateSchema = z.object({
+  buildingId: id(),
+  type: name(),
+  name: name(),
+  sortOrder: z.number().int().min(0).optional(),
+  config: z.record(z.unknown()).optional(),
+});
+
+export const FloorUpdateSchema = z.object({
+  floorId: id(),
+  name: optionalName(),
+  sortOrder: z.number().int().min(0).optional(),
+  config: z.record(z.unknown()).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const FloorDeleteSchema = z.object({
+  floorId: id(),
+});
+
+export const FloorSortSchema = z.object({
+  buildingId: id(),
+  floorIds: z.array(id()).min(1).max(MAX_ARRAY_ITEMS),
 });
 
 // ─── Room Schemas ───
@@ -115,6 +148,20 @@ export const RoomExitSchema = z.object({
   agentId: id(),
 }).passthrough();
 
+export const RoomUpdateSchema = z.object({
+  roomId: id(),
+  name: optionalName(),
+  config: z.record(z.unknown()).optional(),
+  allowedTools: stringArray().optional(),
+  fileScope: z.enum(['assigned', 'read-only', 'full', 'none']).optional(),
+  exitTemplate: z.record(z.unknown()).optional(),
+  provider: optionalName(),
+});
+
+export const RoomDeleteSchema = z.object({
+  roomId: id(),
+});
+
 // ─── Table Schemas ───
 
 export const TableCreateSchema = z.object({
@@ -126,6 +173,17 @@ export const TableCreateSchema = z.object({
 
 export const TableListSchema = z.object({
   roomId: id(),
+});
+
+export const TableUpdateSchema = z.object({
+  tableId: id(),
+  type: optionalName(),
+  chairs: z.number().int().min(1).max(20).optional(),
+  description: optionalDescription(),
+});
+
+export const TableDeleteSchema = z.object({
+  tableId: id(),
 });
 
 // ─── Agent Move Schema ───
@@ -164,6 +222,22 @@ export const AgentUpdateProfileSchema = z.object({
   photoUrl: z.string().url().max(2000).optional(),
   specialization: optionalDescription(),
   profileGenerated: z.boolean().optional(),
+});
+
+export const AgentGenerateProfileSchema = z.object({
+  agentId: id(),
+  /** Override the role used for generation (defaults to agent's registered role) */
+  role: optionalName(),
+  /** Additional capabilities to inform bio generation */
+  capabilities: z.array(z.string().max(MAX_NAME)).max(MAX_ARRAY_ITEMS).optional(),
+  /** Skip bio/name generation */
+  skipBio: z.boolean().optional(),
+  /** Skip photo generation */
+  skipPhoto: z.boolean().optional(),
+  /** Gender preference for name generation */
+  gender: optionalName(),
+  /** AI provider override (defaults to 'anthropic') */
+  provider: optionalName(),
 });
 
 // ─── Chat Schemas ───
@@ -350,6 +424,12 @@ export const ExitDocGetSchema = z.object({
 
 export const ExitDocListSchema = z.object({
   buildingId: id(),
+});
+
+// ─── Agent Photo Generation ───
+
+export const AgentGeneratePhotoSchema = z.object({
+  agentId: id(),
 });
 
 // ─── Citations ───

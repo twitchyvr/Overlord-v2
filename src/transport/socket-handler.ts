@@ -13,9 +13,9 @@
 import { randomUUID } from 'crypto';
 import { logger, broadcastLog } from '../core/logger.js';
 import type { Bus } from '../core/bus.js';
-import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI } from '../core/contracts.js';
+import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
-import { createBuilding, getBuilding, listBuildings, listFloors, getFloor } from '../rooms/building-manager.js';
+import { createBuilding, getBuilding, listBuildings, updateBuilding, listFloors, getFloor, createFloor, updateFloor, deleteFloor, sortFloors } from '../rooms/building-manager.js';
 import { getGates, canAdvance, signoffGate, createGate, getPendingGates, resolveConditions, getStalePendingGates, getPhaseOrder } from '../rooms/phase-gate.js';
 import { searchRaid, addRaidEntry, updateRaidEntry, updateRaidStatus } from '../rooms/raid-log.js';
 import { submitExitDocument } from '../rooms/room-manager.js';
@@ -28,11 +28,13 @@ import type { z } from 'zod';
 
 import {
   validate,
-  BuildingCreateSchema, BuildingGetSchema, BuildingListSchema, BuildingApplyBlueprintSchema,
-  FloorListSchema, FloorGetSchema,
-  RoomCreateSchema, RoomGetSchema, RoomEnterSchema, RoomExitSchema,
-  TableCreateSchema, TableListSchema, AgentMoveSchema,
+  BuildingCreateSchema, BuildingGetSchema, BuildingListSchema, BuildingApplyBlueprintSchema, BuildingUpdateSchema,
+  FloorListSchema, FloorGetSchema, FloorCreateSchema, FloorUpdateSchema, FloorDeleteSchema, FloorSortSchema,
+  RoomCreateSchema, RoomGetSchema, RoomEnterSchema, RoomExitSchema, RoomUpdateSchema, RoomDeleteSchema,
+  TableCreateSchema, TableListSchema, TableUpdateSchema, TableDeleteSchema, AgentMoveSchema,
   AgentRegisterSchema, AgentGetSchema, AgentListSchema, AgentUpdateProfileSchema,
+  AgentGenerateProfileSchema,
+  AgentGeneratePhotoSchema,
   ChatMessageSchema,
   EmptyPayloadSchema, PhaseStatusSchema, PhaseGateSchema,
   PhaseGatesSchema, PhaseCanAdvanceSchema, PhasePendingGatesSchema,
@@ -43,6 +45,11 @@ import {
   ExitDocSubmitSchema, ExitDocGetSchema, ExitDocListSchema,
   CitationListSchema, CitationBacklinksSchema,
 } from './schemas.js';
+import { generateFullProfile } from '../ai/agent-profile-service.js';
+import type { FullProfileResult } from '../ai/agent-profile-service.js';
+import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
+import { isImageGenerationAvailable } from '../ai/minimax-image.js';
+import { writeAgentPhoto } from '../ai/agent-photo-store.js';
 
 const log = logger.child({ module: 'transport' });
 
@@ -65,6 +72,7 @@ interface InitTransportParams {
   rooms: RoomManagerAPI;
   agents: AgentRegistryAPI;
   tools: ToolRegistryAPI;
+  ai: AIProviderAPI;
 }
 
 // ─── Per-socket tracking for disconnect cleanup ───
@@ -131,7 +139,7 @@ function handle<S extends z.ZodTypeAny>(
 
 // ─── Main transport initialization ───
 
-export function initTransport({ io, bus, rooms, agents, tools }: InitTransportParams): void {
+export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTransportParams): void {
   io.on('connection', (socket: Socket) => {
     log.info({ id: socket.id }, 'Client connected');
     broadcastLog('info', `Client connected (${socket.id})`, 'transport');
@@ -159,6 +167,15 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
     handle(socket, 'building:list', BuildingListSchema, (parsed, ack) => {
       if (ack) ack(listBuildings(parsed?.projectId));
+    });
+
+    handle(socket, 'building:update', BuildingUpdateSchema, (parsed, ack) => {
+      const result = updateBuilding(parsed.buildingId, { name: parsed.name, config: parsed.config });
+      if (result.ok) {
+        broadcastLog('info', `Building updated: ${parsed.buildingId}`, 'building');
+        bus.emit('building:updated', { id: parsed.buildingId, name: parsed.name });
+      }
+      if (ack) ack(result);
     });
 
     handle(socket, 'building:apply-blueprint', BuildingApplyBlueprintSchema, (parsed, ack) => {
@@ -195,6 +212,48 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
     handle(socket, 'floor:get', FloorGetSchema, (parsed, ack) => {
       if (ack) ack(getFloor(parsed.floorId));
+    });
+
+    handle(socket, 'floor:create', FloorCreateSchema, (parsed, ack) => {
+      const result = createFloor(parsed as Parameters<typeof createFloor>[0]);
+      if (result.ok) {
+        const floorData = result.data as { id: string; buildingId: string; type: string; name: string };
+        broadcastLog('info', `Floor created: ${floorData.name}`, 'building');
+        bus.emit('floor:created', floorData);
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'floor:update', FloorUpdateSchema, (parsed, ack) => {
+      const result = updateFloor(parsed.floorId, {
+        name: parsed.name,
+        sortOrder: parsed.sortOrder,
+        config: parsed.config,
+        isActive: parsed.isActive,
+      });
+      if (result.ok) {
+        broadcastLog('info', `Floor updated: ${parsed.floorId}`, 'building');
+        bus.emit('floor:updated', { floorId: parsed.floorId });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'floor:delete', FloorDeleteSchema, (parsed, ack) => {
+      const result = deleteFloor(parsed.floorId);
+      if (result.ok) {
+        broadcastLog('info', `Floor deleted: ${parsed.floorId}`, 'building');
+        bus.emit('floor:deleted', { floorId: parsed.floorId });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'floor:sort', FloorSortSchema, (parsed, ack) => {
+      const result = sortFloors(parsed.buildingId, parsed.floorIds);
+      if (result.ok) {
+        broadcastLog('info', `Floors reordered in building ${parsed.buildingId}`, 'building');
+        bus.emit('floor:sorted', { buildingId: parsed.buildingId, order: parsed.floorIds });
+      }
+      if (ack) ack(result);
     });
 
     // ─── Room Events ───
@@ -262,6 +321,31 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       if (ack) ack(result);
     });
 
+    handle(socket, 'room:update', RoomUpdateSchema, (parsed, ack) => {
+      const result = rooms.updateRoom(parsed.roomId, {
+        name: parsed.name,
+        config: parsed.config,
+        allowedTools: parsed.allowedTools,
+        fileScope: parsed.fileScope,
+        exitTemplate: parsed.exitTemplate,
+        provider: parsed.provider,
+      });
+      if (result.ok) {
+        broadcastLog('info', `Room updated: ${parsed.roomId}`, 'rooms');
+        bus.emit('room:updated', { roomId: parsed.roomId });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'room:delete', RoomDeleteSchema, (parsed, ack) => {
+      const result = rooms.deleteRoom(parsed.roomId);
+      if (result.ok) {
+        broadcastLog('info', `Room deleted: ${parsed.roomId}`, 'rooms');
+        bus.emit('room:deleted', { roomId: parsed.roomId });
+      }
+      if (ack) ack(result);
+    });
+
     // ─── Table Events ───
 
     handle(socket, 'table:create', TableCreateSchema, (parsed, ack) => {
@@ -297,6 +381,28 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       });
 
       if (ack) ack({ ok: true, data: result });
+    });
+
+    handle(socket, 'table:update', TableUpdateSchema, (parsed, ack) => {
+      const result = rooms.updateTable(parsed.tableId, {
+        type: parsed.type,
+        chairs: parsed.chairs,
+        description: parsed.description,
+      });
+      if (result.ok) {
+        broadcastLog('info', `Table updated: ${parsed.tableId}`, 'rooms');
+        bus.emit('table:updated', { tableId: parsed.tableId });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'table:delete', TableDeleteSchema, (parsed, ack) => {
+      const result = rooms.deleteTable(parsed.tableId);
+      if (result.ok) {
+        broadcastLog('info', `Table deleted: ${parsed.tableId}`, 'rooms');
+        bus.emit('table:deleted', { tableId: parsed.tableId });
+      }
+      if (ack) ack(result);
     });
 
     // ─── Agent Move (convenience: exit old room + enter new room in one step) ───
@@ -339,6 +445,35 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       if (result.ok) {
         const agentId = (result.data as { id: string }).id;
         getAssociations(socket.id).agentIds.add(agentId);
+
+        // Auto-generate profile in background if no profile fields were provided
+        const hasProfile = parsed.firstName || parsed.lastName || parsed.bio;
+        if (!hasProfile && parsed.role) {
+          // Fire-and-forget: don't block registration
+          generateFullProfile(ai, parsed.role, undefined, {
+            provider: 'anthropic',
+          }).then((genResult) => {
+            if (genResult.ok) {
+              const profileResult = genResult.data as FullProfileResult;
+              const updateResult = agents.updateAgentProfile(agentId, profileResult.profile);
+              if (updateResult.ok) {
+                const updatedAgent = agents.getAgent(agentId);
+                bus.emit('agent:profile-updated', { agentId, profile: updatedAgent });
+                bus.emit('agent:profile-generated', {
+                  agentId,
+                  generation: profileResult.generation,
+                  warnings: profileResult.warnings,
+                  autoGenerated: true,
+                });
+                broadcastLog('info', `Auto-generated AI profile for agent ${parsed.name}: ${profileResult.profile.displayName || 'unnamed'}`, 'agents');
+              }
+            } else {
+              log.warn({ agentId, error: genResult.error }, 'Auto-profile generation failed (non-blocking)');
+            }
+          }).catch((genErr: unknown) => {
+            log.warn({ agentId, err: genErr }, 'Auto-profile generation threw (non-blocking)');
+          });
+        }
       }
       if (ack) ack(result);
     });
@@ -372,6 +507,124 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         broadcastLog('info', `Agent profile updated: ${parsed.agentId}`, 'agents');
       }
       if (ack) ack(result);
+    });
+
+    handle(socket, 'agent:generate-profile', AgentGenerateProfileSchema, async (parsed, ack) => {
+      const agent = agents.getAgent(parsed.agentId);
+      if (!agent) {
+        if (ack) ack({ ok: false, error: { code: 'AGENT_NOT_FOUND', message: `Agent ${parsed.agentId} does not exist`, retryable: false } });
+        return;
+      }
+
+      const role = parsed.role || agent.role || 'General Agent';
+      const capabilities = parsed.capabilities || agent.capabilities || [];
+
+      broadcastLog('info', `Generating AI profile for agent ${agent.name} (${role})...`, 'agents');
+
+      const result = await generateFullProfile(ai, role, capabilities, {
+        skipBio: parsed.skipBio,
+        skipPhoto: parsed.skipPhoto,
+        gender: parsed.gender,
+        provider: parsed.provider,
+        existing: {
+          firstName: agent.first_name,
+          lastName: agent.last_name,
+          displayName: agent.display_name,
+          bio: agent.bio,
+          photoUrl: agent.photo_url,
+          specialization: agent.specialization,
+        },
+      });
+
+      if (result.ok) {
+        const profileResult = result.data as FullProfileResult;
+        // Apply the generated profile to the agent in the database
+        const updateResult = agents.updateAgentProfile(parsed.agentId, profileResult.profile);
+
+        if (updateResult.ok) {
+          const updatedAgent = agents.getAgent(parsed.agentId);
+          bus.emit('agent:profile-updated', { agentId: parsed.agentId, profile: updatedAgent });
+          bus.emit('agent:profile-generated', {
+            agentId: parsed.agentId,
+            generation: profileResult.generation,
+            warnings: profileResult.warnings,
+          });
+          broadcastLog('info', `AI profile generated for agent ${agent.name}: ${profileResult.profile.displayName || 'unnamed'}`, 'agents');
+        }
+
+        if (ack) ack({
+          ok: true,
+          data: {
+            agentId: parsed.agentId,
+            profile: profileResult.profile,
+            generation: profileResult.generation,
+            warnings: profileResult.warnings,
+          },
+        });
+      } else {
+        broadcastLog('warn', `AI profile generation failed for agent ${agent.name}: ${result.error.message}`, 'agents');
+        if (ack) ack(result);
+      }
+    });
+
+    // ─── Agent Photo Generation (MiniMax image-01) ───
+
+    handle(socket, 'agent:generate-photo', AgentGeneratePhotoSchema, async (parsed, ack) => {
+      const agent = agents.getAgent(parsed.agentId);
+      if (!agent) {
+        if (ack) ack({ ok: false, error: { code: 'AGENT_NOT_FOUND', message: `Agent ${parsed.agentId} does not exist`, retryable: false } });
+        return;
+      }
+
+      if (!isImageGenerationAvailable()) {
+        if (ack) ack({ ok: false, error: { code: 'IMAGE_GEN_NOT_AVAILABLE', message: 'MiniMax image generation is not available. MINIMAX_API_KEY is not configured.', retryable: false } });
+        return;
+      }
+
+      const role = agent.role || 'agent';
+      broadcastLog('info', `Generating profile photo for agent ${agent.name} (${role})...`, 'agents');
+
+      const result = await generateAgentProfilePhoto(
+        agent.name,
+        role,
+        agent.specialization || undefined,
+      );
+
+      if (!result.ok) {
+        broadcastLog('warn', `Photo generation failed for agent ${agent.name}: ${result.error.message}`, 'agents');
+        if (ack) ack(result);
+        return;
+      }
+
+      // Write photo to disk
+      const photoWriteResult = writeAgentPhoto(parsed.agentId, result.data.base64);
+      if (!photoWriteResult.ok) {
+        if (ack) ack(photoWriteResult);
+        return;
+      }
+
+      const photoUrl = (photoWriteResult.data as { photoUrl: string }).photoUrl;
+
+      // Update agent profile with the new photo URL
+      const profileUpdateResult = agents.updateAgentProfile(parsed.agentId, {
+        photoUrl,
+        profileGenerated: true,
+      });
+
+      if (profileUpdateResult.ok) {
+        const updatedAgent = agents.getAgent(parsed.agentId);
+        bus.emit('agent:profile-updated', { agentId: parsed.agentId, profile: updatedAgent });
+        broadcastLog('info', `Profile photo generated for agent ${agent.name}`, 'agents');
+      }
+
+      if (ack) ack({
+        ok: true,
+        data: {
+          agentId: parsed.agentId,
+          photoUrl,
+          mimeType: result.data.mimeType,
+        },
+      });
     });
 
     // ─── Command List ───
@@ -987,6 +1240,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   forward('agent:mentioned');
   forward('agent:status-changed');
   forward('agent:profile-updated');
+  forward('agent:profile-generated');
   forward('building:updated');
   forward('deploy:check');
   forward('task:created');
@@ -1008,6 +1262,14 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   forward('phase:room-provisioned');
   forward('citation:added');
   forward('table:created');
+  forward('table:updated');
+  forward('table:deleted');
+  forward('floor:created');
+  forward('floor:updated');
+  forward('floor:deleted');
+  forward('floor:sorted');
+  forward('room:updated');
+  forward('room:deleted');
 
   log.info('Transport layer initialized');
   broadcastLog('info', 'Transport layer initialized', 'transport');

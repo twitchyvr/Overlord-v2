@@ -89,8 +89,10 @@ export class BuildingView extends Component {
       return;
     }
 
-    // Building header
-    const header = h('div', { class: 'building-header' },
+    // Building header with management controls
+    const header = h('div', { class: 'building-header' });
+
+    const headerTop = h('div', { class: 'building-header-top' },
       h('div', { class: 'building-name' }, this._buildingData.name || 'Building'),
       h('div', { class: 'building-phase' },
         h('span', { class: `phase-badge phase-${this._buildingData.active_phase || 'strategy'}` },
@@ -98,6 +100,19 @@ export class BuildingView extends Component {
         )
       )
     );
+    header.appendChild(headerTop);
+
+    // Building action bar
+    const headerActions = h('div', { class: 'building-header-actions' });
+    const addFloorBtn = h('button', { class: 'btn btn-primary btn-sm' }, '+ Add Floor');
+    addFloorBtn.addEventListener('click', () => this._openAddFloorModal());
+    headerActions.appendChild(addFloorBtn);
+
+    const editBuildingBtn = h('button', { class: 'btn btn-ghost btn-sm' }, 'Edit Building');
+    editBuildingBtn.addEventListener('click', () => this._openEditBuildingModal());
+    headerActions.appendChild(editBuildingBtn);
+    header.appendChild(headerActions);
+
     this.el.appendChild(header);
 
     // Building cross-section (column-reverse for bottom-up)
@@ -185,7 +200,7 @@ export class BuildingView extends Component {
       this.render();
     });
 
-    // Expanded content: room grid + add button
+    // Expanded content: room grid + floor management
     if (isExpanded) {
       const expandedContent = h('div', { class: 'floor-expanded-content' });
       expandedContent.addEventListener('click', (e) => e.stopPropagation());
@@ -204,14 +219,31 @@ export class BuildingView extends Component {
         ));
       }
 
-      // "Add Room" button
-      const addRoomBtn = h('button', { class: 'btn btn-primary btn-sm floor-add-room-btn' }, '+ Add Room');
+      // Floor action toolbar
+      const floorActions = h('div', { class: 'floor-action-bar' });
+
+      const addRoomBtn = h('button', { class: 'btn btn-primary btn-sm' }, '+ Add Room');
       addRoomBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._openAddRoomModal(floor);
       });
-      expandedContent.appendChild(addRoomBtn);
+      floorActions.appendChild(addRoomBtn);
 
+      const editFloorBtn = h('button', { class: 'btn btn-ghost btn-sm' }, 'Edit Floor');
+      editFloorBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._openEditFloorModal(floor);
+      });
+      floorActions.appendChild(editFloorBtn);
+
+      const deleteFloorBtn = h('button', { class: 'btn btn-ghost btn-sm btn-danger-ghost' }, 'Delete');
+      deleteFloorBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._confirmDeleteFloor(floor);
+      });
+      floorActions.appendChild(deleteFloorBtn);
+
+      expandedContent.appendChild(floorActions);
       bar.appendChild(expandedContent);
     }
 
@@ -263,6 +295,23 @@ export class BuildingView extends Component {
       }
       roomCard.appendChild(avatarRow);
     }
+
+    // Room action buttons (visible on hover via CSS)
+    const roomActions = h('div', { class: 'room-card-actions' });
+    const editRoomBtn = h('button', { class: 'room-action-btn', title: 'Edit room' }, '\u270F\uFE0F');
+    editRoomBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._openEditRoomModal(room, floorId);
+    });
+    roomActions.appendChild(editRoomBtn);
+
+    const deleteRoomBtn = h('button', { class: 'room-action-btn room-action-danger', title: 'Delete room' }, '\u{1F5D1}\uFE0F');
+    deleteRoomBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._confirmDeleteRoom(room);
+    });
+    roomActions.appendChild(deleteRoomBtn);
+    roomCard.appendChild(roomActions);
 
     roomCard.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -396,6 +445,520 @@ export class BuildingView extends Component {
       position: window.innerWidth < 768 ? 'fullscreen' : 'center',
     });
   }
+
+  // ── Building Management Modal ────────────────────────────
+
+  /** Open modal to edit building name and configuration. */
+  _openEditBuildingModal() {
+    if (!this._buildingData) return;
+    let buildingName = this._buildingData.name || '';
+
+    const container = h('div', { class: 'edit-building-modal' });
+
+    // Name input
+    const nameGroup = h('div', { class: 'add-room-field' });
+    nameGroup.appendChild(h('label', { class: 'form-label' }, 'Building Name'));
+    const nameInput = h('input', { class: 'form-input', type: 'text', value: buildingName });
+    nameInput.addEventListener('input', () => { buildingName = nameInput.value; });
+    nameGroup.appendChild(nameInput);
+    container.appendChild(nameGroup);
+
+    // Building ID (read-only)
+    const idGroup = h('div', { class: 'add-room-field' });
+    idGroup.appendChild(h('label', { class: 'form-label' }, 'Building ID'));
+    idGroup.appendChild(h('div', { class: 'form-input-readonly mono' }, this._buildingData.id));
+    container.appendChild(idGroup);
+
+    // Phase (read-only)
+    const phaseGroup = h('div', { class: 'add-room-field' });
+    phaseGroup.appendChild(h('label', { class: 'form-label' }, 'Current Phase'));
+    phaseGroup.appendChild(h('div', { class: 'form-input-readonly' },
+      h('span', { class: `phase-badge phase-${this._buildingData.active_phase || 'strategy'}` },
+        this._buildingData.active_phase || 'strategy'
+      )
+    ));
+    container.appendChild(phaseGroup);
+
+    // Summary
+    container.appendChild(h('div', { class: 'edit-building-summary' },
+      h('div', { class: 'building-stat' },
+        h('span', { class: 'building-stat-value' }, String(this._floors.length)),
+        h('span', { class: 'building-stat-label' }, 'Floors')
+      ),
+      h('div', { class: 'building-stat' },
+        h('span', { class: 'building-stat-value' }, String(this._countTotalRooms())),
+        h('span', { class: 'building-stat-label' }, 'Rooms')
+      ),
+      h('div', { class: 'building-stat' },
+        h('span', { class: 'building-stat-value' }, String(this._countActiveAgents())),
+        h('span', { class: 'building-stat-label' }, 'Active Agents')
+      )
+    ));
+
+    // Actions
+    const actions = h('div', { class: 'add-room-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('edit-building'));
+
+    const saveBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Save Changes');
+    saveBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      try {
+        const result = await window.overlordSocket.updateBuilding(this._buildingData.id, {
+          name: buildingName.trim() || this._buildingData.name,
+        });
+        if (result && result.ok) {
+          Toast.success('Building updated');
+          Modal.close('edit-building');
+        } else {
+          throw new Error(result?.error?.message || 'Update failed');
+        }
+      } catch (err) {
+        Toast.error(`Failed: ${err.message}`);
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
+    container.appendChild(actions);
+
+    Modal.open('edit-building', {
+      title: `Edit Building: ${this._buildingData.name || 'Building'}`,
+      content: container,
+      size: 'md',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
+  }
+
+  // ── Floor Management Modals ──────────────────────────────
+
+  /** Open modal to edit a floor's name and configuration. */
+  _openEditFloorModal(floor) {
+    let floorName = floor.name || '';
+    let isActive = floor.is_active !== 0;
+
+    const container = h('div', { class: 'edit-floor-modal' });
+
+    // Name input
+    const nameGroup = h('div', { class: 'add-room-field' });
+    nameGroup.appendChild(h('label', { class: 'form-label' }, 'Floor Name'));
+    const nameInput = h('input', { class: 'form-input', type: 'text', value: floorName });
+    nameInput.addEventListener('input', () => { floorName = nameInput.value; });
+    nameGroup.appendChild(nameInput);
+    container.appendChild(nameGroup);
+
+    // Floor type (read-only — structural identity)
+    const typeGroup = h('div', { class: 'add-room-field' });
+    typeGroup.appendChild(h('label', { class: 'form-label' }, 'Floor Type'));
+    typeGroup.appendChild(h('div', { class: 'form-input-readonly' }, floor.type || 'default'));
+    typeGroup.appendChild(h('span', { class: 'form-hint' }, 'Floor type cannot be changed — it defines the floor\'s purpose.'));
+    container.appendChild(typeGroup);
+
+    // Active toggle
+    const activeGroup = h('div', { class: 'add-room-field' });
+    activeGroup.appendChild(h('label', { class: 'form-label' }, 'Active'));
+    const activeToggle = h('button', {
+      class: `settings-switch${isActive ? ' on' : ''}`,
+      role: 'switch',
+      'aria-checked': isActive ? 'true' : 'false'
+    });
+    activeToggle.appendChild(h('span', { class: 'settings-switch-knob' }));
+    activeToggle.addEventListener('click', () => {
+      isActive = !isActive;
+      activeToggle.classList.toggle('on', isActive);
+      activeToggle.setAttribute('aria-checked', isActive ? 'true' : 'false');
+    });
+    activeGroup.appendChild(activeToggle);
+    activeGroup.appendChild(h('span', { class: 'form-hint' }, 'Inactive floors are hidden from agents but preserved.'));
+    container.appendChild(activeGroup);
+
+    // Room summary (read-only info)
+    const rooms = floor.rooms || [];
+    if (rooms.length > 0) {
+      container.appendChild(h('div', { class: 'edit-floor-rooms-summary' },
+        h('label', { class: 'form-label' }, `Rooms on this floor (${rooms.length})`),
+        h('ul', { class: 'edit-floor-room-list' },
+          ...rooms.map(r => h('li', null,
+            h('span', null, r.name || this._formatRoomType(r.type)),
+            h('span', { class: 'edit-floor-room-type' }, r.type)
+          ))
+        )
+      ));
+    }
+
+    // Actions
+    const actions = h('div', { class: 'add-room-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('edit-floor'));
+
+    const saveBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Save Changes');
+    saveBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      try {
+        const result = await window.overlordSocket.updateFloor(floor.id, {
+          name: floorName.trim() || floor.name,
+          isActive: isActive ? 1 : 0,
+        });
+        if (result && result.ok) {
+          Toast.success('Floor updated');
+          Modal.close('edit-floor');
+        } else {
+          throw new Error(result?.error?.message || 'Update failed');
+        }
+      } catch (err) {
+        Toast.error(`Failed: ${err.message}`);
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
+    container.appendChild(actions);
+
+    Modal.open('edit-floor', {
+      title: `Edit Floor: ${floor.name || 'Floor'}`,
+      content: container,
+      size: 'md',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
+  }
+
+  /** Confirm and delete a floor. */
+  _confirmDeleteFloor(floor) {
+    const rooms = floor.rooms || [];
+    const container = h('div', { class: 'confirm-delete-modal' });
+
+    container.appendChild(h('p', { class: 'confirm-delete-message' },
+      `Are you sure you want to delete "${floor.name || 'this floor'}"?`));
+
+    if (rooms.length > 0) {
+      container.appendChild(h('div', { class: 'confirm-delete-warning' },
+        h('span', { class: 'confirm-delete-warning-icon' }, '\u26A0\uFE0F'),
+        h('span', null, `This floor has ${rooms.length} room${rooms.length > 1 ? 's' : ''}. You must delete all rooms first before removing this floor.`)
+      ));
+      // Disable delete button when floor has rooms
+      const actions = h('div', { class: 'add-room-actions' });
+      const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'OK');
+      cancelBtn.addEventListener('click', () => Modal.close('confirm-delete'));
+      actions.appendChild(cancelBtn);
+      container.appendChild(actions);
+
+      Modal.open('confirm-delete', {
+        title: 'Cannot Delete Floor',
+        content: container,
+        size: 'sm',
+        position: 'center',
+      });
+      return;
+    }
+
+    const actions = h('div', { class: 'add-room-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('confirm-delete'));
+
+    const deleteBtn = h('button', { class: 'btn btn-danger btn-md' }, 'Delete Floor');
+    deleteBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+      deleteBtn.disabled = true;
+      deleteBtn.textContent = 'Deleting...';
+      try {
+        const result = await window.overlordSocket.deleteFloor(floor.id);
+        if (result && result.ok) {
+          Toast.success('Floor deleted');
+          Modal.close('confirm-delete');
+          this._expandedFloor = null;
+        } else {
+          throw new Error(result?.error?.message || 'Delete failed');
+        }
+      } catch (err) {
+        Toast.error(`Failed: ${err.message}`);
+        deleteBtn.disabled = false;
+        deleteBtn.textContent = 'Delete Floor';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(deleteBtn);
+    container.appendChild(actions);
+
+    Modal.open('confirm-delete', {
+      title: 'Delete Floor',
+      content: container,
+      size: 'sm',
+      position: 'center',
+    });
+  }
+
+  // ── Room Management Modals ──────────────────────────────
+
+  /** Open modal to edit a room's name, tools, and configuration. */
+  _openEditRoomModal(room, floorId) {
+    let roomName = room.name || '';
+    let allowedTools = room.allowed_tools || room.allowedTools || [];
+    let fileScope = room.file_scope || room.fileScope || 'assigned';
+    let provider = room.provider || 'configurable';
+
+    if (typeof allowedTools === 'string') {
+      try { allowedTools = JSON.parse(allowedTools); } catch { allowedTools = []; }
+    }
+
+    const container = h('div', { class: 'edit-room-modal' });
+
+    // Name input
+    const nameGroup = h('div', { class: 'add-room-field' });
+    nameGroup.appendChild(h('label', { class: 'form-label' }, 'Room Name'));
+    const nameInput = h('input', { class: 'form-input', type: 'text', value: roomName });
+    nameInput.addEventListener('input', () => { roomName = nameInput.value; });
+    nameGroup.appendChild(nameInput);
+    container.appendChild(nameGroup);
+
+    // Room type (read-only)
+    const typeGroup = h('div', { class: 'add-room-field' });
+    typeGroup.appendChild(h('label', { class: 'form-label' }, 'Room Type'));
+    const typeInfo = ROOM_TYPE_INFO[room.type] || { icon: '\u2753', label: room.type, desc: '' };
+    typeGroup.appendChild(h('div', { class: 'form-input-readonly' },
+      h('span', null, `${typeInfo.icon} ${typeInfo.label}`)));
+    typeGroup.appendChild(h('span', { class: 'form-hint' }, typeInfo.desc));
+    container.appendChild(typeGroup);
+
+    // File scope selector
+    const scopeGroup = h('div', { class: 'add-room-field' });
+    scopeGroup.appendChild(h('label', { class: 'form-label' }, 'File Scope'));
+    const scopeSelect = h('select', { class: 'form-input settings-select' });
+    for (const scope of ['assigned', 'read-only', 'full', 'none']) {
+      const opt = h('option', { value: scope }, scope.charAt(0).toUpperCase() + scope.slice(1).replace('-', ' '));
+      if (scope === fileScope) opt.selected = true;
+      scopeSelect.appendChild(opt);
+    }
+    scopeSelect.addEventListener('change', () => { fileScope = scopeSelect.value; });
+    scopeGroup.appendChild(scopeSelect);
+    scopeGroup.appendChild(h('span', { class: 'form-hint' }, 'Controls agent file access in this room.'));
+    container.appendChild(scopeGroup);
+
+    // Provider selector
+    const providerGroup = h('div', { class: 'add-room-field' });
+    providerGroup.appendChild(h('label', { class: 'form-label' }, 'AI Provider'));
+    const providerSelect = h('select', { class: 'form-input settings-select' });
+    for (const prov of ['configurable', 'anthropic', 'minimax', 'openai', 'ollama']) {
+      const opt = h('option', { value: prov }, prov.charAt(0).toUpperCase() + prov.slice(1));
+      if (prov === provider) opt.selected = true;
+      providerSelect.appendChild(opt);
+    }
+    providerSelect.addEventListener('change', () => { provider = providerSelect.value; });
+    providerGroup.appendChild(providerSelect);
+    container.appendChild(providerGroup);
+
+    // Tools list
+    const toolsGroup = h('div', { class: 'add-room-field' });
+    toolsGroup.appendChild(h('label', { class: 'form-label' }, `Allowed Tools (${allowedTools.length})`));
+    const toolsTextarea = h('textarea', {
+      class: 'form-input form-textarea',
+      rows: '4',
+      placeholder: 'One tool per line, e.g.:\nread_file\nwrite_file\nbash',
+    });
+    toolsTextarea.value = Array.isArray(allowedTools) ? allowedTools.join('\n') : '';
+    toolsGroup.appendChild(toolsTextarea);
+    toolsGroup.appendChild(h('span', { class: 'form-hint' }, 'One tool per line. Only these tools will be available to agents in this room.'));
+    container.appendChild(toolsGroup);
+
+    // Actions
+    const actions = h('div', { class: 'add-room-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('edit-room'));
+
+    const saveBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Save Changes');
+    saveBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+
+      const parsedTools = toolsTextarea.value
+        .split('\n')
+        .map(t => t.trim())
+        .filter(Boolean);
+
+      try {
+        const result = await window.overlordSocket.updateRoom(room.id, {
+          name: roomName.trim() || room.name,
+          fileScope,
+          provider,
+          allowedTools: parsedTools,
+        });
+        if (result && result.ok) {
+          Toast.success('Room updated');
+          Modal.close('edit-room');
+        } else {
+          throw new Error(result?.error?.message || 'Update failed');
+        }
+      } catch (err) {
+        Toast.error(`Failed: ${err.message}`);
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
+    container.appendChild(actions);
+
+    Modal.open('edit-room', {
+      title: `Edit Room: ${room.name || typeInfo.label}`,
+      content: container,
+      size: 'lg',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
+  }
+
+  /** Confirm and delete a room. */
+  _confirmDeleteRoom(room) {
+    const container = h('div', { class: 'confirm-delete-modal' });
+    const typeName = ROOM_TYPE_INFO[room.type]?.label || room.type;
+
+    container.appendChild(h('p', { class: 'confirm-delete-message' },
+      `Are you sure you want to delete "${room.name || typeName}"?`));
+
+    container.appendChild(h('div', { class: 'confirm-delete-warning' },
+      h('span', { class: 'confirm-delete-warning-icon' }, '\u26A0\uFE0F'),
+      h('span', null, 'Any agents seated in this room will be unseated. Tables and their data will be removed.')
+    ));
+
+    const actions = h('div', { class: 'add-room-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('confirm-delete'));
+
+    const deleteBtn = h('button', { class: 'btn btn-danger btn-md' }, 'Delete Room');
+    deleteBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+      deleteBtn.disabled = true;
+      deleteBtn.textContent = 'Deleting...';
+      try {
+        const result = await window.overlordSocket.deleteRoom(room.id);
+        if (result && result.ok) {
+          Toast.success(`Room "${typeName}" deleted`);
+          Modal.close('confirm-delete');
+        } else {
+          throw new Error(result?.error?.message || 'Delete failed');
+        }
+      } catch (err) {
+        Toast.error(`Failed: ${err.message}`);
+        deleteBtn.disabled = false;
+        deleteBtn.textContent = 'Delete Room';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(deleteBtn);
+    container.appendChild(actions);
+
+    Modal.open('confirm-delete', {
+      title: 'Delete Room',
+      content: container,
+      size: 'sm',
+      position: 'center',
+    });
+  }
+
+  // ── Add Floor Modal ──────────────────────────────────────
+
+  /** Open modal to add a new floor to the building. */
+  _openAddFloorModal() {
+    const FLOOR_TYPES = [
+      { type: 'strategy',      label: 'Strategy',      icon: '\u{1F3AF}', desc: 'Phase Zero setup, consulting, and project strategy' },
+      { type: 'collaboration', label: 'Collaboration', icon: '\u{1F4AC}', desc: 'Discovery, architecture, and planning rooms' },
+      { type: 'execution',     label: 'Execution',     icon: '\u{1F4BB}', desc: 'Code labs, testing labs, and active development' },
+      { type: 'governance',    label: 'Governance',    icon: '\u{1F4DD}', desc: 'Review, audit, and release management' },
+      { type: 'operations',    label: 'Operations',    icon: '\u2699\uFE0F', desc: 'Deploy, monitoring, and incident response' },
+      { type: 'integration',   label: 'Integration',   icon: '\u{1F50C}', desc: 'Plugins, data exchange, and external APIs' },
+    ];
+
+    let selectedType = FLOOR_TYPES[0].type;
+    let floorName = '';
+
+    const container = h('div', { class: 'add-floor-modal' });
+
+    // Name input
+    const nameGroup = h('div', { class: 'add-room-field' });
+    nameGroup.appendChild(h('label', { class: 'form-label' }, 'Floor Name (optional)'));
+    const nameInput = h('input', { class: 'form-input', type: 'text', placeholder: 'e.g., "Frontend Execution"' });
+    nameInput.addEventListener('input', () => { floorName = nameInput.value; });
+    nameGroup.appendChild(nameInput);
+    container.appendChild(nameGroup);
+
+    // Floor type picker
+    container.appendChild(h('label', { class: 'form-label' }, 'Floor Type'));
+    const typeGrid = h('div', { class: 'add-room-type-grid' });
+
+    for (const ft of FLOOR_TYPES) {
+      const card = h('div', {
+        class: `add-room-type-card${selectedType === ft.type ? ' selected' : ''}`,
+        'data-type': ft.type
+      },
+        h('div', { class: 'add-room-type-icon' }, ft.icon),
+        h('div', { class: 'add-room-type-info' },
+          h('div', { class: 'add-room-type-label' }, ft.label),
+          h('div', { class: 'add-room-type-desc' }, ft.desc)
+        )
+      );
+
+      card.addEventListener('click', () => {
+        selectedType = ft.type;
+        typeGrid.querySelectorAll('.add-room-type-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+      });
+      typeGrid.appendChild(card);
+    }
+    container.appendChild(typeGrid);
+
+    // Actions
+    const actions = h('div', { class: 'add-room-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('add-floor'));
+
+    const createBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Create Floor');
+    createBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+      const buildingId = OverlordUI.getStore()?.get('building.active');
+      if (!buildingId) { Toast.error('No building selected'); return; }
+
+      createBtn.disabled = true;
+      createBtn.textContent = 'Creating...';
+
+      const name = floorName.trim() || `${selectedType.charAt(0).toUpperCase() + selectedType.slice(1)} Floor`;
+      try {
+        const result = await window.overlordSocket.createFloor(buildingId, selectedType, name);
+        if (result && result.ok) {
+          Toast.success(`Floor "${name}" created`);
+          Modal.close('add-floor');
+        } else {
+          throw new Error(result?.error?.message || 'Failed to create floor');
+        }
+      } catch (err) {
+        Toast.error(`Create failed: ${err.message}`);
+        createBtn.disabled = false;
+        createBtn.textContent = 'Create Floor';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(createBtn);
+    container.appendChild(actions);
+
+    Modal.open('add-floor', {
+      title: 'Add Floor to Building',
+      content: container,
+      size: 'lg',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
+  }
+
+  // ── Helpers ──────────────────────────────────────────────
 
   /**
    * Determine the room status based on its agents.

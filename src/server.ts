@@ -31,6 +31,7 @@ import { initCommands } from './commands/index.js';
 import { initPlugins } from './plugins/index.js';
 import type { InitPluginsParams } from './plugins/index.js';
 import { initMcp } from './tools/mcp-manager.js';
+import { getPhotosDirectory, getPhotosUrlPrefix } from './ai/agent-photo-store.js';
 
 import type { Request, Response } from 'express';
 
@@ -98,13 +99,16 @@ async function start(): Promise<void> {
   app.use(express.json());
   app.use(express.static('public'));
 
+  // Serve agent profile photos from data/agent-photos/
+  app.use(getPhotosUrlPrefix(), express.static(getPhotosDirectory()));
+
   const http = createServer(app);
   const io = new SocketServer(http, {
     cors: { origin: config.get('CORS_ORIGIN') },
   });
 
   // 4. Wire transport
-  initTransport({ io, bus, rooms, agents, tools });
+  initTransport({ io, bus, rooms, agents, tools, ai });
   log.info('Transport layer initialized');
 
   // 5. Health check + system status
