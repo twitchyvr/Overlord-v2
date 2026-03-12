@@ -25,6 +25,7 @@ import { initPhaseZeroHandler } from './rooms/phase-zero.js';
 import { initScopeChangeHandler } from './rooms/scope-change.js';
 import { initChatOrchestrator } from './rooms/chat-orchestrator.js';
 import { initBuildingOnboarding } from './rooms/building-onboarding.js';
+import { initEscalationHandler } from './rooms/escalation-handler.js';
 import { listBuildings } from './rooms/building-manager.js';
 import { initCommands } from './commands/index.js';
 import { initPlugins } from './plugins/index.js';
@@ -70,6 +71,10 @@ async function start(): Promise<void> {
   // Building onboarding — auto-provisions Strategist room + agent on building creation
   initBuildingOnboarding({ bus, rooms, agents });
   log.info('Building onboarding initialized');
+
+  // Escalation handler — periodic check for stale pending gates
+  initEscalationHandler({ bus });
+  log.info('Escalation handler initialized');
 
   // 2b. Init commands + plugins (after rooms/agents/tools, before transport)
   initCommands({ bus, rooms, agents, tools });

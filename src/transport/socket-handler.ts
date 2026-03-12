@@ -713,6 +713,68 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       if (ack) ack(signoffResult);
     });
 
+    // ─── Settings Events ───
+
+    handle(socket, 'settings:get-config', EmptyPayloadSchema, (_data, ack) => {
+      if (!ack) return;
+
+      // Build provider config — NEVER expose API keys
+      const providers: Record<string, { configured: boolean; model: string; baseUrl?: string }> = {
+        anthropic: {
+          configured: !!process.env.ANTHROPIC_API_KEY,
+          model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+          baseUrl: process.env.ANTHROPIC_BASE_URL || undefined,
+        },
+        minimax: {
+          configured: !!process.env.MINIMAX_API_KEY,
+          model: process.env.MINIMAX_MODEL || 'MiniMax-M2.5',
+          baseUrl: process.env.MINIMAX_BASE_URL || 'https://api.minimax.io/anthropic',
+        },
+        openai: {
+          configured: !!process.env.OPENAI_API_KEY,
+          model: process.env.OPENAI_MODEL || 'gpt-4o',
+        },
+        ollama: {
+          configured: true, // Ollama is local, always "configured"
+          model: process.env.OLLAMA_MODEL || 'llama3',
+          baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+        },
+      };
+
+      // Room → provider mapping (from env or defaults)
+      const roomProviderMap: Record<string, string> = {
+        strategist: 'anthropic',
+        'building-architect': 'anthropic',
+        discovery: process.env.PROVIDER_DISCOVERY || 'anthropic',
+        architecture: process.env.PROVIDER_ARCHITECTURE || 'anthropic',
+        'code-lab': process.env.PROVIDER_CODE_LAB || 'minimax',
+        'testing-lab': process.env.PROVIDER_TESTING_LAB || 'minimax',
+        review: process.env.PROVIDER_REVIEW || 'anthropic',
+        deploy: process.env.PROVIDER_DEPLOY || 'anthropic',
+        'war-room': 'anthropic',
+        'data-exchange': 'anthropic',
+        'provider-hub': 'anthropic',
+        'plugin-bay': 'anthropic',
+      };
+
+      ack({
+        ok: true,
+        data: {
+          providers,
+          roomProviderMap,
+          features: {
+            plugins: process.env.ENABLE_PLUGINS === 'true',
+            luaScripting: process.env.ENABLE_LUA_SCRIPTING === 'true',
+          },
+          server: {
+            version: '0.1.0',
+            environment: process.env.NODE_ENV || 'development',
+            uptime: process.uptime(),
+          },
+        },
+      });
+    });
+
     // ─── System Events ───
 
     handle(socket, 'system:health', EmptyPayloadSchema, (_data, ack) => {
@@ -788,6 +850,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   forward('todo:created');
   forward('todo:updated');
   forward('todo:deleted');
+  forward('escalation:stale-gate');
   forward('system:log');
   forward('building:created');
   forward('building:onboarded');
