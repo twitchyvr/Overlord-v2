@@ -3,6 +3,7 @@
  *
  * Shows RAID log entries (Risks, Assumptions, Issues, Dependencies)
  * with type-based filtering and search.
+ * Fetches from server when building is active.
  */
 
 import { PanelComponent } from '../components/panel.js';
@@ -32,6 +33,7 @@ export class RaidPanel extends PanelComponent {
     this._filteredEntries = [];
     this._searchQuery = '';
     this._activeFilters = [];
+    this._buildingId = null;
   }
 
   mount() {
@@ -44,6 +46,23 @@ export class RaidPanel extends PanelComponent {
       this._applyFilters();
       this._renderContent();
     });
+
+    // Auto-fetch when building changes
+    this.subscribe(store, 'building.active', (buildingId) => {
+      this._buildingId = buildingId;
+      if (buildingId && window.overlordSocket) {
+        window.overlordSocket.fetchRaidEntries(buildingId);
+      }
+    });
+
+    // If building is already active, fetch
+    const activeBuildingId = store.get('building.active');
+    if (activeBuildingId) {
+      this._buildingId = activeBuildingId;
+      if (window.overlordSocket) {
+        window.overlordSocket.fetchRaidEntries(activeBuildingId);
+      }
+    }
 
     this._renderContent();
   }
@@ -62,6 +81,16 @@ export class RaidPanel extends PanelComponent {
         this._searchQuery = query;
         this._activeFilters = filters;
         this._applyFilters();
+
+        // Also trigger server-side search if query is non-trivial
+        if (query.length >= 3 && this._buildingId && window.overlordSocket) {
+          window.overlordSocket.searchRaid({
+            buildingId: this._buildingId,
+            query,
+            type: filters.length === 1 ? filters[0] : undefined
+          });
+        }
+
         this._renderEntries(body);
       }
     });
@@ -112,7 +141,7 @@ export class RaidPanel extends PanelComponent {
             default: return '\u26A0';
           }
         },
-        summary: (d) => d.title || d.description || 'RAID Entry',
+        summary: (d) => d.title || d.summary || d.description || 'RAID Entry',
         badge: (d) => ({
           text: d.type,
           color: typeConfig.color
@@ -126,9 +155,12 @@ export class RaidPanel extends PanelComponent {
           { label: 'Type', key: 'type' },
           { label: 'Severity', key: 'severity' },
           { label: 'Status', key: 'status' },
+          { label: 'Phase', key: 'phase' },
           { label: 'Description', key: 'description' },
+          { label: 'Summary', key: 'summary' },
           { label: 'Mitigation', key: 'mitigation' },
           { label: 'Owner', key: 'owner' },
+          { label: 'Decided By', key: 'decided_by' },
           { label: 'Room', key: 'room_id' },
           { label: 'Created', key: 'created_at', format: 'date' }
         ]
@@ -153,8 +185,10 @@ export class RaidPanel extends PanelComponent {
       const query = this._searchQuery.toLowerCase();
       entries = entries.filter(e =>
         (e.title || '').toLowerCase().includes(query) ||
+        (e.summary || '').toLowerCase().includes(query) ||
         (e.description || '').toLowerCase().includes(query) ||
-        (e.owner || '').toLowerCase().includes(query)
+        (e.owner || '').toLowerCase().includes(query) ||
+        (e.decided_by || '').toLowerCase().includes(query)
       );
     }
 
