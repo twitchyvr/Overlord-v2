@@ -76,6 +76,12 @@ export class TaskView extends Component {
       OverlordUI.subscribe('task:updated', () => this._fetchTasks())
     );
 
+    // Listen for todo updates to re-render detail view
+    this.subscribe(store, 'todos.list', (todos) => {
+      this._todos = todos || [];
+      this._renderDetailTodos();
+    });
+
     this._buildingId = store.get('building.active');
     this._tasks = store.get('tasks.list') || [];
     this._agents = store.get('agents.list') || [];
@@ -378,9 +384,19 @@ export class TaskView extends Component {
     for (const todo of this._todos) {
       const isDone = todo.status === 'done' || todo.status === 'completed';
       const row = h('div', { class: `todo-row ${isDone ? 'todo-done' : ''}` },
-        h('div', { class: `todo-checkbox ${isDone ? 'checked' : ''}` }),
+        h('div', { class: `todo-checkbox ${isDone ? 'checked' : ''}`, 'data-todo-id': todo.id }),
         h('span', { class: 'todo-text' }, todo.description || 'Untitled todo')
       );
+      // Wire toggle click
+      const checkbox = row.querySelector('.todo-checkbox');
+      if (checkbox) {
+        checkbox.style.cursor = 'pointer';
+        checkbox.addEventListener('click', () => {
+          if (window.overlordSocket) {
+            window.overlordSocket.toggleTodo(todo.id);
+          }
+        });
+      }
       todoContainer.appendChild(row);
     }
   }

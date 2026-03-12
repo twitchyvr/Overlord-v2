@@ -120,6 +120,7 @@ describe('initSocketBridge() — initialization', () => {
       'raid:entry:added', 'phase-zero:complete', 'phase-zero:failed',
       'scope-change:detected', 'exit-doc:submitted',
       'task:created', 'task:updated', 'phase:gate:signed-off',
+      'todo:created', 'todo:updated', 'todo:deleted',
     ];
     for (const evt of expected) {
       expect(mockSocket.handlers[evt]).toBeTypeOf('function');
@@ -1142,5 +1143,151 @@ describe('operation error feedback (_emitWithFeedback)', () => {
     await api.createRoom({ type: 'test' });
 
     expect(mockEngine.dispatch).not.toHaveBeenCalledWith('operation:error', expect.anything());
+  });
+});
+
+// ─── Todo broadcast events ──────────────────────────────────
+
+describe('socket "todo:created" event', () => {
+  it('appends the new todo to todos.list in the store', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    mockStore._data['todos.list'] = [{ id: 'td1', description: 'Existing' }];
+
+    mockSocket._trigger('todo:created', { id: 'td2', description: 'New todo', taskId: 't1' });
+
+    expect(mockStore.update).toHaveBeenCalledWith('todos.list', expect.any(Function));
+    const updated = mockStore._data['todos.list'];
+    expect(updated).toHaveLength(2);
+    expect(updated[1].id).toBe('td2');
+  });
+
+  it('dispatches todo:created engine event', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const data = { id: 'td1', description: 'Test', taskId: 't1' };
+
+    mockSocket._trigger('todo:created', data);
+
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('todo:created', data);
+  });
+
+  it('initializes todos.list from null when first todo is created', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+
+    mockSocket._trigger('todo:created', { id: 'td1', description: 'First' });
+
+    const updated = mockStore._data['todos.list'];
+    expect(updated).toHaveLength(1);
+    expect(updated[0].id).toBe('td1');
+  });
+});
+
+describe('socket "todo:updated" event', () => {
+  it('updates existing todo in todos.list by id', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    mockStore._data['todos.list'] = [
+      { id: 'td1', status: 'pending', description: 'Task A' },
+      { id: 'td2', status: 'pending', description: 'Task B' },
+    ];
+
+    mockSocket._trigger('todo:updated', { id: 'td1', status: 'done', description: 'Task A' });
+
+    const updated = mockStore._data['todos.list'];
+    expect(updated).toHaveLength(2);
+    expect(updated[0].status).toBe('done');
+    expect(updated[1].status).toBe('pending');
+  });
+
+  it('dispatches todo:updated engine event', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const data = { id: 'td1', status: 'done' };
+
+    mockSocket._trigger('todo:updated', data);
+
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('todo:updated', data);
+  });
+
+  it('does not add duplicate when todo id is not found', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    mockStore._data['todos.list'] = [{ id: 'td1', status: 'pending' }];
+
+    mockSocket._trigger('todo:updated', { id: 'td-unknown', status: 'done' });
+
+    const updated = mockStore._data['todos.list'];
+    expect(updated).toHaveLength(1);
+  });
+});
+
+describe('socket "todo:deleted" event', () => {
+  it('removes the todo from todos.list by id', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    mockStore._data['todos.list'] = [
+      { id: 'td1', description: 'Keep' },
+      { id: 'td2', description: 'Remove' },
+    ];
+
+    mockSocket._trigger('todo:deleted', { id: 'td2', taskId: 't1' });
+
+    const updated = mockStore._data['todos.list'];
+    expect(updated).toHaveLength(1);
+    expect(updated[0].id).toBe('td1');
+  });
+
+  it('dispatches todo:deleted engine event', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const data = { id: 'td1', taskId: 't1' };
+
+    mockSocket._trigger('todo:deleted', data);
+
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('todo:deleted', data);
+  });
+
+  it('handles deletion from empty list gracefully', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+
+    mockSocket._trigger('todo:deleted', { id: 'td-nonexistent', taskId: 't1' });
+
+    const updated = mockStore._data['todos.list'];
+    expect(updated).toEqual([]);
+  });
+});
+
+// ─── Todo API methods ──────────────────────────────────────
+
+describe('window.overlordSocket.deleteTodo()', () => {
+  it('emits todo:delete and removes from store on ok', async () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const api = (window as any).overlordSocket;
+    mockStore._data['todos.list'] = [
+      { id: 'td1', description: 'Keep' },
+      { id: 'td2', description: 'Delete' },
+    ];
+
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
+      if (ack) ack({ ok: true, data: { id: 'td2' } });
+    });
+
+    const result = await api.deleteTodo('td2');
+    expect(mockSocket.emit).toHaveBeenCalledWith('todo:delete', { id: 'td2' }, expect.any(Function));
+    expect(result.ok).toBe(true);
+    const updated = mockStore._data['todos.list'];
+    expect(updated).toHaveLength(1);
+    expect(updated[0].id).toBe('td1');
+  });
+
+  it('does not modify store on failed delete', async () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const api = (window as any).overlordSocket;
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockStore._data['todos.list'] = [{ id: 'td1' }, { id: 'td2' }];
+
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
+      if (ack) ack({ ok: false, error: { code: 'TODO_NOT_FOUND', message: 'Not found' } });
+    });
+
+    await api.deleteTodo('td2');
+    // store.update for deleteTodo should NOT have been called (only _emitWithFeedback triggers)
+    // The todos.list should still have 2 items
+    expect(mockStore._data['todos.list']).toHaveLength(2);
+    warnSpy.mockRestore();
   });
 });

@@ -649,6 +649,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
         const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(id);
         log.info({ id, taskId: data.taskId, description: data.description }, 'TODO created');
+        bus.emit('todo:created', todo);
         if (ack) ack({ ok: true, data: todo });
       } catch (e) {
         log.error({ event: 'todo:create', err: e, socketId: socket.id }, 'Handler threw');
@@ -676,6 +677,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
         const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(todoId);
         log.info({ todoId, from: currentStatus, to: newStatus }, 'TODO toggled');
+        bus.emit('todo:updated', todo);
         if (ack) ack({ ok: true, data: todo });
       } catch (e) {
         log.error({ event: 'todo:toggle', err: e, socketId: socket.id }, 'Handler threw');
@@ -691,6 +693,27 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       } catch (e) {
         log.error({ event: 'todo:list', err: e, socketId: socket.id }, 'Handler threw');
         if (ack) ack(errorResponse('todo:list', e));
+      }
+    });
+
+    socket.on('todo:delete', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+      try {
+        const db = getDb();
+        const todoId = data.id as string;
+
+        const existing = db.prepare('SELECT * FROM todos WHERE id = ?').get(todoId) as Record<string, unknown> | undefined;
+        if (!existing) {
+          if (ack) ack({ ok: false, error: { code: 'TODO_NOT_FOUND', message: `TODO ${todoId} does not exist`, retryable: false } });
+          return;
+        }
+
+        db.prepare('DELETE FROM todos WHERE id = ?').run(todoId);
+        log.info({ todoId, taskId: existing.task_id }, 'TODO deleted');
+        bus.emit('todo:deleted', { id: todoId, taskId: existing.task_id });
+        if (ack) ack({ ok: true, data: { id: todoId } });
+      } catch (e) {
+        log.error({ event: 'todo:delete', err: e, socketId: socket.id }, 'Handler threw');
+        if (ack) ack(errorResponse('todo:delete', e));
       }
     });
 
@@ -864,6 +887,9 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   bus.on('task:updated', (data: Record<string, unknown>) => io.emit('task:updated', data));
   bus.on('phase:gate:signed-off', (data: Record<string, unknown>) => io.emit('phase:gate:signed-off', data));
   bus.on('phase:conditions:resolved', (data: Record<string, unknown>) => io.emit('phase:conditions:resolved', data));
+  bus.on('todo:created', (data: Record<string, unknown>) => io.emit('todo:created', data));
+  bus.on('todo:updated', (data: Record<string, unknown>) => io.emit('todo:updated', data));
+  bus.on('todo:deleted', (data: Record<string, unknown>) => io.emit('todo:deleted', data));
 
   log.info('Transport layer initialized');
 }
