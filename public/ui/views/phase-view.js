@@ -7,7 +7,7 @@
  *
  * Store keys:
  *   building.activePhase — current phase string
- *   building.gates       — array of gate objects
+ *   phase.gates           — array of gate objects
  *   building.active      — active building ID
  *
  * Socket API:
@@ -86,7 +86,7 @@ export class PhaseView extends Component {
       this._render();
     });
 
-    this.subscribe(store, 'building.gates', (gates) => {
+    this.subscribe(store, 'phase.gates', (gates) => {
       this._gates = gates || [];
       this._render();
     });
@@ -108,7 +108,7 @@ export class PhaseView extends Component {
 
     // Seed from current store values
     this._currentPhase = store.get('building.activePhase') || 'strategy';
-    this._gates = store.get('building.gates') || [];
+    this._gates = store.get('phase.gates') || [];
     this._buildingId = store.get('building.active') || null;
 
     this._render();
