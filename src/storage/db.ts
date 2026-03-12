@@ -183,6 +183,17 @@ const SCHEMA_SQL = `
     created_at TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS citations (
+    id TEXT PRIMARY KEY,
+    source_room_id TEXT NOT NULL REFERENCES rooms(id),
+    source_message_id TEXT,
+    target_room_id TEXT NOT NULL REFERENCES rooms(id),
+    target_entry_id TEXT,
+    target_type TEXT NOT NULL CHECK(target_type IN ('message', 'raid', 'exit-doc', 'room')),
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS migrations (
     version INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
@@ -204,6 +215,9 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_notes_agent ON notes(agent_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_agent ON agent_sessions(agent_id);
   CREATE INDEX IF NOT EXISTS idx_sessions_room ON agent_sessions(room_id);
+  CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_room_id);
+  CREATE INDEX IF NOT EXISTS idx_citations_target ON citations(target_room_id);
+  CREATE INDEX IF NOT EXISTS idx_citations_type ON citations(target_type);
 `;
 
 /**

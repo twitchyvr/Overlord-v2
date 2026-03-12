@@ -8,6 +8,16 @@ services:
       - node_modules:/workspace/node_modules
     ports:
       - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - DB_PATH=./data/overlord.db
     command: sleep infinity
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
 volumes:
   node_modules:
