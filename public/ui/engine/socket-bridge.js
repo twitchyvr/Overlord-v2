@@ -292,7 +292,13 @@ export function initSocketBridge(socket, store, engine) {
       return list;
     });
     if (data.id === store.get('building.active')) {
-      store.set('building.data', data);
+      const existing = store.get('building.data') || {};
+      const merged = { ...existing, ...data };
+      // Normalize camelCase field from server to snake_case used by UI
+      if (data.activePhase && !data.active_phase) {
+        merged.active_phase = data.activePhase;
+      }
+      store.set('building.data', merged);
     }
     engine.dispatch('building:updated', data);
   });
