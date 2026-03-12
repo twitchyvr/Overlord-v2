@@ -58,6 +58,14 @@ Run `npm run validate` to verify. The CI pipeline enforces this.
    - Always include: `Co-Authored-By: Claude <noreply@anthropic.com>`
 4. Open a PR — never push directly to `main`
 5. PR body: Summary, Test Plan, link to Issue (`Closes #N`)
+6. **MANDATORY CODE REVIEW** — use subagents to review every PR before merging. Never close an issue without code review.
+
+### Agent Fleet Workflow — MANDATORY
+- **Use subagent fleets** for ALL work: coding, issues, writing comments, commits, and code reviews
+- **Launch parallel research agents** to understand requirements before coding
+- **Launch code review agents** after every PR — verify correctness, edge cases, integration
+- **Update README.md** with every significant change
+- **Verify end-to-end functionality** — tests passing is necessary but NOT sufficient
 
 ### Branch Strategy
 - `main` — stable, protected

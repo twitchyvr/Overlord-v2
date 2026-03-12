@@ -23,6 +23,8 @@ import { registerBuiltInRoomTypes } from './rooms/room-types/index.js';
 import { initTransport } from './transport/socket-handler.js';
 import { initPhaseZeroHandler } from './rooms/phase-zero.js';
 import { initScopeChangeHandler } from './rooms/scope-change.js';
+import { initChatOrchestrator } from './rooms/chat-orchestrator.js';
+import { initBuildingOnboarding } from './rooms/building-onboarding.js';
 import { listBuildings } from './rooms/building-manager.js';
 import { initCommands } from './commands/index.js';
 import { initPlugins } from './plugins/index.js';
@@ -60,6 +62,14 @@ async function start(): Promise<void> {
   initPhaseZeroHandler(bus);
   initScopeChangeHandler(bus);
   log.info('Phase Zero + Scope Change bus handlers initialized');
+
+  // Chat orchestrator — THE critical bridge: chat:message → AI → chat:response
+  initChatOrchestrator({ bus, rooms, agents, tools, ai });
+  log.info('Chat orchestrator initialized');
+
+  // Building onboarding — auto-provisions Strategist room + agent on building creation
+  initBuildingOnboarding({ bus, rooms, agents });
+  log.info('Building onboarding initialized');
 
   // 2b. Init commands + plugins (after rooms/agents/tools, before transport)
   initCommands({ bus, rooms, agents, tools });
