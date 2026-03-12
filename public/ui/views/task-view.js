@@ -853,9 +853,12 @@ export class TaskView extends Component {
 
     if (task.table_id) {
       const info = this._getTableInfo(task.table_id);
+      // Use server-enriched table_type/room_name if available, then fall back to local lookup
       const label = info
         ? `${info.tableType} in ${info.roomName}`
-        : `Table: ${task.table_id.slice(0, 8)}`;
+        : (task.table_type && task.room_name)
+          ? `${task.table_type} in ${task.room_name}`
+          : `Table: ${task.table_id.slice(0, 8)}`;
 
       row.appendChild(h('span', { class: 'task-card-table-badge task-card-table-badge-assigned' }, label));
 
@@ -901,10 +904,12 @@ export class TaskView extends Component {
       // Table info card
       const tableCard = h('div', { class: 'task-detail-team-card' });
 
+      const tableType = info ? info.tableType : (task.table_type || 'Table');
+      const roomName = info ? info.roomName : (task.room_name || '');
       const tableHeader = h('div', { class: 'task-detail-team-header' },
-        h('span', { class: 'task-detail-team-type' }, info ? info.tableType : 'Table'),
+        h('span', { class: 'task-detail-team-type' }, tableType),
         h('span', { class: 'task-detail-team-room text-muted' },
-          info ? `in ${info.roomName}` : '')
+          roomName ? `in ${roomName}` : '')
       );
       tableCard.appendChild(tableHeader);
 
