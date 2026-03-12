@@ -116,6 +116,10 @@ vi.mock('../../../public/ui/panels/team-panel.js', () => ({
   TeamPanel: vi.fn(),
 }));
 
+vi.mock('../../../public/ui/panels/tasks-panel.js', () => ({
+  TasksPanel: vi.fn(),
+}));
+
 // ── Deferred imports (grabbed after mocks are in place) ──────────
 
 let createV2Store: any;
@@ -136,6 +140,7 @@ let ProjectsPanel: any;
 let ToolsPanel: any;
 let LogsPanel: any;
 let TeamPanel: any;
+let TasksPanel: any;
 let hFn: any;
 let setContent: any;
 
@@ -155,7 +160,7 @@ function getSubscribeCallback(mock: any, event: string): ((...args: unknown[]) =
  * to get a fresh execution each test.
  */
 
-function setupDOM(opts: { withSocket?: boolean; withPanelEls?: boolean; withLoadingEl?: boolean } = {}) {
+function setupDOM(opts: { withSocket?: boolean; withPanelEls?: boolean; withLoadingEl?: boolean; withThemeToggle?: boolean } = {}) {
   // Clear body
   while (document.body.firstChild) {
     document.body.removeChild(document.body.firstChild);
@@ -175,7 +180,7 @@ function setupDOM(opts: { withSocket?: boolean; withPanelEls?: boolean; withLoad
   document.body.appendChild(rightPanel);
 
   if (opts.withPanelEls) {
-    for (const id of ['panel-phase', 'panel-agents', 'panel-raid', 'panel-activity', 'panel-projects', 'panel-tools', 'panel-logs', 'panel-team']) {
+    for (const id of ['panel-phase', 'panel-agents', 'panel-tasks', 'panel-raid', 'panel-activity', 'panel-projects', 'panel-tools', 'panel-logs', 'panel-team']) {
       const el = document.createElement('div');
       el.id = id;
       document.body.appendChild(el);
@@ -186,6 +191,12 @@ function setupDOM(opts: { withSocket?: boolean; withPanelEls?: boolean; withLoad
     const loading = document.createElement('div');
     loading.id = 'loading-state';
     document.body.appendChild(loading);
+  }
+
+  if (opts.withThemeToggle) {
+    const btn = document.createElement('button');
+    btn.id = 'theme-toggle';
+    document.body.appendChild(btn);
   }
 
   // Socket.IO global
@@ -260,6 +271,9 @@ beforeEach(async () => {
 
   const tmMod = await import('../../../public/ui/panels/team-panel.js');
   TeamPanel = (tmMod as any).TeamPanel;
+
+  const tkMod = await import('../../../public/ui/panels/tasks-panel.js');
+  TasksPanel = (tkMod as any).TasksPanel;
 
   const helpersMod = await import('../../../public/ui/engine/helpers.js');
   hFn = (helpersMod as any).h;
@@ -462,6 +476,7 @@ describe('boot.js — panel construction', () => {
     expect(ToolsPanel).not.toHaveBeenCalled();
     expect(LogsPanel).not.toHaveBeenCalled();
     expect(TeamPanel).not.toHaveBeenCalled();
+    expect(TasksPanel).not.toHaveBeenCalled();
   });
 
   it('still calls initPanelSystem even when no panel elements exist', async () => {
@@ -800,6 +815,7 @@ describe('boot.js — no socket.io fallback', () => {
     expect(ToolsPanel).not.toHaveBeenCalled();
     expect(LogsPanel).not.toHaveBeenCalled();
     expect(TeamPanel).not.toHaveBeenCalled();
+    expect(TasksPanel).not.toHaveBeenCalled();
   });
 
   it('does not call initPanelSystem when io is undefined', async () => {
@@ -856,5 +872,124 @@ describe('boot.js — no socket.io fallback', () => {
     const msgs = spy.mock.calls.map((c: any[]) => c[0]);
     expect(msgs).toContain('[Overlord v2] Boot complete');
     spy.mockRestore();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  8. THEME MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════
+
+describe('boot.js — theme management', () => {
+  afterEach(() => {
+    localStorage.clear();
+    document.documentElement.removeAttribute('data-theme');
+  });
+
+  it('sets data-theme to dark by default when no saved preference', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true });
+    await importBoot();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+  });
+
+  it('restores saved theme from localStorage', async () => {
+    localStorage.setItem('overlord-theme', 'light');
+    setupDOM({ withSocket: true, withPanelEls: true });
+    await importBoot();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  });
+
+  it('toggle button switches dark to light on click', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    await importBoot();
+
+    const btn = document.getElementById('theme-toggle')!;
+    btn.click();
+
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    expect(localStorage.getItem('overlord-theme')).toBe('light');
+  });
+
+  it('toggle button switches light to dark on click', async () => {
+    localStorage.setItem('overlord-theme', 'light');
+    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    await importBoot();
+
+    const btn = document.getElementById('theme-toggle')!;
+    btn.click();
+
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(localStorage.getItem('overlord-theme')).toBe('dark');
+  });
+
+  it('toggle button adds theme-light class when switching to light', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    await importBoot();
+
+    const btn = document.getElementById('theme-toggle')!;
+    btn.click();
+
+    expect(btn.classList.contains('theme-light')).toBe(true);
+  });
+
+  it('toggle button removes theme-light class when switching to dark', async () => {
+    localStorage.setItem('overlord-theme', 'light');
+    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    await importBoot();
+
+    const btn = document.getElementById('theme-toggle')!;
+    expect(btn.classList.contains('theme-light')).toBe(true);
+
+    btn.click();
+    expect(btn.classList.contains('theme-light')).toBe(false);
+  });
+
+  it('sets correct title on toggle button for dark theme', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    await importBoot();
+
+    const btn = document.getElementById('theme-toggle')!;
+    expect(btn.title).toBe('Switch to light theme');
+  });
+
+  it('sets correct title on toggle button for light theme', async () => {
+    localStorage.setItem('overlord-theme', 'light');
+    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    await importBoot();
+
+    const btn = document.getElementById('theme-toggle')!;
+    expect(btn.title).toBe('Switch to dark theme');
+  });
+
+  it('exports theme functions on window._overlordTheme', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true });
+    await importBoot();
+
+    const themeExport = (window as any)._overlordTheme;
+    expect(themeExport).toBeDefined();
+    expect(typeof themeExport.initTheme).toBe('function');
+    expect(typeof themeExport.applyTheme).toBe('function');
+    expect(themeExport.THEME_KEY).toBe('overlord-theme');
+  });
+
+  it('does not crash when theme-toggle button is missing', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: false });
+    await expect(importBoot()).resolves.not.toThrow();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+  });
+
+  it('persists theme across toggle cycles', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    await importBoot();
+
+    const btn = document.getElementById('theme-toggle')!;
+
+    // dark -> light
+    btn.click();
+    expect(localStorage.getItem('overlord-theme')).toBe('light');
+
+    // light -> dark
+    btn.click();
+    expect(localStorage.getItem('overlord-theme')).toBe('dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 });

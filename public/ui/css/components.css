@@ -792,6 +792,38 @@
   color: var(--accent-blue);
 }
 
+/* Theme toggle button */
+.toolbar-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-default);
+  position: relative;
+}
+.toolbar-btn-icon:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.theme-icon-dark,
+.theme-icon-light {
+  position: absolute;
+  transition: opacity var(--duration-fast) var(--ease-default), transform var(--duration-default) var(--ease-default);
+}
+/* Dark theme (default): show moon, hide sun */
+.theme-icon-dark { opacity: 1; transform: rotate(0deg); }
+.theme-icon-light { opacity: 0; transform: rotate(-90deg); }
+/* Light theme: show sun, hide moon */
+.toolbar-btn-icon.theme-light .theme-icon-dark { opacity: 0; transform: rotate(90deg); }
+.toolbar-btn-icon.theme-light .theme-icon-light { opacity: 1; transform: rotate(0deg); }
+
 /* Connection indicator */
 .toolbar-connection {
   display: flex;
