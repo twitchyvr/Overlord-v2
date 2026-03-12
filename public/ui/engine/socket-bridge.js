@@ -113,15 +113,54 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('chat:response', (data) => {
-    store.update('chat.messages', (msgs) => [...(msgs || []), { ...data, type: 'response', timestamp: Date.now() }]);
+    // If we were streaming, finalize it first
+    if (store.peek('ui.streaming')) {
+      engine.dispatch('chat:stream-end', data);
+    }
     store.set('ui.processing', false);
     store.set('ui.streaming', false);
+    // Only add to messages for non-error final responses
+    if (data.type !== 'error') {
+      store.update('chat.messages', (msgs) => [...(msgs || []), {
+        id: data.sessionId || Date.now().toString(),
+        role: 'assistant',
+        content: data.content,
+        agentId: data.agentId,
+        agentName: data.agentName || data.agentId,
+        thinking: data.thinking,
+        toolCalls: data.toolCalls,
+        type: 'response',
+        timestamp: Date.now(),
+      }]);
+    }
     engine.dispatch('chat:response', data);
   });
 
   socket.on('chat:stream', (data) => {
-    store.set('ui.streaming', true);
-    engine.dispatch('chat:stream', data);
+    // Translate backend chat:stream into frontend stream-start/chunk events
+    if (data.status === 'thinking') {
+      // First event — AI is starting to think
+      store.set('ui.streaming', true);
+      engine.dispatch('chat:stream-start', {
+        agentId: data.agentId,
+        agentName: data.agentId,
+        roomId: data.roomId,
+        messageId: `stream-${Date.now()}`,
+      });
+      return;
+    }
+    // Content arrived — extract text from content blocks
+    const textParts = (data.content || [])
+      .filter((b) => b.type === 'text' && b.text)
+      .map((b) => b.text);
+    if (textParts.length > 0) {
+      engine.dispatch('chat:stream-chunk', {
+        text: textParts.join('\n'),
+        agentId: data.agentId,
+        roomId: data.roomId,
+        iteration: data.iteration,
+      });
+    }
   });
 
   socket.on('tool:executed', (data) => {
