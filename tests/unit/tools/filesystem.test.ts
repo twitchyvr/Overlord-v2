@@ -1,5 +1,7 @@
 /**
  * Filesystem Tool Provider Tests
+ *
+ * Includes path traversal protection tests.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -102,7 +104,88 @@ describe('Filesystem Provider', () => {
     });
 
     it('throws for nonexistent directory', async () => {
-      await expect(listDirImpl({ path: '/nonexistent-dir-xyz' })).rejects.toThrow();
+      const dir = makeTempDir();
+      await expect(listDirImpl({ path: 'nonexistent-sub', cwd: dir })).rejects.toThrow();
+    });
+  });
+
+  describe('path traversal protection', () => {
+    it('blocks ../ traversal in readFileImpl', async () => {
+      const dir = makeTempDir();
+      await expect(
+        readFileImpl({ path: '../../../etc/passwd', cwd: dir }),
+      ).rejects.toThrow('Path traversal blocked');
+    });
+
+    it('blocks ../ traversal in writeFileImpl', async () => {
+      const dir = makeTempDir();
+      await expect(
+        writeFileImpl({ path: '../../evil.txt', content: 'pwned', cwd: dir }),
+      ).rejects.toThrow('Path traversal blocked');
+    });
+
+    it('blocks ../ traversal in patchFileImpl', async () => {
+      const dir = makeTempDir();
+      await expect(
+        patchFileImpl({ path: '../outside.txt', search: 'a', replace: 'b', cwd: dir }),
+      ).rejects.toThrow('Path traversal blocked');
+    });
+
+    it('blocks ../ traversal in listDirImpl', async () => {
+      const dir = makeTempDir();
+      await expect(
+        listDirImpl({ path: '../../', cwd: dir }),
+      ).rejects.toThrow('Path traversal blocked');
+    });
+
+    it('blocks absolute paths outside cwd', async () => {
+      const dir = makeTempDir();
+      await expect(
+        readFileImpl({ path: '/etc/passwd', cwd: dir }),
+      ).rejects.toThrow('Path traversal blocked');
+    });
+
+    it('blocks sneaky traversal (subdir/../../..)', async () => {
+      const dir = makeTempDir();
+      mkdirSync(join(dir, 'sub'));
+      await expect(
+        readFileImpl({ path: 'sub/../../..', cwd: dir }),
+      ).rejects.toThrow('Path traversal blocked');
+    });
+
+    it('allows valid relative paths within cwd', async () => {
+      const dir = makeTempDir();
+      mkdirSync(join(dir, 'sub'));
+      writeFileSync(join(dir, 'sub', 'ok.txt'), 'safe');
+
+      const result = await readFileImpl({ path: 'sub/ok.txt', cwd: dir });
+      expect(result.content).toBe('safe');
+    });
+
+    it('allows path that resolves to cwd itself', async () => {
+      const dir = makeTempDir();
+      writeFileSync(join(dir, 'file.txt'), 'data');
+      mkdirSync(join(dir, 'sub'));
+
+      // "sub/.." resolves back to cwd — listing cwd itself is fine
+      const result = await listDirImpl({ path: 'sub/..', cwd: dir });
+      expect(result.entries.length).toBeGreaterThan(0);
+    });
+
+    it('allows . path (current directory)', async () => {
+      const dir = makeTempDir();
+      writeFileSync(join(dir, 'test.txt'), 'hi');
+
+      const result = await listDirImpl({ path: '.', cwd: dir });
+      const names = result.entries.map((e) => e.name);
+      expect(names).toContain('test.txt');
+    });
+
+    it('blocks traversal disguised in nested path', async () => {
+      const dir = makeTempDir();
+      await expect(
+        readFileImpl({ path: 'a/b/c/../../../../etc/shadow', cwd: dir }),
+      ).rejects.toThrow('Path traversal blocked');
     });
   });
 });
