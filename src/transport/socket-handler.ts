@@ -22,7 +22,7 @@ import { submitExitDocument } from '../rooms/room-manager.js';
 import { getDb } from '../storage/db.js';
 import { handleBlueprintSubmission } from '../rooms/phase-zero.js';
 import { parseCommandText, dispatchCommand, handleMention, resolveReference, listCommands } from '../commands/index.js';
-import type { CommandContext } from '../commands/index.js';
+import type { CommandContext, ParsedToken } from '../commands/index.js';
 import type { z } from 'zod';
 
 import {
@@ -100,12 +100,15 @@ function errorResponse(event: string, thrown: unknown): { ok: false; error: { co
  *
  * For simple handlers: validate → call handler → ack result.
  * For complex handlers: validate → custom logic in handler body.
+ *
+ * Uses z.output<S> (Zod's output type) so handlers see post-default values
+ * (e.g. `.optional().default('')` resolves to `string`, not `string | undefined`).
  */
-function handle<T>(
+function handle<S extends z.ZodTypeAny>(
   socket: Socket,
   event: string,
-  schema: z.ZodSchema<T> | null,
-  handler: (parsed: T, ack?: Ack) => void | Promise<void>,
+  schema: S | null,
+  handler: (parsed: z.output<NonNullable<S>>, ack?: Ack) => void | Promise<void>,
 ): void {
   socket.on(event, async (data: unknown, ack?: Ack) => {
     try {
@@ -114,7 +117,7 @@ function handle<T>(
         if (!parsed) return;
         await handler(parsed, ack);
       } else {
-        await handler(data as T, ack);
+        await handler(data as z.output<NonNullable<S>>, ack);
       }
     } catch (e) {
       log.error({ event, err: e, socketId: socket.id }, 'Handler threw');
@@ -143,7 +146,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     handle(socket, 'building:list', BuildingListSchema, (parsed, ack) => {
-      if (ack) ack(listBuildings(parsed.projectId));
+      if (ack) ack(listBuildings(parsed?.projectId));
     });
 
     handle(socket, 'building:apply-blueprint', BuildingApplyBlueprintSchema, (parsed, ack) => {
@@ -264,7 +267,18 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     // ─── Chat Events (with command/mention/reference parsing) ───
 
     handle(socket, 'chat:message', ChatMessageSchema, async (parsed) => {
-      const { text, tokens, buildingId, roomId, agentId } = parsed;
+      const text = parsed.text;
+      const buildingId = parsed.buildingId;
+      const roomId = parsed.roomId;
+      const agentId = parsed.agentId;
+
+      // Coerce schema token objects to ParsedToken interface
+      const tokens: ParsedToken[] = (parsed.tokens ?? []).map((t) => ({
+        type: (t.type || 'command') as ParsedToken['type'],
+        char: t.char || '',
+        id: t.id || '',
+        label: t.label || t.value || '',
+      }));
 
       // 1. Check if message starts with '/' → dispatch as command
       const cmdParsed = parseCommandText(text);
@@ -346,7 +360,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     handle(socket, 'phase:pending-gates', PhasePendingGatesSchema, (parsed, ack) => {
-      if (ack) ack(getPendingGates(parsed.buildingId));
+      if (ack) ack(getPendingGates(parsed?.buildingId));
     });
 
     handle(socket, 'phase:resolve-conditions', PhaseResolveConditionsSchema, (parsed, ack) => {
@@ -368,7 +382,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     handle(socket, 'phase:stale-gates', PhaseStaleGatesSchema, (parsed, ack) => {
-      if (ack) ack(getStalePendingGates(parsed.thresholdMs || 30 * 60 * 1000));
+      if (ack) ack(getStalePendingGates(parsed?.thresholdMs || 30 * 60 * 1000));
     });
 
     handle(socket, 'phase:order', EmptyPayloadSchema, (_data, ack) => {
@@ -386,7 +400,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     handle(socket, 'raid:add', RaidAddSchema, (parsed, ack) => {
-      const result = addRaidEntry(parsed as Parameters<typeof addRaidEntry>[0]);
+      const result = addRaidEntry(parsed as unknown as Parameters<typeof addRaidEntry>[0]);
       bus.emit('raid:entry:added', { ...(result.ok ? result.data as Record<string, unknown> : {}), ...parsed });
       if (ack) ack(result);
     });
@@ -518,7 +532,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
       const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(id);
       log.info({ id, taskId: parsed.taskId, description: parsed.description }, 'TODO created');
-      bus.emit('todo:created', todo);
+      bus.emit('todo:created', todo as Record<string, unknown>);
       if (ack) ack({ ok: true, data: todo });
     });
 
@@ -539,7 +553,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
       const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(parsed.id);
       log.info({ todoId: parsed.id, from: currentStatus, to: newStatus }, 'TODO toggled');
-      bus.emit('todo:updated', todo);
+      bus.emit('todo:updated', todo as Record<string, unknown>);
       if (ack) ack({ ok: true, data: todo });
     });
 
@@ -567,7 +581,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     handle(socket, 'exit-doc:submit', ExitDocSubmitSchema, (parsed, ack) => {
       const result = submitExitDocument({
         roomId: parsed.roomId, agentId: parsed.agentId,
-        document: parsed.document, buildingId: parsed.buildingId, phase: parsed.phase,
+        document: parsed.document ?? {}, buildingId: parsed.buildingId, phase: parsed.phase,
       });
       bus.emit('exit-doc:submitted', {
         roomId: parsed.roomId, roomType: parsed.roomType,

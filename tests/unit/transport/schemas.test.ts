@@ -122,6 +122,9 @@ describe('validate()', () => {
     expect(result).toEqual({
       text: '',
       tokens: [],
+      buildingId: '',
+      roomId: '',
+      agentId: '',
     });
   });
 });
@@ -583,6 +586,7 @@ describe('RAID Schemas', () => {
       const result = RaidAddSchema.safeParse({
         buildingId: 'bld_1',
         type: 'risk',
+        phase: 'discovery',
         summary: 'API rate limits may cause failures',
       });
       expect(result.success).toBe(true);
@@ -597,6 +601,7 @@ describe('RAID Schemas', () => {
       const result = RaidAddSchema.safeParse({
         buildingId: 'bld_1',
         type: 'risk',
+        phase: 'discovery',
         summary: '',
       });
       expect(result.success).toBe(false);
@@ -606,6 +611,7 @@ describe('RAID Schemas', () => {
       const result = RaidAddSchema.safeParse({
         buildingId: 'bld_1',
         type: 'risk',
+        phase: 'discovery',
         summary: 'x'.repeat(10_001),
       });
       expect(result.success).toBe(false);
@@ -615,6 +621,7 @@ describe('RAID Schemas', () => {
       const result = RaidAddSchema.safeParse({
         buildingId: 'bld_1',
         type: 'risk',
+        phase: 'discovery',
         summary: 'Test',
         priority: 'high',
       });
@@ -885,6 +892,7 @@ describe('Field Length Limits', () => {
     const result = RaidAddSchema.safeParse({
       buildingId: 'bld_1',
       type: 'risk',
+      phase: 'discovery',
       summary: 'x'.repeat(10_000),
     });
     expect(result.success).toBe(true);
@@ -894,6 +902,7 @@ describe('Field Length Limits', () => {
     const result = RaidAddSchema.safeParse({
       buildingId: 'bld_1',
       type: 'risk',
+      phase: 'discovery',
       summary: 'x'.repeat(10_001),
     });
     expect(result.success).toBe(false);

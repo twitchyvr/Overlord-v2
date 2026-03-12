@@ -223,6 +223,43 @@ const SCHEMA_SQL = `
 `;
 
 /**
+ * Column definitions that may be missing from existing tables.
+ * Each entry: [table, column, column_definition].
+ * Used by migrateSchema() to ADD COLUMN if the table already existed
+ * before the column was introduced.
+ */
+const EXPECTED_COLUMNS: Array<[string, string, string]> = [
+  ['agents', 'building_id', 'TEXT REFERENCES buildings(id)'],
+];
+
+/**
+ * Detect and apply schema migrations for existing databases.
+ *
+ * `CREATE TABLE IF NOT EXISTS` never modifies existing tables, so new columns
+ * added after initial table creation must be back-filled with ALTER TABLE.
+ * This runs BEFORE the main schema SQL so that CREATE INDEX statements
+ * referencing newly-added columns don't fail.
+ */
+function migrateSchema(database: Database.Database): void {
+  for (const [table, column, definition] of EXPECTED_COLUMNS) {
+    // Check if the table exists
+    const tableExists = database.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+    ).get(table);
+    if (!tableExists) continue; // Table doesn't exist yet — CREATE TABLE will handle it
+
+    // Check if the column exists
+    const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    const hasColumn = columns.some((c) => c.name === column);
+    if (hasColumn) continue; // Column already exists
+
+    // Add the missing column
+    database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    log.info({ table, column }, 'Migration: added missing column to existing table');
+  }
+}
+
+/**
  * Initialize the SQLite database with WAL mode and the v2 schema.
  * Note: Database.prototype.exec() is SQLite's SQL execution method,
  * not Node's child_process exec — no shell injection risk.
@@ -238,6 +275,9 @@ export async function initStorage(cfg: Config): Promise<Database.Database> {
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+
+  // Migrate existing tables before running schema (adds missing columns)
+  migrateSchema(db);
 
   // SQLite exec() runs SQL statements — not a shell command
   db.exec(SCHEMA_SQL);
