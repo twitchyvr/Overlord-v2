@@ -17,6 +17,8 @@ import { createBuilding, getBuilding, listBuildings, listFloors, getFloor } from
 import { getGates, canAdvance } from '../rooms/phase-gate.js';
 import { searchRaid } from '../rooms/raid-log.js';
 import { handleBlueprintSubmission } from '../rooms/phase-zero.js';
+import { initCommands, parseCommandText, dispatchCommand, handleMention, resolveReference } from '../commands/index.js';
+import type { ParsedToken, CommandContext } from '../commands/index.js';
 
 const log = logger.child({ module: 'transport' });
 
@@ -44,7 +46,9 @@ function errorResponse(event: string, thrown: unknown): { ok: false; error: { co
   };
 }
 
-export function initTransport({ io, bus, rooms, agents, tools: _tools }: InitTransportParams): void {
+export function initTransport({ io, bus, rooms, agents, tools }: InitTransportParams): void {
+  // Initialize the command system with all layer APIs
+  initCommands({ bus, rooms, agents, tools });
   io.on('connection', (socket: Socket) => {
     log.info({ id: socket.id }, 'Client connected');
 
@@ -233,9 +237,101 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools }: InitTra
       }
     });
 
-    // ─── Chat Events ───
-    socket.on('chat:message', (data: Record<string, unknown>) => {
+    // ─── Chat Events (with command/mention/reference parsing) ───
+    socket.on('chat:message', async (data: Record<string, unknown>) => {
       try {
+        const text = (data.text as string) || '';
+        const tokens = (data.tokens as ParsedToken[]) || [];
+
+        // 1. Check if message starts with '/' → dispatch as command
+        const parsed = parseCommandText(text);
+        if (parsed) {
+          const ctx: CommandContext = {
+            command: parsed.command,
+            args: parsed.args,
+            rawText: text,
+            socketId: socket.id,
+            buildingId: data.buildingId as string | undefined,
+            roomId: data.roomId as string | undefined,
+            agentId: data.agentId as string | undefined,
+            tokens,
+            bus,
+          };
+
+          const result = await dispatchCommand(ctx);
+
+          // Send command result back to the client
+          if (!result.silent) {
+            socket.emit('chat:response', {
+              type: 'command',
+              command: parsed.command,
+              ok: result.ok,
+              response: result.response,
+              data: result.data,
+            });
+          }
+
+          // Commands are fully handled — don't forward to bus as a chat message
+          return;
+        }
+
+        // 2. Process @mention tokens
+        const mentionTokens = tokens.filter(t => t.type === 'agent' || t.char === '@');
+        for (const token of mentionTokens) {
+          try {
+            const mentionCtx: CommandContext = {
+              command: '',
+              args: [],
+              rawText: text,
+              socketId: socket.id,
+              buildingId: data.buildingId as string | undefined,
+              roomId: data.roomId as string | undefined,
+              agentId: data.agentId as string | undefined,
+              tokens,
+              bus,
+            };
+            const mentionResult = await handleMention(token, mentionCtx);
+            if (mentionResult.notified) {
+              socket.emit('chat:response', {
+                type: 'mention',
+                agentId: mentionResult.agentId,
+                response: mentionResult.response,
+              });
+            }
+          } catch (mentionErr) {
+            log.error({ event: 'chat:message', mentionErr, tokenId: token.id }, 'Mention processing failed');
+          }
+        }
+
+        // 3. Process #reference tokens
+        const refTokens = tokens.filter(t => t.type === 'reference' || t.char === '#');
+        for (const token of refTokens) {
+          try {
+            const refCtx: CommandContext = {
+              command: '',
+              args: [],
+              rawText: text,
+              socketId: socket.id,
+              buildingId: data.buildingId as string | undefined,
+              roomId: data.roomId as string | undefined,
+              agentId: data.agentId as string | undefined,
+              tokens,
+              bus,
+            };
+            const refResult = await resolveReference(token, refCtx);
+            if (refResult.resolved) {
+              socket.emit('chat:response', {
+                type: 'reference',
+                target: refResult.target,
+                content: refResult.content,
+              });
+            }
+          } catch (refErr) {
+            log.error({ event: 'chat:message', refErr, tokenId: token.id }, 'Reference resolution failed');
+          }
+        }
+
+        // 4. Regular message — forward to bus as before
         bus.emit('chat:message', { socketId: socket.id, ...data });
       } catch (e) {
         log.error({ event: 'chat:message', err: e, socketId: socket.id }, 'Handler threw');
@@ -353,6 +449,8 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools }: InitTra
   bus.on('phase-zero:failed', (data: Record<string, unknown>) => io.emit('phase-zero:failed', data));
   bus.on('exit-doc:submitted', (data: Record<string, unknown>) => io.emit('exit-doc:submitted', data));
   bus.on('scope-change:detected', (data: Record<string, unknown>) => io.emit('scope-change:detected', data));
+  bus.on('agent:mentioned', (data: Record<string, unknown>) => io.emit('agent:mentioned', data));
+  bus.on('deploy:check', (data: Record<string, unknown>) => io.emit('deploy:check', data));
 
   log.info('Transport layer initialized');
 }

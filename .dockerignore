@@ -1,0 +1,45 @@
+# Dependencies
+node_modules
+
+# Build output (rebuilt inside container)
+dist
+
+# Version control
+.git
+.gitignore
+
+# Dev container config
+.devcontainer
+
+# Tests
+tests
+coverage
+*.test.ts
+*.spec.ts
+
+# Documentation
+docs
+*.md
+
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+
+# IDE / Editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Architecture design docs
+Architecture Redesign
+
+# Misc
+*.log
+.eslintcache

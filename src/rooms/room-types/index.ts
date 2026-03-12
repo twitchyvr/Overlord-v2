@@ -17,6 +17,9 @@ import { DeployRoom } from './deploy.js';
 import { WarRoom } from './war-room.js';
 import { StrategistOffice } from './strategist.js';
 import { BuildingArchitect } from './building-architect.js';
+import { DataExchangeRoom } from './data-exchange.js';
+import { ProviderHubRoom } from './provider-hub.js';
+import { PluginBayRoom } from './plugin-bay.js';
 
 /**
  * All built-in room types, keyed by their contract roomType string.
@@ -34,6 +37,10 @@ export const builtInRoomTypes: ReadonlyArray<{ type: string; factory: BaseRoomCo
   { type: 'review', factory: ReviewRoom as unknown as BaseRoomConstructor },
   { type: 'deploy', factory: DeployRoom as unknown as BaseRoomConstructor },
   { type: 'war-room', factory: WarRoom as unknown as BaseRoomConstructor },
+  // Integration Floor
+  { type: 'data-exchange', factory: DataExchangeRoom as unknown as BaseRoomConstructor },
+  { type: 'provider-hub', factory: ProviderHubRoom as unknown as BaseRoomConstructor },
+  { type: 'plugin-bay', factory: PluginBayRoom as unknown as BaseRoomConstructor },
 ];
 
 /**
@@ -58,3 +65,6 @@ export { DeployRoom } from './deploy.js';
 export { WarRoom } from './war-room.js';
 export { StrategistOffice } from './strategist.js';
 export { BuildingArchitect } from './building-architect.js';
+export { DataExchangeRoom } from './data-exchange.js';
+export { ProviderHubRoom } from './provider-hub.js';
+export { PluginBayRoom } from './plugin-bay.js';
