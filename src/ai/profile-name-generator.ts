@@ -122,7 +122,7 @@ export async function generateAgentIdentity(
   specialization?: string,
   opts?: GenerateIdentityOpts,
 ): Promise<Result<GeneratedIdentity>> {
-  const provider = opts?.provider || 'anthropic';
+  const provider = opts?.provider || 'minimax';
 
   // Check if the provider adapter exists and is configured
   const adapter = ai.getAdapter(provider);

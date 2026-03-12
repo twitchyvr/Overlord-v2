@@ -604,7 +604,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         if (!hasProfile && parsed.role) {
           // Fire-and-forget: don't block registration
           generateFullProfile(ai, parsed.role, undefined, {
-            provider: 'anthropic',
+            provider: 'minimax',
           }).then((genResult) => {
             if (genResult.ok) {
               const profileResult = genResult.data as FullProfileResult;
@@ -1411,18 +1411,18 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
       // Room → provider mapping (from env or defaults)
       const roomProviderMap: Record<string, string> = {
-        strategist: 'anthropic',
-        'building-architect': 'anthropic',
-        discovery: process.env.PROVIDER_DISCOVERY || 'anthropic',
-        architecture: process.env.PROVIDER_ARCHITECTURE || 'anthropic',
+        strategist: process.env.PROVIDER_DISCOVERY || 'minimax',
+        'building-architect': process.env.PROVIDER_ARCHITECTURE || 'minimax',
+        discovery: process.env.PROVIDER_DISCOVERY || 'minimax',
+        architecture: process.env.PROVIDER_ARCHITECTURE || 'minimax',
         'code-lab': process.env.PROVIDER_CODE_LAB || 'minimax',
         'testing-lab': process.env.PROVIDER_TESTING_LAB || 'minimax',
-        review: process.env.PROVIDER_REVIEW || 'anthropic',
-        deploy: process.env.PROVIDER_DEPLOY || 'anthropic',
-        'war-room': 'anthropic',
-        'data-exchange': 'anthropic',
-        'provider-hub': 'anthropic',
-        'plugin-bay': 'anthropic',
+        review: process.env.PROVIDER_REVIEW || 'minimax',
+        deploy: process.env.PROVIDER_DEPLOY || 'minimax',
+        'war-room': process.env.PROVIDER_DISCOVERY || 'minimax',
+        'data-exchange': process.env.PROVIDER_DISCOVERY || 'minimax',
+        'provider-hub': process.env.PROVIDER_DISCOVERY || 'minimax',
+        'plugin-bay': process.env.PROVIDER_DISCOVERY || 'minimax',
       };
 
       ack({
@@ -1468,13 +1468,15 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
             }
           }
 
+          // Mark agents as idle on disconnect — do NOT delete them.
+          // Agents are persistent entities stored in the database.
+          // They should only be removed via explicit 'agent:remove' events.
           for (const agentId of assoc.agentIds) {
             try {
-              agents.removeAgent(agentId);
-              bus.emit('agent:status-changed', { agentId, status: 'removed', reason: 'disconnect' });
+              bus.emit('agent:status-changed', { agentId, status: 'idle', reason: 'disconnect' });
               cleanedAgents++;
             } catch (e) {
-              log.warn({ agentId, err: e, socketId: socket.id }, 'Failed to remove agent on disconnect');
+              log.warn({ agentId, err: e, socketId: socket.id }, 'Failed to update agent status on disconnect');
             }
           }
 

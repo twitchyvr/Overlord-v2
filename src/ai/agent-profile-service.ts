@@ -27,7 +27,7 @@ export interface GenerateFullProfileOpts {
   skipPhoto?: boolean;
   /** Gender preference for name generation */
   gender?: string;
-  /** AI provider to use (defaults to 'anthropic') */
+  /** AI provider to use (defaults to 'minimax') */
   provider?: string;
   /** Existing profile fields to preserve (won't be overwritten) */
   existing?: Partial<AgentProfileFields>;

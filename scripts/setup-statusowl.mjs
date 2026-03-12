@@ -20,12 +20,13 @@ import { io } from 'socket.io-client';
 
 const SERVER = 'http://localhost:4000';
 const TIMEOUT = 30_000;
+const PROFILE_TIMEOUT = 120_000; // 2 minutes for AI profile + photo generation
 
 // ─── Helpers ───
 
-function emit(socket, event, data = {}) {
+function emit(socket, event, data = {}, timeout = TIMEOUT) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`Timeout: ${event}`)), TIMEOUT);
+    const timer = setTimeout(() => reject(new Error(`Timeout: ${event}`)), timeout);
     socket.emit(event, data, (res) => {
       clearTimeout(timer);
       if (res && res.ok === false) {
@@ -131,7 +132,7 @@ async function setup() {
     await emit(socket, 'room:update', {
       roomId: rooms['Backend Workshop'].id,
       fileScope: 'assigned',
-      provider: 'anthropic',
+      provider: 'minimax',
       allowedTools: ['read_file', 'write_file', 'patch_file', 'list_dir', 'bash', 'web_search', 'record_note', 'recall_notes'],
     });
     log('⚙️', 'Backend Workshop: assigned scope, anthropic, full dev tools');
@@ -142,7 +143,7 @@ async function setup() {
     await emit(socket, 'room:update', {
       roomId: rooms['Frontend Workshop'].id,
       fileScope: 'assigned',
-      provider: 'anthropic',
+      provider: 'minimax',
       allowedTools: ['read_file', 'write_file', 'patch_file', 'list_dir', 'bash', 'web_search', 'fetch_webpage', 'record_note', 'recall_notes'],
     });
     log('⚙️', 'Frontend Workshop: assigned scope, anthropic, full dev tools + web');
@@ -153,7 +154,7 @@ async function setup() {
     await emit(socket, 'room:update', {
       roomId: rooms['QA Lab'].id,
       fileScope: 'read-only',
-      provider: 'anthropic',
+      provider: 'minimax',
       allowedTools: ['read_file', 'list_dir', 'bash', 'qa_run_tests', 'qa_check_lint', 'qa_check_types', 'qa_check_coverage', 'qa_audit_deps'],
     });
     log('⚙️', 'QA Lab: read-only scope, full QA toolset');
@@ -164,7 +165,7 @@ async function setup() {
     await emit(socket, 'room:update', {
       roomId: rooms['Code Review Chamber'].id,
       fileScope: 'read-only',
-      provider: 'anthropic',
+      provider: 'minimax',
     });
     log('⚙️', 'Code Review Chamber: read-only scope');
   }
@@ -281,8 +282,8 @@ async function setup() {
       const res = await emit(socket, 'agent:generate-profile', {
         agentId,
         capabilities: agentDefs.find(a => a.name === name)?.specialization?.split(', ') || [],
-        provider: 'anthropic',
-      });
+        provider: 'minimax',
+      }, PROFILE_TIMEOUT);
       const profile = res.data || res;
       log('📸', `${name}: ${profile.firstName || '?'} ${profile.lastName || '?'} — profile + photo generated`);
       return { name, success: true, profile };

@@ -29,13 +29,13 @@ const ConfigSchema = z.object({
   OLLAMA_BASE_URL: z.string().default('http://localhost:11434'),
   OLLAMA_MODEL: z.string().default('llama3'),
 
-  // Provider assignments per room type
-  PROVIDER_DISCOVERY: z.string().default('anthropic'),
-  PROVIDER_ARCHITECTURE: z.string().default('anthropic'),
+  // Provider assignments per room type (default: minimax for all rooms)
+  PROVIDER_DISCOVERY: z.string().default('minimax'),
+  PROVIDER_ARCHITECTURE: z.string().default('minimax'),
   PROVIDER_CODE_LAB: z.string().default('minimax'),
   PROVIDER_TESTING_LAB: z.string().default('minimax'),
-  PROVIDER_REVIEW: z.string().default('anthropic'),
-  PROVIDER_DEPLOY: z.string().default('anthropic'),
+  PROVIDER_REVIEW: z.string().default('minimax'),
+  PROVIDER_DEPLOY: z.string().default('minimax'),
 
   // GitHub
   GITHUB_TOKEN: z.string().optional(),

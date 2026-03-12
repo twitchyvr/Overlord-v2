@@ -279,7 +279,7 @@ export async function testProvider(
 function getDefaultProviderForRoom(roomType: string): string {
   // Check env directly for room-specific overrides (PROVIDER_CODE_LAB, etc.)
   const envKey = `PROVIDER_${roomType.replace(/-/g, '_').toUpperCase()}`;
-  return process.env[envKey] || 'anthropic';
+  return process.env[envKey] || 'minimax';
 }
 
 function getModelForProvider(provider: string): string {
