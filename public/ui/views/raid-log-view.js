@@ -22,6 +22,7 @@ import { Card } from '../components/card.js';
 import { Tabs } from '../components/tabs.js';
 import { Button } from '../components/button.js';
 import { Modal } from '../components/modal.js';
+import { Toast } from '../components/toast.js';
 
 
 const RAID_TYPES = ['risk', 'assumption', 'issue', 'decision'];
@@ -484,9 +485,25 @@ export class RaidLogView extends Component {
     });
   }
 
-  _submitCreateForm() {
-    const summary = document.getElementById('raid-create-summary')?.value?.trim();
-    if (!summary) return;
+  async _submitCreateForm() {
+    // Clear previous validation errors
+    const existingErrors = document.querySelectorAll('.raid-create-form .form-error');
+    existingErrors.forEach(el => el.remove());
+
+    const summaryInput = document.getElementById('raid-create-summary');
+    const summary = summaryInput?.value?.trim();
+
+    // Validate required fields
+    if (!summary) {
+      if (summaryInput) {
+        summaryInput.classList.add('input-error');
+        summaryInput.parentElement?.appendChild(
+          h('div', { class: 'form-error' }, 'Summary is required')
+        );
+      }
+      return;
+    }
+    if (summaryInput) summaryInput.classList.remove('input-error');
 
     const type = document.getElementById('raid-create-type')?.value || 'risk';
     const rationale = document.getElementById('raid-create-rationale')?.value?.trim() || '';
@@ -497,7 +514,7 @@ export class RaidLogView extends Component {
 
     if (!window.overlordSocket || !this._buildingId) return;
 
-    window.overlordSocket.addRaidEntry({
+    const result = await window.overlordSocket.addRaidEntry({
       buildingId: this._buildingId,
       type,
       summary,
@@ -507,7 +524,13 @@ export class RaidLogView extends Component {
       affectedAreas
     });
 
-    Modal.close('raid-create');
+    if (result && result.ok) {
+      Toast.success('RAID entry added');
+      Modal.close('raid-create');
+    } else {
+      Toast.error(result?.error?.message || 'Failed to add RAID entry');
+      // Keep modal open so user can fix and retry
+    }
   }
 
   // ── Status Updates ─────────────────────────────────────────

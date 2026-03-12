@@ -23,6 +23,7 @@ import { Card } from '../components/card.js';
 import { Tabs } from '../components/tabs.js';
 import { Button } from '../components/button.js';
 import { Modal } from '../components/modal.js';
+import { Toast } from '../components/toast.js';
 
 
 const STATUS_ORDER = ['pending', 'in-progress', 'done', 'blocked'];
@@ -478,9 +479,25 @@ export class TaskView extends Component {
     });
   }
 
-  _submitCreateForm() {
-    const title = document.getElementById('task-create-title')?.value?.trim();
-    if (!title) return;
+  async _submitCreateForm() {
+    // Clear previous validation errors
+    const existingErrors = document.querySelectorAll('.task-create-form .form-error');
+    existingErrors.forEach(el => el.remove());
+
+    const titleInput = document.getElementById('task-create-title');
+    const title = titleInput?.value?.trim();
+
+    // Validate required fields
+    if (!title) {
+      if (titleInput) {
+        titleInput.classList.add('input-error');
+        titleInput.parentElement?.appendChild(
+          h('div', { class: 'form-error' }, 'Title is required')
+        );
+      }
+      return;
+    }
+    if (titleInput) titleInput.classList.remove('input-error');
 
     const description = document.getElementById('task-create-desc')?.value?.trim() || '';
     const priority = document.getElementById('task-create-priority')?.value || 'normal';
@@ -488,7 +505,7 @@ export class TaskView extends Component {
 
     if (!window.overlordSocket || !this._buildingId) return;
 
-    window.overlordSocket.createTask({
+    const result = await window.overlordSocket.createTask({
       buildingId: this._buildingId,
       title,
       description,
@@ -496,7 +513,13 @@ export class TaskView extends Component {
       assigneeId
     });
 
-    Modal.close('task-create');
+    if (result && result.ok) {
+      Toast.success('Task created');
+      Modal.close('task-create');
+    } else {
+      Toast.error(result?.error?.message || 'Failed to create task');
+      // Keep modal open so user can fix and retry
+    }
   }
 
   // ── Task Status Updates ────────────────────────────────────
