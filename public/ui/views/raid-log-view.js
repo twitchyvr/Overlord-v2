@@ -57,6 +57,7 @@ export class RaidLogView extends Component {
     this._searchQuery = '';
     this._typeTabs = null;
     this._statusTabs = null;
+    this._loading = true;
   }
 
   mount() {
@@ -66,6 +67,7 @@ export class RaidLogView extends Component {
 
     this.subscribe(store, 'raid.entries', (entries) => {
       this._entries = entries || [];
+      this._loading = false;
       this._updateEntryList();
       this._updateTabBadges();
     });
@@ -82,6 +84,7 @@ export class RaidLogView extends Component {
 
     this._buildingId = store.get('building.active');
     this._entries = store.get('raid.entries') || [];
+    if (this._entries.length > 0) this._loading = false;
 
     this.render();
     this._fetchEntries();
@@ -236,14 +239,21 @@ export class RaidLogView extends Component {
     const entries = this._getFilteredEntries();
 
     if (entries.length === 0) {
-      container.appendChild(h('div', { class: 'empty-state' },
-        h('p', { class: 'empty-state-title' },
-          this._searchQuery ? 'No matching entries' : 'No RAID entries yet'),
-        h('p', { class: 'empty-state-description' },
-          this._searchQuery
-            ? 'Try adjusting your search or filters.'
-            : 'Add an entry to start tracking risks, assumptions, issues, and decisions.')
-      ));
+      if (this._loading) {
+        container.appendChild(h('div', { class: 'loading-state' },
+          h('div', { class: 'loading-spinner' }),
+          h('p', { class: 'loading-text' }, 'Loading RAID entries...')
+        ));
+      } else {
+        container.appendChild(h('div', { class: 'empty-state' },
+          h('p', { class: 'empty-state-title' },
+            this._searchQuery ? 'No matching entries' : 'No RAID entries yet'),
+          h('p', { class: 'empty-state-description' },
+            this._searchQuery
+              ? 'Try adjusting your search or filters.'
+              : 'Add an entry to start tracking risks, assumptions, issues, and decisions.')
+        ));
+      }
       return;
     }
 

@@ -87,6 +87,9 @@ export class ActivityView extends Component {
 
     /** @type {HTMLElement|null} Item count badge in the header. */
     this._countEl = null;
+
+    /** @type {boolean} True until first data arrives from the store. */
+    this._loading = true;
   }
 
   /* ── Lifecycle ─────────────────────────────────────────── */
@@ -98,10 +101,12 @@ export class ActivityView extends Component {
 
     // Seed from existing store data
     this._items = (store.get('activity.items') || []).slice(-MAX_ITEMS);
+    if (this._items.length > 0) this._loading = false;
 
     // Subscribe to bulk store updates
     this.subscribe(store, 'activity.items', (items) => {
       this._items = (items || []).slice(-MAX_ITEMS);
+      this._loading = false;
       this._render();
     });
 
@@ -198,16 +203,25 @@ export class ActivityView extends Component {
     }
 
     if (filtered.length === 0) {
-      this._timelineEl.appendChild(
-        h('div', { class: 'activity-view-empty' },
-          h('div', { class: 'activity-view-empty-icon' }, '\u{1F4ED}'),
-          h('p', { class: 'activity-view-empty-title' }, 'No activity yet'),
-          h('p', { class: 'activity-view-empty-desc' },
-            this._filter !== 'all'
-              ? 'No events match the selected filter. Try switching to "All".'
-              : 'Activity events will appear here as agents work.')
-        )
-      );
+      if (this._loading) {
+        this._timelineEl.appendChild(
+          h('div', { class: 'loading-state' },
+            h('div', { class: 'loading-spinner' }),
+            h('p', { class: 'loading-text' }, 'Loading activity...')
+          )
+        );
+      } else {
+        this._timelineEl.appendChild(
+          h('div', { class: 'activity-view-empty' },
+            h('div', { class: 'activity-view-empty-icon' }, '\u{1F4ED}'),
+            h('p', { class: 'activity-view-empty-title' }, 'No activity yet'),
+            h('p', { class: 'activity-view-empty-desc' },
+              this._filter !== 'all'
+                ? 'No events match the selected filter. Try switching to "All".'
+                : 'Activity events will appear here as agents work.')
+          )
+        );
+      }
       return;
     }
 
