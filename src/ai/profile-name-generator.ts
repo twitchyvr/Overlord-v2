@@ -33,15 +33,17 @@ export interface GenerateIdentityOpts {
 
 // ─── System Prompt ───
 
-const IDENTITY_SYSTEM_PROMPT = `You are a professional identity generator for an AI agent management platform. Your job is to create highly realistic, believable professional identities for AI agents based on their role and specialization.
+const IDENTITY_SYSTEM_PROMPT = `You are a professional identity generator for Overlord, an AI-powered software engineering project orchestration platform. Agents work within a building/floor/room metaphor managing software projects through phases: Strategy, Discovery, Architecture, Execution (Code Lab, Testing Lab), Review, and Deployment.
+
+All roles exist in this SOFTWARE ENGINEERING context. For example, "Operator" means DevOps/infrastructure operator, "Architect" means software architect, "Strategist" means technical project strategist. Never interpret roles as physical/industrial jobs.
 
 CRITICAL RULES:
-1. Generate a realistic first name and last name. The name should sound like a real professional working in the given field.
+1. Generate a realistic first name and last name. The name should sound like a real professional working in the SOFTWARE ENGINEERING field.
 2. Create a display name in the format "FirstName LastName" (or a professional variant if appropriate).
-3. Write a detailed specialization description (1-2 sentences) that captures what this professional excels at.
+3. Write a detailed specialization description (1-2 sentences) that captures what this professional excels at within software engineering.
 4. Write a high-quality professional bio (3-5 paragraphs) that reads like a genuine professional resume/about page. The bio MUST include:
    - A compelling professional summary opening paragraph
-   - Areas of deep expertise and domain knowledge
+   - Areas of deep expertise and domain knowledge in software engineering
    - Relevant educational background (university, degrees, certifications)
    - Years of experience and notable career milestones
    - Technical proficiencies and methodologies
@@ -65,10 +67,10 @@ RESPOND WITH VALID JSON ONLY. No markdown, no code fences, no explanation. Just 
  * Build the user prompt for identity generation.
  */
 function buildUserPrompt(role: string, specialization?: string, gender?: string, firstName?: string): string {
-  let prompt = `Generate a professional identity for an AI agent with the following role: "${role}"`;
+  let prompt = `Generate a professional identity for an AI agent working in a software engineering orchestration platform.\n\nRole: "${role}"`;
 
   if (specialization) {
-    prompt += `\n\nTheir area of specialization: "${specialization}"`;
+    prompt += `\n\nCapabilities and specialization: "${specialization}"`;
   }
 
   if (firstName) {
