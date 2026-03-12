@@ -986,7 +986,7 @@ describe('window.overlordSocket.sendMessage()', () => {
     expect(mockStore.update).toHaveBeenCalledWith('chat.messages', expect.any(Function));
     const updaterFn = mockStore.update.mock.calls.find((c: any) => c[0] === 'chat.messages')![1];
     const result = updaterFn([]);
-    expect(result[0]).toEqual({ content: 'hello', agentId: 'a1', type: 'user', timestamp: now });
+    expect(result[0]).toEqual({ id: String(now), role: 'user', content: 'hello', agentId: 'a1', type: 'user', timestamp: now });
   });
 
   it('sets ui.processing to true', () => {
