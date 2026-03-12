@@ -40,6 +40,8 @@ export class Dropdown extends Component {
     this._searchVal = '';
     this._outsideClickHandler = null;
     this._resizeHandler = null;
+    this._keydownHandler = null;
+    this._highlightedIdx = -1;
   }
 
   mount() {
@@ -63,10 +65,12 @@ export class Dropdown extends Component {
   open() {
     if (this._isOpen) return;
     this._isOpen = true;
+    this._highlightedIdx = -1;
     this._buildMenu();
     this._position();
     this._attachOutsideClick();
     this._attachResize();
+    this._attachKeyboard();
   }
 
   /** Close the dropdown. */
@@ -77,8 +81,11 @@ export class Dropdown extends Component {
       this._menuEl.parentNode.removeChild(this._menuEl);
     }
     this._menuEl = null;
+    this._highlightedIdx = -1;
     this._detachOutsideClick();
     this._detachResize();
+    this._detachKeyboard();
+    this.el.focus();
   }
 
   /** Toggle open/close. */
@@ -260,5 +267,76 @@ export class Dropdown extends Component {
       window.removeEventListener('scroll', this._resizeHandler, true);
       this._resizeHandler = null;
     }
+  }
+
+  /** @private Attach keyboard navigation handler. */
+  _attachKeyboard() {
+    this._keydownHandler = (e) => {
+      if (!this._isOpen || !this._menuEl) return;
+
+      const items = this._getSelectableItems();
+      if (!items.length) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          this._moveHighlight(items, 1);
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          this._moveHighlight(items, -1);
+          break;
+        case 'Enter':
+        case ' ':
+          e.preventDefault();
+          if (this._highlightedIdx >= 0 && this._highlightedIdx < items.length) {
+            items[this._highlightedIdx].click();
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
+          this.close();
+          break;
+      }
+    };
+    document.addEventListener('keydown', this._keydownHandler);
+  }
+
+  /** @private Detach keyboard handler. */
+  _detachKeyboard() {
+    if (this._keydownHandler) {
+      document.removeEventListener('keydown', this._keydownHandler);
+      this._keydownHandler = null;
+    }
+  }
+
+  /** @private Get all selectable (non-disabled, non-divider, visible) items. */
+  _getSelectableItems() {
+    if (!this._menuEl) return [];
+    return Array.from(
+      this._menuEl.querySelectorAll('.dropdown-item:not(.disabled)')
+    ).filter(el => el.style.display !== 'none');
+  }
+
+  /** @private Move highlight by delta (+1 or -1), wrapping at boundaries. */
+  _moveHighlight(items, delta) {
+    // Remove old highlight
+    if (this._highlightedIdx >= 0 && this._highlightedIdx < items.length) {
+      items[this._highlightedIdx].classList.remove('highlighted');
+    }
+
+    if (this._highlightedIdx < 0) {
+      // No current highlight — start at first (ArrowDown) or last (ArrowUp)
+      this._highlightedIdx = delta > 0 ? 0 : items.length - 1;
+    } else {
+      this._highlightedIdx += delta;
+      // Wrap around
+      if (this._highlightedIdx >= items.length) this._highlightedIdx = 0;
+      if (this._highlightedIdx < 0) this._highlightedIdx = items.length - 1;
+    }
+
+    // Apply new highlight
+    items[this._highlightedIdx].classList.add('highlighted');
+    items[this._highlightedIdx].scrollIntoView?.({ block: 'nearest' });
   }
 }

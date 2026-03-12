@@ -612,3 +612,287 @@ describe('Dropdown — destroy()', () => {
     expect(dd._listeners).toEqual([]);
   });
 });
+
+// ─── Keyboard navigation ─────────────────────────────────────
+
+function pressKey(key: string) {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+}
+
+describe('Dropdown — keyboard navigation', () => {
+  it('ArrowDown highlights the first item', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const items = [
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Beta' },
+      { id: 'c', label: 'Gamma' },
+    ];
+
+    const dd = new Dropdown(trigger, { items });
+    dd.mount();
+    dd.open();
+
+    pressKey('ArrowDown');
+
+    const highlighted = dd._menuEl.querySelector('.dropdown-item.highlighted');
+    expect(highlighted).not.toBeNull();
+    expect(highlighted.getAttribute('data-dropdown-id')).toBe('a');
+  });
+
+  it('ArrowDown moves highlight to next item', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const items = [
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Beta' },
+      { id: 'c', label: 'Gamma' },
+    ];
+
+    const dd = new Dropdown(trigger, { items });
+    dd.mount();
+    dd.open();
+
+    pressKey('ArrowDown'); // → Alpha
+    pressKey('ArrowDown'); // → Beta
+
+    const highlighted = dd._menuEl.querySelectorAll('.dropdown-item.highlighted');
+    expect(highlighted.length).toBe(1);
+    expect(highlighted[0].getAttribute('data-dropdown-id')).toBe('b');
+  });
+
+  it('ArrowDown wraps from last to first item', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const items = [
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Beta' },
+    ];
+
+    const dd = new Dropdown(trigger, { items });
+    dd.mount();
+    dd.open();
+
+    pressKey('ArrowDown'); // → Alpha
+    pressKey('ArrowDown'); // → Beta
+    pressKey('ArrowDown'); // → wraps to Alpha
+
+    const highlighted = dd._menuEl.querySelector('.dropdown-item.highlighted');
+    expect(highlighted.getAttribute('data-dropdown-id')).toBe('a');
+  });
+
+  it('ArrowUp highlights the last item when no highlight exists', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const items = [
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Beta' },
+      { id: 'c', label: 'Gamma' },
+    ];
+
+    const dd = new Dropdown(trigger, { items });
+    dd.mount();
+    dd.open();
+
+    pressKey('ArrowUp');
+
+    const highlighted = dd._menuEl.querySelector('.dropdown-item.highlighted');
+    expect(highlighted.getAttribute('data-dropdown-id')).toBe('c');
+  });
+
+  it('ArrowUp wraps from first to last item', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const items = [
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Beta' },
+    ];
+
+    const dd = new Dropdown(trigger, { items });
+    dd.mount();
+    dd.open();
+
+    pressKey('ArrowDown'); // → Alpha (idx 0)
+    pressKey('ArrowUp');   // → wraps to Beta (idx 1)
+
+    const highlighted = dd._menuEl.querySelector('.dropdown-item.highlighted');
+    expect(highlighted.getAttribute('data-dropdown-id')).toBe('b');
+  });
+
+  it('skips disabled items during navigation', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const items = [
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Beta', disabled: true },
+      { id: 'c', label: 'Gamma' },
+    ];
+
+    const dd = new Dropdown(trigger, { items });
+    dd.mount();
+    dd.open();
+
+    pressKey('ArrowDown'); // → Alpha
+    pressKey('ArrowDown'); // → skips Beta (disabled), goes to Gamma
+
+    const highlighted = dd._menuEl.querySelector('.dropdown-item.highlighted');
+    expect(highlighted.getAttribute('data-dropdown-id')).toBe('c');
+  });
+
+  it('Enter selects the highlighted item', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const onSelect = vi.fn();
+    const items = [
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Beta' },
+    ];
+
+    const dd = new Dropdown(trigger, { items, onSelect });
+    dd.mount();
+    dd.open();
+
+    pressKey('ArrowDown'); // → Alpha
+    pressKey('ArrowDown'); // → Beta
+    pressKey('Enter');
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(items[1]);
+    expect(dd.isOpen).toBe(false);
+  });
+
+  it('Space selects the highlighted item', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const onSelect = vi.fn();
+    const items = [
+      { id: 'a', label: 'Alpha' },
+    ];
+
+    const dd = new Dropdown(trigger, { items, onSelect });
+    dd.mount();
+    dd.open();
+
+    pressKey('ArrowDown'); // → Alpha
+    pressKey(' ');
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(items[0]);
+  });
+
+  it('Enter does nothing when no item is highlighted', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const onSelect = vi.fn();
+    const items = [
+      { id: 'a', label: 'Alpha' },
+    ];
+
+    const dd = new Dropdown(trigger, { items, onSelect });
+    dd.mount();
+    dd.open();
+
+    pressKey('Enter');
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(dd.isOpen).toBe(true);
+  });
+
+  it('Escape closes the dropdown', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const dd = new Dropdown(trigger, {
+      items: [{ id: 'a', label: 'Alpha' }],
+    });
+    dd.mount();
+    dd.open();
+    expect(dd.isOpen).toBe(true);
+
+    pressKey('Escape');
+
+    expect(dd.isOpen).toBe(false);
+  });
+
+  it('Escape returns focus to trigger element', () => {
+    const trigger = document.createElement('button');
+    trigger.tabIndex = 0;
+    document.body.appendChild(trigger);
+
+    const dd = new Dropdown(trigger, {
+      items: [{ id: 'a', label: 'Alpha' }],
+    });
+    dd.mount();
+    dd.open();
+
+    const focusSpy = vi.spyOn(trigger, 'focus');
+    pressKey('Escape');
+
+    expect(focusSpy).toHaveBeenCalled();
+  });
+
+  it('close() returns focus to trigger element', () => {
+    const trigger = document.createElement('button');
+    trigger.tabIndex = 0;
+    document.body.appendChild(trigger);
+
+    const dd = new Dropdown(trigger, {
+      items: [{ id: 'a', label: 'Alpha' }],
+    });
+    dd.mount();
+    dd.open();
+
+    const focusSpy = vi.spyOn(trigger, 'focus');
+    dd.close();
+
+    expect(focusSpy).toHaveBeenCalled();
+  });
+
+  it('detaches keydown handler on close', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const dd = new Dropdown(trigger, {
+      items: [{ id: 'a', label: 'Alpha' }],
+    });
+    dd.mount();
+    dd.open();
+    expect(dd._keydownHandler).not.toBeNull();
+
+    dd.close();
+    expect(dd._keydownHandler).toBeNull();
+  });
+
+  it('resets highlight index on re-open', () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+
+    const items = [
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Beta' },
+    ];
+
+    const dd = new Dropdown(trigger, { items });
+    dd.mount();
+
+    dd.open();
+    pressKey('ArrowDown'); // → Alpha
+    pressKey('ArrowDown'); // → Beta
+    dd.close();
+
+    dd.open();
+    pressKey('ArrowDown'); // should start at Alpha again
+
+    const highlighted = dd._menuEl.querySelector('.dropdown-item.highlighted');
+    expect(highlighted.getAttribute('data-dropdown-id')).toBe('a');
+  });
+});
