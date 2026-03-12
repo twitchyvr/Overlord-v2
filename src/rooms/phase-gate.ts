@@ -8,7 +8,7 @@
 
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
-import { ok, err } from '../core/contracts.js';
+import { ok, err, safeJsonParse } from '../core/contracts.js';
 import type { Result, PhaseGateRow, BuildingRow, GateVerdict } from '../core/contracts.js';
 
 const log = logger.child({ module: 'phase-gate' });
@@ -176,7 +176,7 @@ export function resolveConditions({ gateId, resolvedConditions, resolver }: {
     return err('GATE_NOT_CONDITIONAL', `Gate ${gateId} is not in CONDITIONAL status (current: ${gate.status})`);
   }
 
-  const originalConditions: string[] = JSON.parse(gate.signoff_conditions || '[]');
+  const originalConditions: string[] = safeJsonParse<string[]>(gate.signoff_conditions, []);
   const remaining = originalConditions.filter((c) => !resolvedConditions.includes(c));
 
   if (remaining.length === 0) {
@@ -188,7 +188,7 @@ export function resolveConditions({ gateId, resolvedConditions, resolver }: {
       verdict: 'GO',
       conditions: [],
       exitDocId: gate.exit_doc_id || undefined,
-      nextPhaseInput: JSON.parse(gate.next_phase_input || '{}'),
+      nextPhaseInput: safeJsonParse<Record<string, unknown>>(gate.next_phase_input, {}),
     });
   }
 

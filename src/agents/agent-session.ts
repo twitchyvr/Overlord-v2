@@ -8,6 +8,7 @@
 
 import { logger } from '../core/logger.js';
 import { getDb } from '../storage/db.js';
+import { safeJsonParse } from '../core/contracts.js';
 
 const log = logger.child({ module: 'agent-session' });
 
@@ -184,9 +185,9 @@ export class AgentSession {
     session.agentId = row.agent_id;
     session.roomId = row.room_id;
     session.tableType = row.table_type;
-    session.tools = JSON.parse(row.tools) as string[];
+    session.tools = safeJsonParse<string[]>(row.tools, []);
     session.status = row.status as 'active' | 'ended';
-    session.messages = JSON.parse(row.messages) as SessionMessage[];
+    session.messages = safeJsonParse<SessionMessage[]>(row.messages, []);
     session.startedAt = new Date(row.started_at).getTime();
     session.endedAt = row.ended_at ? new Date(row.ended_at).getTime() : null;
     return session;

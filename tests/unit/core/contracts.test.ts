@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ok, err, RoomContractSchema, AgentIdentitySchema, RaidEntrySchema } from '../../../src/core/contracts.js';
+import { ok, err, safeJsonParse, RoomContractSchema, AgentIdentitySchema, RaidEntrySchema } from '../../../src/core/contracts.js';
 
 describe('Result helpers', () => {
   it('ok() creates a success result', () => {
@@ -78,5 +78,37 @@ describe('Schema validation', () => {
 
     const result = RaidEntrySchema.safeParse(entry);
     expect(result.success).toBe(false);
+  });
+});
+
+describe('safeJsonParse()', () => {
+  it('parses valid JSON', () => {
+    expect(safeJsonParse('{"a":1}', {})).toEqual({ a: 1 });
+  });
+
+  it('parses valid JSON array', () => {
+    expect(safeJsonParse('["a","b"]', [])).toEqual(['a', 'b']);
+  });
+
+  it('returns fallback for malformed JSON', () => {
+    expect(safeJsonParse('{bad json', {})).toEqual({});
+  });
+
+  it('returns fallback for null', () => {
+    expect(safeJsonParse(null, [])).toEqual([]);
+  });
+
+  it('returns fallback for undefined', () => {
+    expect(safeJsonParse(undefined, {})).toEqual({});
+  });
+
+  it('returns fallback for empty string', () => {
+    expect(safeJsonParse('', { default: true })).toEqual({ default: true });
+  });
+
+  it('preserves type safety with generic', () => {
+    const result = safeJsonParse<string[]>('["x","y"]', []);
+    expect(result).toEqual(['x', 'y']);
+    expect(Array.isArray(result)).toBe(true);
   });
 });

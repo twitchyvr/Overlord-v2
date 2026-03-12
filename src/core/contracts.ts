@@ -351,6 +351,20 @@ export function err(
   return { ok: false, error: { code, message, retryable, context } };
 }
 
+/**
+ * Safely parse a JSON string, returning a fallback value if parsing fails.
+ * Use this for all database fields that store serialized JSON to prevent
+ * crashes from corrupted data.
+ */
+export function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 // ─── Zod Schemas (for runtime validation at system boundaries) ───
 
 export const RoomContractSchema = z.object({

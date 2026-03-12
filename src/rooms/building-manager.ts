@@ -11,7 +11,7 @@
 import { randomUUID } from 'crypto';
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
-import { ok, err } from '../core/contracts.js';
+import { ok, err, safeJsonParse } from '../core/contracts.js';
 import type { Result, ErrResult, BuildingRow, FloorRow } from '../core/contracts.js';
 
 function uid(prefix: string): string {
@@ -84,7 +84,7 @@ export function getBuilding(buildingId: string): Result {
 
   return ok({
     ...building,
-    config: JSON.parse(building.config || '{}'),
+    config: safeJsonParse(building.config, {}),
     floors,
   });
 }
@@ -100,7 +100,7 @@ export function listBuildings(projectId?: string): Result {
   } else {
     rows = db.prepare('SELECT * FROM buildings ORDER BY created_at').all() as BuildingRow[];
   }
-  return ok(rows.map((b) => ({ ...b, config: JSON.parse(b.config || '{}') })));
+  return ok(rows.map((b) => ({ ...b, config: safeJsonParse(b.config, {}) })));
 }
 
 /**
@@ -175,7 +175,7 @@ export function getFloor(floorId: string): Result {
 
   return ok({
     ...floor,
-    config: JSON.parse(floor.config || '{}'),
+    config: safeJsonParse(floor.config, {}),
     rooms,
   });
 }
@@ -189,7 +189,7 @@ export function listFloors(buildingId: string): Result {
     'SELECT * FROM floors WHERE building_id = ? ORDER BY sort_order',
   ).all(buildingId) as FloorRow[];
 
-  return ok(floors.map((f) => ({ ...f, config: JSON.parse(f.config || '{}') })));
+  return ok(floors.map((f) => ({ ...f, config: safeJsonParse(f.config, {}) })));
 }
 
 /**
@@ -202,7 +202,7 @@ export function getFloorByType(buildingId: string, floorType: string): Result {
   ).get(buildingId, floorType) as FloorRow | undefined;
 
   if (!floor) return err('FLOOR_NOT_FOUND', `No ${floorType} floor in building ${buildingId}`);
-  return ok({ ...floor, config: JSON.parse((floor as any).config || '{}') });
+  return ok({ ...floor, config: safeJsonParse((floor as any).config, {}) });
 }
 
 // ─── Blueprint Application Pipeline ───
