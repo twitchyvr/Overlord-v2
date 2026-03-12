@@ -586,6 +586,171 @@ describe('RoomView', () => {
     // The view should have registered at least one listener
     expect(view._listeners.length).toBeGreaterThan(0);
   });
+
+  it('builds content with all sections from room data', async () => {
+    const { RoomView } = await import('../../../public/ui/views/room-view.js');
+    const el = document.createElement('div');
+    const view = new RoomView(el);
+    view.mount();
+
+    // Set room data directly and build content
+    (view as any)._roomData = {
+      id: 'room_1',
+      type: 'code-lab',
+      name: 'Main Lab',
+      tools: ['read_file', 'write_file', 'run_test'],
+      fileScope: 'assigned',
+      exitRequired: { type: 'code-lab', fields: ['summary', 'files_changed'] },
+      escalation: { 'blocked': 'war-room' },
+      tables: { coding: { purpose: 'Implementation work' }, review: { purpose: 'Code review' } },
+      provider: 'anthropic',
+    };
+    (view as any)._agentPositions = {};
+
+    const content = (view as any)._buildContent();
+
+    // Should have header section
+    expect(content.querySelector('.room-view-header')).not.toBeNull();
+    expect(content.querySelector('.room-type-badge')!.textContent).toBe('Code Lab');
+
+    // Should have stats bar
+    expect(content.querySelector('.room-stats-bar')).not.toBeNull();
+    const statValues = content.querySelectorAll('.room-stat-value');
+    expect(statValues.length).toBe(4);
+
+    // Should have agent roster
+    expect(content.querySelector('.room-agent-roster')).not.toBeNull();
+    expect(content.querySelector('.room-roster-empty')).not.toBeNull(); // no agents
+
+    // Should have tools section
+    expect(content.querySelector('.room-tools-section')).not.toBeNull();
+    expect(content.querySelectorAll('.tool-tag').length).toBe(3);
+
+    // Should have tables section
+    expect(content.querySelector('.room-tables-section')).not.toBeNull();
+    expect(content.querySelectorAll('.room-table-card').length).toBe(2);
+
+    // Should have activity feed
+    expect(content.querySelector('.room-activity-section')).not.toBeNull();
+    expect(content.querySelector('.room-activity-empty')).not.toBeNull();
+
+    // Should have room details
+    expect(content.querySelector('.room-info-section')).not.toBeNull();
+  });
+
+  it('shows agent roster with status dots when agents are present', async () => {
+    const { RoomView } = await import('../../../public/ui/views/room-view.js');
+    const el = document.createElement('div');
+    const view = new RoomView(el);
+    view.mount();
+
+    (view as any)._roomData = {
+      id: 'room_1', type: 'code-lab', tools: [],
+      exitRequired: null, escalation: {}, tables: {},
+    };
+    (view as any)._agentPositions = {
+      'a1': { agentId: 'a1', name: 'Coder', role: 'developer', roomId: 'room_1', status: 'working' },
+      'a2': { agentId: 'a2', name: 'Reviewer', role: 'reviewer', roomId: 'room_1', status: 'idle' },
+      'a3': { agentId: 'a3', name: 'Other', role: 'tester', roomId: 'room_2', status: 'idle' },
+    };
+
+    const content = (view as any)._buildContent();
+
+    // Only agents in room_1 should appear
+    const rosterRows = content.querySelectorAll('.room-roster-row');
+    expect(rosterRows.length).toBe(2);
+
+    // Check status dots
+    expect(rosterRows[0].querySelector('.room-roster-dot-working')).not.toBeNull();
+    expect(rosterRows[1].querySelector('.room-roster-dot-idle')).not.toBeNull();
+
+    // Check names
+    expect(rosterRows[0].querySelector('.room-roster-name')!.textContent).toBe('Coder');
+    expect(rosterRows[1].querySelector('.room-roster-name')!.textContent).toBe('Reviewer');
+
+    // Stats bar should show 2 agents
+    const agentStat = content.querySelectorAll('.room-stat-value')[0];
+    expect(agentStat.textContent).toBe('2');
+  });
+
+  it('shows active status badge when agents are in room', async () => {
+    const { RoomView } = await import('../../../public/ui/views/room-view.js');
+    const el = document.createElement('div');
+    const view = new RoomView(el);
+    view.mount();
+
+    (view as any)._roomData = { id: 'room_1', type: 'war-room', tools: [], exitRequired: null, escalation: {}, tables: {} };
+    (view as any)._agentPositions = {
+      'a1': { agentId: 'a1', name: 'Agent', roomId: 'room_1', status: 'working' },
+    };
+
+    const content = (view as any)._buildContent();
+    expect(content.querySelector('.room-status-active')!.textContent).toBe('Active');
+  });
+
+  it('shows empty status badge when no agents in room', async () => {
+    const { RoomView } = await import('../../../public/ui/views/room-view.js');
+    const el = document.createElement('div');
+    const view = new RoomView(el);
+    view.mount();
+
+    (view as any)._roomData = { id: 'room_1', type: 'discovery', tools: [], exitRequired: null, escalation: {}, tables: {} };
+    (view as any)._agentPositions = {};
+
+    const content = (view as any)._buildContent();
+    expect(content.querySelector('.room-status-empty')!.textContent).toBe('Empty');
+  });
+
+  it('formats room type slugs as titles', async () => {
+    const { RoomView } = await import('../../../public/ui/views/room-view.js');
+    const el = document.createElement('div');
+    const view = new RoomView(el);
+
+    expect((view as any)._formatRoomType('code-lab')).toBe('Code Lab');
+    expect((view as any)._formatRoomType('war-room')).toBe('War Room');
+    expect((view as any)._formatRoomType('discovery')).toBe('Discovery');
+    expect((view as any)._formatRoomType(null)).toBe('Room');
+  });
+
+  it('tracks activity items and renders them in feed', async () => {
+    const { RoomView } = await import('../../../public/ui/views/room-view.js');
+    const el = document.createElement('div');
+    const view = new RoomView(el);
+    view.mount();
+
+    (view as any)._roomData = { id: 'room_1', type: 'code-lab', tools: [], exitRequired: null, escalation: {}, tables: {} };
+    (view as any)._agentPositions = {};
+
+    // Add activity
+    (view as any)._addActivity({ type: 'enter', message: 'Coder joined', roomId: 'room_1', timestamp: new Date().toISOString() });
+    (view as any)._addActivity({ type: 'tool', message: 'read_file executed', roomId: 'room_1', timestamp: new Date().toISOString() });
+
+    const content = (view as any)._buildContent();
+    const activityItems = content.querySelectorAll('.room-activity-item');
+    expect(activityItems.length).toBe(2);
+    expect(activityItems[0].querySelector('.room-activity-text')!.textContent).toBe('Coder joined');
+  });
+
+  it('displays exit document field count when required', async () => {
+    const { RoomView } = await import('../../../public/ui/views/room-view.js');
+    const el = document.createElement('div');
+    const view = new RoomView(el);
+    view.mount();
+
+    (view as any)._roomData = {
+      id: 'room_1', type: 'code-lab', tools: [],
+      exitRequired: { type: 'code-lab', fields: ['summary', 'files_changed', 'test_results'] },
+      escalation: {}, tables: {},
+    };
+    (view as any)._agentPositions = {};
+
+    const content = (view as any)._buildContent();
+    const exitRow = [...content.querySelectorAll('.room-info-row')].find(
+      (row: any) => row.querySelector('.room-info-label')?.textContent === 'Exit Required'
+    );
+    expect(exitRow).toBeDefined();
+    expect(exitRow!.querySelector('.room-info-value')!.textContent).toContain('3 fields');
+  });
 });
 
 // ─── TaskView ──────────────────────────────────────────────
