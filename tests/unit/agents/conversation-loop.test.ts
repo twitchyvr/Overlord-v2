@@ -433,6 +433,78 @@ describe('Conversation Loop', () => {
     }
   });
 
+  it('rejects AI-hallucinated tool names not in the allowed list', async () => {
+    const ai = createMockAI([
+      {
+        id: 'msg_1',
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: 'tc_1',
+          name: 'delete_everything',  // hallucinated tool name
+          input: { target: '/' },
+        }],
+        model: 'test',
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      },
+      {
+        id: 'msg_2',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'That tool was not available.' }],
+        model: 'test',
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 20, output_tokens: 10 },
+      },
+    ]);
+
+    // Track bus events
+    const busEvents: Array<{ event: string; data: unknown }> = [];
+    const bus = createMockBus();
+    const originalEmit = bus.emit;
+    bus.emit = (event: string | symbol, data?: Record<string, unknown>) => {
+      busEvents.push({ event: String(event), data });
+      return originalEmit(event, data);
+    };
+
+    let toolExecuted = false;
+    const tools = createMockTools();
+    const originalExecuteInRoom = tools.executeInRoom;
+    tools.executeInRoom = async (params) => {
+      toolExecuted = true;
+      return originalExecuteInRoom(params);
+    };
+
+    const result = await runConversationLoop({
+      provider: 'anthropic',
+      room: createMockRoom(['bash', 'read_file']),
+      agentId: 'agent_1',
+      messages: [{ role: 'user', content: 'Delete everything' }],
+      ai,
+      tools,
+      bus,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // Tool should NOT have been executed
+      expect(toolExecuted).toBe(false);
+      // Tool call should be logged with error
+      expect(result.data.toolCalls.length).toBe(1);
+      expect(result.data.toolCalls[0].name).toBe('delete_everything');
+      expect(result.data.toolCalls[0].result).toEqual({ error: 'Tool "delete_everything" is not available' });
+    }
+
+    // Guardrail violation event should have been emitted
+    const violationEvent = busEvents.find(e => e.event === 'tool:guardrail-violation');
+    expect(violationEvent).toBeDefined();
+    expect(violationEvent!.data).toEqual(expect.objectContaining({
+      type: 'unknown_tool',
+      toolName: 'delete_everything',
+      agentId: 'agent_1',
+    }));
+  });
+
   it('blocks tool execution when onBeforeToolCall returns err', async () => {
     // AI requests a tool call, then gives a final text response
     const ai = createMockAI([

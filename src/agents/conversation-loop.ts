@@ -235,6 +235,30 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
       log.info({ tool: toolName, agentId, roomId: room.id }, 'Executing tool');
 
+      // Guard: reject tool names not in the room's allowed list
+      if (!allowedToolNames.includes(toolName)) {
+        log.warn({ tool: toolName, agentId, roomId: room.id, allowedTools: allowedToolNames }, 'AI requested unknown/disallowed tool');
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content: `Error: Tool "${toolName}" is not available in this room. Available tools: ${allowedToolNames.join(', ')}`,
+          is_error: true,
+        });
+        toolCallLog.push({
+          name: toolName,
+          input: toolInput,
+          result: { error: `Tool "${toolName}" is not available` },
+        });
+        bus.emit('tool:guardrail-violation', {
+          type: 'unknown_tool',
+          toolName,
+          agentId,
+          roomId: room.id,
+          allowedTools: allowedToolNames,
+        });
+        continue;
+      }
+
       // Room-level guardrail: onBeforeToolCall can BLOCK execution
       const beforeResult = room.onBeforeToolCall(toolName, agentId, toolInput);
       if (!beforeResult.ok) {
