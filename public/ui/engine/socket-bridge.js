@@ -344,6 +344,13 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'phase:room-provisioned', ...data });
   });
 
+  socket.on('phase:gate:created', (data) => {
+    store.update('phase.gates', (gates) => [...(gates || []), data]);
+    store.update('activity.items', (items) => [{ event: 'phase:gate:created', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('phase:gate:created', data);
+    engine.dispatch('activity:new', { event: 'phase:gate:created', ...data });
+  });
+
   socket.on('phase:gate:signed-off', (data) => {
     // Update gates list in store
     store.update('phase.gates', (gates) => {
@@ -777,6 +784,10 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     // ── Phase Gate methods ──
+
+    createGate(buildingId, phase) {
+      return _emitWithFeedback('phase:gate:create', { buildingId, phase });
+    },
 
     signoffGate(params) {
       return _emitWithFeedback('phase:gate:signoff', params);
