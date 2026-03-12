@@ -9,6 +9,7 @@
 import { OverlordUI } from './engine/engine.js';
 import { createV2Store } from './engine/store.js';
 import { initSocketBridge } from './engine/socket-bridge.js';
+import { createLogger, setLogLevel } from './engine/logger.js';
 import { h, setContent } from './engine/helpers.js';
 import { initRouter, navigateTo, getInitialRoute, initBuildingView } from './engine/router.js';
 import { initPanelSystem } from './components/panel.js';
@@ -234,6 +235,8 @@ _updatePhaseBar('strategy');
 // Export for testing
 if (typeof window !== 'undefined') {
   window._overlordTheme = { initTheme, applyTheme, THEME_KEY };
+  window._overlordLogger = { setLogLevel };
 }
 
-console.log('[Overlord v2] Boot complete');
+const bootLog = createLogger('Overlord');
+bootLog.info('Boot complete');

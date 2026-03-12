@@ -6,6 +6,9 @@
  */
 
 import { OverlordUI } from './engine.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('SocketBridge');
 
 /**
  * Initialize the socket bridge.
@@ -18,7 +21,7 @@ export function initSocketBridge(socket, store, engine) {
   // ── Connection lifecycle ──
 
   socket.on('connect', () => {
-    console.log('[SocketBridge] Connected:', socket.id);
+    log.info('Connected:', socket.id);
     store.set('ui.connected', true);
     store.set('ui.connectionState', 'connected');
 
@@ -42,7 +45,7 @@ export function initSocketBridge(socket, store, engine) {
     // Re-fetch active building data on reconnect
     const activeBuildingId = store.get('building.active');
     if (activeBuildingId) {
-      console.log('[SocketBridge] Reconnected — re-fetching active building data');
+      log.info('Reconnected — re-fetching active building data');
       // Use setTimeout to avoid race with system:status hydration
       setTimeout(() => {
         if (window.overlordSocket && window.overlordSocket.selectBuilding) {
@@ -53,14 +56,14 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('disconnect', (reason) => {
-    console.log('[SocketBridge] Disconnected:', reason);
+    log.info('Disconnected:', reason);
     store.set('ui.connected', false);
     store.set('ui.connectionState', 'disconnected');
     engine.dispatch('connection:lost', { reason });
   });
 
   socket.on('connect_error', (error) => {
-    console.error('[SocketBridge] Connection error:', error.message);
+    log.error('Connection error:', error.message);
     store.set('ui.connectionState', 'reconnecting');
     engine.dispatch('connection:error', { message: error.message });
   });
@@ -69,18 +72,18 @@ export function initSocketBridge(socket, store, engine) {
 
   if (socket.io) {
     socket.io.on('reconnect_attempt', (attempt) => {
-      console.log('[SocketBridge] Reconnection attempt:', attempt);
+      log.info('Reconnection attempt:', attempt);
       store.set('ui.connectionState', 'reconnecting');
       engine.dispatch('connection:reconnecting', { attempt });
     });
 
     socket.io.on('reconnect', (attempt) => {
-      console.log('[SocketBridge] Reconnected after', attempt, 'attempts');
+      log.info('Reconnected after', attempt, 'attempts');
       engine.dispatch('connection:reconnected', { attempt });
     });
 
     socket.io.on('reconnect_failed', () => {
-      console.error('[SocketBridge] Reconnection failed permanently');
+      log.error('Reconnection failed permanently');
       store.set('ui.connectionState', 'failed');
       engine.dispatch('connection:failed', {});
     });
@@ -308,7 +311,7 @@ export function initSocketBridge(socket, store, engine) {
         if (res && !res.ok) {
           const errorMsg = res.error?.message || res.error || 'Operation failed';
           const errorCode = res.error?.code || 'UNKNOWN';
-          console.warn(`[SocketBridge] ${event} failed:`, errorMsg);
+          log.warn(`${event} failed:`, errorMsg);
           engine.dispatch('operation:error', { event, code: errorCode, message: errorMsg });
         }
         resolve(res);
@@ -721,6 +724,6 @@ export function initSocketBridge(socket, store, engine) {
     },
   };
 
-  console.log('[SocketBridge] v2 bridge initialized');
+  log.info('v2 bridge initialized');
   return window.overlordSocket;
 }

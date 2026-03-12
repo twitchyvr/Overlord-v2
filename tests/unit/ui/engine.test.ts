@@ -10,6 +10,18 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const mockEngineLog = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+};
+
+vi.mock('../../../public/ui/engine/logger.js', () => ({
+  createLogger: vi.fn(() => mockEngineLog),
+  setLogLevel: vi.fn(),
+}));
+
 const storePath = '../../../public/ui/engine/store.js';
 const enginePath = '../../../public/ui/engine/engine.js';
 
@@ -28,6 +40,12 @@ let OverlordUI: any;
 let Store: any;
 
 beforeEach(async () => {
+  // Reset logger mock
+  mockEngineLog.debug.mockClear();
+  mockEngineLog.info.mockClear();
+  mockEngineLog.warn.mockClear();
+  mockEngineLog.error.mockClear();
+
   // Fresh imports each test to avoid cross-test pollution
   const engineMod = await import(enginePath);
   OverlordUI = engineMod.OverlordUI;
@@ -182,11 +200,9 @@ describe('OverlordUI.mountComponent()', () => {
   });
 
   it('warns and returns undefined for unknown id', () => {
-    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const result = OverlordUI.mountComponent('missing');
     expect(result).toBeUndefined();
-    expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
+    expect(mockEngineLog.warn).toHaveBeenCalled();
   });
 
   it('catches mount() errors without crashing', () => {
@@ -316,13 +332,11 @@ describe('OverlordUI — event bus', () => {
     OverlordUI.subscribe('err-event', fn1);
     OverlordUI.subscribe('err-event', fn2);
 
-    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     OverlordUI.dispatch('err-event', 'payload');
 
     expect(fn1).toHaveBeenCalledWith('payload');
     expect(fn2).toHaveBeenCalledWith('payload');
-    expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
+    expect(mockEngineLog.warn).toHaveBeenCalled();
   });
 
   it('subscribe returns a function', () => {

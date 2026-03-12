@@ -6,6 +6,9 @@
  */
 
 import { h, setContent, setTrustedContent, $, $$, debounce, throttle, escapeHtml, uid, formatTime, clamp } from './helpers.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('OverlordUI');
 
 export const OverlordUI = {
   _components: new Map(),
@@ -28,7 +31,7 @@ export const OverlordUI = {
       store._channel = this._channel;
     }
     this._setupBroadcastChannel();
-    console.log('[OverlordUI] v2 Engine initialized');
+    log.info('v2 Engine initialized');
     return this;
   },
 
@@ -41,7 +44,7 @@ export const OverlordUI = {
 
   registerComponent(id, instance) {
     if (this._components.has(id)) {
-      console.warn(`[OverlordUI] Component "${id}" already registered, replacing`);
+      log.warn(`Component "${id}" already registered, replacing`);
       this._components.get(id).destroy();
     }
     this._components.set(id, instance);
@@ -50,24 +53,24 @@ export const OverlordUI = {
 
   mountComponent(id) {
     const comp = this._components.get(id);
-    if (!comp) { console.warn(`[OverlordUI] Cannot mount unknown component "${id}"`); return; }
+    if (!comp) { log.warn(`Cannot mount unknown component "${id}"`); return; }
     if (comp._mounted) return comp;
     comp._mounted = true;
-    try { comp.mount(); } catch (e) { console.error(`[OverlordUI] Error mounting "${id}":`, e); }
+    try { comp.mount(); } catch (e) { log.error(`Error mounting "${id}":`, e); }
     return comp;
   },
 
   unmountComponent(id) {
     const comp = this._components.get(id);
     if (comp && comp._mounted) {
-      try { comp.unmount(); } catch (e) { console.warn(`[OverlordUI] Error unmounting "${id}":`, e); }
+      try { comp.unmount(); } catch (e) { log.warn(`Error unmounting "${id}":`, e); }
     }
   },
 
   destroyComponent(id) {
     const comp = this._components.get(id);
     if (comp) {
-      try { comp.destroy(); } catch (e) { console.warn(`[OverlordUI] Error destroying "${id}":`, e); }
+      try { comp.destroy(); } catch (e) { log.warn(`Error destroying "${id}":`, e); }
       this._components.delete(id);
     }
   },
@@ -97,7 +100,7 @@ export const OverlordUI = {
     const listeners = this._eventBus.get(event);
     if (listeners) {
       listeners.forEach(fn => {
-        try { fn(data); } catch (e) { console.warn(`[OverlordUI] listener error in "${event}":`, e); }
+        try { fn(data); } catch (e) { log.warn(`listener error in "${event}":`, e); }
       });
     }
   },
@@ -120,7 +123,7 @@ export const OverlordUI = {
   broadcast(msg) {
     if (this._channel) {
       try { this._channel.postMessage(msg); }
-      catch (e) { console.warn('[OverlordUI] BroadcastChannel error:', e); }
+      catch (e) { log.warn('BroadcastChannel error:', e); }
     }
   },
 
