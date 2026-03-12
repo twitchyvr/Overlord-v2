@@ -33,14 +33,14 @@ const stringArray = () => z.array(z.string().max(MAX_NAME)).max(MAX_ARRAY_ITEMS)
 
 /**
  * Validate incoming socket data against a Zod schema.
- * Returns parsed data on success, or null on failure (after sending error ack).
+ * Returns parsed (output-typed) data on success, or null on failure (after sending error ack).
  */
-export function validate<T>(
-  schema: z.ZodSchema<T>,
+export function validate<S extends z.ZodTypeAny>(
+  schema: S,
   data: unknown,
   event: string,
   ack?: (res: unknown) => void,
-): T | null {
+): z.output<S> | null {
   const result = schema.safeParse(data);
   if (!result.success) {
     const message = result.error.issues
@@ -58,7 +58,7 @@ export function validate<T>(
     }
     return null;
   }
-  return result.data;
+  return result.data as z.output<S>;
 }
 
 // ─── Building Schemas ───
@@ -133,14 +133,15 @@ export const AgentListSchema = z.object({}).passthrough().optional().default({})
 export const ChatMessageSchema = z.object({
   text: z.string().max(MAX_TEXT).optional().default(''),
   tokens: z.array(z.object({
-    id: optionalId(),
-    type: optionalName(),
-    char: z.string().max(10).optional(),
-    value: z.string().max(MAX_NAME).optional(),
+    id: z.string().max(MAX_ID).optional().default(''),
+    type: z.string().max(MAX_NAME).optional().default(''),
+    char: z.string().max(10).optional().default(''),
+    label: z.string().max(MAX_NAME).optional().default(''),
+    value: z.string().max(MAX_NAME).optional().default(''),
   }).passthrough()).max(MAX_ARRAY_ITEMS).optional().default([]),
-  buildingId: optionalId(),
-  roomId: optionalId(),
-  agentId: optionalId(),
+  buildingId: z.string().max(MAX_ID).optional().default(''),
+  roomId: z.string().max(MAX_ID).optional().default(''),
+  agentId: z.string().max(MAX_ID).optional().default(''),
 }).passthrough();
 
 // ─── Read-only Event Schemas (no user data — reject unexpected fields) ───
@@ -215,6 +216,7 @@ export const RaidListSchema = z.object({
 export const RaidAddSchema = z.object({
   buildingId: id(),
   type: name(),
+  phase: name(),
   summary: z.string().min(1).max(MAX_DESCRIPTION),
 }).passthrough();
 
