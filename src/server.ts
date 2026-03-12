@@ -43,7 +43,7 @@ async function start(): Promise<void> {
   await initStorage(config);
   log.info('Storage initialized');
 
-  const ai = initAI(config);
+  const ai = initAI(config, bus);
   log.info('AI layer initialized');
 
   const tools = initTools(config);

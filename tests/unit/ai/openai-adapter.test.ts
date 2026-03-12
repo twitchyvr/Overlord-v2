@@ -20,10 +20,11 @@ vi.mock('openai', () => ({
 
 const { createOpenAIAdapter } = await import('../../../src/ai/adapters/openai.js');
 
-function makeConfig(overrides: Record<string, string | undefined> = {}): Config {
+function makeConfig(overrides: Record<string, unknown> = {}): Config {
   const values: Record<string, unknown> = {
     OPENAI_API_KEY: 'sk-test-openai-key',
     OPENAI_MODEL: 'gpt-4o',
+    AI_REQUEST_TIMEOUT_MS: 60_000,
     ...overrides,
   };
   return {
@@ -252,5 +253,40 @@ describe('OpenAI Adapter', () => {
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
       model: 'gpt-4-turbo',
     }));
+  });
+
+  describe('timeout configuration', () => {
+    it('passes configured timeout to OpenAI client', async () => {
+      mockCreate.mockResolvedValueOnce(standardOpenAIResponse);
+
+      const adapter = createOpenAIAdapter(makeConfig({ AI_REQUEST_TIMEOUT_MS: 30_000 }));
+      await adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {});
+
+      expect(MockOpenAI).toHaveBeenCalledWith(
+        expect.objectContaining({ timeout: 30_000 }),
+      );
+    });
+
+    it('uses default 60s timeout', async () => {
+      mockCreate.mockResolvedValueOnce(standardOpenAIResponse);
+
+      const adapter = createOpenAIAdapter(makeConfig());
+      await adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {});
+
+      expect(MockOpenAI).toHaveBeenCalledWith(
+        expect.objectContaining({ timeout: 60_000 }),
+      );
+    });
+
+    it('propagates SDK timeout errors', async () => {
+      const timeoutError = new Error('Connection timed out');
+      timeoutError.name = 'APIConnectionTimeoutError';
+      mockCreate.mockRejectedValueOnce(timeoutError);
+
+      const adapter = createOpenAIAdapter(makeConfig());
+      await expect(
+        adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {}),
+      ).rejects.toThrow('Connection timed out');
+    });
   });
 });

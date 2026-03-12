@@ -130,7 +130,8 @@ export function createOpenAIAdapter(cfg: Config): AIAdapter {
     if (!client) {
       const apiKey = cfg.get('OPENAI_API_KEY');
       if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
-      client = new OpenAI({ apiKey });
+      const timeoutMs = cfg.get('AI_REQUEST_TIMEOUT_MS');
+      client = new OpenAI({ apiKey, timeout: timeoutMs });
     }
     return client;
   }

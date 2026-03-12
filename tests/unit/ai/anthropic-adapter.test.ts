@@ -19,11 +19,12 @@ vi.mock('@anthropic-ai/sdk', () => ({
 
 const { createAnthropicAdapter } = await import('../../../src/ai/adapters/anthropic.js');
 
-function makeConfig(overrides: Record<string, string | undefined> = {}): Config {
+function makeConfig(overrides: Record<string, unknown> = {}): Config {
   const values: Record<string, unknown> = {
     ANTHROPIC_API_KEY: 'sk-ant-test-key',
     ANTHROPIC_MODEL: 'claude-sonnet-4-20250514',
     ANTHROPIC_BASE_URL: undefined,
+    AI_REQUEST_TIMEOUT_MS: 60_000,
     ...overrides,
   };
   return {
@@ -68,6 +69,7 @@ describe('Anthropic Adapter', () => {
 
     expect(MockAnthropic).toHaveBeenCalledWith({
       apiKey: 'sk-ant-test-key',
+      timeout: 60_000,
     });
   });
 
@@ -79,6 +81,7 @@ describe('Anthropic Adapter', () => {
 
     expect(MockAnthropic).toHaveBeenCalledWith({
       apiKey: 'sk-ant-test-key',
+      timeout: 60_000,
       baseURL: 'https://custom.api.com',
     });
   });
@@ -182,5 +185,40 @@ describe('Anthropic Adapter', () => {
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
       temperature: 0.7,
     }));
+  });
+
+  describe('timeout configuration', () => {
+    it('passes configured timeout to Anthropic client', async () => {
+      mockCreate.mockResolvedValueOnce(standardResponse);
+
+      const adapter = createAnthropicAdapter(makeConfig({ AI_REQUEST_TIMEOUT_MS: 30_000 }));
+      await adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {});
+
+      expect(MockAnthropic).toHaveBeenCalledWith(
+        expect.objectContaining({ timeout: 30_000 }),
+      );
+    });
+
+    it('uses default 60s timeout', async () => {
+      mockCreate.mockResolvedValueOnce(standardResponse);
+
+      const adapter = createAnthropicAdapter(makeConfig());
+      await adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {});
+
+      expect(MockAnthropic).toHaveBeenCalledWith(
+        expect.objectContaining({ timeout: 60_000 }),
+      );
+    });
+
+    it('propagates SDK timeout errors', async () => {
+      const timeoutError = new Error('Connection timed out');
+      timeoutError.name = 'APIConnectionTimeoutError';
+      mockCreate.mockRejectedValueOnce(timeoutError);
+
+      const adapter = createAnthropicAdapter(makeConfig());
+      await expect(
+        adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {}),
+      ).rejects.toThrow('Connection timed out');
+    });
   });
 });

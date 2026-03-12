@@ -20,11 +20,12 @@ vi.mock('@anthropic-ai/sdk', () => ({
 // Import after mocking
 const { createMinimaxAdapter } = await import('../../../src/ai/adapters/minimax.js');
 
-function makeConfig(overrides: Record<string, string | undefined> = {}): Config {
+function makeConfig(overrides: Record<string, unknown> = {}): Config {
   const values: Record<string, unknown> = {
     MINIMAX_API_KEY: 'test-key',
     MINIMAX_BASE_URL: 'https://api.minimax.io/anthropic',
     MINIMAX_MODEL: 'MiniMax-M2.5',
+    AI_REQUEST_TIMEOUT_MS: 60_000,
     ...overrides,
   };
   return {
@@ -69,6 +70,7 @@ describe('MiniMax Adapter (Anthropic-Compatible)', () => {
 
     expect(MockAnthropic).toHaveBeenCalledWith({
       apiKey: 'test-key',
+      timeout: 60_000,
       baseURL: 'https://api.minimax.io/anthropic',
     });
   });
@@ -190,5 +192,40 @@ describe('MiniMax Adapter (Anthropic-Compatible)', () => {
     await expect(
       adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {}),
     ).rejects.toThrow('MINIMAX_API_KEY is not configured');
+  });
+
+  describe('timeout configuration', () => {
+    it('passes configured timeout to Anthropic client', async () => {
+      mockCreate.mockResolvedValueOnce(standardResponse);
+
+      const adapter = createMinimaxAdapter(makeConfig({ AI_REQUEST_TIMEOUT_MS: 30_000 }));
+      await adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {});
+
+      expect(MockAnthropic).toHaveBeenCalledWith(
+        expect.objectContaining({ timeout: 30_000 }),
+      );
+    });
+
+    it('uses default 60s timeout', async () => {
+      mockCreate.mockResolvedValueOnce(standardResponse);
+
+      const adapter = createMinimaxAdapter(makeConfig());
+      await adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {});
+
+      expect(MockAnthropic).toHaveBeenCalledWith(
+        expect.objectContaining({ timeout: 60_000 }),
+      );
+    });
+
+    it('propagates SDK timeout errors', async () => {
+      const timeoutError = new Error('Connection timed out');
+      timeoutError.name = 'APIConnectionTimeoutError';
+      mockCreate.mockRejectedValueOnce(timeoutError);
+
+      const adapter = createMinimaxAdapter(makeConfig());
+      await expect(
+        adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {}),
+      ).rejects.toThrow('Connection timed out');
+    });
   });
 });
