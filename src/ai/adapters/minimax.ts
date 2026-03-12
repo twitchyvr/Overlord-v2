@@ -42,6 +42,7 @@ export interface MinimaxResponse {
   model: string;
   stop_reason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | null;
   usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number };
+  thinking?: string;
 }
 
 export function createMinimaxAdapter(cfg: Config): AIAdapter {
@@ -123,13 +124,36 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
         'MiniMax response received',
       );
 
+      // Normalize content: separate thinking blocks from text/tool_use blocks.
+      // MiniMax may return { type: 'thinking' } blocks (extended thinking) which
+      // consumers don't expect in the content array.
+      const rawContent = response.content as AnthropicContentBlock[];
+      const thinkingBlocks = rawContent.filter((b) => b.type === 'thinking');
+      const normalizedContent = rawContent.filter((b) => b.type !== 'thinking');
+
+      // Combine thinking text for consumers that want it
+      const thinkingText = thinkingBlocks
+        .map((b) => b.thinking || b.text || '')
+        .filter(Boolean)
+        .join('\n\n');
+
+      // If only thinking blocks remain (max_tokens exhausted on thinking),
+      // synthesize a text block from the thinking content
+      let finalContent = normalizedContent;
+      if (finalContent.length === 0 && thinkingText) {
+        finalContent = [{ type: 'text' as const, text: thinkingText }];
+      } else if (finalContent.length === 0) {
+        finalContent = rawContent;
+      }
+
       return {
         id: response.id,
         role: response.role,
-        content: response.content as AnthropicContentBlock[],
+        content: finalContent,
         model: response.model,
         stop_reason: response.stop_reason,
         usage,
+        ...(thinkingText ? { thinking: thinkingText } : {}),
       };
     },
 
