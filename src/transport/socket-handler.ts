@@ -21,6 +21,7 @@ import { searchRaid, addRaidEntry, updateRaidEntry, updateRaidStatus } from '../
 import { submitExitDocument } from '../rooms/room-manager.js';
 import { getDb } from '../storage/db.js';
 import { handleBlueprintSubmission } from '../rooms/phase-zero.js';
+import { addCitation, getCitations, getBacklinks } from '../rooms/citation-tracker.js';
 import { parseCommandText, dispatchCommand, handleMention, resolveReference, listCommands } from '../commands/index.js';
 import type { CommandContext, ParsedToken } from '../commands/index.js';
 import type { z } from 'zod';
@@ -39,6 +40,7 @@ import {
   TaskCreateSchema, TaskUpdateSchema, TaskListSchema, TaskGetSchema,
   TodoCreateSchema, TodoToggleSchema, TodoListSchema, TodoDeleteSchema,
   ExitDocSubmitSchema, ExitDocGetSchema, ExitDocListSchema,
+  CitationListSchema, CitationBacklinksSchema,
 } from './schemas.js';
 
 const log = logger.child({ module: 'transport' });
@@ -325,7 +327,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         }
       }
 
-      // 3. Process #reference tokens
+      // 3. Process #reference tokens — resolve and record citations
       const refTokens = tokens.filter(t => t.type === 'reference' || t.char === '#');
       for (const token of refTokens) {
         try {
@@ -338,6 +340,27 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
             socket.emit('chat:response', {
               type: 'reference', target: refResult.target, content: refResult.content,
             });
+
+            // Record a citation if the source room context is available
+            if (roomId && refResult.content && typeof refResult.content === 'object') {
+              const content = refResult.content as Record<string, unknown>;
+              const targetRoomId = (content.id as string) || '';
+              const targetType = token.id.startsWith('raid') ? 'raid' as const : 'room' as const;
+              const targetEntryId = targetType === 'raid' ? (content.id as string) : undefined;
+
+              if (targetRoomId || targetType === 'raid') {
+                const citResult = addCitation({
+                  sourceRoomId: roomId,
+                  targetRoomId: targetType === 'raid' ? roomId : targetRoomId,
+                  targetEntryId,
+                  targetType,
+                  createdBy: agentId || socket.id,
+                });
+                if (citResult.ok) {
+                  bus.emit('citation:added', citResult.data as unknown as Record<string, unknown>);
+                }
+              }
+            }
           }
         } catch (refErr) {
           log.error({ event: 'chat:message', refErr, tokenId: token.id }, 'Reference resolution failed');
@@ -631,6 +654,16 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       });
     });
 
+    // ─── Citation Events ───
+
+    handle(socket, 'citations:list', CitationListSchema, (parsed, ack) => {
+      if (ack) ack(getCitations(parsed.roomId));
+    });
+
+    handle(socket, 'citations:backlinks', CitationBacklinksSchema, (parsed, ack) => {
+      if (ack) ack(getBacklinks(parsed.roomId, parsed.entryId));
+    });
+
     // ─── Phase Gate Events ───
 
     handle(socket, 'phase:gate:create', PhaseGateSchema, (parsed, ack) => {
@@ -859,6 +892,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   forward('building:onboarded');
   forward('building:onboard-failed');
   forward('phase:room-provisioned');
+  forward('citation:added');
 
   log.info('Transport layer initialized');
   broadcastLog('info', 'Transport layer initialized', 'transport');
