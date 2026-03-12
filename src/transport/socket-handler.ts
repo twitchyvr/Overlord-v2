@@ -7,6 +7,8 @@
  * CRITICAL: Every socket.on handler is wrapped in try/catch to prevent
  * unhandled exceptions from crashing the server. Errors are logged and
  * returned to the client via the ack callback when available.
+ *
+ * All incoming payloads are validated with Zod schemas before processing.
  */
 
 import { randomUUID } from 'crypto';
@@ -21,7 +23,22 @@ import { submitExitDocument } from '../rooms/room-manager.js';
 import { getDb } from '../storage/db.js';
 import { handleBlueprintSubmission } from '../rooms/phase-zero.js';
 import { parseCommandText, dispatchCommand, handleMention, resolveReference, listCommands } from '../commands/index.js';
-import type { ParsedToken, CommandContext } from '../commands/index.js';
+import type { CommandContext } from '../commands/index.js';
+
+import {
+  validate,
+  BuildingCreateSchema, BuildingGetSchema, BuildingListSchema, BuildingApplyBlueprintSchema,
+  FloorListSchema, FloorGetSchema,
+  RoomCreateSchema, RoomGetSchema, RoomEnterSchema, RoomExitSchema,
+  AgentRegisterSchema, AgentGetSchema, AgentListSchema,
+  ChatMessageSchema,
+  PhaseGatesSchema, PhaseCanAdvanceSchema, PhasePendingGatesSchema,
+  PhaseResolveConditionsSchema, PhaseStaleGatesSchema, PhaseGateSignoffSchema, PhaseAdvanceSchema,
+  RaidSearchSchema, RaidListSchema, RaidAddSchema, RaidUpdateSchema, RaidEditSchema,
+  TaskCreateSchema, TaskUpdateSchema, TaskListSchema, TaskGetSchema,
+  TodoCreateSchema, TodoToggleSchema, TodoListSchema, TodoDeleteSchema,
+  ExitDocSubmitSchema, ExitDocGetSchema, ExitDocListSchema,
+} from './schemas.js';
 
 const log = logger.child({ module: 'transport' });
 
@@ -56,9 +73,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     broadcastLog('info', `Client connected (${socket.id})`, 'transport');
 
     // ─── Building Events ───
-    socket.on('building:create', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('building:create', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = createBuilding(data as unknown as Parameters<typeof createBuilding>[0]);
+        const parsed = validate(BuildingCreateSchema, data, 'building:create', ack);
+        if (!parsed) return;
+        const result = createBuilding(parsed as Parameters<typeof createBuilding>[0]);
         if (result.ok) broadcastLog('info', `Building created: ${(result as { ok: true; data: { name: string } }).data.name}`, 'building');
         if (ack) ack(result);
       } catch (e) {
@@ -67,9 +86,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('building:get', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('building:get', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = getBuilding(data.buildingId as string);
+        const parsed = validate(BuildingGetSchema, data, 'building:get', ack);
+        if (!parsed) return;
+        const result = getBuilding(parsed.buildingId);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'building:get', err: e, socketId: socket.id }, 'Handler threw');
@@ -77,9 +98,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('building:list', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('building:list', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = listBuildings(data.projectId as string | undefined);
+        const parsed = validate(BuildingListSchema, data, 'building:list', ack);
+        if (!parsed) return;
+        const result = listBuildings(parsed.projectId);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'building:list', err: e, socketId: socket.id }, 'Handler threw');
@@ -87,12 +110,14 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('building:apply-blueprint', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('building:apply-blueprint', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(BuildingApplyBlueprintSchema, data, 'building:apply-blueprint', ack);
+        if (!parsed) return;
         const result = handleBlueprintSubmission({
-          buildingId: data.buildingId as string,
-          blueprint: data.blueprint as Record<string, unknown>,
-          agentId: data.agentId as string,
+          buildingId: parsed.buildingId,
+          blueprint: parsed.blueprint,
+          agentId: parsed.agentId,
         });
         if (ack) ack(result);
       } catch (e) {
@@ -120,9 +145,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     // ─── Floor Events ───
-    socket.on('floor:list', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('floor:list', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = listFloors(data.buildingId as string);
+        const parsed = validate(FloorListSchema, data, 'floor:list', ack);
+        if (!parsed) return;
+        const result = listFloors(parsed.buildingId);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'floor:list', err: e, socketId: socket.id }, 'Handler threw');
@@ -130,9 +157,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('floor:get', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('floor:get', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = getFloor(data.floorId as string);
+        const parsed = validate(FloorGetSchema, data, 'floor:get', ack);
+        if (!parsed) return;
+        const result = getFloor(parsed.floorId);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'floor:get', err: e, socketId: socket.id }, 'Handler threw');
@@ -141,9 +170,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     // ─── Room Events ───
-    socket.on('room:create', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('room:create', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = rooms.createRoom(data as Parameters<typeof rooms.createRoom>[0]);
+        const parsed = validate(RoomCreateSchema, data, 'room:create', ack);
+        if (!parsed) return;
+        const result = rooms.createRoom(parsed as Parameters<typeof rooms.createRoom>[0]);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'room:create', err: e, socketId: socket.id }, 'Handler threw');
@@ -151,11 +182,13 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('room:get', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('room:get', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const room = rooms.getRoom(data.roomId as string);
+        const parsed = validate(RoomGetSchema, data, 'room:get', ack);
+        if (!parsed) return;
+        const room = rooms.getRoom(parsed.roomId);
         if (!room) {
-          if (ack) ack({ ok: false, error: { code: 'ROOM_NOT_FOUND', message: `Room ${data.roomId} does not exist`, retryable: false } });
+          if (ack) ack({ ok: false, error: { code: 'ROOM_NOT_FOUND', message: `Room ${parsed.roomId} does not exist`, retryable: false } });
           return;
         }
         if (ack) ack({
@@ -186,9 +219,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('room:enter', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('room:enter', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = rooms.enterRoom(data as Parameters<typeof rooms.enterRoom>[0]);
+        const parsed = validate(RoomEnterSchema, data, 'room:enter', ack);
+        if (!parsed) return;
+        const result = rooms.enterRoom(parsed as Parameters<typeof rooms.enterRoom>[0]);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'room:enter', err: e, socketId: socket.id }, 'Handler threw');
@@ -196,9 +231,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('room:exit', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('room:exit', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = rooms.exitRoom(data as Parameters<typeof rooms.exitRoom>[0]);
+        const parsed = validate(RoomExitSchema, data, 'room:exit', ack);
+        if (!parsed) return;
+        const result = rooms.exitRoom(parsed as Parameters<typeof rooms.exitRoom>[0]);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'room:exit', err: e, socketId: socket.id }, 'Handler threw');
@@ -207,9 +244,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     // ─── Agent Events ───
-    socket.on('agent:register', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('agent:register', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = agents.registerAgent(data as Parameters<typeof agents.registerAgent>[0]);
+        const parsed = validate(AgentRegisterSchema, data, 'agent:register', ack);
+        if (!parsed) return;
+        const result = agents.registerAgent(parsed as Parameters<typeof agents.registerAgent>[0]);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'agent:register', err: e, socketId: socket.id }, 'Handler threw');
@@ -217,11 +256,13 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('agent:get', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('agent:get', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const agent = agents.getAgent(data.agentId as string);
+        const parsed = validate(AgentGetSchema, data, 'agent:get', ack);
+        if (!parsed) return;
+        const agent = agents.getAgent(parsed.agentId);
         if (!agent) {
-          if (ack) ack({ ok: false, error: { code: 'AGENT_NOT_FOUND', message: `Agent ${data.agentId} does not exist`, retryable: false } });
+          if (ack) ack({ ok: false, error: { code: 'AGENT_NOT_FOUND', message: `Agent ${parsed.agentId} does not exist`, retryable: false } });
           return;
         }
         if (ack) ack({ ok: true, data: agent });
@@ -231,9 +272,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('agent:list', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('agent:list', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = agents.listAgents(data as Parameters<typeof agents.listAgents>[0]);
+        const parsed = validate(AgentListSchema, data, 'agent:list', ack);
+        if (!parsed) return;
+        const result = agents.listAgents(parsed as Parameters<typeof agents.listAgents>[0]);
         if (ack) ack({ ok: true, data: result });
       } catch (e) {
         log.error({ event: 'agent:list', err: e, socketId: socket.id }, 'Handler threw');
@@ -260,22 +303,24 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     // ─── Chat Events (with command/mention/reference parsing) ───
-    socket.on('chat:message', async (data: Record<string, unknown>) => {
+    socket.on('chat:message', async (data: unknown) => {
       try {
-        const text = (data.text as string) || '';
-        const tokens = (data.tokens as ParsedToken[]) || [];
+        const parsed = validate(ChatMessageSchema, data, 'chat:message');
+        if (!parsed) return;
+
+        const { text, tokens, buildingId, roomId, agentId } = parsed;
 
         // 1. Check if message starts with '/' → dispatch as command
-        const parsed = parseCommandText(text);
-        if (parsed) {
+        const cmdParsed = parseCommandText(text);
+        if (cmdParsed) {
           const ctx: CommandContext = {
-            command: parsed.command,
-            args: parsed.args,
+            command: cmdParsed.command,
+            args: cmdParsed.args,
             rawText: text,
             socketId: socket.id,
-            buildingId: data.buildingId as string | undefined,
-            roomId: data.roomId as string | undefined,
-            agentId: data.agentId as string | undefined,
+            buildingId,
+            roomId,
+            agentId,
             tokens,
             bus,
           };
@@ -286,7 +331,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
           if (!result.silent) {
             socket.emit('chat:response', {
               type: 'command',
-              command: parsed.command,
+              command: cmdParsed.command,
               ok: result.ok,
               response: result.response,
               data: result.data,
@@ -306,9 +351,9 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
               args: [],
               rawText: text,
               socketId: socket.id,
-              buildingId: data.buildingId as string | undefined,
-              roomId: data.roomId as string | undefined,
-              agentId: data.agentId as string | undefined,
+              buildingId,
+              roomId,
+              agentId,
               tokens,
               bus,
             };
@@ -334,9 +379,9 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
               args: [],
               rawText: text,
               socketId: socket.id,
-              buildingId: data.buildingId as string | undefined,
-              roomId: data.roomId as string | undefined,
-              agentId: data.agentId as string | undefined,
+              buildingId,
+              roomId,
+              agentId,
               tokens,
               bus,
             };
@@ -354,16 +399,16 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         }
 
         // 4. Regular message — forward to bus as before
-        bus.emit('chat:message', { socketId: socket.id, ...data });
+        bus.emit('chat:message', { socketId: socket.id, ...parsed });
       } catch (e) {
         log.error({ event: 'chat:message', err: e, socketId: socket.id }, 'Handler threw');
       }
     });
 
     // ─── Phase Events ───
-    socket.on('phase:status', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('phase:status', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        bus.emit('phase:status', { socketId: socket.id, ...data });
+        bus.emit('phase:status', { socketId: socket.id, ...(data as Record<string, unknown>) });
         if (ack) ack({ ok: true });
       } catch (e) {
         log.error({ event: 'phase:status', err: e, socketId: socket.id }, 'Handler threw');
@@ -371,9 +416,9 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('phase:gate', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('phase:gate', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        bus.emit('phase:gate', { socketId: socket.id, ...data });
+        bus.emit('phase:gate', { socketId: socket.id, ...(data as Record<string, unknown>) });
         if (ack) ack({ ok: true });
       } catch (e) {
         log.error({ event: 'phase:gate', err: e, socketId: socket.id }, 'Handler threw');
@@ -381,9 +426,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('phase:gates', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('phase:gates', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = getGates(data.buildingId as string);
+        const parsed = validate(PhaseGatesSchema, data, 'phase:gates', ack);
+        if (!parsed) return;
+        const result = getGates(parsed.buildingId);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'phase:gates', err: e, socketId: socket.id }, 'Handler threw');
@@ -391,9 +438,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('phase:can-advance', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('phase:can-advance', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = canAdvance(data.buildingId as string);
+        const parsed = validate(PhaseCanAdvanceSchema, data, 'phase:can-advance', ack);
+        if (!parsed) return;
+        const result = canAdvance(parsed.buildingId);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'phase:can-advance', err: e, socketId: socket.id }, 'Handler threw');
@@ -401,9 +450,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('phase:pending-gates', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('phase:pending-gates', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = getPendingGates(data.buildingId as string | undefined);
+        const parsed = validate(PhasePendingGatesSchema, data, 'phase:pending-gates', ack);
+        if (!parsed) return;
+        const result = getPendingGates(parsed.buildingId);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'phase:pending-gates', err: e, socketId: socket.id }, 'Handler threw');
@@ -411,12 +462,14 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('phase:resolve-conditions', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('phase:resolve-conditions', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(PhaseResolveConditionsSchema, data, 'phase:resolve-conditions', ack);
+        if (!parsed) return;
         const result = resolveConditions({
-          gateId: data.gateId as string,
-          resolvedConditions: (data.resolvedConditions as string[]) || [],
-          resolver: (data.resolver as string) || 'system',
+          gateId: parsed.gateId,
+          resolvedConditions: parsed.resolvedConditions,
+          resolver: parsed.resolver,
         });
         if (result.ok) {
           const resultData = result.data as Record<string, unknown>;
@@ -425,7 +478,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
             bus.emit('phase:gate:signed-off', resultData);
             bus.emit('phase:advanced', resultData);
           } else {
-            bus.emit('phase:conditions:resolved', { gateId: data.gateId, ...resultData });
+            bus.emit('phase:conditions:resolved', { gateId: parsed.gateId, ...resultData });
           }
         }
         if (ack) ack(result);
@@ -435,9 +488,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('phase:stale-gates', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('phase:stale-gates', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const thresholdMs = (data.thresholdMs as number) || 30 * 60 * 1000;
+        const parsed = validate(PhaseStaleGatesSchema, data, 'phase:stale-gates', ack);
+        if (!parsed) return;
+        const thresholdMs = parsed.thresholdMs || 30 * 60 * 1000;
         const result = getStalePendingGates(thresholdMs);
         if (ack) ack(result);
       } catch (e) {
@@ -456,9 +511,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     // ─── RAID Events ───
-    socket.on('raid:search', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('raid:search', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = searchRaid(data as unknown as Parameters<typeof searchRaid>[0]);
+        const parsed = validate(RaidSearchSchema, data, 'raid:search', ack);
+        if (!parsed) return;
+        const result = searchRaid(parsed as Parameters<typeof searchRaid>[0]);
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'raid:search', err: e, socketId: socket.id }, 'Handler threw');
@@ -466,9 +523,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('raid:list', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('raid:list', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = searchRaid({ buildingId: data.buildingId as string });
+        const parsed = validate(RaidListSchema, data, 'raid:list', ack);
+        if (!parsed) return;
+        const result = searchRaid({ buildingId: parsed.buildingId });
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'raid:list', err: e, socketId: socket.id }, 'Handler threw');
@@ -476,10 +535,12 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('raid:add', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('raid:add', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = addRaidEntry(data as unknown as Parameters<typeof addRaidEntry>[0]);
-        bus.emit('raid:entry:added', { ...(result.ok ? result.data as Record<string, unknown> : {}), ...data });
+        const parsed = validate(RaidAddSchema, data, 'raid:add', ack);
+        if (!parsed) return;
+        const result = addRaidEntry(parsed as Parameters<typeof addRaidEntry>[0]);
+        bus.emit('raid:entry:added', { ...(result.ok ? result.data as Record<string, unknown> : {}), ...parsed });
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'raid:add', err: e, socketId: socket.id }, 'Handler threw');
@@ -487,9 +548,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('raid:update', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('raid:update', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const result = updateRaidStatus({ id: data.id as string, status: data.status as string });
+        const parsed = validate(RaidUpdateSchema, data, 'raid:update', ack);
+        if (!parsed) return;
+        const result = updateRaidStatus({ id: parsed.id, status: parsed.status });
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'raid:update', err: e, socketId: socket.id }, 'Handler threw');
@@ -497,14 +560,16 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('raid:edit', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('raid:edit', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(RaidEditSchema, data, 'raid:edit', ack);
+        if (!parsed) return;
         const result = updateRaidEntry({
-          id: data.id as string,
-          summary: data.summary as string | undefined,
-          rationale: data.rationale as string | undefined,
-          decidedBy: data.decidedBy as string | undefined,
-          affectedAreas: data.affectedAreas as string[] | undefined,
+          id: parsed.id,
+          summary: parsed.summary,
+          rationale: parsed.rationale,
+          decidedBy: parsed.decidedBy,
+          affectedAreas: parsed.affectedAreas,
         });
         if (ack) ack(result);
       } catch (e) {
@@ -514,8 +579,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     // ─── Task Events ───
-    socket.on('task:create', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('task:create', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(TaskCreateSchema, data, 'task:create', ack);
+        if (!parsed) return;
+
         const db = getDb();
         const id = randomUUID();
         const now = new Date().toISOString();
@@ -525,23 +593,23 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(?), datetime(?))
         `).run(
           id,
-          data.buildingId as string,
-          data.title as string,
-          (data.description as string) || null,
-          (data.status as string) || 'pending',
-          (data.parentId as string) || null,
-          (data.milestoneId as string) || null,
-          (data.assigneeId as string) || null,
-          (data.roomId as string) || null,
-          (data.phase as string) || null,
-          (data.priority as string) || 'normal',
+          parsed.buildingId,
+          parsed.title,
+          parsed.description || null,
+          parsed.status,
+          parsed.parentId || null,
+          parsed.milestoneId || null,
+          parsed.assigneeId || null,
+          parsed.roomId || null,
+          parsed.phase || null,
+          parsed.priority,
           now,
           now,
         );
 
         const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
-        log.info({ id, buildingId: data.buildingId, title: data.title }, 'Task created');
-        broadcastLog('info', `Task created: ${data.title}`, 'tasks');
+        log.info({ id, buildingId: parsed.buildingId, title: parsed.title }, 'Task created');
+        broadcastLog('info', `Task created: ${parsed.title}`, 'tasks');
         bus.emit('task:created', task as Record<string, unknown>);
         if (ack) ack({ ok: true, data: task });
       } catch (e) {
@@ -550,10 +618,13 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('task:update', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('task:update', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(TaskUpdateSchema, data, 'task:update', ack);
+        if (!parsed) return;
+
         const db = getDb();
-        const taskId = data.id as string;
+        const taskId = parsed.id;
 
         const existing = db.prepare('SELECT id FROM tasks WHERE id = ?').get(taskId);
         if (!existing) {
@@ -572,9 +643,9 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         };
 
         for (const key of updatable) {
-          if (key in data) {
+          if (parsed[key] !== undefined) {
             fields.push(`${columnMap[key]} = ?`);
-            values.push(data[key] as unknown);
+            values.push(parsed[key]);
           }
         }
 
@@ -599,17 +670,18 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('task:list', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('task:list', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(TaskListSchema, data, 'task:list', ack);
+        if (!parsed) return;
+
         const db = getDb();
-        const buildingId = data.buildingId as string;
-
         let sql = 'SELECT * FROM tasks WHERE building_id = ?';
-        const params: unknown[] = [buildingId];
+        const params: unknown[] = [parsed.buildingId];
 
-        if (data.status) { sql += ' AND status = ?'; params.push(data.status as string); }
-        if (data.phase) { sql += ' AND phase = ?'; params.push(data.phase as string); }
-        if (data.assigneeId) { sql += ' AND assignee_id = ?'; params.push(data.assigneeId as string); }
+        if (parsed.status) { sql += ' AND status = ?'; params.push(parsed.status); }
+        if (parsed.phase) { sql += ' AND phase = ?'; params.push(parsed.phase); }
+        if (parsed.assigneeId) { sql += ' AND assignee_id = ?'; params.push(parsed.assigneeId); }
 
         sql += ' ORDER BY created_at DESC';
 
@@ -621,17 +693,20 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('task:get', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('task:get', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(TaskGetSchema, data, 'task:get', ack);
+        if (!parsed) return;
+
         const db = getDb();
-        const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(data.id as string);
+        const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(parsed.id);
         if (!task) {
-          if (ack) ack({ ok: false, error: { code: 'TASK_NOT_FOUND', message: `Task ${data.id} does not exist`, retryable: false } });
+          if (ack) ack({ ok: false, error: { code: 'TASK_NOT_FOUND', message: `Task ${parsed.id} does not exist`, retryable: false } });
           return;
         }
 
         // Also fetch associated todos
-        const todos = db.prepare('SELECT * FROM todos WHERE task_id = ? ORDER BY created_at').all(data.id as string);
+        const todos = db.prepare('SELECT * FROM todos WHERE task_id = ? ORDER BY created_at').all(parsed.id);
         if (ack) ack({ ok: true, data: { ...(task as Record<string, unknown>), todos } });
       } catch (e) {
         log.error({ event: 'task:get', err: e, socketId: socket.id }, 'Handler threw');
@@ -640,16 +715,19 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     // ─── TODO Events ───
-    socket.on('todo:create', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('todo:create', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(TodoCreateSchema, data, 'todo:create', ack);
+        if (!parsed) return;
+
         const db = getDb();
         const id = randomUUID();
         const now = new Date().toISOString();
 
         // Verify parent task exists
-        const task = db.prepare('SELECT id FROM tasks WHERE id = ?').get(data.taskId as string);
+        const task = db.prepare('SELECT id FROM tasks WHERE id = ?').get(parsed.taskId);
         if (!task) {
-          if (ack) ack({ ok: false, error: { code: 'TASK_NOT_FOUND', message: `Parent task ${data.taskId} does not exist`, retryable: false } });
+          if (ack) ack({ ok: false, error: { code: 'TASK_NOT_FOUND', message: `Parent task ${parsed.taskId} does not exist`, retryable: false } });
           return;
         }
 
@@ -658,17 +736,17 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
           VALUES (?, ?, ?, ?, ?, ?, ?, datetime(?))
         `).run(
           id,
-          data.taskId as string,
-          (data.agentId as string) || null,
-          (data.roomId as string) || null,
-          data.description as string,
-          (data.status as string) || 'pending',
-          (data.exitDocRef as string) || null,
+          parsed.taskId,
+          parsed.agentId || null,
+          parsed.roomId || null,
+          parsed.description,
+          parsed.status,
+          parsed.exitDocRef || null,
           now,
         );
 
         const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(id);
-        log.info({ id, taskId: data.taskId, description: data.description }, 'TODO created');
+        log.info({ id, taskId: parsed.taskId, description: parsed.description }, 'TODO created');
         bus.emit('todo:created', todo);
         if (ack) ack({ ok: true, data: todo });
       } catch (e) {
@@ -677,14 +755,15 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('todo:toggle', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('todo:toggle', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const db = getDb();
-        const todoId = data.id as string;
+        const parsed = validate(TodoToggleSchema, data, 'todo:toggle', ack);
+        if (!parsed) return;
 
-        const existing = db.prepare('SELECT * FROM todos WHERE id = ?').get(todoId) as Record<string, unknown> | undefined;
+        const db = getDb();
+        const existing = db.prepare('SELECT * FROM todos WHERE id = ?').get(parsed.id) as Record<string, unknown> | undefined;
         if (!existing) {
-          if (ack) ack({ ok: false, error: { code: 'TODO_NOT_FOUND', message: `TODO ${todoId} does not exist`, retryable: false } });
+          if (ack) ack({ ok: false, error: { code: 'TODO_NOT_FOUND', message: `TODO ${parsed.id} does not exist`, retryable: false } });
           return;
         }
 
@@ -693,10 +772,10 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         const completedAt = newStatus === 'done' ? new Date().toISOString() : null;
 
         db.prepare("UPDATE todos SET status = ?, completed_at = datetime(?) WHERE id = ?")
-          .run(newStatus, completedAt, todoId);
+          .run(newStatus, completedAt, parsed.id);
 
-        const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(todoId);
-        log.info({ todoId, from: currentStatus, to: newStatus }, 'TODO toggled');
+        const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(parsed.id);
+        log.info({ todoId: parsed.id, from: currentStatus, to: newStatus }, 'TODO toggled');
         bus.emit('todo:updated', todo);
         if (ack) ack({ ok: true, data: todo });
       } catch (e) {
@@ -705,10 +784,13 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('todo:list', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('todo:list', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(TodoListSchema, data, 'todo:list', ack);
+        if (!parsed) return;
+
         const db = getDb();
-        const todos = db.prepare('SELECT * FROM todos WHERE task_id = ? ORDER BY created_at').all(data.taskId as string);
+        const todos = db.prepare('SELECT * FROM todos WHERE task_id = ? ORDER BY created_at').all(parsed.taskId);
         if (ack) ack({ ok: true, data: todos });
       } catch (e) {
         log.error({ event: 'todo:list', err: e, socketId: socket.id }, 'Handler threw');
@@ -716,21 +798,22 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('todo:delete', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('todo:delete', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const db = getDb();
-        const todoId = data.id as string;
+        const parsed = validate(TodoDeleteSchema, data, 'todo:delete', ack);
+        if (!parsed) return;
 
-        const existing = db.prepare('SELECT * FROM todos WHERE id = ?').get(todoId) as Record<string, unknown> | undefined;
+        const db = getDb();
+        const existing = db.prepare('SELECT * FROM todos WHERE id = ?').get(parsed.id) as Record<string, unknown> | undefined;
         if (!existing) {
-          if (ack) ack({ ok: false, error: { code: 'TODO_NOT_FOUND', message: `TODO ${todoId} does not exist`, retryable: false } });
+          if (ack) ack({ ok: false, error: { code: 'TODO_NOT_FOUND', message: `TODO ${parsed.id} does not exist`, retryable: false } });
           return;
         }
 
-        db.prepare('DELETE FROM todos WHERE id = ?').run(todoId);
-        log.info({ todoId, taskId: existing.task_id }, 'TODO deleted');
-        bus.emit('todo:deleted', { id: todoId, taskId: existing.task_id });
-        if (ack) ack({ ok: true, data: { id: todoId } });
+        db.prepare('DELETE FROM todos WHERE id = ?').run(parsed.id);
+        log.info({ todoId: parsed.id, taskId: existing.task_id }, 'TODO deleted');
+        bus.emit('todo:deleted', { id: parsed.id, taskId: existing.task_id });
+        if (ack) ack({ ok: true, data: { id: parsed.id } });
       } catch (e) {
         log.error({ event: 'todo:delete', err: e, socketId: socket.id }, 'Handler threw');
         if (ack) ack(errorResponse('todo:delete', e));
@@ -738,21 +821,23 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     // ─── Exit Document Events ───
-    socket.on('exit-doc:submit', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('exit-doc:submit', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(ExitDocSubmitSchema, data, 'exit-doc:submit', ack);
+        if (!parsed) return;
         const result = submitExitDocument({
-          roomId: data.roomId as string,
-          agentId: data.agentId as string,
-          document: (data.document as Record<string, unknown>) || {},
-          buildingId: data.buildingId as string | undefined,
-          phase: data.phase as string | undefined,
+          roomId: parsed.roomId,
+          agentId: parsed.agentId,
+          document: parsed.document,
+          buildingId: parsed.buildingId,
+          phase: parsed.phase,
         });
         bus.emit('exit-doc:submitted', {
-          roomId: data.roomId as string,
-          roomType: data.roomType as string,
-          buildingId: data.buildingId as string,
-          agentId: data.agentId as string,
-          document: data.document,
+          roomId: parsed.roomId,
+          roomType: parsed.roomType,
+          buildingId: parsed.buildingId,
+          agentId: parsed.agentId,
+          document: parsed.document,
           ...(result.ok ? result.data as Record<string, unknown> : {}),
         });
         if (ack) ack(result);
@@ -762,12 +847,14 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('exit-doc:get', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('exit-doc:get', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(ExitDocGetSchema, data, 'exit-doc:get', ack);
+        if (!parsed) return;
         const db = getDb();
         const docs = db.prepare(
           'SELECT * FROM exit_documents WHERE room_id = ? ORDER BY created_at DESC'
-        ).all(data.roomId as string);
+        ).all(parsed.roomId);
         if (ack) ack({ ok: true, data: docs });
       } catch (e) {
         log.error({ event: 'exit-doc:get', err: e, socketId: socket.id }, 'Handler threw');
@@ -775,8 +862,10 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('exit-doc:list', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('exit-doc:list', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(ExitDocListSchema, data, 'exit-doc:list', ack);
+        if (!parsed) return;
         const db = getDb();
         // Join through rooms → floors → building to get exit docs by building
         const docs = db.prepare(`
@@ -785,7 +874,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
           JOIN floors f ON r.floor_id = f.id
           WHERE f.building_id = ?
           ORDER BY ed.created_at DESC
-        `).all(data.buildingId as string);
+        `).all(parsed.buildingId);
         if (ack) ack({ ok: true, data: docs });
       } catch (e) {
         log.error({ event: 'exit-doc:list', err: e, socketId: socket.id }, 'Handler threw');
@@ -794,15 +883,17 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     // ─── Phase Gate Events ───
-    socket.on('phase:gate:signoff', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('phase:gate:signoff', (data: unknown, ack?: (res: unknown) => void) => {
       try {
+        const parsed = validate(PhaseGateSignoffSchema, data, 'phase:gate:signoff', ack);
+        if (!parsed) return;
         const result = signoffGate({
-          gateId: data.gateId as string,
-          reviewer: data.reviewer as string,
-          verdict: data.verdict as 'GO' | 'NO-GO' | 'CONDITIONAL',
-          conditions: (data.conditions as string[]) || [],
-          exitDocId: data.exitDocId as string | undefined,
-          nextPhaseInput: (data.nextPhaseInput as Record<string, unknown>) || {},
+          gateId: parsed.gateId,
+          reviewer: parsed.reviewer,
+          verdict: parsed.verdict,
+          conditions: parsed.conditions,
+          exitDocId: parsed.exitDocId,
+          nextPhaseInput: parsed.nextPhaseInput,
         });
         if (result.ok) {
           bus.emit('phase:gate:signed-off', result.data as Record<string, unknown>);
@@ -814,9 +905,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       }
     });
 
-    socket.on('phase:advance', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
+    socket.on('phase:advance', (data: unknown, ack?: (res: unknown) => void) => {
       try {
-        const buildingId = data.buildingId as string;
+        const parsed = validate(PhaseAdvanceSchema, data, 'phase:advance', ack);
+        if (!parsed) return;
+        const buildingId = parsed.buildingId;
 
         // Check if advancement is allowed
         const advanceCheck = canAdvance(buildingId);
@@ -841,10 +934,10 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         const gateData = gateResult.data as { id: string };
         const signoffResult = signoffGate({
           gateId: gateData.id,
-          reviewer: (data.reviewer as string) || 'system',
+          reviewer: parsed.reviewer || 'system',
           verdict: 'GO',
           conditions: [],
-          nextPhaseInput: (data.nextPhaseInput as Record<string, unknown>) || {},
+          nextPhaseInput: parsed.nextPhaseInput,
         });
 
         if (signoffResult.ok) {
