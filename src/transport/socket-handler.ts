@@ -884,7 +884,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         broadcastLog('info', `Client disconnected (${socket.id})`, 'transport');
       } catch (e) {
         // Last resort — disconnect handler should never crash the server
-        console.error('[transport] disconnect handler threw:', e);
+        log.error({ err: e, socketId: socket.id }, 'Disconnect handler threw');
       }
     });
   });
