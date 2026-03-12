@@ -137,6 +137,12 @@ export class ChatView extends Component {
     this.subscribe(store, 'agents.list', () => { this._agentCache = null; });
     this.subscribe(store, 'rooms.list', () => { this._refCache = null; });
     this.subscribe(store, 'raid.entries', () => { this._refCache = null; });
+
+    // Hydrate from store — messages may have arrived before this view mounted
+    const existingMessages = store.get('chat.messages');
+    if (existingMessages && existingMessages.length > 0) {
+      this._renderMessages(existingMessages);
+    }
   }
 
   _render() {
