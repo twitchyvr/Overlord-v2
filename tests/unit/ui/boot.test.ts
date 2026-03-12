@@ -3,7 +3,7 @@
  * Tests for public/ui/boot.js
  *
  * Covers: bootOverlord bootstrap — store creation, engine init, socket bridge,
- *         panel construction, view mounting, router init, connection lifecycle,
+ *         view mounting, router init, connection lifecycle,
  *         phase bar reactivity, no-socket fallback, _updatePhaseBar helper.
  *
  * Strategy: vi.mock() all imports so boot.js runs in isolation. We capture
@@ -72,11 +72,6 @@ vi.mock('../../../public/ui/engine/router.js', () => ({
   initBuildingView: vi.fn(),
 }));
 
-vi.mock('../../../public/ui/components/panel.js', () => ({
-  initPanelSystem: vi.fn(),
-  PanelComponent: vi.fn(),
-}));
-
 vi.mock('../../../public/ui/components/toast.js', () => ({
   Toast: {
     info: vi.fn(),
@@ -88,42 +83,6 @@ vi.mock('../../../public/ui/components/toast.js', () => ({
 
 vi.mock('../../../public/ui/views/room-view.js', () => ({
   RoomView: vi.fn().mockImplementation(() => mockRoomViewInstance),
-}));
-
-vi.mock('../../../public/ui/panels/phase-panel.js', () => ({
-  PhasePanel: vi.fn(),
-}));
-
-vi.mock('../../../public/ui/panels/agents-panel.js', () => ({
-  AgentsPanel: vi.fn(),
-}));
-
-vi.mock('../../../public/ui/panels/raid-panel.js', () => ({
-  RaidPanel: vi.fn(),
-}));
-
-vi.mock('../../../public/ui/panels/activity-panel.js', () => ({
-  ActivityPanel: vi.fn(),
-}));
-
-vi.mock('../../../public/ui/panels/projects-panel.js', () => ({
-  ProjectsPanel: vi.fn(),
-}));
-
-vi.mock('../../../public/ui/panels/tools-panel.js', () => ({
-  ToolsPanel: vi.fn(),
-}));
-
-vi.mock('../../../public/ui/panels/logs-panel.js', () => ({
-  LogsPanel: vi.fn(),
-}));
-
-vi.mock('../../../public/ui/panels/team-panel.js', () => ({
-  TeamPanel: vi.fn(),
-}));
-
-vi.mock('../../../public/ui/panels/tasks-panel.js', () => ({
-  TasksPanel: vi.fn(),
 }));
 
 vi.mock('../../../public/ui/engine/logger.js', () => ({
@@ -145,18 +104,8 @@ let initRouter: any;
 let navigateTo: any;
 let getInitialRoute: any;
 let initBuildingView: any;
-let initPanelSystem: any;
 let Toast: any;
 let RoomView: any;
-let PhasePanel: any;
-let AgentsPanel: any;
-let RaidPanel: any;
-let ActivityPanel: any;
-let ProjectsPanel: any;
-let ToolsPanel: any;
-let LogsPanel: any;
-let TeamPanel: any;
-let TasksPanel: any;
 let hFn: any;
 let setContent: any;
 
@@ -176,7 +125,7 @@ function getSubscribeCallback(mock: any, event: string): ((...args: unknown[]) =
  * to get a fresh execution each test.
  */
 
-function setupDOM(opts: { withSocket?: boolean; withPanelEls?: boolean; withLoadingEl?: boolean; withThemeToggle?: boolean; withConnectionIndicator?: boolean } = {}) {
+function setupDOM(opts: { withSocket?: boolean; withLoadingEl?: boolean; withThemeToggle?: boolean; withConnectionIndicator?: boolean } = {}) {
   // Clear body
   while (document.body.firstChild) {
     document.body.removeChild(document.body.firstChild);
@@ -190,18 +139,6 @@ function setupDOM(opts: { withSocket?: boolean; withPanelEls?: boolean; withLoad
   const buildingPanel = document.createElement('div');
   buildingPanel.id = 'building-panel';
   document.body.appendChild(buildingPanel);
-
-  const rightPanel = document.createElement('div');
-  rightPanel.id = 'right-panel';
-  document.body.appendChild(rightPanel);
-
-  if (opts.withPanelEls) {
-    for (const id of ['panel-phase', 'panel-agents', 'panel-tasks', 'panel-raid', 'panel-activity', 'panel-projects', 'panel-tools', 'panel-logs', 'panel-team']) {
-      const el = document.createElement('div');
-      el.id = id;
-      document.body.appendChild(el);
-    }
-  }
 
   if (opts.withLoadingEl) {
     const loading = document.createElement('div');
@@ -261,41 +198,11 @@ beforeEach(async () => {
   getInitialRoute = (routerMod as any).getInitialRoute;
   initBuildingView = (routerMod as any).initBuildingView;
 
-  const panelMod = await import('../../../public/ui/components/panel.js');
-  initPanelSystem = (panelMod as any).initPanelSystem;
-
   const toastMod = await import('../../../public/ui/components/toast.js');
   Toast = (toastMod as any).Toast;
 
   const rvMod = await import('../../../public/ui/views/room-view.js');
   RoomView = (rvMod as any).RoomView;
-
-  const ppMod = await import('../../../public/ui/panels/phase-panel.js');
-  PhasePanel = (ppMod as any).PhasePanel;
-
-  const apMod = await import('../../../public/ui/panels/agents-panel.js');
-  AgentsPanel = (apMod as any).AgentsPanel;
-
-  const rpMod = await import('../../../public/ui/panels/raid-panel.js');
-  RaidPanel = (rpMod as any).RaidPanel;
-
-  const acMod = await import('../../../public/ui/panels/activity-panel.js');
-  ActivityPanel = (acMod as any).ActivityPanel;
-
-  const prjMod = await import('../../../public/ui/panels/projects-panel.js');
-  ProjectsPanel = (prjMod as any).ProjectsPanel;
-
-  const tlMod = await import('../../../public/ui/panels/tools-panel.js');
-  ToolsPanel = (tlMod as any).ToolsPanel;
-
-  const lgMod = await import('../../../public/ui/panels/logs-panel.js');
-  LogsPanel = (lgMod as any).LogsPanel;
-
-  const tmMod = await import('../../../public/ui/panels/team-panel.js');
-  TeamPanel = (tmMod as any).TeamPanel;
-
-  const tkMod = await import('../../../public/ui/panels/tasks-panel.js');
-  TasksPanel = (tkMod as any).TasksPanel;
 
   const helpersMod = await import('../../../public/ui/engine/helpers.js');
   hFn = (helpersMod as any).h;
@@ -326,38 +233,37 @@ async function importBoot() {
 
 describe('boot.js — core initialization', () => {
   it('calls createV2Store() to create the store', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     expect(createV2Store).toHaveBeenCalledTimes(1);
   });
 
   it('calls OverlordUI.init() with the created store', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     expect(OverlordUI.init).toHaveBeenCalledTimes(1);
     expect(OverlordUI.init).toHaveBeenCalledWith(mockStore);
   });
 
   it('init returns the engine singleton', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     expect(OverlordUI.init).toHaveReturnedWith(mockEngine);
   });
 
-  it('queries DOM for center-panel, building-panel, right-panel', async () => {
+  it('queries DOM for center-panel and building-panel', async () => {
     const spy = vi.spyOn(document, 'getElementById');
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     const ids = spy.mock.calls.map((c: any[]) => c[0]);
     expect(ids).toContain('center-panel');
     expect(ids).toContain('building-panel');
-    expect(ids).toContain('right-panel');
     spy.mockRestore();
   });
 
   it('logs boot complete message to console', async () => {
     const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     const bootCall = spy.mock.calls.find((c: any[]) => c[0] === '[Overlord]' && c[1] === 'Boot complete');
     expect(bootCall).toBeTruthy();
@@ -371,20 +277,20 @@ describe('boot.js — core initialization', () => {
 
 describe('boot.js — socket connected path', () => {
   it('calls io() to create the socket connection', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     expect((globalThis as any).io).toHaveBeenCalledTimes(1);
   });
 
   it('calls initSocketBridge with socket, store, and engine', async () => {
-    const mockSocket = setupDOM({ withSocket: true, withPanelEls: true });
+    const mockSocket = setupDOM({ withSocket: true });
     await importBoot();
     expect(initSocketBridge).toHaveBeenCalledTimes(1);
     expect(initSocketBridge).toHaveBeenCalledWith(mockSocket, mockStore, mockEngine);
   });
 
   it('calls initRouter with centerPanel and buildingPanel elements', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     expect(initRouter).toHaveBeenCalledTimes(1);
     const arg = initRouter.mock.calls[0][0];
@@ -394,20 +300,14 @@ describe('boot.js — socket connected path', () => {
     expect(arg.buildingPanel.id).toBe('building-panel');
   });
 
-  it('calls initPanelSystem after constructing panels', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
-    await importBoot();
-    expect(initPanelSystem).toHaveBeenCalledTimes(1);
-  });
-
   it('calls initBuildingView to mount the building sidebar', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     expect(initBuildingView).toHaveBeenCalledTimes(1);
   });
 
   it('creates a RoomView and calls mount()', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     expect(RoomView).toHaveBeenCalledTimes(1);
     // The constructor receives a div element
@@ -419,109 +319,19 @@ describe('boot.js — socket connected path', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-//  3. PANEL CONSTRUCTION
-// ═══════════════════════════════════════════════════════════════════
-
-describe('boot.js — panel construction', () => {
-  it('constructs PhasePanel when #panel-phase exists', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
-    await importBoot();
-    expect(PhasePanel).toHaveBeenCalledTimes(1);
-    const arg = PhasePanel.mock.calls[0][0];
-    expect(arg.id).toBe('panel-phase');
-  });
-
-  it('constructs AgentsPanel when #panel-agents exists', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
-    await importBoot();
-    expect(AgentsPanel).toHaveBeenCalledTimes(1);
-    const arg = AgentsPanel.mock.calls[0][0];
-    expect(arg.id).toBe('panel-agents');
-  });
-
-  it('constructs RaidPanel when #panel-raid exists', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
-    await importBoot();
-    expect(RaidPanel).toHaveBeenCalledTimes(1);
-    const arg = RaidPanel.mock.calls[0][0];
-    expect(arg.id).toBe('panel-raid');
-  });
-
-  it('constructs ActivityPanel when #panel-activity exists', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
-    await importBoot();
-    expect(ActivityPanel).toHaveBeenCalledTimes(1);
-    const arg = ActivityPanel.mock.calls[0][0];
-    expect(arg.id).toBe('panel-activity');
-  });
-
-  it('constructs ProjectsPanel when #panel-projects exists', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
-    await importBoot();
-    expect(ProjectsPanel).toHaveBeenCalledTimes(1);
-    const arg = ProjectsPanel.mock.calls[0][0];
-    expect(arg.id).toBe('panel-projects');
-  });
-
-  it('constructs ToolsPanel when #panel-tools exists', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
-    await importBoot();
-    expect(ToolsPanel).toHaveBeenCalledTimes(1);
-    const arg = ToolsPanel.mock.calls[0][0];
-    expect(arg.id).toBe('panel-tools');
-  });
-
-  it('constructs LogsPanel when #panel-logs exists', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
-    await importBoot();
-    expect(LogsPanel).toHaveBeenCalledTimes(1);
-    const arg = LogsPanel.mock.calls[0][0];
-    expect(arg.id).toBe('panel-logs');
-  });
-
-  it('constructs TeamPanel when #panel-team exists', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
-    await importBoot();
-    expect(TeamPanel).toHaveBeenCalledTimes(1);
-    const arg = TeamPanel.mock.calls[0][0];
-    expect(arg.id).toBe('panel-team');
-  });
-
-  it('skips panel construction when panel elements are missing from DOM', async () => {
-    setupDOM({ withSocket: true, withPanelEls: false });
-    await importBoot();
-    expect(PhasePanel).not.toHaveBeenCalled();
-    expect(AgentsPanel).not.toHaveBeenCalled();
-    expect(RaidPanel).not.toHaveBeenCalled();
-    expect(ActivityPanel).not.toHaveBeenCalled();
-    expect(ProjectsPanel).not.toHaveBeenCalled();
-    expect(ToolsPanel).not.toHaveBeenCalled();
-    expect(LogsPanel).not.toHaveBeenCalled();
-    expect(TeamPanel).not.toHaveBeenCalled();
-    expect(TasksPanel).not.toHaveBeenCalled();
-  });
-
-  it('still calls initPanelSystem even when no panel elements exist', async () => {
-    setupDOM({ withSocket: true, withPanelEls: false });
-    await importBoot();
-    expect(initPanelSystem).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════
 //  4. system:status EVENT HANDLER
 // ═══════════════════════════════════════════════════════════════════
 
 describe('boot.js — system:status handler', () => {
   it('subscribes to system:status via engine.subscribe', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     const events = mockEngine.subscribe.mock.calls.map((c: any[]) => c[0]);
     expect(events).toContain('system:status');
   });
 
   it('removes #loading-state element when system:status fires', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true, withLoadingEl: true });
+    setupDOM({ withSocket: true, withLoadingEl: true });
     await importBoot();
     expect(document.getElementById('loading-state')).toBeTruthy();
 
@@ -531,14 +341,14 @@ describe('boot.js — system:status handler', () => {
   });
 
   it('does not throw when #loading-state is missing', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true, withLoadingEl: false });
+    setupDOM({ withSocket: true, withLoadingEl: false });
     await importBoot();
     const cb = getSubscribeCallback(mockEngine.subscribe, 'system:status');
     expect(() => cb!({ buildings: [], isNewUser: false })).not.toThrow();
   });
 
   it('sets building.list in store when data.buildings is present', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     mockStore.set.mockClear();
 
@@ -549,7 +359,7 @@ describe('boot.js — system:status handler', () => {
   });
 
   it('does not set building.list when data.buildings is undefined', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     mockStore.set.mockClear();
 
@@ -559,7 +369,7 @@ describe('boot.js — system:status handler', () => {
   });
 
   it('navigates to strategist for new users', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
 
     const cb = getSubscribeCallback(mockEngine.subscribe, 'system:status');
@@ -569,7 +379,7 @@ describe('boot.js — system:status handler', () => {
   });
 
   it('navigates to dashboard for returning users with buildings', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
 
     const cb = getSubscribeCallback(mockEngine.subscribe, 'system:status');
@@ -579,7 +389,7 @@ describe('boot.js — system:status handler', () => {
   });
 
   it('navigates to strategist when buildings array is empty', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
 
     const cb = getSubscribeCallback(mockEngine.subscribe, 'system:status');
@@ -596,14 +406,14 @@ describe('boot.js — system:status handler', () => {
 
 describe('boot.js — connection lifecycle', () => {
   it('subscribes to connection:lost via engine.subscribe', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     const events = mockEngine.subscribe.mock.calls.map((c: any[]) => c[0]);
     expect(events).toContain('connection:lost');
   });
 
   it('shows warning toast on connection:lost', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
 
     const cb = getSubscribeCallback(mockEngine.subscribe, 'connection:lost');
@@ -612,14 +422,14 @@ describe('boot.js — connection lifecycle', () => {
   });
 
   it('subscribes to ui.connected via store.subscribe', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     const keys = mockStore.subscribe.mock.calls.map((c: any[]) => c[0]);
     expect(keys).toContain('ui.connected');
   });
 
   it('shows success toast when ui.connected becomes true', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
 
     const cb = getSubscribeCallback(mockStore.subscribe, 'ui.connected');
@@ -628,7 +438,7 @@ describe('boot.js — connection lifecycle', () => {
   });
 
   it('does not show success toast when ui.connected is false', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
 
     const cb = getSubscribeCallback(mockStore.subscribe, 'ui.connected');
@@ -637,7 +447,7 @@ describe('boot.js — connection lifecycle', () => {
   });
 
   it('updates connection indicator aria-label on state change', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true, withConnectionIndicator: true });
+    setupDOM({ withSocket: true, withConnectionIndicator: true });
     await importBoot();
 
     const cb = getSubscribeCallback(mockStore.subscribe, 'ui.connectionState');
@@ -657,7 +467,7 @@ describe('boot.js — connection lifecycle', () => {
   });
 
   it('updates connection indicator title on state change', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true, withConnectionIndicator: true });
+    setupDOM({ withSocket: true, withConnectionIndicator: true });
     await importBoot();
 
     const cb = getSubscribeCallback(mockStore.subscribe, 'ui.connectionState');
@@ -674,14 +484,14 @@ describe('boot.js — connection lifecycle', () => {
 
 describe('boot.js — phase bar reactivity', () => {
   it('subscribes to building.activePhase via store.subscribe', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     const keys = mockStore.subscribe.mock.calls.map((c: any[]) => c[0]);
     expect(keys).toContain('building.activePhase');
   });
 
   it('_updatePhaseBar marks steps before active as completed', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
 
     // Create phase steps in the DOM
     const phases = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
@@ -712,7 +522,7 @@ describe('boot.js — phase bar reactivity', () => {
   });
 
   it('_updatePhaseBar sets aria-current="step" on active phase', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
 
     const phases = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
     phases.forEach(phase => {
@@ -739,7 +549,7 @@ describe('boot.js — phase bar reactivity', () => {
   });
 
   it('_updatePhaseBar sets aria-label with phase status', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
 
     const phases = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
     phases.forEach(phase => {
@@ -764,7 +574,7 @@ describe('boot.js — phase bar reactivity', () => {
   });
 
   it('_updatePhaseBar clears previous classes before applying new ones', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
 
     const phases = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
     phases.forEach(phase => {
@@ -796,7 +606,7 @@ describe('boot.js — phase bar reactivity', () => {
   });
 
   it('_updatePhaseBar handles first phase (strategy) with no completed steps', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
 
     const phases = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
     phases.forEach(phase => {
@@ -821,7 +631,7 @@ describe('boot.js — phase bar reactivity', () => {
   });
 
   it('_updatePhaseBar handles last phase (deploy) with all prior completed', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
 
     const phases = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
     phases.forEach(phase => {
@@ -845,7 +655,7 @@ describe('boot.js — phase bar reactivity', () => {
   });
 
   it('_updatePhaseBar handles unknown phase gracefully (no step gets current)', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
 
     const phases = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
     phases.forEach(phase => {
@@ -868,7 +678,7 @@ describe('boot.js — phase bar reactivity', () => {
   });
 
   it('_updatePhaseBar is called with strategy on initial boot', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
 
     const phases = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
     phases.forEach(phase => {
@@ -886,7 +696,7 @@ describe('boot.js — phase bar reactivity', () => {
   });
 
   it('_updatePhaseBar does not throw when no .phase-step elements exist', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     // No phase-step elements in DOM
     await expect(importBoot()).resolves.not.toThrow();
   });
@@ -907,26 +717,6 @@ describe('boot.js — no socket.io fallback', () => {
     setupDOM({ withSocket: false });
     await importBoot();
     expect(initRouter).not.toHaveBeenCalled();
-  });
-
-  it('does not construct any panels when io is undefined', async () => {
-    setupDOM({ withSocket: false, withPanelEls: true });
-    await importBoot();
-    expect(PhasePanel).not.toHaveBeenCalled();
-    expect(AgentsPanel).not.toHaveBeenCalled();
-    expect(RaidPanel).not.toHaveBeenCalled();
-    expect(ActivityPanel).not.toHaveBeenCalled();
-    expect(ProjectsPanel).not.toHaveBeenCalled();
-    expect(ToolsPanel).not.toHaveBeenCalled();
-    expect(LogsPanel).not.toHaveBeenCalled();
-    expect(TeamPanel).not.toHaveBeenCalled();
-    expect(TasksPanel).not.toHaveBeenCalled();
-  });
-
-  it('does not call initPanelSystem when io is undefined', async () => {
-    setupDOM({ withSocket: false });
-    await importBoot();
-    expect(initPanelSystem).not.toHaveBeenCalled();
   });
 
   it('does not call initBuildingView when io is undefined', async () => {
@@ -991,20 +781,20 @@ describe('boot.js — theme management', () => {
   });
 
   it('sets data-theme to dark by default when no saved preference', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
   it('restores saved theme from localStorage', async () => {
     localStorage.setItem('overlord-theme', 'light');
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 
   it('toggle button switches dark to light on click', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    setupDOM({ withSocket: true, withThemeToggle: true });
     await importBoot();
 
     const btn = document.getElementById('theme-toggle')!;
@@ -1016,7 +806,7 @@ describe('boot.js — theme management', () => {
 
   it('toggle button switches light to dark on click', async () => {
     localStorage.setItem('overlord-theme', 'light');
-    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    setupDOM({ withSocket: true, withThemeToggle: true });
     await importBoot();
 
     const btn = document.getElementById('theme-toggle')!;
@@ -1027,7 +817,7 @@ describe('boot.js — theme management', () => {
   });
 
   it('toggle button adds theme-light class when switching to light', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    setupDOM({ withSocket: true, withThemeToggle: true });
     await importBoot();
 
     const btn = document.getElementById('theme-toggle')!;
@@ -1038,7 +828,7 @@ describe('boot.js — theme management', () => {
 
   it('toggle button removes theme-light class when switching to dark', async () => {
     localStorage.setItem('overlord-theme', 'light');
-    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    setupDOM({ withSocket: true, withThemeToggle: true });
     await importBoot();
 
     const btn = document.getElementById('theme-toggle')!;
@@ -1049,7 +839,7 @@ describe('boot.js — theme management', () => {
   });
 
   it('sets correct title on toggle button for dark theme', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    setupDOM({ withSocket: true, withThemeToggle: true });
     await importBoot();
 
     const btn = document.getElementById('theme-toggle')!;
@@ -1058,7 +848,7 @@ describe('boot.js — theme management', () => {
 
   it('sets correct title on toggle button for light theme', async () => {
     localStorage.setItem('overlord-theme', 'light');
-    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    setupDOM({ withSocket: true, withThemeToggle: true });
     await importBoot();
 
     const btn = document.getElementById('theme-toggle')!;
@@ -1066,7 +856,7 @@ describe('boot.js — theme management', () => {
   });
 
   it('exports theme functions on window._overlordTheme', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true });
+    setupDOM({ withSocket: true });
     await importBoot();
 
     const themeExport = (window as any)._overlordTheme;
@@ -1077,13 +867,13 @@ describe('boot.js — theme management', () => {
   });
 
   it('does not crash when theme-toggle button is missing', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: false });
+    setupDOM({ withSocket: true, withThemeToggle: false });
     await expect(importBoot()).resolves.not.toThrow();
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
   it('persists theme across toggle cycles', async () => {
-    setupDOM({ withSocket: true, withPanelEls: true, withThemeToggle: true });
+    setupDOM({ withSocket: true, withThemeToggle: true });
     await importBoot();
 
     const btn = document.getElementById('theme-toggle')!;
