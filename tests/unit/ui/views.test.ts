@@ -43,6 +43,7 @@ beforeEach(async () => {
   store.set('phase.gates', [], { silent: true });
   store.set('phase.canAdvance', null, { silent: true });
   store.set('rooms.list', [], { silent: true });
+  store.set('tasks.list', [], { silent: true });
   OverlordUI.init(store);
 });
 
@@ -304,5 +305,339 @@ describe('RoomView', () => {
     view.mount();
     // The view should have registered at least one listener
     expect(view._listeners.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── TaskView ──────────────────────────────────────────────
+
+describe('TaskView', () => {
+  it('exports the TaskView class', async () => {
+    const mod = await import('../../../public/ui/views/task-view.js');
+    expect(mod.TaskView).toBeDefined();
+    expect(typeof mod.TaskView).toBe('function');
+  });
+
+  it('renders header, search, tabs, and list container on mount', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    expect(el.querySelector('.task-view-header')).not.toBeNull();
+    expect(el.querySelector('.task-view-title')!.textContent).toBe('Tasks');
+    expect(el.querySelector('.task-search-input')).not.toBeNull();
+    expect(el.querySelector('.task-filter-tabs')).not.toBeNull();
+    expect(el.querySelector('#task-list')).not.toBeNull();
+  });
+
+  it('shows empty state when no tasks', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    const list = el.querySelector('#task-list');
+    expect(list!.querySelector('.empty-state')).not.toBeNull();
+    expect(list!.textContent).toContain('No tasks yet');
+  });
+
+  it('renders task cards from store', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('tasks.list', [
+      { id: 't1', title: 'Write tests', status: 'pending', priority: 'high', created_at: new Date().toISOString() },
+      { id: 't2', title: 'Fix bug', status: 'in-progress', priority: 'critical', created_at: new Date().toISOString() },
+      { id: 't3', title: 'Deploy v2', status: 'done', priority: 'normal', created_at: new Date().toISOString() }
+    ]);
+
+    const cards = el.querySelectorAll('.card-task');
+    expect(cards.length).toBe(3);
+  });
+
+  it('filters tasks by status tab', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('tasks.list', [
+      { id: 't1', title: 'Task A', status: 'pending', priority: 'normal', created_at: new Date().toISOString() },
+      { id: 't2', title: 'Task B', status: 'done', priority: 'normal', created_at: new Date().toISOString() }
+    ]);
+
+    // Click the 'Done' tab
+    const doneTab = el.querySelector('[data-tab-id="done"]') as HTMLElement;
+    expect(doneTab).not.toBeNull();
+    doneTab.click();
+
+    const cards = el.querySelectorAll('.card-task');
+    expect(cards.length).toBe(1);
+  });
+
+  it('filters tasks by search query', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('tasks.list', [
+      { id: 't1', title: 'Write tests', status: 'pending', priority: 'normal', created_at: new Date().toISOString() },
+      { id: 't2', title: 'Fix auth bug', status: 'pending', priority: 'normal', created_at: new Date().toISOString() }
+    ]);
+
+    // Type in the search input
+    const searchInput = el.querySelector('.task-search-input') as HTMLInputElement;
+    searchInput.value = 'auth';
+    searchInput.dispatchEvent(new Event('input'));
+
+    const cards = el.querySelectorAll('.card-task');
+    expect(cards.length).toBe(1);
+  });
+
+  it('sorts tasks by priority (critical first)', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('tasks.list', [
+      { id: 't1', title: 'Low task', status: 'pending', priority: 'low', created_at: new Date().toISOString() },
+      { id: 't2', title: 'Critical task', status: 'pending', priority: 'critical', created_at: new Date().toISOString() },
+      { id: 't3', title: 'Normal task', status: 'pending', priority: 'normal', created_at: new Date().toISOString() }
+    ]);
+
+    const titles = [...el.querySelectorAll('.task-title')].map((t: Element) => t.textContent);
+    expect(titles[0]).toBe('Critical task');
+    expect(titles[titles.length - 1]).toBe('Low task');
+  });
+
+  it('has a New Task button', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    const newBtn = el.querySelector('.task-view-actions .btn-primary');
+    expect(newBtn).not.toBeNull();
+    expect(newBtn!.textContent).toContain('New Task');
+  });
+
+  it('renders tab badges with correct counts', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('tasks.list', [
+      { id: 't1', title: 'A', status: 'pending', priority: 'normal' },
+      { id: 't2', title: 'B', status: 'pending', priority: 'normal' },
+      { id: 't3', title: 'C', status: 'done', priority: 'normal' }
+    ]);
+
+    const allTab = el.querySelector('[data-tab-id="all"]');
+    const allBadge = allTab?.querySelector('.tab-badge');
+    expect(allBadge?.textContent).toBe('3');
+
+    const pendingTab = el.querySelector('[data-tab-id="pending"]');
+    const pendingBadge = pendingTab?.querySelector('.tab-badge');
+    expect(pendingBadge?.textContent).toBe('2');
+  });
+
+  it('cleans up on destroy', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const parent = document.createElement('div');
+    const el = document.createElement('div');
+    parent.appendChild(el);
+    const view = new TaskView(el);
+    view.mount();
+
+    expect(view._mounted).toBe(true);
+    view.destroy();
+    expect(view._mounted).toBe(false);
+    expect(view._subs.length).toBe(0);
+    expect(view._listeners.length).toBe(0);
+  });
+});
+
+// ─── RaidLogView ───────────────────────────────────────────
+
+describe('RaidLogView', () => {
+  it('exports the RaidLogView class', async () => {
+    const mod = await import('../../../public/ui/views/raid-log-view.js');
+    expect(mod.RaidLogView).toBeDefined();
+    expect(typeof mod.RaidLogView).toBe('function');
+  });
+
+  it('renders header, search, type tabs, status tabs, and list container on mount', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    expect(el.querySelector('.raid-view-header')).not.toBeNull();
+    expect(el.querySelector('.raid-view-title')!.textContent).toBe('RAID Log');
+    expect(el.querySelector('.raid-search-input')).not.toBeNull();
+    expect(el.querySelector('.raid-type-tabs')).not.toBeNull();
+    expect(el.querySelector('.raid-status-tabs')).not.toBeNull();
+    expect(el.querySelector('#raid-list')).not.toBeNull();
+  });
+
+  it('shows empty state when no entries', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    const list = el.querySelector('#raid-list');
+    expect(list!.querySelector('.empty-state')).not.toBeNull();
+    expect(list!.textContent).toContain('No RAID entries yet');
+  });
+
+  it('renders RAID entry cards from store', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('raid.entries', [
+      { id: 'r1', type: 'risk', summary: 'API rate limits', status: 'active', created_at: new Date().toISOString() },
+      { id: 'r2', type: 'decision', summary: 'Use PostgreSQL', status: 'active', created_at: new Date().toISOString() },
+      { id: 'r3', type: 'issue', summary: 'Auth flow broken', status: 'closed', created_at: new Date().toISOString() }
+    ]);
+
+    const cards = el.querySelectorAll('.card-raid');
+    expect(cards.length).toBe(3);
+  });
+
+  it('filters entries by type tab', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('raid.entries', [
+      { id: 'r1', type: 'risk', summary: 'Risk A', status: 'active', created_at: new Date().toISOString() },
+      { id: 'r2', type: 'decision', summary: 'Decision B', status: 'active', created_at: new Date().toISOString() },
+      { id: 'r3', type: 'risk', summary: 'Risk C', status: 'active', created_at: new Date().toISOString() }
+    ]);
+
+    // Click the 'Risks' tab
+    const riskTab = el.querySelector('.raid-type-tabs [data-tab-id="risk"]') as HTMLElement;
+    expect(riskTab).not.toBeNull();
+    riskTab.click();
+
+    const cards = el.querySelectorAll('.card-raid');
+    expect(cards.length).toBe(2);
+  });
+
+  it('filters entries by status tab', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('raid.entries', [
+      { id: 'r1', type: 'risk', summary: 'Risk A', status: 'active', created_at: new Date().toISOString() },
+      { id: 'r2', type: 'risk', summary: 'Risk B', status: 'closed', created_at: new Date().toISOString() }
+    ]);
+
+    // Click the 'Closed' status tab
+    const closedTab = el.querySelector('.raid-status-tabs [data-tab-id="closed"]') as HTMLElement;
+    expect(closedTab).not.toBeNull();
+    closedTab.click();
+
+    const cards = el.querySelectorAll('.card-raid');
+    expect(cards.length).toBe(1);
+  });
+
+  it('filters entries by search query', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('raid.entries', [
+      { id: 'r1', type: 'risk', summary: 'API rate limits', status: 'active', created_at: new Date().toISOString() },
+      { id: 'r2', type: 'decision', summary: 'Use PostgreSQL', status: 'active', created_at: new Date().toISOString() }
+    ]);
+
+    const searchInput = el.querySelector('.raid-search-input') as HTMLInputElement;
+    searchInput.value = 'postgresql';
+    searchInput.dispatchEvent(new Event('input'));
+
+    const cards = el.querySelectorAll('.card-raid');
+    expect(cards.length).toBe(1);
+  });
+
+  it('has a New Entry button', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    const newBtn = el.querySelector('.raid-view-actions .btn-primary');
+    expect(newBtn).not.toBeNull();
+    expect(newBtn!.textContent).toContain('New Entry');
+  });
+
+  it('renders type tab badges with correct counts', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('raid.entries', [
+      { id: 'r1', type: 'risk', summary: 'A', status: 'active' },
+      { id: 'r2', type: 'risk', summary: 'B', status: 'active' },
+      { id: 'r3', type: 'issue', summary: 'C', status: 'active' }
+    ]);
+
+    const allTab = el.querySelector('.raid-type-tabs [data-tab-id="all"]');
+    const allBadge = allTab?.querySelector('.tab-badge');
+    expect(allBadge?.textContent).toBe('3');
+
+    const riskTab = el.querySelector('.raid-type-tabs [data-tab-id="risk"]');
+    const riskBadge = riskTab?.querySelector('.tab-badge');
+    expect(riskBadge?.textContent).toBe('2');
+  });
+
+  it('renders subtitle text', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    const subtitle = el.querySelector('.raid-view-subtitle');
+    expect(subtitle).not.toBeNull();
+    expect(subtitle!.textContent).toContain('Risks');
+    expect(subtitle!.textContent).toContain('Decisions');
+  });
+
+  it('cleans up on destroy', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const parent = document.createElement('div');
+    const el = document.createElement('div');
+    parent.appendChild(el);
+    const view = new RaidLogView(el);
+    view.mount();
+
+    expect(view._mounted).toBe(true);
+    view.destroy();
+    expect(view._mounted).toBe(false);
+    expect(view._subs.length).toBe(0);
+    expect(view._listeners.length).toBe(0);
   });
 });
