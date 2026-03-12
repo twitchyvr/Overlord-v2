@@ -522,10 +522,426 @@
   color: var(--accent-yellow);
 }
 
+/* ═══════════════════════════════════════════════
+   TASK VIEW
+   ═══════════════════════════════════════════════ */
+
+.task-view {
+  padding: var(--sp-6);
+  overflow-y: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+/* Task view header */
+.task-view-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.task-view-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.task-view-title {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+.task-view-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+/* Search */
+.task-search-row {
+  display: flex;
+}
+.task-search-input {
+  flex: 1;
+  max-width: 400px;
+}
+
+/* Filter tabs */
+.task-filter-tabs {
+  flex-shrink: 0;
+}
+
+/* Task list */
+.task-list-container {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.task-card-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.task-card-grid .card-task {
+  transition: all var(--duration-fast) var(--ease-default);
+}
+.task-card-grid .card-task:hover {
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+/* Task status badge */
+.task-status-badge {
+  display: inline-block;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  text-transform: capitalize;
+}
+.task-status-badge.status-pending {
+  background: rgba(250, 204, 21, 0.15);
+  color: var(--accent-yellow);
+}
+.task-status-badge.status-in-progress {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--accent-blue);
+}
+.task-status-badge.status-done {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--accent-green);
+}
+.task-status-badge.status-blocked {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--accent-red);
+}
+
+/* Task detail modal */
+.task-detail-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.task-detail-meta {
+  display: flex;
+  gap: var(--sp-6);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border-secondary);
+}
+.task-detail-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.task-detail-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.task-detail-section {
+  padding-top: var(--sp-3);
+}
+.task-detail-section h4 {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--sp-2);
+  color: var(--text-secondary);
+}
+.task-detail-description {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  line-height: var(--leading-relaxed);
+}
+.task-detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  border-top: 1px solid var(--border-secondary);
+}
+.task-detail-info-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+.task-detail-actions {
+  display: flex;
+  gap: var(--sp-2);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border-secondary);
+}
+
+/* Todo checklist */
+.task-todo-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.todo-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+.todo-row.todo-done {
+  opacity: 0.6;
+}
+.todo-row.todo-done .todo-text {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.todo-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.todo-checkbox.checked {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+}
+.todo-text {
+  color: var(--text-primary);
+}
+.empty-state-inline {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: var(--sp-3);
+  text-align: center;
+}
+
+/* Create form */
+.task-create-form,
+.raid-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.task-create-actions,
+.raid-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-secondary);
+}
+
+
+/* ═══════════════════════════════════════════════
+   RAID LOG VIEW
+   ═══════════════════════════════════════════════ */
+
+.raid-log-view {
+  padding: var(--sp-6);
+  overflow-y: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+/* Header */
+.raid-view-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.raid-view-title-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.raid-view-title {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+.raid-view-subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.raid-view-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+/* Search */
+.raid-search-row {
+  display: flex;
+}
+.raid-search-input {
+  flex: 1;
+  max-width: 400px;
+}
+
+/* Filter tabs */
+.raid-type-tabs {
+  flex-shrink: 0;
+}
+.raid-status-tabs {
+  flex-shrink: 0;
+}
+
+/* Entry list */
+.raid-list-container {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.raid-entry-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.raid-entry-grid .card-raid {
+  transition: all var(--duration-fast) var(--ease-default);
+}
+.raid-entry-grid .card-raid:hover {
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+/* RAID type badges */
+.badge {
+  display: inline-block;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  text-transform: capitalize;
+}
+.badge-risk {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--accent-red, #f87171);
+}
+.badge-assumption {
+  background: rgba(250, 204, 21, 0.15);
+  color: var(--accent-yellow, #facc15);
+}
+.badge-issue {
+  background: rgba(251, 146, 60, 0.15);
+  color: var(--accent-amber, #fb923c);
+}
+.badge-decision {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--accent-green, #4ade80);
+}
+
+/* RAID status badge */
+.raid-status-badge {
+  display: inline-block;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  text-transform: capitalize;
+}
+.raid-status-badge.status-active {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--accent-green);
+}
+.raid-status-badge.status-superseded {
+  background: rgba(250, 204, 21, 0.15);
+  color: var(--accent-yellow);
+}
+.raid-status-badge.status-closed {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
+}
+
+/* RAID detail modal */
+.raid-detail-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.raid-detail-meta {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border-secondary);
+}
+.raid-detail-section {
+  padding-top: var(--sp-3);
+}
+.raid-detail-section h4 {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--sp-2);
+  color: var(--text-secondary);
+}
+.raid-detail-text {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  line-height: var(--leading-relaxed);
+}
+.raid-detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  border-top: 1px solid var(--border-secondary);
+}
+.raid-detail-info-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+.raid-detail-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  min-width: 110px;
+}
+.raid-detail-actions {
+  display: flex;
+  gap: var(--sp-2);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border-secondary);
+}
+
+/* Affected areas chips */
+.raid-affected-areas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+.raid-area-chip {
+  font-size: var(--text-xs);
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+}
+
+/* RAID color tokens (used by Card component) */
+:root {
+  --raid-risk: #f87171;
+  --raid-assumption: #facc15;
+  --raid-issue: #fb923c;
+  --raid-dependency: #60a5fa;
+  --raid-decision: #4ade80;
+}
+
+
 /* ── Responsive ── */
 @media (max-width: 640px) {
   .dashboard-view,
-  .strategist-view {
+  .strategist-view,
+  .task-view,
+  .raid-log-view {
     padding: var(--sp-4);
   }
   .kpi-card-row {
@@ -543,5 +959,16 @@
   }
   .room-chair-row {
     gap: var(--sp-2);
+  }
+  .task-search-input,
+  .raid-search-input {
+    max-width: 100%;
+  }
+  .task-detail-meta {
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .raid-detail-meta {
+    flex-wrap: wrap;
   }
 }

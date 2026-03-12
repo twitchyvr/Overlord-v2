@@ -10,6 +10,8 @@
  *   'strategist'  → StrategistView (new user / new project wizard)
  *   'chat'        → ChatView (active project conversation)
  *   'building'    → BuildingView (rendered in left panel, always active)
+ *   'tasks'       → TaskView (task management with filtering)
+ *   'raid-log'    → RaidLogView (RAID log with type/status tabs)
  *
  * Mobile navigation adds:
  *   'raid'    → RAID panel full-screen
@@ -42,6 +44,8 @@ export function initRouter({ centerPanel, buildingPanel }) {
   OverlordUI.subscribe('navigate:dashboard', () => navigateTo('dashboard'));
   OverlordUI.subscribe('navigate:strategist', () => navigateTo('strategist'));
   OverlordUI.subscribe('navigate:chat', () => navigateTo('chat'));
+  OverlordUI.subscribe('navigate:tasks', () => navigateTo('tasks'));
+  OverlordUI.subscribe('navigate:raid-log', () => navigateTo('raid-log'));
 
   // Mobile bottom nav
   document.querySelectorAll('#mobile-nav .mobile-nav-item').forEach(item => {
@@ -171,19 +175,25 @@ async function _loadViewModules() {
     { DashboardView },
     { StrategistView },
     { ChatView },
-    { BuildingView }
+    { BuildingView },
+    { TaskView },
+    { RaidLogView }
   ] = await Promise.all([
     import('../views/dashboard-view.js'),
     import('../views/strategist-view.js'),
     import('../views/chat-view.js'),
-    import('../views/building-view.js')
+    import('../views/building-view.js'),
+    import('../views/task-view.js'),
+    import('../views/raid-log-view.js')
   ]);
 
   return {
     dashboard:  DashboardView,
     strategist: StrategistView,
     chat:       ChatView,
-    building:   BuildingView
+    building:   BuildingView,
+    tasks:      TaskView,
+    'raid-log': RaidLogView
   };
 }
 

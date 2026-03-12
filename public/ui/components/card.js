@@ -232,7 +232,8 @@ export class Card {
       risk: 'var(--raid-risk)',
       assumption: 'var(--raid-assumption)',
       issue: 'var(--raid-issue)',
-      dependency: 'var(--raid-dependency)'
+      dependency: 'var(--raid-dependency)',
+      decision: 'var(--raid-decision)'
     };
     const header = h('div', { class: 'card-header' },
       h('span', {
