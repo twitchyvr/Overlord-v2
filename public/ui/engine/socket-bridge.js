@@ -211,6 +211,23 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'phase:gate:signed-off', ...data });
   });
 
+  socket.on('phase:conditions:resolved', (data) => {
+    // Update gates list in store with remaining conditions
+    store.update('phase.gates', (gates) => {
+      const list = gates || [];
+      const idx = list.findIndex((g) => g.id === data.gateId);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], signoff_conditions: JSON.stringify(data.remainingConditions || []) };
+        return next;
+      }
+      return list;
+    });
+    store.update('activity.items', (items) => [{ event: 'phase:conditions:resolved', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('phase:conditions:resolved', data);
+    engine.dispatch('activity:new', { event: 'phase:conditions:resolved', ...data });
+  });
+
   // ── Client emit wrappers (convenience for components) ──
 
   /** Fetch a building with floors */
@@ -301,6 +318,47 @@ export function initSocketBridge(socket, store, engine) {
         socket.emit('phase:can-advance', { buildingId }, (res) => {
           if (res && res.ok) {
             store.set('phase.canAdvance', res.data.canAdvance);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    fetchPendingGates(buildingId) {
+      return new Promise((resolve) => {
+        socket.emit('phase:pending-gates', { buildingId }, (res) => {
+          if (res && res.ok) {
+            store.set('phase.pendingGates', res.data);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    resolveConditions(gateId, resolvedConditions, resolver) {
+      return new Promise((resolve) => {
+        socket.emit('phase:resolve-conditions', { gateId, resolvedConditions, resolver }, (res) => {
+          resolve(res);
+        });
+      });
+    },
+
+    fetchStaleGates(thresholdMs) {
+      return new Promise((resolve) => {
+        socket.emit('phase:stale-gates', { thresholdMs }, (res) => {
+          if (res && res.ok) {
+            store.set('phase.staleGates', res.data);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    fetchPhaseOrder() {
+      return new Promise((resolve) => {
+        socket.emit('phase:order', {}, (res) => {
+          if (res && res.ok) {
+            store.set('phase.order', res.data);
           }
           resolve(res);
         });
