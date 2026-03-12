@@ -4,121 +4,113 @@
 
 Overlord v2 supports plugins for extending the framework with custom room types, tools, AI providers, and integrations. The plugin system is planned for Phase 7.
 
-**Source:** `src/plugins/` (scaffold only)
-
-## Plugin Types
-
-### Custom Room Types
-Create new room types with specific tool sets, exit documents, and rules:
-
-```typescript
-import { BaseRoom } from 'overlord-v2/rooms/room-types/base-room';
-
-export class SecurityAuditRoom extends BaseRoom {
-  static contract = {
-    roomType: 'security-audit',
-    floor: 'governance',
-    tables: {
-      review: { chairs: 2, description: 'Security reviewer + architect' }
-    },
-    tools: ['read_file', 'list_dir', 'qa_audit_deps', 'security_scan'],
-    fileScope: 'read-only',
-    exitRequired: {
-      type: 'security-report',
-      fields: ['vulnerabilities', 'severity', 'recommendations', 'compliance']
-    },
-    provider: 'smart'
-  };
-
-  getRules() {
-    return [
-      'Review all code for OWASP Top 10 vulnerabilities.',
-      'Check dependency audit results.',
-      'Verify authentication and authorization patterns.',
-    ];
-  }
-}
-```
-
-Register with the Room Manager:
-```typescript
-registerRoomType('security-audit', SecurityAuditRoom);
-```
-
-### Custom Tools
-Add new tools that can be assigned to room contracts:
-
-```typescript
-import { registerTool } from 'overlord-v2/tools/tool-registry';
-
-registerTool({
-  name: 'security_scan',
-  description: 'Run a security scan on the codebase',
-  category: 'security',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      target: { type: 'string' },
-      severity: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] }
-    },
-    required: ['target']
-  },
-  execute: async (params, context) => {
-    // Run security scan
-    return { vulnerabilities: [], score: 100 };
-  }
-});
-```
-
-### Custom AI Providers
-Add new AI provider adapters:
-
-```typescript
-import { registerAdapter } from 'overlord-v2/ai/ai-provider';
-
-registerAdapter('my-provider', {
-  name: 'my-provider',
-  async sendMessage(messages, tools, options) {
-    // Translate from Anthropic format → your provider
-    // Call your provider's API
-    // Translate response back to Anthropic format
-    return response;
-  },
-  validateConfig: (config) => !!config.get('MY_PROVIDER_KEY')
-});
-```
+**Source:** `src/plugins/contracts.ts`, `src/plugins/plugin-loader.ts`, `src/plugins/plugin-sandbox.ts`
+**Full reference:** [`docs/api/plugins.md`](../api/plugins.md)
 
 ## Plugin Structure
+
+A plugin is a directory containing a manifest and an entrypoint script:
 
 ```
 plugins/
   my-plugin/
-    index.ts          # Plugin entry point
-    rooms/            # Custom room types
-    tools/            # Custom tools
-    providers/        # Custom AI providers
-    package.json      # Plugin metadata
+    plugin.json          ← Manifest (required)
+    main.js              ← JavaScript entrypoint
+    main.lua             ← Lua entrypoint (if engine: "lua")
 ```
 
-## Plugin Entry Point
+## Manifest (`plugin.json`)
 
-```typescript
-// plugins/my-plugin/index.ts
-export default function register({ rooms, tools, ai }) {
-  // Register custom room types
-  rooms.registerRoomType('security-audit', SecurityAuditRoom);
-
-  // Register custom tools
-  tools.registerTool(securityScanTool);
-
-  // Register custom AI providers
-  ai.registerAdapter('my-provider', myProviderAdapter);
+```json
+{
+  "id": "security-audit",
+  "name": "Security Audit",
+  "version": "1.0.0",
+  "description": "Automated security scanning and audit room",
+  "author": "Overlord Team",
+  "engine": "js",
+  "entrypoint": "main.js",
+  "permissions": ["room:write", "tool:execute", "bus:emit", "storage:write"],
+  "provides": {
+    "roomTypes": ["security-audit"],
+    "tools": ["security-scan"]
+  }
 }
 ```
 
-## Scripting (Planned)
+## Permissions
 
-Phase 7 will add Lua and JavaScript scripting support for lightweight room customization without full plugin development:
+| Permission | Description | Risk |
+|------------|-------------|------|
+| `room:read` | List/get rooms | Low |
+| `room:write` | Create/modify rooms | Medium |
+| `tool:execute` | Execute tools | Medium |
+| `agent:read` | List/get agents | Low |
+| `bus:emit` | Emit events on the bus | Medium |
+| `storage:read` | Read plugin-scoped storage | Low |
+| `storage:write` | Write plugin-scoped storage | Low |
+| `fs:read` | Filesystem read access | High |
+| `fs:write` | Filesystem write access | High |
+| `net:http` | Outbound HTTP requests | High |
+
+## Plugin Context API
+
+When loaded, a plugin receives a sandboxed context:
+
+- `context.manifest` — Read-only plugin manifest
+- `context.log` — Scoped logger (`info`, `warn`, `error`)
+- `context.bus` — Event bus (requires `bus:emit`)
+- `context.rooms` — Room management (requires `room:read`/`room:write`)
+- `context.agents` — Agent info (requires `agent:read`)
+- `context.tools` — Register/execute tools (requires `tool:execute`)
+- `context.storage` — Key-value storage (requires `storage:read`/`storage:write`)
+
+## Plugin Entry Point
+
+```javascript
+// plugins/my-plugin/main.js
+module.exports = function(context) {
+  context.log.info('Plugin loaded');
+
+  // Register a custom tool
+  context.tools.register({
+    name: 'security-scan',
+    description: 'Scan codebase for vulnerabilities',
+    category: 'security',
+    inputSchema: {
+      type: 'object',
+      properties: { target: { type: 'string' } },
+      required: ['target']
+    },
+    execute: async (params, ctx) => {
+      return { ok: true, data: { findings: [] } };
+    }
+  });
+
+  // Register a custom room type
+  context.rooms.registerType({
+    type: 'security-audit',
+    floor: 'integration',
+    tables: [{ type: 'audit_table', seats: 2 }],
+    tools: ['security-scan', 'read_file', 'bash'],
+    exitRequirements: ['audit_report'],
+    fileScope: 'read-only'
+  });
+
+  // Return lifecycle hooks
+  return {
+    onUnload: () => { /* cleanup */ },
+    onRoomEnter: (data) => { /* agent entered */ },
+    onRoomExit: (data) => { /* agent exited */ },
+    onToolExecute: (data) => { /* tool ran */ },
+    onPhaseAdvance: (data) => { /* phase changed */ }
+  };
+};
+```
+
+## Scripting
+
+Lua scripting is also supported when `ENABLE_LUA_SCRIPTING=true`:
 
 ```lua
 -- rooms/custom-review.lua
@@ -132,10 +124,18 @@ room.on_enter = function(agent)
 end
 ```
 
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_PLUGINS` | `false` | Enable the plugin system |
+| `ENABLE_LUA_SCRIPTING` | `false` | Enable Lua scripting engine |
+| `PLUGIN_DIR` | `./plugins` | Directory to scan for plugins |
+
 ## Safety
 
 Plugins run in a sandboxed environment:
-- No access to the host filesystem outside the workspace
-- Network access controlled by room contract
+- Only granted permissions are available — ungrantable APIs are not exposed
+- Plugin-scoped storage prevents cross-plugin data access
 - Tool access controlled by room contract (plugins can't bypass structural enforcement)
 - Plugin crashes are isolated and don't affect the core system

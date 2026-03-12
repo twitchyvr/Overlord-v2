@@ -18,6 +18,19 @@ Health check endpoint.
 }
 ```
 
+### `GET /api/status`
+System status check. Reports whether this is a new user and lists existing buildings.
+
+**Response:**
+```json
+{
+  "isNewUser": false,
+  "buildings": [
+    { "id": "bld_abc123", "name": "My Project", "activePhase": "architecture" }
+  ]
+}
+```
+
 ### `GET /` (Static Files)
 Serves the web UI from the `public/` directory.
 
@@ -25,18 +38,7 @@ Serves the web UI from the `public/` directory.
 app.use(express.static('public'));
 ```
 
-## Future REST Endpoints
-
-The following REST endpoints are planned for Phase 6 (UI):
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/buildings` | List buildings |
-| `GET` | `/api/buildings/:id` | Get building details |
-| `GET` | `/api/buildings/:id/rooms` | List rooms in building |
-| `GET` | `/api/buildings/:id/agents` | List agents in building |
-| `GET` | `/api/buildings/:id/raid` | Get RAID log |
-| `GET` | `/api/buildings/:id/gates` | Get phase gates |
+**Note:** Most domain operations use Socket.IO events, not REST. See [Socket Events](Socket-Events.md) for the full real-time API.
 
 ## Middleware
 
@@ -55,4 +57,6 @@ const io = new SocketServer(http, {
 });
 ```
 
-Default: `http://localhost:5173` (Vite dev server)
+Default: `http://localhost:4000`
+
+**Full reference:** [`docs/api/rest-api.md`](../api/rest-api.md)
