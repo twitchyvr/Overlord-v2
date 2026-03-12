@@ -33,6 +33,12 @@ vi.mock('../../../public/ui/engine/store.js', () => ({
 vi.mock('../../../public/ui/engine/engine.js', () => ({
   OverlordUI: {
     init: vi.fn(() => mockEngine),
+    subscribe: vi.fn(() => () => {}),
+    dispatch: vi.fn(),
+    getStore: vi.fn(() => mockStore),
+    registerComponent: vi.fn(),
+    mountComponent: vi.fn(),
+    getComponent: vi.fn(),
   },
 }));
 
