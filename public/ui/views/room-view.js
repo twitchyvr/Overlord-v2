@@ -1336,9 +1336,19 @@ export class RoomView extends Component {
     const assignedIds = new Set(agentsInRoom.map(a => a.id));
     const available = allAgents.filter(a => !assignedIds.has(a.id));
 
-    // Check room access for each available agent
+    // Check room access for each available agent (mirrors server checkRoomAccess logic)
     const roomType = room.type || '';
     const hasAccess = (agent) => {
+      // Badge takes priority over room_access (server enforces same rule)
+      if (agent.badge) {
+        try {
+          const badge = typeof agent.badge === 'string' ? JSON.parse(agent.badge) : agent.badge;
+          if (badge && Array.isArray(badge.rooms)) {
+            return badge.rooms.includes('*') || badge.rooms.includes(roomType);
+          }
+        } catch { /* malformed badge — fall through to room_access */ }
+      }
+      // Fallback to room_access array
       const access = agent.room_access || [];
       return access.includes('*') || access.includes(roomType);
     };
