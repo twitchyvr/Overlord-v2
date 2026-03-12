@@ -30,14 +30,16 @@ const PROVIDERS = {
   ollama:    { name: 'Ollama (Local)',      icon: '\u{1F535}', envKey: 'OLLAMA_BASE_URL' },
 };
 
-/** Room type → default provider mapping. */
+/** All room types with default provider assignments. */
 const ROOM_PROVIDERS = {
+  strategist:    'anthropic',
   discovery:     'anthropic',
   architecture:  'anthropic',
   'code-lab':    'minimax',
   'testing-lab': 'minimax',
   review:        'anthropic',
   deploy:        'anthropic',
+  'war-room':    'anthropic',
 };
 
 
@@ -281,15 +283,25 @@ export class SettingsView extends Component {
 
     // Room → Provider mapping
     section.appendChild(h('h4', { class: 'settings-section-title', style: { marginTop: 'var(--sp-6)' } },
-      'Room Provider Defaults'));
+      'Room \u2192 Provider Routing'));
     section.appendChild(h('p', { class: 'settings-section-desc' },
-      'Default AI provider assignment per room type. Override with PROVIDER_* env vars.'));
+      'Which AI provider handles each room type. Override with PROVIDER_ROOM_* env vars.'));
 
+    // Table header
     const mappingTable = h('div', { class: 'settings-mapping-table' });
+    mappingTable.appendChild(h('div', { class: 'settings-mapping-row settings-mapping-header' },
+      h('span', { class: 'settings-mapping-room' }, 'Room Type'),
+      h('span', { class: 'settings-mapping-provider' }, 'Provider'),
+      h('span', { class: 'settings-mapping-model' }, 'Model'),
+      h('span', { class: 'settings-mapping-source' }, 'Source')
+    ));
+
     for (const [roomType, defaultProvider] of Object.entries(ROOM_PROVIDERS)) {
       const serverOverride = this._serverConfig?.roomProviderMap?.[roomType];
       const active = serverOverride || defaultProvider;
       const providerInfo = PROVIDERS[active] || { name: active, icon: '\u2753' };
+      const isOverride = serverOverride && serverOverride !== defaultProvider;
+      const model = this._serverConfig?.providers?.[active]?.model || '\u2014';
 
       mappingTable.appendChild(h('div', { class: 'settings-mapping-row' },
         h('span', { class: 'settings-mapping-room' },
@@ -297,9 +309,10 @@ export class SettingsView extends Component {
         h('span', { class: 'settings-mapping-provider' },
           h('span', null, providerInfo.icon),
           h('span', null, ` ${providerInfo.name}`)),
-        serverOverride && serverOverride !== defaultProvider
-          ? h('span', { class: 'settings-mapping-override' }, 'Override')
-          : null
+        h('span', { class: 'settings-mapping-model mono' }, model),
+        h('span', {
+          class: `settings-mapping-source${isOverride ? ' override' : ''}`
+        }, isOverride ? 'Override' : 'Default')
       ));
     }
     section.appendChild(mappingTable);
