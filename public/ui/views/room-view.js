@@ -136,6 +136,11 @@ export class RoomView extends Component {
     // ── Room info details ──
     container.appendChild(this._buildInfoSection(room));
 
+    // ── Exit Document action ──
+    if (room.exitRequired && room.exitRequired.fields && room.exitRequired.fields.length > 0) {
+      container.appendChild(this._buildExitDocSection(room));
+    }
+
     // ── Tools section ──
     if (room.tools && room.tools.length > 0) {
       container.appendChild(this._buildToolsSection(room));
@@ -415,6 +420,50 @@ export class RoomView extends Component {
       ),
       h('span', { class: 'room-activity-text' }, item.message || '')
     );
+  }
+
+  _buildExitDocSection(room) {
+    const exitReq = room.exitRequired;
+    const section = h('div', { class: 'room-exit-doc-section' });
+
+    // Header
+    section.appendChild(h('h4', null, 'Exit Document'));
+
+    // Info about the required exit doc
+    const infoRow = h('div', { class: 'room-exit-doc-info' },
+      h('div', { class: 'room-exit-doc-type' },
+        h('span', { class: 'room-exit-doc-icon' }, '\u{1F4DD}'),
+        h('span', null, `Type: `),
+        h('span', { class: 'badge' }, exitReq.type)
+      ),
+      h('div', { class: 'room-exit-doc-fields-count' },
+        `${exitReq.fields.length} required field${exitReq.fields.length !== 1 ? 's' : ''}: `,
+        h('span', { class: 'room-exit-doc-field-list' },
+          exitReq.fields.map(f =>
+            f.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).trim()
+          ).join(', ')
+        )
+      )
+    );
+    section.appendChild(infoRow);
+
+    // Submit button
+    const submitBtn = h('button', {
+      class: 'btn btn-primary btn-md room-exit-doc-btn'
+    }, '\u{1F4CB} Submit Exit Document');
+
+    submitBtn.addEventListener('click', () => {
+      const store = OverlordUI.getStore();
+      OverlordUI.dispatch('exit-doc:open-form', {
+        roomId: room.id,
+        roomData: room,
+        buildingId: store?.get('building.active'),
+        phase: store?.get('building.activePhase') || 'strategy',
+      });
+    });
+
+    section.appendChild(submitBtn);
+    return section;
   }
 
   // ── Data Helpers ──────────────────────────────────────────────
