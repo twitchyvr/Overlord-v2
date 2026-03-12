@@ -819,4 +819,148 @@ describe('Socket Handler (Transport Layer)', () => {
       }).not.toThrow();
     });
   });
+
+  // ─── Disconnect cleanup ─────────────────────────────────────────
+
+  describe('disconnect cleanup', () => {
+    it('exits rooms on disconnect for agents registered by the socket', () => {
+      // Register an agent
+      const regAck = vi.fn();
+      socket.emit('agent:register', { name: 'TestAgent', role: 'coder' }, regAck);
+      expect(regAck).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+
+      // Enter a room
+      const enterAck = vi.fn();
+      socket.emit('room:enter', { roomId: 'room_1', agentId: 'agent_1' }, enterAck);
+      expect(enterAck).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+
+      // Disconnect
+      socket.emit('disconnect');
+
+      // exitRoom should have been called for the room membership
+      expect(rooms.exitRoom).toHaveBeenCalledWith({ roomId: 'room_1', agentId: 'agent_1' });
+    });
+
+    it('removes agents on disconnect that were registered by the socket', () => {
+      // Register an agent
+      const regAck = vi.fn();
+      socket.emit('agent:register', { name: 'TestAgent', role: 'coder' }, regAck);
+
+      // Disconnect
+      socket.emit('disconnect');
+
+      // removeAgent should have been called
+      expect(agents.removeAgent).toHaveBeenCalledWith('agent_1');
+    });
+
+    it('emits room:agent:exited bus event with disconnect reason', () => {
+      // Register + enter room
+      socket.emit('agent:register', { name: 'TestAgent', role: 'coder' }, vi.fn());
+      socket.emit('room:enter', { roomId: 'room_1', agentId: 'agent_1' }, vi.fn());
+
+      // Disconnect
+      socket.emit('disconnect');
+
+      // Bus should have room:agent:exited event with reason
+      const exitEvent = bus.emitted.find(
+        (e) => e.event === 'room:agent:exited' && (e.data as Record<string, unknown>)?.reason === 'disconnect'
+      );
+      expect(exitEvent).toBeDefined();
+      expect(exitEvent!.data).toEqual(expect.objectContaining({
+        roomId: 'room_1',
+        agentId: 'agent_1',
+        reason: 'disconnect',
+      }));
+    });
+
+    it('emits agent:status-changed bus event on disconnect', () => {
+      // Register
+      socket.emit('agent:register', { name: 'TestAgent', role: 'coder' }, vi.fn());
+
+      // Disconnect
+      socket.emit('disconnect');
+
+      const statusEvent = bus.emitted.find(
+        (e) => e.event === 'agent:status-changed' && (e.data as Record<string, unknown>)?.reason === 'disconnect'
+      );
+      expect(statusEvent).toBeDefined();
+      expect(statusEvent!.data).toEqual(expect.objectContaining({
+        agentId: 'agent_1',
+        status: 'removed',
+        reason: 'disconnect',
+      }));
+    });
+
+    it('emits socket:disconnected bus event with cleanup summary', () => {
+      // Register + enter room
+      socket.emit('agent:register', { name: 'TestAgent', role: 'coder' }, vi.fn());
+      socket.emit('room:enter', { roomId: 'room_1', agentId: 'agent_1' }, vi.fn());
+
+      // Disconnect
+      socket.emit('disconnect');
+
+      const dcEvent = bus.emitted.find((e) => e.event === 'socket:disconnected');
+      expect(dcEvent).toBeDefined();
+      expect(dcEvent!.data).toEqual(expect.objectContaining({
+        socketId: socket.id,
+        cleanedRooms: 1,
+        cleanedAgents: 1,
+      }));
+    });
+
+    it('handles disconnect with no associations gracefully', () => {
+      // Disconnect without registering anything
+      expect(() => {
+        socket.emit('disconnect');
+      }).not.toThrow();
+
+      const dcEvent = bus.emitted.find((e) => e.event === 'socket:disconnected');
+      expect(dcEvent).toBeDefined();
+      expect(dcEvent!.data).toEqual(expect.objectContaining({
+        cleanedRooms: 0,
+        cleanedAgents: 0,
+      }));
+    });
+
+    it('does not track room entry after room:exit', () => {
+      // Register + enter + exit
+      socket.emit('agent:register', { name: 'TestAgent', role: 'coder' }, vi.fn());
+      socket.emit('room:enter', { roomId: 'room_1', agentId: 'agent_1' }, vi.fn());
+      socket.emit('room:exit', { roomId: 'room_1', agentId: 'agent_1' }, vi.fn());
+
+      // Clear mocks so we only see disconnect calls
+      (rooms.exitRoom as ReturnType<typeof vi.fn>).mockClear();
+
+      // Disconnect — should NOT try to exit the room again
+      socket.emit('disconnect');
+
+      // exitRoom was called by room:exit above, not by disconnect
+      expect(rooms.exitRoom).not.toHaveBeenCalled();
+    });
+
+    it('handles multiple agents and rooms per socket', () => {
+      // Register two agents
+      (agents.registerAgent as ReturnType<typeof vi.fn>)
+        .mockReturnValueOnce({ ok: true, data: { id: 'agent_A', name: 'Alpha' } })
+        .mockReturnValueOnce({ ok: true, data: { id: 'agent_B', name: 'Beta' } });
+
+      socket.emit('agent:register', { name: 'Alpha', role: 'coder' }, vi.fn());
+      socket.emit('agent:register', { name: 'Beta', role: 'reviewer' }, vi.fn());
+      socket.emit('room:enter', { roomId: 'room_1', agentId: 'agent_A' }, vi.fn());
+      socket.emit('room:enter', { roomId: 'room_2', agentId: 'agent_B' }, vi.fn());
+
+      // Reset to track only disconnect calls
+      (rooms.exitRoom as ReturnType<typeof vi.fn>).mockClear();
+      (agents.removeAgent as ReturnType<typeof vi.fn>).mockClear();
+
+      socket.emit('disconnect');
+
+      // Both rooms exited
+      expect(rooms.exitRoom).toHaveBeenCalledTimes(2);
+      // Both agents removed
+      expect(agents.removeAgent).toHaveBeenCalledTimes(2);
+      expect(agents.removeAgent).toHaveBeenCalledWith('agent_A');
+      expect(agents.removeAgent).toHaveBeenCalledWith('agent_B');
+    });
+  });
 });
