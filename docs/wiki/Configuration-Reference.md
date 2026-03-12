@@ -27,37 +27,69 @@ All configuration is loaded from environment variables (`.env` file) and validat
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `ANTHROPIC_API_KEY` | string | — | API key (required for Anthropic provider) |
-| `ANTHROPIC_MODEL` | string | `'claude-3-sonnet-20240229'` | Default model |
+| `ANTHROPIC_MODEL` | string | `'claude-sonnet-4-20250514'` | Default model |
 
 ### MiniMax
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `MINIMAX_API_KEY` | string | — | API key |
-| `MINIMAX_MODEL` | string | `'abab6.5-chat'` | Default model |
+| `MINIMAX_MODEL` | string | — | Default model |
 | `MINIMAX_GROUP_ID` | string | — | MiniMax group ID |
 
 ### OpenAI
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `OPENAI_API_KEY` | string | — | API key |
-| `OPENAI_MODEL` | string | `'gpt-4-turbo'` | Default model |
+| `OPENAI_MODEL` | string | — | Default model |
 
 ### Ollama (Local)
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `OLLAMA_BASE_URL` | string | `'http://localhost:11434'` | Ollama server URL |
-| `OLLAMA_MODEL` | string | `'llama3'` | Default model |
+| `OLLAMA_MODEL` | string | — | Default model |
 
 ## Room Provider Assignment
 
+Each room type can use a different AI provider:
+
+| Variable | Type | Default | Room Type |
+|----------|------|---------|-----------|
+| `PROVIDER_DISCOVERY` | string | `'anthropic'` | Discovery rooms |
+| `PROVIDER_ARCHITECTURE` | string | `'anthropic'` | Architecture rooms |
+| `PROVIDER_CODE_LAB` | string | `'minimax'` | Code lab rooms |
+| `PROVIDER_TESTING_LAB` | string | `'minimax'` | Testing lab rooms |
+| `PROVIDER_REVIEW` | string | `'anthropic'` | Review rooms |
+| `PROVIDER_DEPLOY` | string | `'anthropic'` | Deploy rooms |
+
+The Strategist room always uses Anthropic. War rooms default to Anthropic.
+
+## GitHub Integration
+
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `PROVIDER_SMART` | string | `'anthropic'` | Provider for `smart` rooms |
-| `MODEL_SMART` | string | — | Model for `smart` rooms |
-| `PROVIDER_CHEAP` | string | `'anthropic'` | Provider for `cheap` rooms |
-| `MODEL_CHEAP` | string | — | Model for `cheap` rooms |
-| `PROVIDER_DEFAULT` | string | `'anthropic'` | Default provider for `configurable` rooms |
-| `MODEL_DEFAULT` | string | — | Default model for `configurable` rooms |
+| `GITHUB_TOKEN` | string | — | GitHub personal access token |
+| `GITHUB_OWNER` | string | — | GitHub repository owner |
+| `GITHUB_REPO` | string | — | GitHub repository name |
+
+## Security
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `SESSION_SECRET` | string | `'dev-secret-change-in-production'` | Session signing secret |
+
+## Plugins
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ENABLE_PLUGINS` | boolean | `false` | Enable the plugin system |
+| `ENABLE_LUA_SCRIPTING` | boolean | `false` | Enable Lua scripting engine |
+| `PLUGIN_DIR` | string | `'./plugins'` | Directory to scan for plugins |
+
+## MCP
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `MCP_SERVERS_CONFIG` | string | `'./mcp-servers.json'` | Path to MCP server config |
 
 ## Example `.env` File
 
@@ -65,7 +97,7 @@ All configuration is loaded from environment variables (`.env` file) and validat
 # Server
 PORT=4000
 NODE_ENV=development
-CORS_ORIGIN=http://localhost:5173
+CORS_ORIGIN=http://localhost:4000
 LOG_LEVEL=info
 
 # Database
@@ -73,25 +105,33 @@ DB_PATH=./data/overlord.db
 
 # AI Providers
 ANTHROPIC_API_KEY=sk-ant-your-key-here
-ANTHROPIC_MODEL=claude-3-sonnet-20240229
+ANTHROPIC_MODEL=claude-sonnet-4-20250514
 
 MINIMAX_API_KEY=your-minimax-key
-MINIMAX_MODEL=abab6.5-chat
 MINIMAX_GROUP_ID=your-group-id
 
-OPENAI_API_KEY=sk-your-openai-key
-OPENAI_MODEL=gpt-4-turbo
-
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3
+# OPENAI_API_KEY=sk-your-openai-key
+# OLLAMA_BASE_URL=http://localhost:11434
 
 # Room Provider Assignment
-PROVIDER_SMART=anthropic
-MODEL_SMART=claude-3-opus-20240229
-PROVIDER_CHEAP=anthropic
-MODEL_CHEAP=claude-3-haiku-20240307
-PROVIDER_DEFAULT=anthropic
-MODEL_DEFAULT=claude-3-sonnet-20240229
+PROVIDER_DISCOVERY=anthropic
+PROVIDER_ARCHITECTURE=anthropic
+PROVIDER_CODE_LAB=minimax
+PROVIDER_TESTING_LAB=minimax
+PROVIDER_REVIEW=anthropic
+PROVIDER_DEPLOY=anthropic
+
+# GitHub
+GITHUB_TOKEN=ghp_...
+GITHUB_OWNER=myorg
+GITHUB_REPO=myproject
+
+# Security
+SESSION_SECRET=change-this-in-production
+
+# Plugins
+ENABLE_PLUGINS=false
+PLUGIN_DIR=./plugins
 ```
 
 ## Config Validation
