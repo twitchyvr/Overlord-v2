@@ -242,6 +242,18 @@
   line-height: var(--leading-normal);
 }
 
+/* Form validation */
+.input-error {
+  border-color: var(--accent-red, #ef4444) !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
+}
+.form-error {
+  color: var(--accent-red, #ef4444);
+  font-size: var(--text-xs);
+  margin-top: var(--sp-1);
+  line-height: var(--leading-snug);
+}
+
 /* Blueprint preview */
 .blueprint-preview {
   background: var(--bg-tertiary);

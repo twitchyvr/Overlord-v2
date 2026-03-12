@@ -11,7 +11,7 @@
  * with a mock engine/store.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const storePath = '../../../public/ui/engine/store.js';
 const enginePath = '../../../public/ui/engine/engine.js';
@@ -20,6 +20,12 @@ let Store: any;
 let OverlordUI: any;
 
 beforeEach(async () => {
+  // Clean up modals from previous tests
+  try {
+    const { Modal } = await import('../../../public/ui/components/modal.js');
+    Modal.closeAll();
+  } catch (_) { /* ignore if not yet loaded */ }
+
   // Clear DOM
   document.body.textContent = '';
 
@@ -639,5 +645,209 @@ describe('RaidLogView', () => {
     expect(view._mounted).toBe(false);
     expect(view._subs.length).toBe(0);
     expect(view._listeners.length).toBe(0);
+  });
+});
+
+// ─── TaskView form validation ──────────────────────────────
+
+describe('TaskView — create form validation', () => {
+  it('shows validation error when title is empty on submit', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    // Click "New Task" to open the form
+    const newBtn = el.querySelector('.task-view-actions .btn-primary') as HTMLElement;
+    newBtn.click();
+
+    // Wait for modal to render
+    await new Promise(r => setTimeout(r, 50));
+
+    // Submit with empty title
+    const submitBtn = document.querySelector('.task-create-actions .btn-primary') as HTMLElement;
+    expect(submitBtn).not.toBeNull();
+    submitBtn.click();
+
+    await new Promise(r => setTimeout(r, 50));
+
+    // Title input should have error class
+    const titleInput = document.getElementById('task-create-title');
+    expect(titleInput?.classList.contains('input-error')).toBe(true);
+
+    // Error message should be visible
+    const errorMsg = document.querySelector('.task-create-form .form-error');
+    expect(errorMsg).not.toBeNull();
+    expect(errorMsg!.textContent).toBe('Title is required');
+  });
+
+  it('calls createTask and closes modal on valid submit', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const { Modal } = await import('../../../public/ui/components/modal.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    // Mock overlordSocket
+    (window as any).overlordSocket = {
+      createTask: vi.fn().mockResolvedValue({ ok: true, data: { id: 'new-task' } }),
+      fetchTasks: vi.fn(),
+      fetchTodos: vi.fn(),
+    };
+
+    // Set buildingId AFTER mount (mount reads from store and overwrites)
+    (view as any)._buildingId = 'b1';
+
+    // Open the form
+    const newBtn = el.querySelector('.task-view-actions .btn-primary') as HTMLElement;
+    newBtn.click();
+    await new Promise(r => setTimeout(r, 50));
+
+    // Fill in the title
+    const titleInput = document.getElementById('task-create-title') as HTMLInputElement;
+    titleInput.value = 'My new task';
+
+    // Call submit directly to avoid microtask timing issues
+    await (view as any)._submitCreateForm();
+
+    expect((window as any).overlordSocket.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'My new task', buildingId: 'b1' })
+    );
+
+    // Modal should be closed on success
+    expect(Modal.isOpen('task-create')).toBe(false);
+
+    Modal.closeAll();
+    delete (window as any).overlordSocket;
+  });
+
+  it('keeps modal open on failed submit', async () => {
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const { Modal } = await import('../../../public/ui/components/modal.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    // Mock overlordSocket with failure
+    (window as any).overlordSocket = {
+      createTask: vi.fn().mockResolvedValue({ ok: false, error: { message: 'Server error' } }),
+      fetchTasks: vi.fn(),
+      fetchTodos: vi.fn(),
+    };
+
+    // Set buildingId AFTER mount
+    (view as any)._buildingId = 'b1';
+
+    // Open form
+    const newBtn = el.querySelector('.task-view-actions .btn-primary') as HTMLElement;
+    newBtn.click();
+    await new Promise(r => setTimeout(r, 50));
+
+    // Fill title and submit directly
+    (document.getElementById('task-create-title') as HTMLInputElement).value = 'Failing task';
+    await (view as any)._submitCreateForm();
+
+    // Modal should still be open
+    expect(Modal.isOpen('task-create')).toBe(true);
+
+    Modal.closeAll();
+    delete (window as any).overlordSocket;
+  });
+});
+
+// ─── RaidLogView form validation ──────────────────────────────
+
+describe('RaidLogView — create form validation', () => {
+  it('shows validation error when summary is empty on submit', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    // Click "New Entry"
+    const newBtn = el.querySelector('.raid-view-actions .btn-primary') as HTMLElement;
+    newBtn.click();
+    await new Promise(r => setTimeout(r, 50));
+
+    // Submit with empty summary
+    const submitBtn = document.querySelector('.raid-create-actions .btn-primary') as HTMLElement;
+    expect(submitBtn).not.toBeNull();
+    submitBtn.click();
+    await new Promise(r => setTimeout(r, 50));
+
+    // Summary input should have error class
+    const summaryInput = document.getElementById('raid-create-summary');
+    expect(summaryInput?.classList.contains('input-error')).toBe(true);
+
+    // Error message
+    const errorMsg = document.querySelector('.raid-create-form .form-error');
+    expect(errorMsg).not.toBeNull();
+    expect(errorMsg!.textContent).toBe('Summary is required');
+  });
+
+  it('calls addRaidEntry and closes modal on valid submit', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const { Modal } = await import('../../../public/ui/components/modal.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    // Mock overlordSocket
+    (window as any).overlordSocket = {
+      addRaidEntry: vi.fn().mockResolvedValue({ ok: true, data: { id: 'new-entry' } }),
+      fetchRaidEntries: vi.fn(),
+    };
+
+    // Set buildingId AFTER mount
+    (view as any)._buildingId = 'b1';
+
+    // Open form
+    const newBtn = el.querySelector('.raid-view-actions .btn-primary') as HTMLElement;
+    newBtn.click();
+    await new Promise(r => setTimeout(r, 50));
+
+    // Fill in summary
+    (document.getElementById('raid-create-summary') as HTMLInputElement).value = 'API rate limit risk';
+
+    // Call submit directly to avoid microtask timing issues
+    await (view as any)._submitCreateForm();
+
+    expect((window as any).overlordSocket.addRaidEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ summary: 'API rate limit risk', buildingId: 'b1' })
+    );
+
+    // Modal should be closed
+    expect(Modal.isOpen('raid-create')).toBe(false);
+
+    Modal.closeAll();
+    delete (window as any).overlordSocket;
+  });
+
+  it('keeps modal open on failed submit', async () => {
+    const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
+    const { Modal } = await import('../../../public/ui/components/modal.js');
+    const el = document.createElement('div');
+    const view = new RaidLogView(el);
+    view.mount();
+
+    (window as any).overlordSocket = {
+      addRaidEntry: vi.fn().mockResolvedValue({ ok: false, error: { message: 'DB error' } }),
+      fetchRaidEntries: vi.fn(),
+    };
+
+    // Set buildingId AFTER mount
+    (view as any)._buildingId = 'b1';
+
+    const newBtn = el.querySelector('.raid-view-actions .btn-primary') as HTMLElement;
+    newBtn.click();
+    await new Promise(r => setTimeout(r, 50));
+
+    (document.getElementById('raid-create-summary') as HTMLInputElement).value = 'Failing entry';
+    await (view as any)._submitCreateForm();
+
+    expect(Modal.isOpen('raid-create')).toBe(true);
+
+    Modal.closeAll();
+    delete (window as any).overlordSocket;
   });
 });

@@ -22,6 +22,10 @@ let _modalRoot = null;         // shared container element
  * @returns {HTMLElement}
  */
 function getRoot() {
+  // Re-check if cached root is still in the DOM (may have been removed by DOM clearing)
+  if (_modalRoot && !_modalRoot.isConnected) {
+    _modalRoot = null;
+  }
   if (!_modalRoot) {
     _modalRoot = document.getElementById('modal-root');
     if (!_modalRoot) {
