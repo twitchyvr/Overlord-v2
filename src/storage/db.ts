@@ -110,6 +110,7 @@ const SCHEMA_SQL = `
     milestone_id TEXT,
     assignee_id TEXT REFERENCES agents(id),
     room_id TEXT REFERENCES rooms(id),
+    table_id TEXT REFERENCES tables_v2(id),
     phase TEXT,
     priority TEXT DEFAULT 'normal',
     created_at TEXT DEFAULT (datetime('now')),
@@ -216,6 +217,9 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_agents_building ON agents(building_id);
   CREATE INDEX IF NOT EXISTS idx_tasks_building ON tasks(building_id);
   CREATE INDEX IF NOT EXISTS idx_todos_task ON todos(task_id);
+  CREATE INDEX IF NOT EXISTS idx_todos_agent ON todos(agent_id);
+  CREATE INDEX IF NOT EXISTS idx_tasks_table ON tasks(table_id);
+  CREATE INDEX IF NOT EXISTS idx_tasks_room ON tasks(room_id);
   CREATE INDEX IF NOT EXISTS idx_raid_building ON raid_entries(building_id);
   CREATE INDEX IF NOT EXISTS idx_raid_phase ON raid_entries(phase);
   CREATE INDEX IF NOT EXISTS idx_raid_type ON raid_entries(type);
@@ -244,6 +248,7 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['agents', 'photo_url', 'TEXT'],
   ['agents', 'specialization', 'TEXT'],
   ['agents', 'profile_generated', 'INTEGER DEFAULT 0'],
+  ['tasks', 'table_id', 'TEXT REFERENCES tables_v2(id)'],
 ];
 
 /**

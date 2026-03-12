@@ -147,6 +147,274 @@
   border-top: 1px solid var(--border-secondary);
 }
 
+/* ── Agent Card — Avatar Photo Support ── */
+
+.agents-view-card-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 2px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  position: relative;
+}
+.agents-view-avatar-sm {
+  width: 48px;
+  height: 48px;
+  font-size: var(--text-lg);
+}
+.agents-view-avatar-lg {
+  width: 120px;
+  height: 120px;
+  font-size: 48px;
+}
+.agents-view-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.agents-view-avatar-img-loaded {
+  opacity: 1;
+}
+.agents-view-avatar-fallback {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+/* ── Agent Card — Name Group ── */
+
+.agents-view-card-name-group {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.agents-view-card-name {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agents-view-card-specialization {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agents-view-card-role {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.agents-view-role-badge {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-full);
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent-blue);
+  white-space: nowrap;
+}
+
+/* ── Agent Detail Drawer — Profile Header ── */
+
+.agents-view-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-2) 0;
+}
+.agents-view-detail-header {
+  display: flex;
+  gap: var(--sp-4);
+  align-items: flex-start;
+}
+.agents-view-detail-header-profile {
+  flex-direction: row;
+  align-items: flex-start;
+}
+.agents-view-detail-avatar {
+  flex-shrink: 0;
+}
+.agents-view-detail-identity {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.agents-view-detail-name {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.3;
+}
+.agents-view-detail-codename {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.agents-view-detail-specialization {
+  font-size: var(--text-sm);
+  color: var(--accent-blue);
+  font-weight: var(--font-medium);
+}
+.agents-view-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+/* ── Agent Detail — Sections ── */
+
+.agents-view-detail-section {
+  border-top: 1px solid var(--border-secondary);
+  padding-top: var(--sp-3);
+}
+.agents-view-detail-section-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 var(--sp-2) 0;
+}
+
+/* ── Agent Detail — Bio ── */
+
+.agents-view-detail-bio {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+.agents-view-detail-bio-paragraph {
+  margin: 0 0 var(--sp-2) 0;
+}
+.agents-view-detail-bio-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Agent Detail — Capabilities & Info Grid ── */
+
+.agents-view-detail-cap-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+.agents-view-detail-cap-tag {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+}
+.agents-view-detail-info-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-1) var(--sp-3);
+  font-size: var(--text-sm);
+}
+.agents-view-detail-info-label {
+  color: var(--text-muted);
+  font-weight: var(--font-medium);
+}
+.agents-view-detail-info-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  word-break: break-all;
+}
+
+/* ── Agent Detail — Profile Actions ── */
+
+.agents-view-detail-profile-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.agents-view-detail-actions {
+  display: flex;
+  gap: var(--sp-2);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-secondary);
+  flex-wrap: wrap;
+}
+
+/* ── Agent Detail — Edit Profile Form ── */
+
+.agents-view-detail-edit-toggle {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.agents-view-detail-edit-toggle::after {
+  content: '\25B6';
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+.agents-view-detail-edit-toggle-open::after {
+  transform: rotate(90deg);
+}
+.agents-view-detail-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+}
+.agents-view-detail-edit-collapsed {
+  display: none;
+}
+.agents-view-detail-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.agents-view-detail-edit-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.agents-view-detail-edit-textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.agents-view-detail-edit-actions {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+}
+
+/* ── Agent Detail — Status Badge ── */
+
+.agents-view-detail-status-badge {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-full);
+}
+
 /* ══════════════════════════════════════════════
    ACTIVITY VIEW
    ══════════════════════════════════════════════ */

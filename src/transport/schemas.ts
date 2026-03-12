@@ -356,6 +356,7 @@ export const TaskCreateSchema = z.object({
   milestoneId: optionalId(),
   assigneeId: optionalId(),
   roomId: optionalId(),
+  tableId: optionalId(),
   phase: optionalName(),
   priority: z.string().max(MAX_NAME).optional().default('normal'),
 });
@@ -369,6 +370,7 @@ export const TaskUpdateSchema = z.object({
   milestoneId: optionalId(),
   assigneeId: optionalId(),
   roomId: optionalId(),
+  tableId: optionalId(),
   phase: optionalName(),
   priority: optionalName(),
 });
@@ -378,10 +380,21 @@ export const TaskListSchema = z.object({
   status: optionalName(),
   phase: optionalName(),
   assigneeId: optionalId(),
+  tableId: optionalId(),
+  roomId: optionalId(),
 });
 
 export const TaskGetSchema = z.object({
   id: id(),
+});
+
+export const TaskAssignTableSchema = z.object({
+  taskId: id(),
+  tableId: id(),
+});
+
+export const TaskUnassignTableSchema = z.object({
+  taskId: id(),
 });
 
 // ─── TODO Schemas ───
@@ -400,11 +413,23 @@ export const TodoToggleSchema = z.object({
 });
 
 export const TodoListSchema = z.object({
-  taskId: id(),
+  taskId: optionalId(),
+  agentId: optionalId(),
+}).refine((data) => data.taskId || data.agentId, {
+  message: 'At least one of taskId or agentId must be provided',
 });
 
 export const TodoDeleteSchema = z.object({
   id: id(),
+});
+
+export const TodoAssignAgentSchema = z.object({
+  todoId: id(),
+  agentId: id(),
+});
+
+export const TodoUnassignAgentSchema = z.object({
+  todoId: id(),
 });
 
 // ─── Exit Document Schemas ───
