@@ -225,13 +225,26 @@ export class BuildingView extends Component {
   }
 
   _updateAgentDots() {
-    // Optimized partial update — just re-render agent dots without full render
+    // Optimized partial update — update agent dots + room avatars without full render
+    let needsFullRender = false;
+
     this.el.querySelectorAll('.floor-bar').forEach(bar => {
       const floorId = bar.dataset.floorId;
-      const dotsRow = bar.querySelector('.floor-agent-dots');
       const agents = this._getAgentsOnFloor(floorId);
 
-      if (dotsRow) {
+      // Update floor-level dots
+      let dotsRow = bar.querySelector('.floor-agent-dots');
+      if (agents.length > 0) {
+        if (!dotsRow) {
+          // Create dots row if it didn't exist
+          dotsRow = h('div', { class: 'floor-agent-dots' });
+          const expandIcon = bar.querySelector('.floor-expand-icon');
+          if (expandIcon) {
+            bar.insertBefore(dotsRow, expandIcon);
+          } else {
+            bar.appendChild(dotsRow);
+          }
+        }
         dotsRow.textContent = '';
         for (const agent of agents.slice(0, 8)) {
           dotsRow.appendChild(h('div', {
@@ -242,10 +255,49 @@ export class BuildingView extends Component {
         if (agents.length > 8) {
           dotsRow.appendChild(h('span', { class: 'agent-dot-overflow' }, `+${agents.length - 8}`));
         }
-      } else if (agents.length > 0) {
-        // Agent dots didn't exist yet — need full re-render
-        this.render();
+      } else if (dotsRow) {
+        // No agents on floor — remove dots row
+        dotsRow.remove();
       }
+
+      // Update room card agent avatars (for expanded floors)
+      bar.querySelectorAll('.room-card').forEach(roomCard => {
+        const roomId = roomCard.dataset.roomId;
+        const agentsInRoom = this._getAgentsInRoom(roomId);
+        const existingAvatarRow = roomCard.querySelector('.room-agent-avatars');
+
+        // Update occupied class
+        roomCard.classList.toggle('room-occupied', agentsInRoom.length > 0);
+
+        // Update status dot
+        const statusDot = roomCard.querySelector('.status-dot');
+        if (statusDot) {
+          statusDot.classList.remove('status-active', 'status-idle');
+          statusDot.classList.add(agentsInRoom.length > 0 ? 'status-active' : 'status-idle');
+        }
+
+        if (agentsInRoom.length > 0) {
+          const avatarRow = existingAvatarRow || h('div', { class: 'room-agent-avatars' });
+          avatarRow.textContent = '';
+          for (const agent of agentsInRoom) {
+            avatarRow.appendChild(h('div', {
+              class: 'agent-avatar',
+              title: agent.name || agent.agentId
+            }, (agent.name || '?')[0].toUpperCase()));
+          }
+          if (!existingAvatarRow) {
+            roomCard.appendChild(avatarRow);
+          }
+        } else if (existingAvatarRow) {
+          existingAvatarRow.remove();
+        }
+      });
     });
+
+    // Update active agent count in stats
+    const activeStatEl = this.el.querySelector('.building-stats .building-stat:last-child .building-stat-value');
+    if (activeStatEl) {
+      activeStatEl.textContent = String(this._countActiveAgents());
+    }
   }
 }

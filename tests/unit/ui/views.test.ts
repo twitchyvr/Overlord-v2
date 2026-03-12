@@ -111,6 +111,147 @@ describe('BuildingView', () => {
     expect(statValues[1].textContent).toBe('2');  // 2 rooms
     expect(statValues[2].textContent).toBe('0');  // 0 active agents
   });
+
+  it('adds agent dots when agentPositions update without full re-render', async () => {
+    const { BuildingView } = await import('../../../public/ui/views/building-view.js');
+    const el = document.createElement('div');
+    const view = new BuildingView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('building.data', { name: 'B' });
+    store.set('building.floors', [
+      { id: 'f1', ordinal: 1, rooms: [] }
+    ]);
+
+    // Verify no dots initially
+    expect(el.querySelector('.floor-agent-dots')).toBeNull();
+
+    // Add agents via agentPositions — triggers _updateAgentDots (partial update)
+    store.set('building.agentPositions', {
+      a1: { agentId: 'a1', name: 'Agent 1', floorId: 'f1', status: 'active' },
+      a2: { agentId: 'a2', name: 'Agent 2', floorId: 'f1', status: 'idle' }
+    });
+
+    const dotsRow = el.querySelector('.floor-agent-dots');
+    expect(dotsRow).not.toBeNull();
+    expect(dotsRow!.querySelectorAll('.agent-dot').length).toBe(2);
+    expect(dotsRow!.querySelector('.agent-dot-active')).not.toBeNull();
+    expect(dotsRow!.querySelector('.agent-dot-idle')).not.toBeNull();
+  });
+
+  it('removes agent dots when all agents leave a floor', async () => {
+    const { BuildingView } = await import('../../../public/ui/views/building-view.js');
+    const el = document.createElement('div');
+    const view = new BuildingView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('building.data', { name: 'B' });
+    store.set('building.floors', [
+      { id: 'f1', ordinal: 1, rooms: [] }
+    ]);
+    store.set('building.agentPositions', {
+      a1: { agentId: 'a1', name: 'Agent 1', floorId: 'f1', status: 'active' }
+    });
+
+    expect(el.querySelector('.floor-agent-dots')).not.toBeNull();
+
+    // Remove all agents
+    store.set('building.agentPositions', {});
+
+    expect(el.querySelector('.floor-agent-dots')).toBeNull();
+  });
+
+  it('updates active agent count in stats on agentPositions change', async () => {
+    const { BuildingView } = await import('../../../public/ui/views/building-view.js');
+    const el = document.createElement('div');
+    const view = new BuildingView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('building.data', { name: 'B' });
+    store.set('building.floors', [
+      { id: 'f1', ordinal: 1, rooms: [] }
+    ]);
+
+    // Initially 0 active
+    const statValues = el.querySelectorAll('.building-stat-value');
+    expect(statValues[2].textContent).toBe('0');
+
+    // Add agents — one active, one idle
+    store.set('building.agentPositions', {
+      a1: { agentId: 'a1', floorId: 'f1', status: 'active' },
+      a2: { agentId: 'a2', floorId: 'f1', status: 'idle' },
+      a3: { agentId: 'a3', floorId: 'f1', status: 'working' }
+    });
+
+    // active + working = 2
+    expect(statValues[2].textContent).toBe('2');
+  });
+
+  it('updates room card avatars in expanded floors on agentPositions change', async () => {
+    const { BuildingView } = await import('../../../public/ui/views/building-view.js');
+    const el = document.createElement('div');
+    const view = new BuildingView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('building.data', { name: 'B' });
+    store.set('building.floors', [
+      { id: 'f1', ordinal: 1, rooms: [{ id: 'r1', name: 'Code Lab', type: 'code-lab' }] }
+    ]);
+
+    // Expand the floor by clicking the floor bar
+    const floorBar = el.querySelector('.floor-bar') as HTMLElement;
+    expect(floorBar).not.toBeNull();
+    floorBar.click();
+
+    // Should now have expanded content with room card
+    expect(el.querySelector('.floor-room-grid')).not.toBeNull();
+    const roomCard = el.querySelector('.room-card') as HTMLElement;
+    expect(roomCard).not.toBeNull();
+    expect(roomCard.classList.contains('room-occupied')).toBe(false);
+
+    // Add an agent to that room
+    store.set('building.agentPositions', {
+      a1: { agentId: 'a1', name: 'Alice', floorId: 'f1', roomId: 'r1', status: 'active' }
+    });
+
+    // Room card should now be occupied with avatar
+    expect(roomCard.classList.contains('room-occupied')).toBe(true);
+    const avatarRow = roomCard.querySelector('.room-agent-avatars');
+    expect(avatarRow).not.toBeNull();
+    expect(avatarRow!.querySelector('.agent-avatar')!.textContent).toBe('A');
+  });
+
+  it('shows overflow indicator when more than 8 agents on a floor', async () => {
+    const { BuildingView } = await import('../../../public/ui/views/building-view.js');
+    const el = document.createElement('div');
+    const view = new BuildingView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('building.data', { name: 'B' });
+    store.set('building.floors', [
+      { id: 'f1', ordinal: 1, rooms: [] }
+    ]);
+
+    // Add 10 agents to one floor
+    const positions: Record<string, unknown> = {};
+    for (let i = 1; i <= 10; i++) {
+      positions[`a${i}`] = { agentId: `a${i}`, name: `Agent ${i}`, floorId: 'f1', status: 'active' };
+    }
+    store.set('building.agentPositions', positions);
+
+    const dotsRow = el.querySelector('.floor-agent-dots');
+    expect(dotsRow).not.toBeNull();
+    // Only 8 dots rendered, plus overflow
+    expect(dotsRow!.querySelectorAll('.agent-dot').length).toBe(8);
+    const overflow = dotsRow!.querySelector('.agent-dot-overflow');
+    expect(overflow).not.toBeNull();
+    expect(overflow!.textContent).toBe('+2');
+  });
 });
 
 // ─── ChatView ───────────────────────────────────────────────
