@@ -12,6 +12,7 @@ import { DrillItem } from '../components/drill-item.js';
 import { Tabs } from '../components/tabs.js';
 import { Toast } from '../components/toast.js';
 import { Modal } from '../components/modal.js';
+import { EntityLink } from '../engine/entity-nav.js';
 
 
 export class AgentsPanel extends PanelComponent {
@@ -121,10 +122,22 @@ export class AgentsPanel extends PanelComponent {
         detail: [
           { label: 'Role', key: 'role' },
           { label: 'Status', key: 'status' },
-          { label: 'Current Room', key: 'currentRoomName' },
+          { label: 'Current Room', key: 'currentRoom', value: (d) => {
+            if (!d.currentRoom) return null;
+            return EntityLink.room(d.currentRoom, d.currentRoomName);
+          }},
           { label: 'Capabilities', key: 'capabilities', format: 'json' },
           { label: 'Room Access', key: 'room_access', format: 'json' }
-        ]
+        ],
+        actions: (d) => {
+          const actions = [
+            { label: 'View Full Profile', onClick: () => OverlordUI.dispatch('navigate:entity', { type: 'agent', id: d.id }) },
+          ];
+          if (d.currentRoom) {
+            actions.push({ label: 'View Room', onClick: () => OverlordUI.dispatch('navigate:entity', { type: 'room', id: d.currentRoom }) });
+          }
+          return actions;
+        }
       });
 
       // If agent has no room, show a quick-assign link

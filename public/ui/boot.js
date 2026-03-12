@@ -17,6 +17,7 @@ import { Toast } from './components/toast.js';
 import { RoomView } from './views/room-view.js';
 import { ExitDocForm } from './views/exit-doc-form.js';
 import { SettingsView } from './views/settings-view.js';
+import { initEntityNav } from './engine/entity-nav.js';
 
 // ── Import panel classes (they self-register on construction) ──
 import { PhasePanel } from './panels/phase-panel.js';
@@ -127,6 +128,9 @@ if (socket) {
 
   // ── Mount building view (always-on in left sidebar) ──
   initBuildingView();
+
+  // ── Initialize entity navigation (cross-panel linking) ──
+  initEntityNav();
 
   // ── Mount room view handler (listens for room-selected events) ──
   const roomView = new RoomView(document.createElement('div'));

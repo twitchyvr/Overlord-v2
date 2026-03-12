@@ -11,6 +11,7 @@ import { OverlordUI } from '../engine/engine.js';
 import { h, formatTime } from '../engine/helpers.js';
 import { DrillItem } from '../components/drill-item.js';
 import { Tabs } from '../components/tabs.js';
+import { EntityLink, resolveAgent, resolveRoom } from '../engine/entity-nav.js';
 
 
 const MAX_ITEMS = 100;
@@ -135,13 +136,25 @@ export class ActivityPanel extends PanelComponent {
         meta: (d) => d.ts ? formatTime(d.ts) : d.timestamp ? formatTime(d.timestamp) : '',
         detail: [
           { label: 'Event', key: 'event' },
-          { label: 'Agent', key: 'agentId' },
-          { label: 'Room', key: 'roomId' },
+          { label: 'Agent', key: 'agentId', value: (d) => {
+            if (!d.agentId) return null;
+            return EntityLink.agent(d.agentId);
+          }},
+          { label: 'Room', key: 'roomId', value: (d) => {
+            if (!d.roomId) return null;
+            return EntityLink.room(d.roomId);
+          }},
           { label: 'Tool', key: 'toolName' },
           { label: 'Phase', key: 'phase' },
           { label: 'Duration', key: 'duration', format: 'duration' },
           { label: 'Details', key: 'details' }
-        ]
+        ],
+        actions: (d) => {
+          const actions = [];
+          if (d.agentId) actions.push({ label: 'View Agent', onClick: () => OverlordUI.dispatch('navigate:entity', { type: 'agent', id: d.agentId }) });
+          if (d.roomId) actions.push({ label: 'View Room', onClick: () => OverlordUI.dispatch('navigate:entity', { type: 'room', id: d.roomId }) });
+          return actions;
+        }
       });
 
       list.appendChild(drillItem);
@@ -183,7 +196,8 @@ export class ActivityPanel extends PanelComponent {
     const event = item.event || item.type || '';
 
     if (event === 'tool:executed') {
-      return `${item.toolName || 'Tool'} executed${item.agentId ? ` by ${item.agentId}` : ''}`;
+      const agentName = item.agentName || (item.agentId ? resolveAgent(item.agentId)?.name : null) || 'Agent';
+      return `${item.toolName || 'Tool'} executed by ${agentName}`;
     }
     if (event === 'phase:advanced') {
       return `Phase advanced: ${item.from || ''} → ${item.to || item.newPhase || item.phase || 'next'}`;
@@ -192,10 +206,13 @@ export class ActivityPanel extends PanelComponent {
       return `Gate signed off: ${item.verdict || item.signoff_verdict || 'unknown'}${item.reviewer || item.signoff_reviewer ? ` by ${item.reviewer || item.signoff_reviewer}` : ''}`;
     }
     if (event === 'room:agent:entered') {
-      return `${item.agentName || item.agentId || 'Agent'} entered ${item.roomType || 'room'}`;
+      const agentName = item.agentName || (item.agentId ? resolveAgent(item.agentId)?.name : null) || 'Agent';
+      const roomName = item.roomType ? resolveRoom(item.roomId)?.name || item.roomType : 'room';
+      return `${agentName} entered ${roomName}`;
     }
     if (event === 'room:agent:exited') {
-      return `${item.agentName || item.agentId || 'Agent'} exited room`;
+      const agentName = item.agentName || (item.agentId ? resolveAgent(item.agentId)?.name : null) || 'Agent';
+      return `${agentName} exited room`;
     }
     if (event === 'raid:entry:added') {
       return `RAID: ${item.title || item.summary || item.description || 'New entry'}`;
