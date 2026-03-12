@@ -66,6 +66,17 @@ export class ArchitectureRoom extends BaseRoom {
     };
   }
 
+  /**
+   * Block write operations — Architecture is read-only planning.
+   */
+  override onBeforeToolCall(toolName: string, _agentId: string, _input: Record<string, unknown>): Result {
+    const WRITE_TOOLS = ['write_file', 'patch_file'];
+    if (WRITE_TOOLS.includes(toolName)) {
+      return err('TOOL_BLOCKED', `${toolName} is not allowed in the Architecture Room — no code changes permitted`);
+    }
+    return ok(null);
+  }
+
   override validateExitDocumentValues(document: Record<string, unknown>): Result {
     const milestones = document.milestones as unknown[];
     const taskBreakdown = document.taskBreakdown as unknown[];

@@ -93,8 +93,55 @@ export class CodeLab extends BaseRoom {
   }
 
   /**
-   * Before tool call: warn on write operations (future: enforce assigned file scope).
-   * For now, all writes are allowed — file scope enforcement requires task assignment data.
+   * Track assigned file paths for scope enforcement.
+   * Set via setAssignedFiles() when agent enters with a task assignment.
+   */
+  private assignedFiles: Set<string> = new Set();
+
+  /**
+   * Set the assigned file scope for the current task.
+   * Called by the orchestrator when placing an agent with a task.
+   */
+  setAssignedFiles(files: string[]): void {
+    this.assignedFiles = new Set(files);
+  }
+
+  /**
+   * Before tool call: enforce assigned file scope on write operations.
+   * If assignedFiles is populated, write_file/patch_file are restricted to those paths.
+   * If no assignment is set, writes are allowed (trust the agent's judgment).
+   */
+  override onBeforeToolCall(toolName: string, _agentId: string, input: Record<string, unknown>): Result {
+    const WRITE_TOOLS = ['write_file', 'patch_file'];
+    if (!WRITE_TOOLS.includes(toolName)) return ok(null);
+
+    // If no file scope is assigned, allow all writes
+    if (this.assignedFiles.size === 0) return ok(null);
+
+    const targetPath = (input.path || input.file_path || '') as string;
+    if (!targetPath) return ok(null);
+
+    // Check if the target path is within any assigned file/directory
+    const isAllowed = Array.from(this.assignedFiles).some((assigned) => {
+      // Exact match
+      if (targetPath === assigned) return true;
+      // Target is under an assigned directory (normalize trailing slash)
+      const dir = assigned.endsWith('/') ? assigned : assigned + '/';
+      return targetPath.startsWith(dir);
+    });
+
+    if (!isAllowed) {
+      return err(
+        'TOOL_BLOCKED',
+        `${toolName} blocked: "${targetPath}" is outside assigned file scope. Allowed: ${Array.from(this.assignedFiles).join(', ')}`,
+      );
+    }
+
+    return ok(null);
+  }
+
+  /**
+   * After tool call: detect write failures and suggest escalation.
    */
   override onAfterToolCall(toolName: string, agentId: string, result: Result): void {
     if ((toolName === 'write_file' || toolName === 'patch_file') && !result.ok) {

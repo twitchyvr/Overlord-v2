@@ -104,6 +104,23 @@ export class PluginBayRoom extends BaseRoom {
   }
 
   /**
+   * Before tool call: emit warning on destructive uninstall operations.
+   * Does not block — but notifies observers so the UI can warn the user.
+   */
+  override onBeforeToolCall(toolName: string, agentId: string, input: Record<string, unknown>): Result {
+    if (toolName === 'uninstall_plugin') {
+      const pluginName = (input.name || input.plugin || 'unknown') as string;
+      this.bus?.emit('room:warning', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+        warning: `Destructive operation: uninstalling plugin "${pluginName}". This action may affect system stability.`,
+      });
+    }
+    return ok(null);
+  }
+
+  /**
    * After tool call: detect plugin failures and suggest escalation.
    */
   override onAfterToolCall(toolName: string, agentId: string, result: Result): void {

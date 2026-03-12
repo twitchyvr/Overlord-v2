@@ -82,6 +82,18 @@ export class DeployRoom extends BaseRoom {
   }
 
   /**
+   * Block direct file write operations — Deploy is read-only.
+   * Only bash and github tools can make changes (via CI/CD, not direct file edits).
+   */
+  override onBeforeToolCall(toolName: string, _agentId: string, _input: Record<string, unknown>): Result {
+    const WRITE_TOOLS = ['write_file', 'patch_file'];
+    if (WRITE_TOOLS.includes(toolName)) {
+      return err('TOOL_BLOCKED', `${toolName} is not allowed in the Deploy Room — use CI/CD tools for deployment`);
+    }
+    return ok(null);
+  }
+
+  /**
    * After tool call: detect deployment failures and suggest war-room escalation.
    */
   override onAfterToolCall(toolName: string, agentId: string, result: Result): void {

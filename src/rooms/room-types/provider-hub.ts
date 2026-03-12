@@ -92,6 +92,16 @@ export class ProviderHubRoom extends BaseRoom {
       return err('EXIT_DOC_INVALID', 'configurationChanges must be an array');
     }
 
+    // Validate fallback chain integrity: no circular references
+    for (let i = 0; i < (fallbackChains as unknown[]).length; i++) {
+      const chain = (fallbackChains as unknown[])[i] as Record<string, unknown> | undefined;
+      if (chain && typeof chain.primary === 'string' && Array.isArray(chain.fallbacks)) {
+        if ((chain.fallbacks as string[]).includes(chain.primary)) {
+          return err('EXIT_DOC_INVALID', `fallbackChains[${i}]: primary provider "${chain.primary}" cannot be in its own fallback list`);
+        }
+      }
+    }
+
     return ok(document);
   }
 

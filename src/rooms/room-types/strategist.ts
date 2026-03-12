@@ -199,6 +199,17 @@ export class StrategistOffice extends BaseRoom {
     };
   }
 
+  /**
+   * Block write operations — Strategist is read-only consultation.
+   */
+  override onBeforeToolCall(toolName: string, _agentId: string, _input: Record<string, unknown>): Result {
+    const WRITE_TOOLS = ['write_file', 'patch_file', 'bash'];
+    if (WRITE_TOOLS.includes(toolName)) {
+      return err('TOOL_BLOCKED', `${toolName} is not allowed in the Strategist Office — consultation only, no code changes`);
+    }
+    return ok(null);
+  }
+
   override getRules(): string[] {
     return [
       'You are the Strategist. Guide the user through project setup.',

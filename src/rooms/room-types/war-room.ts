@@ -14,6 +14,10 @@ import { ok, err } from '../../core/contracts.js';
 import type { Result, RoomContract } from '../../core/contracts.js';
 
 export class WarRoom extends BaseRoom {
+  /**
+   * Track when each agent entered the war room for time-box awareness.
+   */
+  private entryTimes: Map<string, number> = new Map();
   static override contract: RoomContract = {
     roomType: 'war-room',
     floor: 'collaboration',
@@ -40,6 +44,32 @@ export class WarRoom extends BaseRoom {
     escalation: {},
     provider: 'configurable',
   };
+
+  /**
+   * Track agent entry time for time-boxing.
+   */
+  override onAgentEnter(agentId: string, tableType: string): Result {
+    this.entryTimes.set(agentId, Date.now());
+    return super.onAgentEnter(agentId, tableType);
+  }
+
+  /**
+   * Clean up entry time tracking on exit.
+   */
+  override onAgentExit(agentId: string): Result {
+    this.entryTimes.delete(agentId);
+    return super.onAgentExit(agentId);
+  }
+
+  /**
+   * Get how long an agent has been in the war room (ms).
+   * Returns null if agent is not in the room.
+   */
+  getAgentDuration(agentId: string): number | null {
+    const entry = this.entryTimes.get(agentId);
+    if (entry === undefined) return null;
+    return Date.now() - entry;
+  }
 
   override getRules(): string[] {
     return [
