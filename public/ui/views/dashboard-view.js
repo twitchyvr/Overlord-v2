@@ -47,6 +47,10 @@ export class DashboardView extends Component {
 
     this.subscribe(store, 'building.active', (id) => {
       this._activeBuilding = id;
+      if (id && window.overlordSocket) {
+        window.overlordSocket.fetchAgents({});
+        window.overlordSocket.fetchRaidEntries(id);
+      }
       this.render();
     });
 
@@ -56,6 +60,16 @@ export class DashboardView extends Component {
     this._agents = store.get('agents.list') || [];
     this._raidEntries = store.get('raid.entries') || [];
     this._activeBuilding = store.get('building.active');
+
+    // If a building is active but agents/RAID data is missing, fetch it
+    if (this._activeBuilding && window.overlordSocket) {
+      if (this._agents.length === 0) {
+        window.overlordSocket.fetchAgents({});
+      }
+      if (this._raidEntries.length === 0) {
+        window.overlordSocket.fetchRaidEntries(this._activeBuilding);
+      }
+    }
 
     this.render();
   }
