@@ -16,6 +16,8 @@ import {
   getFloor,
   listFloors,
   getFloorByType,
+  applyBlueprint,
+  applyCustomPlan,
 } from '../../../src/rooms/building-manager.js';
 
 let memDb: Database.Database;
@@ -42,6 +44,13 @@ function setupDb(): Database.Database {
     file_scope TEXT DEFAULT 'assigned', exit_template TEXT DEFAULT '{}',
     escalation TEXT DEFAULT '{}', provider TEXT DEFAULT 'configurable',
     config TEXT DEFAULT '{}', status TEXT DEFAULT 'idle', created_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+
+  db.prepare(`CREATE TABLE IF NOT EXISTS agents (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL,
+    building_id TEXT, capabilities TEXT DEFAULT '[]', room_access TEXT DEFAULT '[]',
+    badge TEXT, status TEXT DEFAULT 'idle', current_room_id TEXT, current_table_id TEXT,
+    config TEXT DEFAULT '{}', created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
   )`).run();
 
   return db;
@@ -230,5 +239,249 @@ describe('getFloorByType', () => {
     const result = getFloorByType(building.data.id, 'nonexistent');
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('FLOOR_NOT_FOUND');
+  });
+});
+
+// ─── applyBlueprint ───
+
+describe('applyBlueprint', () => {
+  it('provisions floors, rooms, and agents from a blueprint', () => {
+    const building = createBuilding({ name: 'Blueprint Test', provisionFloors: false });
+    const bid = building.data.id;
+
+    const result = applyBlueprint(bid, {
+      floorsNeeded: ['execution', 'governance'],
+      roomConfig: [
+        { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+        { floor: 'governance', rooms: ['review-room'] },
+      ],
+      agentRoster: [
+        { name: 'Coder', role: 'developer', rooms: ['code-lab'] },
+        { name: 'Tester', role: 'qa', rooms: ['testing-lab'] },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.data.floorsCreated).toBe(2);
+    expect(result.data.roomsCreated).toBe(3);
+    expect(result.data.agentsCreated).toBe(2);
+
+    // Verify DB state
+    const floors = memDb.prepare('SELECT * FROM floors WHERE building_id = ?').all(bid);
+    expect(floors).toHaveLength(2);
+
+    const rooms = memDb.prepare('SELECT * FROM rooms').all() as Array<Record<string, unknown>>;
+    expect(rooms).toHaveLength(3);
+    expect(rooms.map(r => r.type)).toContain('code-lab');
+    expect(rooms.map(r => r.type)).toContain('testing-lab');
+    expect(rooms.map(r => r.type)).toContain('review-room');
+
+    const agents = memDb.prepare('SELECT * FROM agents WHERE building_id = ?').all(bid) as Array<Record<string, unknown>>;
+    expect(agents).toHaveLength(2);
+    expect(agents.map(a => a.name)).toContain('Coder');
+    expect(agents.map(a => a.name)).toContain('Tester');
+  });
+
+  it('skips already-existing floors', () => {
+    const building = createBuilding({ name: 'Existing Floors' });
+    const bid = building.data.id;
+    // Building already has 6 default floors including 'execution'
+
+    const result = applyBlueprint(bid, {
+      floorsNeeded: ['execution', 'custom-new'],
+      roomConfig: [],
+      agentRoster: [],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.data.floorsCreated).toBe(1); // only 'custom-new' created
+  });
+
+  it('returns error for non-existent building', () => {
+    const result = applyBlueprint('bld_nonexistent', {
+      floorsNeeded: [],
+      roomConfig: [],
+      agentRoster: [],
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('BUILDING_NOT_FOUND');
+    }
+  });
+
+  it('stores agent room_access as JSON array', () => {
+    const building = createBuilding({ name: 'Room Access Test', provisionFloors: false });
+    const bid = building.data.id;
+
+    applyBlueprint(bid, {
+      floorsNeeded: [],
+      roomConfig: [],
+      agentRoster: [
+        { name: 'MultiRoom', role: 'senior', rooms: ['code-lab', 'review-room', 'testing-lab'] },
+      ],
+    });
+
+    const agent = memDb.prepare('SELECT room_access FROM agents WHERE building_id = ?').get(bid) as Record<string, unknown>;
+    const roomAccess = JSON.parse(agent.room_access as string);
+    expect(roomAccess).toEqual(['code-lab', 'review-room', 'testing-lab']);
+  });
+
+  it('skips rooms for missing floors gracefully', () => {
+    const building = createBuilding({ name: 'Missing Floor', provisionFloors: false });
+    const bid = building.data.id;
+
+    const result = applyBlueprint(bid, {
+      floorsNeeded: ['execution'],
+      roomConfig: [
+        { floor: 'execution', rooms: ['code-lab'] },
+        { floor: 'nonexistent-floor', rooms: ['phantom-room'] },
+      ],
+      agentRoster: [],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.data.roomsCreated).toBe(1); // only the execution room
+  });
+});
+
+// ─── applyCustomPlan ───
+
+describe('applyCustomPlan', () => {
+  it('provisions floors, rooms, and agents from a custom plan', () => {
+    const building = createBuilding({ name: 'Custom Plan Test', provisionFloors: false });
+    const bid = building.data.id;
+
+    const result = applyCustomPlan(bid, {
+      floors: [
+        { type: 'design', name: 'Design Floor' },
+        { type: 'testing', name: 'QA Floor' },
+      ],
+      roomAssignments: [
+        { floor: 'design', roomType: 'ui-lab', roomName: 'UI Design Lab', config: { theme: 'dark' } },
+        { floor: 'testing', roomType: 'qa-suite', roomName: 'QA Suite' },
+      ],
+      agentDefinitions: [
+        { name: 'Designer', role: 'ui-designer', capabilities: ['figma', 'css'], roomAccess: ['ui-lab'] },
+        { name: 'QA Bot', role: 'tester', capabilities: ['selenium'], roomAccess: ['qa-suite'] },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.data.floorsCreated).toBe(2);
+    expect(result.data.roomsCreated).toBe(2);
+    expect(result.data.agentsCreated).toBe(2);
+  });
+
+  it('preserves explicit floor naming', () => {
+    const building = createBuilding({ name: 'Floor Names', provisionFloors: false });
+    const bid = building.data.id;
+
+    applyCustomPlan(bid, {
+      floors: [{ type: 'custom-type', name: 'My Custom Floor' }],
+      roomAssignments: [],
+      agentDefinitions: [],
+    });
+
+    const floor = memDb.prepare('SELECT name FROM floors WHERE building_id = ? AND type = ?').get(bid, 'custom-type') as Record<string, unknown>;
+    expect(floor.name).toBe('My Custom Floor');
+  });
+
+  it('stores room config as JSON', () => {
+    const building = createBuilding({ name: 'Room Config', provisionFloors: false });
+    const bid = building.data.id;
+
+    applyCustomPlan(bid, {
+      floors: [{ type: 'exec', name: 'Exec Floor' }],
+      roomAssignments: [
+        { floor: 'exec', roomType: 'dev-room', roomName: 'Dev Room', config: { maxAgents: 3, priority: 'high' } },
+      ],
+      agentDefinitions: [],
+    });
+
+    const room = memDb.prepare('SELECT config FROM rooms').get() as Record<string, unknown>;
+    expect(JSON.parse(room.config as string)).toEqual({ maxAgents: 3, priority: 'high' });
+  });
+
+  it('stores agent capabilities and room_access as JSON arrays', () => {
+    const building = createBuilding({ name: 'Agent Fields', provisionFloors: false });
+    const bid = building.data.id;
+
+    applyCustomPlan(bid, {
+      floors: [],
+      roomAssignments: [],
+      agentDefinitions: [
+        { name: 'Full Agent', role: 'architect', capabilities: ['design', 'review', 'code'], roomAccess: ['arch-room', 'review-room'] },
+      ],
+    });
+
+    const agent = memDb.prepare('SELECT capabilities, room_access FROM agents WHERE building_id = ?').get(bid) as Record<string, unknown>;
+    expect(JSON.parse(agent.capabilities as string)).toEqual(['design', 'review', 'code']);
+    expect(JSON.parse(agent.room_access as string)).toEqual(['arch-room', 'review-room']);
+  });
+
+  it('skips already-existing floors', () => {
+    const building = createBuilding({ name: 'Dupe Floors' });
+    const bid = building.data.id;
+    // Building already has 6 default floors including 'execution'
+
+    const result = applyCustomPlan(bid, {
+      floors: [
+        { type: 'execution', name: 'Should Be Skipped' },
+        { type: 'brand-new', name: 'Brand New Floor' },
+      ],
+      roomAssignments: [],
+      agentDefinitions: [],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.data.floorsCreated).toBe(1); // only 'brand-new'
+  });
+
+  it('returns error for non-existent building', () => {
+    const result = applyCustomPlan('bld_nonexistent', {
+      floors: [],
+      roomAssignments: [],
+      agentDefinitions: [],
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('BUILDING_NOT_FOUND');
+    }
+  });
+
+  it('skips rooms for missing floors gracefully', () => {
+    const building = createBuilding({ name: 'Missing Floor Custom', provisionFloors: false });
+    const bid = building.data.id;
+
+    const result = applyCustomPlan(bid, {
+      floors: [{ type: 'real', name: 'Real Floor' }],
+      roomAssignments: [
+        { floor: 'real', roomType: 'real-room', roomName: 'Real Room' },
+        { floor: 'ghost', roomType: 'ghost-room', roomName: 'Ghost Room' },
+      ],
+      agentDefinitions: [],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.data.roomsCreated).toBe(1);
+  });
+
+  it('defaults capabilities and roomAccess to empty arrays', () => {
+    const building = createBuilding({ name: 'Defaults Test', provisionFloors: false });
+    const bid = building.data.id;
+
+    applyCustomPlan(bid, {
+      floors: [],
+      roomAssignments: [],
+      agentDefinitions: [
+        { name: 'Minimal Agent', role: 'assistant' },
+      ],
+    });
+
+    const agent = memDb.prepare('SELECT capabilities, room_access FROM agents WHERE building_id = ?').get(bid) as Record<string, unknown>;
+    expect(JSON.parse(agent.capabilities as string)).toEqual([]);
+    expect(JSON.parse(agent.room_access as string)).toEqual([]);
   });
 });
