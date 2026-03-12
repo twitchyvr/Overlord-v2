@@ -25,16 +25,43 @@ import { createBuilding, getBuilding, listBuildings, listFloors, getFloor } from
 vi.mock('../../../src/rooms/phase-gate.js', () => ({
   getGates: vi.fn().mockReturnValue({ ok: true, data: [] }),
   canAdvance: vi.fn().mockReturnValue({ ok: true, data: { canAdvance: false, reason: 'No gate exists' } }),
+  signoffGate: vi.fn().mockReturnValue({ ok: true, data: { gateId: 'gate_1', verdict: 'GO', status: 'go' } }),
+  createGate: vi.fn().mockReturnValue({ ok: true, data: { id: 'gate_1', phase: 'strategy', status: 'pending' } }),
 }));
 
-import { getGates, canAdvance } from '../../../src/rooms/phase-gate.js';
+import { getGates, canAdvance, signoffGate, createGate } from '../../../src/rooms/phase-gate.js';
 
 // Mock raid-log — imported directly by socket-handler
 vi.mock('../../../src/rooms/raid-log.js', () => ({
   searchRaid: vi.fn().mockReturnValue({ ok: true, data: [] }),
+  addRaidEntry: vi.fn().mockReturnValue({ ok: true, data: { id: 'raid_1' } }),
+  updateRaidStatus: vi.fn().mockReturnValue({ ok: true, data: { id: 'raid_1', status: 'closed' } }),
 }));
 
-import { searchRaid } from '../../../src/rooms/raid-log.js';
+import { searchRaid, addRaidEntry, updateRaidStatus } from '../../../src/rooms/raid-log.js';
+
+// Mock room-manager — submitExitDocument imported directly by socket-handler
+vi.mock('../../../src/rooms/room-manager.js', () => ({
+  submitExitDocument: vi.fn().mockReturnValue({ ok: true, data: { id: 'exitdoc_1', roomId: 'r1', raidEntryIds: [] } }),
+}));
+
+import { submitExitDocument } from '../../../src/rooms/room-manager.js';
+
+// Mock storage/db — getDb imported directly by socket-handler for task/todo queries
+vi.mock('../../../src/storage/db.js', () => {
+  const mockStmt = {
+    run: vi.fn(),
+    get: vi.fn().mockReturnValue(null),
+    all: vi.fn().mockReturnValue([]),
+  };
+  return {
+    getDb: vi.fn().mockReturnValue({
+      prepare: vi.fn().mockReturnValue(mockStmt),
+    }),
+  };
+});
+
+import { getDb } from '../../../src/storage/db.js';
 
 // Mock phase-zero — imported directly by socket-handler
 vi.mock('../../../src/rooms/phase-zero.js', () => ({
@@ -417,9 +444,15 @@ describe('Socket Handler (Transport Layer)', () => {
   });
 
   describe('exit document events', () => {
-    it('exit-doc:submit emits to bus and acks ok', () => {
+    it('exit-doc:submit calls submitExitDocument, emits to bus, and acks result', () => {
       const ack = vi.fn();
       socket.emit('exit-doc:submit', { roomId: 'r1', agentId: 'a1', document: { summary: 'test' } }, ack);
+
+      expect(submitExitDocument).toHaveBeenCalledWith(expect.objectContaining({
+        roomId: 'r1',
+        agentId: 'a1',
+        document: { summary: 'test' },
+      }));
 
       const busEvent = bus.emitted.find((e) => e.event === 'exit-doc:submitted');
       expect(busEvent).toBeDefined();
@@ -428,7 +461,7 @@ describe('Socket Handler (Transport Layer)', () => {
         agentId: 'a1',
         document: { summary: 'test' },
       }));
-      expect(ack).toHaveBeenCalledWith({ ok: true });
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
     });
   });
 

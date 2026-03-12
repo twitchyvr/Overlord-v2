@@ -28,6 +28,7 @@ interface RegisterAgentParams {
   roomAccess?: string[];
   badge?: string | null;
   config?: Record<string, unknown>;
+  buildingId?: string | null;
 }
 
 interface AgentUpdates {
@@ -50,24 +51,25 @@ export function initAgents({ bus }: InitAgentsParams): AgentRegistryAPI {
 /**
  * Register a new agent (10-line identity card)
  */
-export function registerAgent({ name, role, capabilities = [], roomAccess = [], badge = null, config = {} }: RegisterAgentParams): Result {
+export function registerAgent({ name, role, capabilities = [], roomAccess = [], badge = null, config = {}, buildingId = null }: RegisterAgentParams): Result {
   const db = getDb();
   const id = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   db.prepare(`
-    INSERT INTO agents (id, name, role, capabilities, room_access, badge, config)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO agents (id, name, role, building_id, capabilities, room_access, badge, config)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name,
     role,
+    buildingId || null,
     JSON.stringify(capabilities),
     JSON.stringify(roomAccess),
     badge,
     JSON.stringify(config),
   );
 
-  log.info({ id, name, role, roomAccess }, 'Agent registered');
+  log.info({ id, name, role, buildingId, roomAccess }, 'Agent registered');
   return ok({ id, name, role });
 }
 
@@ -88,15 +90,16 @@ export function getAgent(agentId: string): ParsedAgent | null {
 }
 
 /**
- * List all agents, optionally filtered by status or room
+ * List all agents, optionally filtered by status, room, or building
  */
-export function listAgents({ status, roomId }: { status?: string; roomId?: string } = {}): ParsedAgent[] {
+export function listAgents({ status, roomId, buildingId }: { status?: string; roomId?: string; buildingId?: string } = {}): ParsedAgent[] {
   const db = getDb();
   let sql = 'SELECT * FROM agents WHERE 1=1';
   const params: string[] = [];
 
   if (status) { sql += ' AND status = ?'; params.push(status); }
   if (roomId) { sql += ' AND current_room_id = ?'; params.push(roomId); }
+  if (buildingId) { sql += ' AND building_id = ?'; params.push(buildingId); }
 
   sql += ' ORDER BY name';
 

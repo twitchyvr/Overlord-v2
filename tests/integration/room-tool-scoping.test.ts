@@ -51,6 +51,7 @@ function setupDb(): Database.Database {
   )`).run();
   memDb.prepare(`CREATE TABLE agents (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL,
+    building_id TEXT,
     capabilities TEXT DEFAULT '[]', room_access TEXT DEFAULT '[]', badge TEXT,
     status TEXT DEFAULT 'idle', current_room_id TEXT, current_table_id TEXT,
     config TEXT DEFAULT '{}', created_at TEXT DEFAULT (datetime('now')),

@@ -123,6 +123,7 @@ export interface AgentRow {
   id: string;
   name: string;
   role: string;
+  building_id: string | null;
   capabilities: string;
   room_access: string;
   badge: string | null;
@@ -244,10 +245,11 @@ export interface AgentRegistryAPI {
   registerAgent: (params: {
     name: string; role: string; capabilities?: string[];
     roomAccess?: string[]; badge?: string | null; config?: Record<string, unknown>;
+    buildingId?: string | null;
   }) => Result;
   removeAgent: (agentId: string) => Result;
   getAgent: (agentId: string) => ParsedAgent | null;
-  listAgents: (filters?: { status?: string; roomId?: string }) => ParsedAgent[];
+  listAgents: (filters?: { status?: string; roomId?: string; buildingId?: string }) => ParsedAgent[];
   updateAgent: (agentId: string, updates: Record<string, unknown>) => Result;
 }
 
@@ -274,6 +276,7 @@ export interface ParsedAgent {
   id: string;
   name: string;
   role: string;
+  building_id: string | null;
   capabilities: string[];
   room_access: string[];
   badge: string | null;

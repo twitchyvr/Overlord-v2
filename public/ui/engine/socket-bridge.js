@@ -116,6 +116,32 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('exit-doc:submitted', data);
   });
 
+  socket.on('task:created', (data) => {
+    store.update('tasks.list', (tasks) => [data, ...(tasks || [])]);
+    store.update('activity.items', (items) => [{ type: 'task-created', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('task:created', data);
+  });
+
+  socket.on('task:updated', (data) => {
+    store.update('tasks.list', (tasks) => {
+      const list = tasks || [];
+      const idx = list.findIndex((t) => t.id === data.id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = data;
+        return next;
+      }
+      return [data, ...list];
+    });
+    store.update('activity.items', (items) => [{ type: 'task-updated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('task:updated', data);
+  });
+
+  socket.on('phase:gate:signed-off', (data) => {
+    store.update('activity.items', (items) => [{ type: 'gate-signoff', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('phase:gate:signed-off', data);
+  });
+
   // ── Client emit wrappers (convenience for components) ──
 
   /** Fetch a building with floors */
@@ -287,15 +313,185 @@ export function initSocketBridge(socket, store, engine) {
       socket.emit('chat:message', { content, agentId, tokens, buildingId });
     },
 
-    submitExitDoc(roomId, agentId, document) {
+    submitExitDoc(params) {
       return new Promise((resolve) => {
-        socket.emit('exit-doc:submit', { roomId, agentId, document }, (res) => resolve(res));
+        socket.emit('exit-doc:submit', params, (res) => resolve(res));
+      });
+    },
+
+    fetchExitDocs(roomId) {
+      return new Promise((resolve) => {
+        socket.emit('exit-doc:get', { roomId }, (res) => {
+          if (res && res.ok) {
+            store.set('exitDocs.byRoom', res.data);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    fetchExitDocsByBuilding(buildingId) {
+      return new Promise((resolve) => {
+        socket.emit('exit-doc:list', { buildingId }, (res) => {
+          if (res && res.ok) {
+            store.set('exitDocs.list', res.data);
+          }
+          resolve(res);
+        });
       });
     },
 
     submitGate(data) {
       return new Promise((resolve) => {
         socket.emit('phase:gate', data, (res) => resolve(res));
+      });
+    },
+
+    // ── Task methods ──
+
+    fetchTasks(buildingId, filters = {}) {
+      return new Promise((resolve) => {
+        socket.emit('task:list', { buildingId, ...filters }, (res) => {
+          if (res && res.ok) {
+            store.set('tasks.list', res.data);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    createTask(params) {
+      return new Promise((resolve) => {
+        socket.emit('task:create', params, (res) => {
+          if (res && res.ok) {
+            store.update('tasks.list', (tasks) => [res.data, ...(tasks || [])]);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    updateTask(params) {
+      return new Promise((resolve) => {
+        socket.emit('task:update', params, (res) => {
+          if (res && res.ok) {
+            store.update('tasks.list', (tasks) => {
+              const list = tasks || [];
+              const idx = list.findIndex((t) => t.id === res.data.id);
+              if (idx >= 0) {
+                const next = [...list];
+                next[idx] = res.data;
+                return next;
+              }
+              return list;
+            });
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    getTask(taskId) {
+      return new Promise((resolve) => {
+        socket.emit('task:get', { id: taskId }, (res) => resolve(res));
+      });
+    },
+
+    // ── TODO methods ──
+
+    fetchTodos(taskId) {
+      return new Promise((resolve) => {
+        socket.emit('todo:list', { taskId }, (res) => {
+          if (res && res.ok) {
+            store.set('todos.list', res.data);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    createTodo(params) {
+      return new Promise((resolve) => {
+        socket.emit('todo:create', params, (res) => {
+          if (res && res.ok) {
+            store.update('todos.list', (todos) => [...(todos || []), res.data]);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    toggleTodo(todoId) {
+      return new Promise((resolve) => {
+        socket.emit('todo:toggle', { id: todoId }, (res) => {
+          if (res && res.ok) {
+            store.update('todos.list', (todos) => {
+              const list = todos || [];
+              const idx = list.findIndex((t) => t.id === res.data.id);
+              if (idx >= 0) {
+                const next = [...list];
+                next[idx] = res.data;
+                return next;
+              }
+              return list;
+            });
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    // ── RAID methods ──
+
+    addRaidEntry(params) {
+      return new Promise((resolve) => {
+        socket.emit('raid:add', params, (res) => {
+          if (res && res.ok) {
+            store.update('raid.entries', (entries) => [res.data, ...(entries || [])]);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    updateRaidStatus(params) {
+      return new Promise((resolve) => {
+        socket.emit('raid:update', params, (res) => {
+          if (res && res.ok) {
+            store.update('raid.entries', (entries) => {
+              const list = entries || [];
+              const idx = list.findIndex((e) => e.id === params.id);
+              if (idx >= 0) {
+                const next = [...list];
+                next[idx] = { ...next[idx], status: params.status };
+                return next;
+              }
+              return list;
+            });
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    // ── Phase Gate methods ──
+
+    signoffGate(params) {
+      return new Promise((resolve) => {
+        socket.emit('phase:gate:signoff', params, (res) => resolve(res));
+      });
+    },
+
+    advancePhase(buildingId, reviewer) {
+      return new Promise((resolve) => {
+        socket.emit('phase:advance', { buildingId, reviewer }, (res) => {
+          if (res && res.ok) {
+            // Refresh phase state after advancement
+            this.fetchGates(buildingId);
+            this.fetchCanAdvance(buildingId);
+          }
+          resolve(res);
+        });
       });
     },
 
@@ -309,6 +505,7 @@ export function initSocketBridge(socket, store, engine) {
         this.fetchCanAdvance(buildingId),
         this.fetchRaidEntries(buildingId),
         this.fetchRooms(),
+        this.fetchTasks(buildingId),
       ]);
     },
   };

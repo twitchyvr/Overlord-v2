@@ -56,6 +56,7 @@ function setupDb(): Database.Database {
 
   db.prepare(`CREATE TABLE IF NOT EXISTS agents (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL,
+    building_id TEXT REFERENCES buildings(id),
     capabilities TEXT DEFAULT '[]', room_access TEXT DEFAULT '[]',
     badge TEXT, status TEXT DEFAULT 'idle', current_room_id TEXT,
     current_table_id TEXT, config TEXT DEFAULT '{}',

@@ -104,21 +104,24 @@ export function listBuildings(projectId?: string): Result {
 }
 
 /**
- * Update a building's config or name
+ * Update a building's config or name (atomic single UPDATE)
  */
 export function updateBuilding(buildingId: string, updates: { name?: string; config?: Record<string, unknown> }): Result {
   const db = getDb();
   const building = db.prepare('SELECT * FROM buildings WHERE id = ?').get(buildingId) as BuildingRow | undefined;
   if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
 
-  if (updates.name) {
-    db.prepare('UPDATE buildings SET name = ?, updated_at = datetime(?) WHERE id = ?')
-      .run(updates.name, new Date().toISOString(), buildingId);
-  }
-  if (updates.config) {
-    db.prepare('UPDATE buildings SET config = ?, updated_at = datetime(?) WHERE id = ?')
-      .run(JSON.stringify(updates.config), new Date().toISOString(), buildingId);
-  }
+  db.prepare(`
+    UPDATE buildings SET
+      name = COALESCE(?, name),
+      config = COALESCE(?, config),
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).run(
+    updates.name || null,
+    updates.config ? JSON.stringify(updates.config) : null,
+    buildingId,
+  );
 
   log.info({ buildingId, updates: Object.keys(updates) }, 'Building updated');
   return ok({ buildingId });
@@ -280,9 +283,9 @@ export function applyBlueprint(buildingId: string, blueprint: BlueprintData): Re
   for (const agent of blueprint.agentRoster) {
     const agentId = uid('agent');
     db.prepare(`
-      INSERT INTO agents (id, name, role, room_access)
-      VALUES (?, ?, ?, ?)
-    `).run(agentId, agent.name, agent.role, JSON.stringify(agent.rooms));
+      INSERT INTO agents (id, name, role, building_id, room_access)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(agentId, agent.name, agent.role, buildingId, JSON.stringify(agent.rooms));
     agentsCreated++;
   }
 
@@ -352,12 +355,13 @@ export function applyCustomPlan(buildingId: string, plan: CustomPlanData): Resul
   for (const agentDef of plan.agentDefinitions) {
     const agentId = uid('agent');
     db.prepare(`
-      INSERT INTO agents (id, name, role, capabilities, room_access)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO agents (id, name, role, building_id, capabilities, room_access)
+      VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       agentId,
       agentDef.name,
       agentDef.role,
+      buildingId,
       JSON.stringify(agentDef.capabilities || []),
       JSON.stringify(agentDef.roomAccess || []),
     );
