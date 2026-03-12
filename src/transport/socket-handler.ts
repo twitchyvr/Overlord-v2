@@ -42,6 +42,27 @@ import {
 
 const log = logger.child({ module: 'transport' });
 
+/**
+ * Tracks what resources a socket has created/entered so we can clean up on disconnect.
+ */
+interface SocketAssociations {
+  agentIds: Set<string>;
+  /** Map of agentId → roomId for active room memberships */
+  roomMemberships: Map<string, string>;
+}
+
+/** Per-socket tracking for disconnect cleanup */
+const socketAssociations = new Map<string, SocketAssociations>();
+
+function getAssociations(socketId: string): SocketAssociations {
+  let assoc = socketAssociations.get(socketId);
+  if (!assoc) {
+    assoc = { agentIds: new Set(), roomMemberships: new Map() };
+    socketAssociations.set(socketId, assoc);
+  }
+  return assoc;
+}
+
 interface InitTransportParams {
   io: SocketIOServer;
   bus: Bus;
@@ -224,6 +245,9 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         const parsed = validate(RoomEnterSchema, data, 'room:enter', ack);
         if (!parsed) return;
         const result = rooms.enterRoom(parsed as Parameters<typeof rooms.enterRoom>[0]);
+        if (result.ok) {
+          getAssociations(socket.id).roomMemberships.set(parsed.agentId, parsed.roomId);
+        }
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'room:enter', err: e, socketId: socket.id }, 'Handler threw');
@@ -236,6 +260,9 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         const parsed = validate(RoomExitSchema, data, 'room:exit', ack);
         if (!parsed) return;
         const result = rooms.exitRoom(parsed as Parameters<typeof rooms.exitRoom>[0]);
+        if (result.ok) {
+          getAssociations(socket.id).roomMemberships.delete(parsed.agentId);
+        }
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'room:exit', err: e, socketId: socket.id }, 'Handler threw');
@@ -249,6 +276,10 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         const parsed = validate(AgentRegisterSchema, data, 'agent:register', ack);
         if (!parsed) return;
         const result = agents.registerAgent(parsed as Parameters<typeof agents.registerAgent>[0]);
+        if (result.ok) {
+          const agentId = (result.data as { id: string }).id;
+          getAssociations(socket.id).agentIds.add(agentId);
+        }
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'agent:register', err: e, socketId: socket.id }, 'Handler threw');
@@ -973,11 +1004,43 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
     socket.on('disconnect', () => {
       try {
-        log.info({ id: socket.id }, 'Client disconnected');
-        broadcastLog('info', `Client disconnected (${socket.id})`, 'transport');
+        const assoc = socketAssociations.get(socket.id);
+        let cleanedRooms = 0;
+        let cleanedAgents = 0;
+
+        if (assoc) {
+          // Exit all rooms this socket's agents were in
+          for (const [agentId, roomId] of assoc.roomMemberships) {
+            try {
+              rooms.exitRoom({ roomId, agentId });
+              bus.emit('room:agent:exited', { roomId, agentId, reason: 'disconnect' });
+              cleanedRooms++;
+            } catch (e) {
+              log.warn({ agentId, roomId, err: e, socketId: socket.id }, 'Failed to exit room on disconnect');
+            }
+          }
+
+          // Remove all agents registered by this socket
+          for (const agentId of assoc.agentIds) {
+            try {
+              agents.removeAgent(agentId);
+              bus.emit('agent:status-changed', { agentId, status: 'removed', reason: 'disconnect' });
+              cleanedAgents++;
+            } catch (e) {
+              log.warn({ agentId, err: e, socketId: socket.id }, 'Failed to remove agent on disconnect');
+            }
+          }
+
+          socketAssociations.delete(socket.id);
+        }
+
+        log.info({ id: socket.id, cleanedRooms, cleanedAgents }, 'Client disconnected');
+        broadcastLog('info', `Client disconnected (${socket.id}) — cleaned ${cleanedRooms} rooms, ${cleanedAgents} agents`, 'transport');
+        bus.emit('socket:disconnected', { socketId: socket.id, cleanedRooms, cleanedAgents });
       } catch (e) {
         // Last resort — disconnect handler should never crash the server
         log.error({ err: e, socketId: socket.id }, 'Disconnect handler threw');
+        socketAssociations.delete(socket.id);
       }
     });
   });
