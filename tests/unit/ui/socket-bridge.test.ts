@@ -121,6 +121,7 @@ describe('initSocketBridge() — initialization', () => {
       'scope-change:detected', 'exit-doc:submitted',
       'task:created', 'task:updated', 'phase:gate:signed-off',
       'todo:created', 'todo:updated', 'todo:deleted',
+      'system:log',
     ];
     for (const evt of expected) {
       expect(mockSocket.handlers[evt]).toBeTypeOf('function');
@@ -1289,5 +1290,27 @@ describe('window.overlordSocket.deleteTodo()', () => {
     // The todos.list should still have 2 items
     expect(mockStore._data['todos.list']).toHaveLength(2);
     warnSpy.mockRestore();
+  });
+});
+
+// ─── System log broadcast events ──────────────────────────────
+
+describe('socket "system:log" event', () => {
+  it('dispatches system:log engine event', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const data = { level: 'info', message: 'Test log', source: 'server', module: 'transport', timestamp: Date.now() };
+
+    mockSocket._trigger('system:log', data);
+
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('system:log', data);
+  });
+
+  it('handles error level logs', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const data = { level: 'error', message: 'Handler failed', source: 'server', module: 'transport' };
+
+    mockSocket._trigger('system:log', data);
+
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('system:log', data);
   });
 });

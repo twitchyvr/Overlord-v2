@@ -10,7 +10,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { logger } from '../core/logger.js';
+import { logger, broadcastLog } from '../core/logger.js';
 import type { Bus } from '../core/bus.js';
 import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI } from '../core/contracts.js';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
@@ -39,6 +39,7 @@ interface InitTransportParams {
  */
 function errorResponse(event: string, thrown: unknown): { ok: false; error: { code: string; message: string; retryable: boolean } } {
   const message = thrown instanceof Error ? thrown.message : String(thrown);
+  broadcastLog('error', `Handler "${event}" failed: ${message}`, 'transport');
   return {
     ok: false,
     error: {
@@ -52,11 +53,13 @@ function errorResponse(event: string, thrown: unknown): { ok: false; error: { co
 export function initTransport({ io, bus, rooms, agents, tools }: InitTransportParams): void {
   io.on('connection', (socket: Socket) => {
     log.info({ id: socket.id }, 'Client connected');
+    broadcastLog('info', `Client connected (${socket.id})`, 'transport');
 
     // ─── Building Events ───
     socket.on('building:create', (data: Record<string, unknown>, ack?: (res: unknown) => void) => {
       try {
         const result = createBuilding(data as unknown as Parameters<typeof createBuilding>[0]);
+        if (result.ok) broadcastLog('info', `Building created: ${(result as { ok: true; data: { name: string } }).data.name}`, 'building');
         if (ack) ack(result);
       } catch (e) {
         log.error({ event: 'building:create', err: e, socketId: socket.id }, 'Handler threw');
@@ -522,6 +525,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
         const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
         log.info({ id, buildingId: data.buildingId, title: data.title }, 'Task created');
+        broadcastLog('info', `Task created: ${data.title}`, 'tasks');
         bus.emit('task:created', task as Record<string, unknown>);
         if (ack) ack({ ok: true, data: task });
       } catch (e) {
@@ -828,6 +832,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         });
 
         if (signoffResult.ok) {
+          broadcastLog('info', `Phase advanced: ${advanceData.currentPhase} → ${advanceData.nextPhase}`, 'phase');
           bus.emit('phase:advanced', {
             buildingId,
             from: advanceData.currentPhase,
@@ -860,6 +865,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     socket.on('disconnect', () => {
       try {
         log.info({ id: socket.id }, 'Client disconnected');
+        broadcastLog('info', `Client disconnected (${socket.id})`, 'transport');
       } catch (e) {
         // Last resort — disconnect handler should never crash the server
         console.error('[transport] disconnect handler threw:', e);
@@ -890,6 +896,8 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   bus.on('todo:created', (data: Record<string, unknown>) => io.emit('todo:created', data));
   bus.on('todo:updated', (data: Record<string, unknown>) => io.emit('todo:updated', data));
   bus.on('todo:deleted', (data: Record<string, unknown>) => io.emit('todo:deleted', data));
+  bus.on('system:log', (data: Record<string, unknown>) => io.emit('system:log', data));
 
   log.info('Transport layer initialized');
+  broadcastLog('info', 'Transport layer initialized', 'transport');
 }
