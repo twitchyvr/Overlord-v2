@@ -216,6 +216,14 @@ export class ChatView extends Component {
       const emptyState = this._messagesEl.querySelector('.empty-state');
       if (emptyState) emptyState.remove();
 
+      // Remove any streaming element — the store now has the final message
+      const streamingEl = this._messagesEl.querySelector('.streaming');
+      if (streamingEl) {
+        streamingEl.remove();
+        this._streamingMessage = null;
+        this._streamBuffer = '';
+      }
+
       // Append only the new messages
       const frag = document.createDocumentFragment();
       for (let i = prevCount; i < messages.length; i++) {
