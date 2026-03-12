@@ -261,6 +261,7 @@ async function setup() {
         name: def.name,
         role: def.role,
         specialization: def.specialization,
+        firstName: def.name, // Use codename as first name — AI will generate matching last name
       });
       const agentId = res.data?.id || res.id;
       agents[def.name] = agentId;
