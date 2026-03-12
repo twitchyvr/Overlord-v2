@@ -170,7 +170,7 @@ function getSubscribeCallback(mock: any, event: string): ((...args: unknown[]) =
  * to get a fresh execution each test.
  */
 
-function setupDOM(opts: { withSocket?: boolean; withPanelEls?: boolean; withLoadingEl?: boolean; withThemeToggle?: boolean } = {}) {
+function setupDOM(opts: { withSocket?: boolean; withPanelEls?: boolean; withLoadingEl?: boolean; withThemeToggle?: boolean; withConnectionIndicator?: boolean } = {}) {
   // Clear body
   while (document.body.firstChild) {
     document.body.removeChild(document.body.firstChild);
@@ -207,6 +207,12 @@ function setupDOM(opts: { withSocket?: boolean; withPanelEls?: boolean; withLoad
     const btn = document.createElement('button');
     btn.id = 'theme-toggle';
     document.body.appendChild(btn);
+  }
+
+  if (opts.withConnectionIndicator) {
+    const conn = document.createElement('span');
+    conn.id = 'toolbar-connection';
+    document.body.appendChild(conn);
   }
 
   // Socket.IO global
@@ -623,6 +629,37 @@ describe('boot.js — connection lifecycle', () => {
     cb!(false);
     expect(Toast.success).not.toHaveBeenCalled();
   });
+
+  it('updates connection indicator aria-label on state change', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true, withConnectionIndicator: true });
+    await importBoot();
+
+    const cb = getSubscribeCallback(mockStore.subscribe, 'ui.connectionState');
+    const connEl = document.getElementById('toolbar-connection')!;
+
+    cb!('connected');
+    expect(connEl.getAttribute('aria-label')).toBe('Connection status: Connected');
+
+    cb!('disconnected');
+    expect(connEl.getAttribute('aria-label')).toBe('Connection status: Disconnected');
+
+    cb!('reconnecting');
+    expect(connEl.getAttribute('aria-label')).toBe('Connection status: Reconnecting...');
+
+    cb!('failed');
+    expect(connEl.getAttribute('aria-label')).toBe('Connection status: Connection failed');
+  });
+
+  it('updates connection indicator title on state change', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true, withConnectionIndicator: true });
+    await importBoot();
+
+    const cb = getSubscribeCallback(mockStore.subscribe, 'ui.connectionState');
+    const connEl = document.getElementById('toolbar-connection')!;
+
+    cb!('disconnected');
+    expect(connEl.title).toBe('Disconnected');
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -666,6 +703,58 @@ describe('boot.js — phase bar reactivity', () => {
     expect(steps[3].classList.contains('current')).toBe(false);
     expect(steps[4].classList.contains('completed')).toBe(false);
     expect(steps[5].classList.contains('completed')).toBe(false);
+  });
+
+  it('_updatePhaseBar sets aria-current="step" on active phase', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true });
+
+    const phases = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
+    phases.forEach(phase => {
+      const step = document.createElement('div');
+      step.className = 'phase-step';
+      step.dataset.phase = phase;
+      document.body.appendChild(step);
+    });
+
+    await importBoot();
+
+    const cb = getSubscribeCallback(mockStore.subscribe, 'building.activePhase');
+    cb!('execution');
+
+    const steps = document.querySelectorAll('.phase-step');
+    // execution (3) should have aria-current="step"
+    expect(steps[3].getAttribute('aria-current')).toBe('step');
+    // Others should have aria-current="false"
+    expect(steps[0].getAttribute('aria-current')).toBe('false');
+    expect(steps[1].getAttribute('aria-current')).toBe('false');
+    expect(steps[2].getAttribute('aria-current')).toBe('false');
+    expect(steps[4].getAttribute('aria-current')).toBe('false');
+    expect(steps[5].getAttribute('aria-current')).toBe('false');
+  });
+
+  it('_updatePhaseBar sets aria-label with phase status', async () => {
+    setupDOM({ withSocket: true, withPanelEls: true });
+
+    const phases = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
+    phases.forEach(phase => {
+      const step = document.createElement('div');
+      step.className = 'phase-step';
+      step.dataset.phase = phase;
+      document.body.appendChild(step);
+    });
+
+    await importBoot();
+
+    const cb = getSubscribeCallback(mockStore.subscribe, 'building.activePhase');
+    cb!('architecture');
+
+    const steps = document.querySelectorAll('.phase-step');
+    expect(steps[0].getAttribute('aria-label')).toContain('completed');
+    expect(steps[1].getAttribute('aria-label')).toContain('completed');
+    expect(steps[2].getAttribute('aria-label')).toContain('current');
+    expect(steps[3].getAttribute('aria-label')).toContain('pending');
+    expect(steps[4].getAttribute('aria-label')).toContain('pending');
+    expect(steps[5].getAttribute('aria-label')).toContain('pending');
   });
 
   it('_updatePhaseBar clears previous classes before applying new ones', async () => {

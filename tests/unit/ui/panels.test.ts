@@ -125,6 +125,35 @@ describe('PhasePanel', () => {
     expect(gateList).not.toBeNull();
     expect(gateList!.children.length).toBe(2);
   });
+
+  it('step indicators have aria-label and aria-current attributes', async () => {
+    const { PhasePanel } = await import('../../../public/ui/panels/phase-panel.js');
+    const el = createPanelEl('panel-phase', 'Phase Gates');
+    document.body.appendChild(el);
+
+    const panel = new PhasePanel(el);
+    panel.mount();
+
+    // Trigger render by setting active phase (default is strategy, index 0)
+    const store = OverlordUI.getStore();
+    store.set('building.activePhase', 'architecture');
+
+    const indicators = el.querySelectorAll('.phase-step-indicator');
+    expect(indicators.length).toBeGreaterThan(0);
+
+    // Find the current step
+    const current = Array.from(indicators).find(
+      (ind: any) => ind.getAttribute('aria-current') === 'step'
+    );
+    expect(current).not.toBeUndefined();
+    expect(current!.getAttribute('aria-label')).toContain('current');
+
+    // Completed steps should say "completed"
+    const completed = Array.from(indicators).filter(
+      (ind: any) => ind.getAttribute('aria-label')?.includes('completed')
+    );
+    expect(completed.length).toBeGreaterThan(0);
+  });
 });
 
 // ─── AgentsPanel ────────────────────────────────────────────

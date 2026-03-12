@@ -123,7 +123,15 @@ export class PhasePanel extends PanelComponent {
         gate?.signoff_verdict === 'NO_GO' ? 'step-nogo' : ''
       ].filter(Boolean).join(' ');
 
-      stepsRow.appendChild(h('div', { class: stepClass, title: phase },
+      const stepStatus = isComplete ? 'completed' : isCurrent ? 'current' : 'pending';
+      const verdictSuffix = gate?.signoff_verdict ? ` (${gate.signoff_verdict})` : '';
+
+      stepsRow.appendChild(h('div', {
+        class: stepClass,
+        title: phase,
+        'aria-label': `${phase} phase — ${stepStatus}${verdictSuffix}`,
+        'aria-current': isCurrent ? 'step' : 'false'
+      },
         h('span', { class: 'step-dot' }, isComplete ? '\u2713' : isCurrent ? '\u25CF' : '\u25CB'),
         h('span', { class: 'step-name' }, phase.slice(0, 4))
       ));

@@ -28,28 +28,28 @@
 <body>
   <div id="app">
     <!-- Phase progress bar (top) -->
-    <header id="phase-bar" class="phase-bar">
-      <div class="phase-step" data-phase="strategy">
+    <header id="phase-bar" class="phase-bar" role="navigation" aria-label="Project phase progress">
+      <div class="phase-step" data-phase="strategy" role="listitem" aria-label="Strategy phase — pending" aria-current="false">
         <span class="phase-dot"></span>
         <span class="phase-label">Strategy</span>
       </div>
-      <div class="phase-step" data-phase="discovery">
+      <div class="phase-step" data-phase="discovery" role="listitem" aria-label="Discovery phase — pending" aria-current="false">
         <span class="phase-dot"></span>
         <span class="phase-label">Discovery</span>
       </div>
-      <div class="phase-step" data-phase="architecture">
+      <div class="phase-step" data-phase="architecture" role="listitem" aria-label="Architecture phase — pending" aria-current="false">
         <span class="phase-dot"></span>
         <span class="phase-label">Architecture</span>
       </div>
-      <div class="phase-step" data-phase="execution">
+      <div class="phase-step" data-phase="execution" role="listitem" aria-label="Execution phase — pending" aria-current="false">
         <span class="phase-dot"></span>
         <span class="phase-label">Execution</span>
       </div>
-      <div class="phase-step" data-phase="review">
+      <div class="phase-step" data-phase="review" role="listitem" aria-label="Review phase — pending" aria-current="false">
         <span class="phase-dot"></span>
         <span class="phase-label">Review</span>
       </div>
-      <div class="phase-step" data-phase="deploy">
+      <div class="phase-step" data-phase="deploy" role="listitem" aria-label="Deploy phase — pending" aria-current="false">
         <span class="phase-dot"></span>
         <span class="phase-label">Deploy</span>
       </div>
@@ -58,23 +58,23 @@
     <!-- Navigation toolbar -->
     <nav id="app-toolbar" class="app-toolbar">
       <div class="toolbar-left">
-        <button class="toolbar-btn active" data-view="dashboard" title="Dashboard">
+        <button class="toolbar-btn active" data-view="dashboard" title="Dashboard" aria-label="Dashboard" aria-current="page">
           <span class="toolbar-icon">&#9632;</span>
           <span class="toolbar-label">Dashboard</span>
         </button>
-        <button class="toolbar-btn" data-view="chat" title="Chat">
+        <button class="toolbar-btn" data-view="chat" title="Chat" aria-label="Chat">
           <span class="toolbar-icon">&#9993;</span>
           <span class="toolbar-label">Chat</span>
         </button>
-        <button class="toolbar-btn" data-view="tasks" title="Tasks">
+        <button class="toolbar-btn" data-view="tasks" title="Tasks" aria-label="Tasks">
           <span class="toolbar-icon">&#9745;</span>
           <span class="toolbar-label">Tasks</span>
         </button>
-        <button class="toolbar-btn" data-view="raid-log" title="RAID Log">
+        <button class="toolbar-btn" data-view="raid-log" title="RAID Log" aria-label="RAID Log">
           <span class="toolbar-icon">&#9888;</span>
           <span class="toolbar-label">RAID Log</span>
         </button>
-        <button class="toolbar-btn" data-view="strategist" title="New Project">
+        <button class="toolbar-btn" data-view="strategist" title="New Project" aria-label="New Project">
           <span class="toolbar-icon">&#9733;</span>
           <span class="toolbar-label">Strategist</span>
         </button>
@@ -84,7 +84,7 @@
           <span class="theme-icon-dark">&#9790;</span>
           <span class="theme-icon-light">&#9728;</span>
         </button>
-        <span id="toolbar-connection" class="toolbar-connection connected" title="Connected">
+        <span id="toolbar-connection" class="toolbar-connection connected" title="Connected" role="status" aria-live="polite" aria-label="Connection status: Connected">
           <span class="connection-dot"></span>
         </span>
       </div>
@@ -173,27 +173,27 @@
     </main>
 
     <!-- Mobile bottom nav -->
-    <nav id="mobile-nav">
-      <div class="mobile-nav-item active" data-view="dashboard">
+    <nav id="mobile-nav" aria-label="Mobile navigation">
+      <button class="mobile-nav-item active" data-view="dashboard" aria-label="Home" aria-current="page">
         <span class="mobile-nav-icon">&#9632;</span>
         <span>Home</span>
-      </div>
-      <div class="mobile-nav-item" data-view="chat">
+      </button>
+      <button class="mobile-nav-item" data-view="chat" aria-label="Chat">
         <span class="mobile-nav-icon">&#9993;</span>
         <span>Chat</span>
-      </div>
-      <div class="mobile-nav-item" data-view="tasks">
+      </button>
+      <button class="mobile-nav-item" data-view="tasks" aria-label="Tasks">
         <span class="mobile-nav-icon">&#9745;</span>
         <span>Tasks</span>
-      </div>
-      <div class="mobile-nav-item" data-view="raid-log">
+      </button>
+      <button class="mobile-nav-item" data-view="raid-log" aria-label="RAID Log">
         <span class="mobile-nav-icon">&#9888;</span>
         <span>RAID</span>
-      </div>
-      <div class="mobile-nav-item" data-view="agents">
+      </button>
+      <button class="mobile-nav-item" data-view="agents" aria-label="Agents">
         <span class="mobile-nav-icon">&#9679;</span>
         <span>Agents</span>
-      </div>
+      </button>
     </nav>
 
     <!-- Modal root -->

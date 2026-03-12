@@ -203,13 +203,17 @@ async function _loadViewModules() {
 
 function _updateToolbar(viewName) {
   document.querySelectorAll('#app-toolbar .toolbar-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.view === viewName);
+    const isActive = btn.dataset.view === viewName;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-current', isActive ? 'page' : 'false');
   });
 }
 
 function _updateMobileNav(viewName) {
   document.querySelectorAll('#mobile-nav .mobile-nav-item').forEach(item => {
-    item.classList.toggle('active', item.dataset.view === viewName);
+    const isActive = item.dataset.view === viewName;
+    item.classList.toggle('active', isActive);
+    item.setAttribute('aria-current', isActive ? 'page' : 'false');
   });
 }
 
@@ -242,7 +246,18 @@ function _updatePhaseBar(activePhase) {
     const phase = step.dataset.phase;
     const idx = PHASE_ORDER.indexOf(phase);
     step.classList.remove('completed', 'current');
-    if (idx < activeIdx) step.classList.add('completed');
-    else if (idx === activeIdx) step.classList.add('current');
+
+    if (idx < activeIdx) {
+      step.classList.add('completed');
+      step.setAttribute('aria-label', `${phase} phase — completed`);
+      step.setAttribute('aria-current', 'false');
+    } else if (idx === activeIdx) {
+      step.classList.add('current');
+      step.setAttribute('aria-label', `${phase} phase — current`);
+      step.setAttribute('aria-current', 'step');
+    } else {
+      step.setAttribute('aria-label', `${phase} phase — pending`);
+      step.setAttribute('aria-current', 'false');
+    }
   });
 }

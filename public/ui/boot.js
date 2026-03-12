@@ -145,7 +145,9 @@ if (socket) {
       connectionEl.classList.remove('connected', 'disconnected', 'reconnecting');
       connectionEl.classList.add(state || 'disconnected');
       const labels = { connected: 'Connected', disconnected: 'Disconnected', reconnecting: 'Reconnecting...', failed: 'Connection failed' };
-      connectionEl.title = labels[state] || 'Unknown';
+      const label = labels[state] || 'Unknown';
+      connectionEl.title = label;
+      connectionEl.setAttribute('aria-label', `Connection status: ${label}`);
     });
   }
 
@@ -221,10 +223,18 @@ function _updatePhaseBar(activePhase) {
     const phase = step.dataset.phase;
     const idx = PHASE_ORDER.indexOf(phase);
     step.classList.remove('completed', 'current');
+
     if (idx < activeIdx) {
       step.classList.add('completed');
+      step.setAttribute('aria-label', `${phase} phase — completed`);
+      step.setAttribute('aria-current', 'false');
     } else if (idx === activeIdx) {
       step.classList.add('current');
+      step.setAttribute('aria-label', `${phase} phase — current`);
+      step.setAttribute('aria-current', 'step');
+    } else {
+      step.setAttribute('aria-label', `${phase} phase — pending`);
+      step.setAttribute('aria-current', 'false');
     }
   });
 }
