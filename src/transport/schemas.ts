@@ -313,3 +313,14 @@ export const ExitDocGetSchema = z.object({
 export const ExitDocListSchema = z.object({
   buildingId: id(),
 });
+
+// ─── Citations ───
+
+export const CitationListSchema = z.object({
+  roomId: id(),
+});
+
+export const CitationBacklinksSchema = z.object({
+  roomId: id(),
+  entryId: optionalId(),
+});

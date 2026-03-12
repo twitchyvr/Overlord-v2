@@ -48,6 +48,8 @@ export class RoomView extends Component {
     this._agentPositions = {};
     this._activityItems = [];
     this._exitDocHistory = [];
+    this._citations = [];
+    this._backlinks = [];
   }
 
   mount() {
@@ -90,8 +92,11 @@ export class RoomView extends Component {
     this._roomData = result.data;
     this._activityItems = [];
     this._exitDocHistory = [];
+    this._citations = [];
+    this._backlinks = [];
     this._openModal();
     this._fetchExitDocHistory(roomId);
+    this._fetchCitations(roomId);
   }
 
   _openModal() {
@@ -158,6 +163,9 @@ export class RoomView extends Component {
     if (room.tables && Object.keys(room.tables).length > 0) {
       container.appendChild(this._buildTablesSection(room));
     }
+
+    // ── Citations / Backlinks section ──
+    container.appendChild(this._buildCitationsSection(room));
 
     // ── Activity feed ──
     container.appendChild(this._buildActivityFeed());
@@ -544,6 +552,83 @@ export class RoomView extends Component {
       });
 
       container.appendChild(row);
+    }
+  }
+
+  // ── Citations / Backlinks ──────────────────────────────────────
+
+  _buildCitationsSection(room) {
+    const section = h('div', { class: 'room-citations-section' },
+      h('h4', null, 'Cross-Room Citations')
+    );
+    const container = h('div', {
+      class: 'room-citations-list',
+      'data-testid': 'room-citations'
+    });
+    container.appendChild(h('div', { class: 'room-citations-loading' }, 'Loading citations...'));
+    section.appendChild(container);
+    return section;
+  }
+
+  async _fetchCitations(roomId) {
+    if (!window.overlordSocket) return;
+    try {
+      const [citResult, blResult] = await Promise.all([
+        window.overlordSocket.emitWithAck('citations:list', { roomId }),
+        window.overlordSocket.emitWithAck('citations:backlinks', { roomId }),
+      ]);
+      if (citResult && citResult.ok) this._citations = citResult.data || [];
+      if (blResult && blResult.ok) this._backlinks = blResult.data || [];
+
+      const modalBody = Modal.getBody(`room-${roomId}`);
+      if (modalBody) {
+        const el = modalBody.querySelector('[data-testid="room-citations"]');
+        if (el) this._renderCitations(el);
+      }
+    } catch {
+      // Citations are supplementary — silent fail
+    }
+  }
+
+  _renderCitations(container) {
+    container.textContent = '';
+
+    if (this._backlinks.length === 0 && this._citations.length === 0) {
+      container.appendChild(h('div', { class: 'room-citations-empty' },
+        'No cross-room citations yet'
+      ));
+      return;
+    }
+
+    // Backlinks — "Cited by" (incoming references from other rooms)
+    if (this._backlinks.length > 0) {
+      container.appendChild(h('div', { class: 'room-citations-group-header' },
+        `Cited by (${this._backlinks.length})`
+      ));
+      for (const bl of this._backlinks.slice(0, 10)) {
+        container.appendChild(h('div', { class: 'room-citation-row room-citation-incoming' },
+          h('span', { class: 'room-citation-icon' }, '\u2190'),
+          h('span', { class: 'room-citation-room' }, bl.sourceRoomId),
+          h('span', { class: 'room-citation-type badge' }, bl.targetType),
+          h('span', { class: 'room-citation-time' }, formatTime(bl.createdAt))
+        ));
+      }
+    }
+
+    // Outgoing — citations this room made
+    const outgoing = this._citations.filter(c => c.sourceRoomId === this._roomData?.id);
+    if (outgoing.length > 0) {
+      container.appendChild(h('div', { class: 'room-citations-group-header' },
+        `References (${outgoing.length})`
+      ));
+      for (const cit of outgoing.slice(0, 10)) {
+        container.appendChild(h('div', { class: 'room-citation-row room-citation-outgoing' },
+          h('span', { class: 'room-citation-icon' }, '\u2192'),
+          h('span', { class: 'room-citation-room' }, cit.targetRoomId),
+          h('span', { class: 'room-citation-type badge' }, cit.targetType),
+          h('span', { class: 'room-citation-time' }, formatTime(cit.createdAt))
+        ));
+      }
     }
   }
 

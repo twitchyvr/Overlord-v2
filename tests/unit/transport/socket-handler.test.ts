@@ -70,6 +70,15 @@ vi.mock('../../../src/rooms/phase-zero.js', () => ({
 
 import { handleBlueprintSubmission } from '../../../src/rooms/phase-zero.js';
 
+// Mock citation-tracker — imported directly by socket-handler
+vi.mock('../../../src/rooms/citation-tracker.js', () => ({
+  addCitation: vi.fn().mockReturnValue({ ok: true, data: { id: 'cit_1', sourceRoomId: 'room_1', targetRoomId: 'room_2', targetType: 'room', createdBy: 'agent_1', createdAt: '2025-01-01T00:00:00Z' } }),
+  getCitations: vi.fn().mockReturnValue({ ok: true, data: [] }),
+  getBacklinks: vi.fn().mockReturnValue({ ok: true, data: [] }),
+}));
+
+import { getCitations, getBacklinks } from '../../../src/rooms/citation-tracker.js';
+
 // Mock socket — emulates a Socket.IO socket with on/emit
 class MockSocket extends EventEmitter {
   id = 'socket_test_1';
@@ -1152,6 +1161,79 @@ describe('Socket Handler (Transport Layer)', () => {
       expect(agents.removeAgent).toHaveBeenCalledTimes(2);
       expect(agents.removeAgent).toHaveBeenCalledWith('agent_A');
       expect(agents.removeAgent).toHaveBeenCalledWith('agent_B');
+    });
+  });
+
+  // ─── Citation Events ───
+
+  describe('citation events', () => {
+    it('registers citations:list handler', () => {
+      expect(socket.listenerCount('citations:list')).toBeGreaterThan(0);
+    });
+
+    it('registers citations:backlinks handler', () => {
+      expect(socket.listenerCount('citations:backlinks')).toBeGreaterThan(0);
+    });
+
+    it('citations:list calls getCitations with roomId', () => {
+      const ack = vi.fn();
+      (getCitations as ReturnType<typeof vi.fn>).mockReturnValue({ ok: true, data: [{ id: 'cit_1' }] });
+
+      socket.emit('citations:list', { roomId: 'room_1' }, ack);
+
+      expect(getCitations).toHaveBeenCalledWith('room_1');
+      expect(ack).toHaveBeenCalledWith({ ok: true, data: [{ id: 'cit_1' }] });
+    });
+
+    it('citations:list rejects invalid payload', () => {
+      const ack = vi.fn();
+      socket.emit('citations:list', {}, ack);
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: 'VALIDATION_ERROR' }),
+      }));
+    });
+
+    it('citations:backlinks calls getBacklinks with roomId', () => {
+      const ack = vi.fn();
+      (getBacklinks as ReturnType<typeof vi.fn>).mockReturnValue({ ok: true, data: [{ id: 'cit_2' }] });
+
+      socket.emit('citations:backlinks', { roomId: 'room_2' }, ack);
+
+      expect(getBacklinks).toHaveBeenCalledWith('room_2', undefined);
+      expect(ack).toHaveBeenCalledWith({ ok: true, data: [{ id: 'cit_2' }] });
+    });
+
+    it('citations:backlinks passes entryId when provided', () => {
+      const ack = vi.fn();
+      (getBacklinks as ReturnType<typeof vi.fn>).mockReturnValue({ ok: true, data: [] });
+
+      socket.emit('citations:backlinks', { roomId: 'room_2', entryId: 'raid_1' }, ack);
+
+      expect(getBacklinks).toHaveBeenCalledWith('room_2', 'raid_1');
+    });
+
+    it('citations:backlinks rejects missing roomId', () => {
+      const ack = vi.fn();
+      socket.emit('citations:backlinks', {}, ack);
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: 'VALIDATION_ERROR' }),
+      }));
+    });
+  });
+
+  // ─── Bus → Socket Forwards ───
+
+  describe('citation bus forwards', () => {
+    it('forwards citation:added events to all clients', () => {
+      bus.emit('citation:added', { id: 'cit_1', sourceRoomId: 'room_1', targetRoomId: 'room_2' });
+
+      const forwarded = io.broadcasted.find(b => b.event === 'citation:added');
+      expect(forwarded).toBeDefined();
+      expect(forwarded!.data).toMatchObject({ id: 'cit_1' });
     });
   });
 });
