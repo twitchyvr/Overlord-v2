@@ -713,6 +713,91 @@
   color: var(--accent-green);
 }
 
+/* ── App Toolbar (Navigation) ── */
+.app-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 var(--sp-4);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-default);
+  white-space: nowrap;
+}
+.toolbar-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.toolbar-btn.active {
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent-blue);
+}
+.toolbar-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.toolbar-label {
+  font-weight: var(--font-medium);
+}
+
+/* Connection indicator */
+.toolbar-connection {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.connection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: background var(--duration-fast);
+}
+.toolbar-connection.connected .connection-dot {
+  background: var(--accent-green);
+}
+.toolbar-connection.disconnected .connection-dot {
+  background: var(--accent-red);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+.toolbar-connection.reconnecting .connection-dot {
+  background: var(--accent-yellow);
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 /* ── Search Input ── */
 .search-input-wrapper {
   position: relative;

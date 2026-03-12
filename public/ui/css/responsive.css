@@ -131,6 +131,11 @@
 
   .phase-label { display: none; }
   .phase-step { flex: 0; padding: var(--sp-1) var(--sp-2); }
+
+  /* Toolbar: hide labels on tablet */
+  .toolbar-label { display: none; }
+  .toolbar-btn { padding: var(--sp-1) var(--sp-2); }
+  .toolbar-icon { font-size: 16px; }
 }
 
 /* ══════════════════════════════════════════════

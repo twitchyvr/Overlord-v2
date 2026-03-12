@@ -72,6 +72,24 @@ if (socket) {
   const roomView = new RoomView(document.createElement('div'));
   roomView.mount();
 
+  // ── Toolbar navigation click handlers ──
+  document.querySelectorAll('#app-toolbar .toolbar-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      if (view) navigateTo(view);
+    });
+  });
+
+  // ── Connection indicator ──
+  const connectionEl = document.getElementById('toolbar-connection');
+  if (connectionEl) {
+    store.subscribe('ui.connected', (connected) => {
+      connectionEl.classList.toggle('connected', connected === true);
+      connectionEl.classList.toggle('disconnected', connected === false);
+      connectionEl.title = connected ? 'Connected' : 'Disconnected';
+    });
+  }
+
   // ── Determine initial view after connection ──
   engine.subscribe('system:status', (data) => {
     const loadingEl = document.getElementById('loading-state');
