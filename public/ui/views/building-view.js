@@ -202,11 +202,14 @@ export class BuildingView extends Component {
       'data-type': floorType
     });
 
-    // Floor info row
+    // Floor info row — name on first line, type + room count as metadata
+    const floorLabel = floor.name || `Floor ${floor.ordinal || '?'}`;
     const infoRow = h('div', { class: 'floor-bar-info' },
-      h('span', { class: 'floor-bar-name', title: floor.name || `Floor ${floor.ordinal || '?'}` }, floor.name || `Floor ${floor.ordinal || '?'}`),
-      h('span', { class: 'floor-bar-type' }, floorType),
-      h('span', { class: 'floor-bar-rooms' }, `${roomCount} rm`)
+      h('span', { class: 'floor-bar-name', title: floorLabel }, floorLabel),
+      h('span', { class: 'floor-bar-meta-row' },
+        h('span', { class: 'floor-bar-type' }, floorType),
+        h('span', { class: 'floor-bar-rooms' }, `${roomCount} rm`)
+      )
     );
     bar.appendChild(infoRow);
 
