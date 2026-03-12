@@ -39,6 +39,7 @@ export class LogsPanel extends PanelComponent {
     this._logs = [];
     this._filter = 'all';
     this._autoScroll = true;
+    this._renderPending = false;
   }
 
   mount() {
@@ -122,7 +123,16 @@ export class LogsPanel extends PanelComponent {
       this._logs = this._logs.slice(-MAX_LOGS);
     }
 
-    this._renderContent();
+    this._scheduleRender();
+  }
+
+  _scheduleRender() {
+    if (this._renderPending) return;
+    this._renderPending = true;
+    requestAnimationFrame(() => {
+      this._renderPending = false;
+      this._renderContent();
+    });
   }
 
   _renderContent() {

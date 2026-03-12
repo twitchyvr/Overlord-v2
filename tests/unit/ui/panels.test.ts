@@ -642,6 +642,9 @@ describe('LogsPanel', () => {
 
     expect(panel._logs.length).toBe(3);
 
+    // Flush deferred render (requestAnimationFrame in jsdom)
+    await new Promise((r) => requestAnimationFrame(r));
+
     const list = el.querySelector('.logs-list');
     expect(list).not.toBeNull();
     expect(list!.children.length).toBe(3);
@@ -704,7 +707,7 @@ describe('LogsPanel', () => {
     }
 
     expect(panel._logs.length).toBe(200);
-  }, 15000);
+  });
 
   it('sets default fields on log entries', async () => {
     const { LogsPanel } = await import('../../../public/ui/panels/logs-panel.js');
