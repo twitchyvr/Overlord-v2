@@ -143,7 +143,7 @@ export function initSocketBridge(socket, store, engine) {
       store.set('ui.streaming', true);
       engine.dispatch('chat:stream-start', {
         agentId: data.agentId,
-        agentName: data.agentId,
+        agentName: data.agentName || data.agentId,
         roomId: data.roomId,
         messageId: `stream-${Date.now()}`,
       });

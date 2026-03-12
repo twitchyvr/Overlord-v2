@@ -191,7 +191,7 @@ export class BuildingView extends Component {
 
     // Floor info row
     const infoRow = h('div', { class: 'floor-bar-info' },
-      h('span', { class: 'floor-bar-name' }, floor.name || `Floor ${floor.ordinal || '?'}`),
+      h('span', { class: 'floor-bar-name', title: floor.name || `Floor ${floor.ordinal || '?'}` }, floor.name || `Floor ${floor.ordinal || '?'}`),
       h('span', { class: 'floor-bar-type' }, floorType),
       h('span', { class: 'floor-bar-rooms' }, `${roomCount} rm`)
     );
@@ -287,7 +287,7 @@ export class BuildingView extends Component {
     // Header: status badge + name
     const header = h('div', { class: 'room-card-header' },
       h('span', { class: `room-status-badge room-status-${roomStatus}` }, roomStatus),
-      h('span', { class: 'room-card-name' }, room.name || this._formatRoomType(room.type))
+      h('span', { class: 'room-card-name', title: room.name || this._formatRoomType(room.type) }, room.name || this._formatRoomType(room.type))
     );
     roomCard.appendChild(header);
 

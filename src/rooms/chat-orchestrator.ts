@@ -198,10 +198,14 @@ async function handleChatMessage(
       'Processing chat message',
     );
 
+    // Resolve display name for the agent (used in chat UI)
+    const agentName = agent?.name || resolvedAgentId;
+
     // 7. Emit a "thinking" indicator so the frontend shows the AI is working
     bus.emit('chat:stream', {
       socketId,
       agentId: resolvedAgentId,
+      agentName,
       roomId: room.id,
       content: [{ type: 'text', text: '' }],
       iteration: 0,
@@ -259,6 +263,7 @@ async function handleChatMessage(
         socketId,
         type: 'message',
         agentId: resolvedAgentId,
+        agentName,
         roomId: room.id,
         content,
         thinking: data.thinking,
@@ -274,6 +279,7 @@ async function handleChatMessage(
         socketId,
         type: 'error',
         agentId: resolvedAgentId,
+        agentName,
         roomId: room.id,
         error: result.error,
       });
