@@ -77,18 +77,25 @@ export function signoffGate({ gateId, reviewer, verdict, conditions = [], exitDo
   );
 
   // If GO, advance the building's active phase
+  let phaseAdvanced = false;
+  let nextPhase: string | null = null;
   if (verdict === 'GO') {
     const currentIdx = PHASE_ORDER.indexOf(gate.phase);
-    if (currentIdx < PHASE_ORDER.length - 1) {
-      const nextPhase = PHASE_ORDER[currentIdx + 1];
+    if (currentIdx === -1) {
+      log.warn({ gateId, phase: gate.phase }, 'Gate phase not in PHASE_ORDER — cannot determine advancement');
+    } else if (currentIdx >= PHASE_ORDER.length - 1) {
+      log.info({ gateId, phase: gate.phase, buildingId: gate.building_id }, 'Final phase signed off — no further advancement possible');
+    } else {
+      nextPhase = PHASE_ORDER[currentIdx + 1];
       db.prepare('UPDATE buildings SET active_phase = ?, updated_at = datetime(?) WHERE id = ?')
         .run(nextPhase, new Date().toISOString(), gate.building_id);
+      phaseAdvanced = true;
       log.info({ buildingId: gate.building_id, from: gate.phase, to: nextPhase }, 'Phase advanced');
     }
   }
 
   log.info({ gateId, verdict, reviewer }, 'Phase gate signed off');
-  return ok({ gateId, verdict, status });
+  return ok({ gateId, verdict, status, phaseAdvanced, nextPhase });
 }
 
 /**

@@ -446,6 +446,273 @@ describe('Phase Gate System', () => {
     });
   });
 
+  describe('signoffGate — edge cases', () => {
+    it('does not advance when GO on final phase (deploy)', () => {
+      // Move building to deploy (final phase)
+      db.prepare("UPDATE buildings SET active_phase = 'deploy' WHERE id = 'bld_1'").run();
+      const gate = createGate({ buildingId: 'bld_1', phase: 'deploy' });
+      if (!gate.ok) throw new Error('gate creation failed');
+
+      const result = signoffGate({
+        gateId: gate.data.id,
+        reviewer: 'pm',
+        verdict: 'GO',
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.verdict).toBe('GO');
+        expect(result.data.status).toBe('go');
+        expect(result.data.phaseAdvanced).toBe(false);
+        expect(result.data.nextPhase).toBeNull();
+      }
+
+      // Building stays on deploy
+      const building = db.prepare('SELECT active_phase FROM buildings WHERE id = ?').get('bld_1') as { active_phase: string };
+      expect(building.active_phase).toBe('deploy');
+    });
+
+    it('returns phaseAdvanced=true and nextPhase when GO advances', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('gate creation failed');
+
+      const result = signoffGate({
+        gateId: gate.data.id,
+        reviewer: 'pm',
+        verdict: 'GO',
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.phaseAdvanced).toBe(true);
+        expect(result.data.nextPhase).toBe('discovery');
+      }
+    });
+
+    it('does not set phaseAdvanced on NO-GO verdict', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('gate creation failed');
+
+      const result = signoffGate({
+        gateId: gate.data.id,
+        reviewer: 'pm',
+        verdict: 'NO-GO',
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.phaseAdvanced).toBe(false);
+        expect(result.data.nextPhase).toBeNull();
+      }
+    });
+
+    it('handles gate phase not in PHASE_ORDER gracefully', () => {
+      // Insert gate with a custom/unknown phase
+      db.prepare(`
+        INSERT INTO phase_gates (id, building_id, phase, status)
+        VALUES ('gate_custom', 'bld_1', 'custom-phase', 'pending')
+      `).run();
+
+      const result = signoffGate({
+        gateId: 'gate_custom',
+        reviewer: 'pm',
+        verdict: 'GO',
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.phaseAdvanced).toBe(false);
+        expect(result.data.nextPhase).toBeNull();
+      }
+    });
+  });
+
+  describe('createGate — edge cases', () => {
+    it('allows multiple gates for the same building and phase (duplicate)', () => {
+      createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      createGate({ buildingId: 'bld_1', phase: 'strategy' });
+
+      const rows = db.prepare("SELECT * FROM phase_gates WHERE building_id = 'bld_1' AND phase = 'strategy'").all();
+      expect(rows).toHaveLength(2);
+    });
+
+    it('generates unique IDs for each gate', () => {
+      const g1 = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      const g2 = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!g1.ok || !g2.ok) throw new Error('failed');
+
+      expect(g1.data.id).not.toBe(g2.data.id);
+    });
+  });
+
+  describe('canAdvance — edge cases', () => {
+    it('returns canAdvance=false with reason on final phase', () => {
+      db.prepare("UPDATE buildings SET active_phase = 'deploy' WHERE id = 'bld_1'").run();
+
+      const result = canAdvance('bld_1');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.canAdvance).toBe(false);
+        expect(result.data.reason).toContain('Final phase');
+      }
+    });
+
+    it('returns error for unknown phase not in PHASE_ORDER', () => {
+      db.prepare("UPDATE buildings SET active_phase = 'unknown-phase' WHERE id = 'bld_1'").run();
+
+      const result = canAdvance('bld_1');
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('UNKNOWN_PHASE');
+      }
+    });
+  });
+
+  describe('resolveConditions — edge cases', () => {
+    it('resolves multiple conditions at once', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('failed');
+
+      signoffGate({
+        gateId: gate.data.id,
+        reviewer: 'pm',
+        verdict: 'CONDITIONAL',
+        conditions: ['Fix auth', 'Add rate limiting', 'Update docs'],
+      });
+
+      const result = resolveConditions({
+        gateId: gate.data.id,
+        resolvedConditions: ['Fix auth', 'Update docs'],
+        resolver: 'dev-agent',
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.resolvedCount).toBe(2);
+        expect(result.data.remainingConditions).toEqual(['Add rate limiting']);
+      }
+    });
+
+    it('ignores non-matching resolved conditions', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('failed');
+
+      signoffGate({
+        gateId: gate.data.id,
+        reviewer: 'pm',
+        verdict: 'CONDITIONAL',
+        conditions: ['Fix auth', 'Add tests'],
+      });
+
+      const result = resolveConditions({
+        gateId: gate.data.id,
+        resolvedConditions: ['NonExistent condition'],
+        resolver: 'agent',
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        // None were actually matched, so all remain
+        expect(result.data.remainingConditions).toEqual(['Fix auth', 'Add tests']);
+      }
+    });
+
+    it('rejects resolve on a GO gate', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('failed');
+
+      signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'GO' });
+
+      const result = resolveConditions({
+        gateId: gate.data.id,
+        resolvedConditions: ['anything'],
+        resolver: 'agent',
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('GATE_NOT_CONDITIONAL');
+      }
+    });
+
+    it('rejects resolve on a NO-GO gate', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('failed');
+
+      signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'NO-GO' });
+
+      const result = resolveConditions({
+        gateId: gate.data.id,
+        resolvedConditions: ['anything'],
+        resolver: 'agent',
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('GATE_NOT_CONDITIONAL');
+      }
+    });
+  });
+
+  describe('getStalePendingGates — edge cases', () => {
+    it('uses default 30-minute threshold when no argument', () => {
+      // Insert gate 2 hours old
+      db.prepare(`
+        INSERT INTO phase_gates (id, building_id, phase, status, created_at)
+        VALUES ('gate_ancient', 'bld_1', 'strategy', 'pending', datetime('now', '-2 hours'))
+      `).run();
+
+      const result = getStalePendingGates(); // default threshold
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const gates = result.data as unknown[];
+        expect(gates).toHaveLength(1);
+      }
+    });
+
+    it('excludes non-pending (conditional/go/no-go) gates', () => {
+      const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      if (!gate.ok) throw new Error('failed');
+
+      // Sign off as conditional (not pending)
+      signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'CONDITIONAL', conditions: ['c1'] });
+
+      // Backdate it
+      db.prepare(`UPDATE phase_gates SET created_at = datetime('now', '-2 hours') WHERE id = ?`).run(gate.data.id);
+
+      const result = getStalePendingGates(30 * 60 * 1000);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data).toHaveLength(0);
+      }
+    });
+
+    it('returns empty when all pending gates are recent', () => {
+      createGate({ buildingId: 'bld_1', phase: 'strategy' });
+
+      const result = getStalePendingGates(30 * 60 * 1000);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data).toHaveLength(0);
+      }
+    });
+
+    it('includes building_name and active_phase in results', () => {
+      db.prepare(`
+        INSERT INTO phase_gates (id, building_id, phase, status, created_at)
+        VALUES ('gate_old2', 'bld_1', 'strategy', 'pending', datetime('now', '-1 hour'))
+      `).run();
+
+      const result = getStalePendingGates(30 * 60 * 1000);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const gates = result.data as Record<string, unknown>[];
+        expect(gates[0]).toHaveProperty('building_name', 'Test Project');
+        expect(gates[0]).toHaveProperty('active_phase', 'strategy');
+      }
+    });
+  });
+
   describe('full phase advancement', () => {
     it('advances through strategy → discovery → architecture', () => {
       // Strategy gate
