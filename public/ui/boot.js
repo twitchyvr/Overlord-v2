@@ -20,6 +20,10 @@ import { PhasePanel } from './panels/phase-panel.js';
 import { AgentsPanel } from './panels/agents-panel.js';
 import { RaidPanel } from './panels/raid-panel.js';
 import { ActivityPanel } from './panels/activity-panel.js';
+import { ProjectsPanel } from './panels/projects-panel.js';
+import { ToolsPanel } from './panels/tools-panel.js';
+import { LogsPanel } from './panels/logs-panel.js';
+import { TeamPanel } from './panels/team-panel.js';
 
 // ── Initialize core ──
 const store = createV2Store();
@@ -44,11 +48,19 @@ if (socket) {
   const agentsEl = document.getElementById('panel-agents');
   const raidEl = document.getElementById('panel-raid');
   const activityEl = document.getElementById('panel-activity');
+  const projectsEl = document.getElementById('panel-projects');
+  const toolsEl = document.getElementById('panel-tools');
+  const logsEl = document.getElementById('panel-logs');
+  const teamEl = document.getElementById('panel-team');
 
   if (phaseEl) new PhasePanel(phaseEl);
   if (agentsEl) new AgentsPanel(agentsEl);
   if (raidEl) new RaidPanel(raidEl);
   if (activityEl) new ActivityPanel(activityEl);
+  if (projectsEl) new ProjectsPanel(projectsEl);
+  if (toolsEl) new ToolsPanel(toolsEl);
+  if (logsEl) new LogsPanel(logsEl);
+  if (teamEl) new TeamPanel(teamEl);
 
   // ── Initialize panel system (mounts, restores visibility/heights, drag-resize) ──
   initPanelSystem();
