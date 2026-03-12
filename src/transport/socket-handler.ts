@@ -31,6 +31,7 @@ import {
   BuildingCreateSchema, BuildingGetSchema, BuildingListSchema, BuildingApplyBlueprintSchema,
   FloorListSchema, FloorGetSchema,
   RoomCreateSchema, RoomGetSchema, RoomEnterSchema, RoomExitSchema,
+  TableCreateSchema, TableListSchema, AgentMoveSchema,
   AgentRegisterSchema, AgentGetSchema, AgentListSchema,
   ChatMessageSchema,
   EmptyPayloadSchema, PhaseStatusSchema, PhaseGateSchema,
@@ -259,6 +260,76 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         getAssociations(socket.id).roomMemberships.delete(parsed.agentId);
       }
       if (ack) ack(result);
+    });
+
+    // ─── Table Events ───
+
+    handle(socket, 'table:create', TableCreateSchema, (parsed, ack) => {
+      const db = getDb();
+      const tableId = `table_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      // Verify room exists
+      const roomRow = db.prepare('SELECT id, type FROM rooms WHERE id = ?').get(parsed.roomId) as { id: string; type: string } | undefined;
+      if (!roomRow) {
+        if (ack) ack({ ok: false, error: { code: 'ROOM_NOT_FOUND', message: `Room ${parsed.roomId} does not exist`, retryable: false } });
+        return;
+      }
+
+      db.prepare('INSERT INTO tables_v2 (id, room_id, type, chairs, description) VALUES (?, ?, ?, ?, ?)').run(
+        tableId, parsed.roomId, parsed.type, parsed.chairs, parsed.description || null,
+      );
+
+      const table = db.prepare('SELECT * FROM tables_v2 WHERE id = ?').get(tableId);
+      log.info({ tableId, roomId: parsed.roomId, type: parsed.type }, 'Table created');
+      broadcastLog('info', `Table "${parsed.type}" created in room ${roomRow.type}`, 'rooms');
+      bus.emit('table:created', table as Record<string, unknown>);
+      if (ack) ack({ ok: true, data: table });
+    });
+
+    handle(socket, 'table:list', TableListSchema, (parsed, ack) => {
+      const db = getDb();
+      const tables = db.prepare('SELECT * FROM tables_v2 WHERE room_id = ? ORDER BY created_at').all(parsed.roomId);
+
+      // Include agent count per table
+      const result = (tables as Array<Record<string, unknown>>).map(t => {
+        const agentCount = db.prepare('SELECT COUNT(*) as count FROM agents WHERE current_table_id = ?').get(t.id) as { count: number };
+        return { ...t, agentCount: agentCount.count };
+      });
+
+      if (ack) ack({ ok: true, data: result });
+    });
+
+    // ─── Agent Move (convenience: exit old room + enter new room in one step) ───
+
+    handle(socket, 'agent:move', AgentMoveSchema, (parsed, ack) => {
+      const db = getDb();
+      const agent = db.prepare('SELECT id, current_room_id FROM agents WHERE id = ?').get(parsed.agentId) as { id: string; current_room_id: string | null } | undefined;
+
+      if (!agent) {
+        if (ack) ack({ ok: false, error: { code: 'AGENT_NOT_FOUND', message: `Agent ${parsed.agentId} does not exist`, retryable: false } });
+        return;
+      }
+
+      // Exit current room if any
+      if (agent.current_room_id) {
+        const exitResult = rooms.exitRoom({ roomId: agent.current_room_id, agentId: parsed.agentId });
+        if (!exitResult.ok) {
+          // If exit fails due to exit doc requirement, tell the user
+          if (ack) ack(exitResult);
+          return;
+        }
+        getAssociations(socket.id).roomMemberships.delete(parsed.agentId);
+        bus.emit('room:agent:exited', { roomId: agent.current_room_id, agentId: parsed.agentId, reason: 'move' });
+      }
+
+      // Enter new room
+      const enterResult = rooms.enterRoom({ roomId: parsed.roomId, agentId: parsed.agentId, tableType: parsed.tableType });
+      if (enterResult.ok) {
+        getAssociations(socket.id).roomMemberships.set(parsed.agentId, parsed.roomId);
+        bus.emit('room:agent:entered', { roomId: parsed.roomId, agentId: parsed.agentId, tableType: parsed.tableType });
+        broadcastLog('info', `Agent ${parsed.agentId} moved to room`, 'rooms');
+      }
+      if (ack) ack(enterResult);
     });
 
     // ─── Agent Events ───
@@ -917,6 +988,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   forward('building:onboard-failed');
   forward('phase:room-provisioned');
   forward('citation:added');
+  forward('table:created');
 
   log.info('Transport layer initialized');
   broadcastLog('info', 'Transport layer initialized', 'transport');

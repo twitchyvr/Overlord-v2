@@ -11,6 +11,35 @@
 import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
 import { h, formatTime } from '../engine/helpers.js';
+import { Modal } from '../components/modal.js';
+import { Toast } from '../components/toast.js';
+
+/** Room type metadata for the creation modal. */
+const ROOM_TYPE_INFO = {
+  'strategist':         { icon: '\u{1F9E0}', label: 'Strategist',         desc: 'High-level planning and project strategy. Defines goals, phases, and resource allocation.' },
+  'building-architect': { icon: '\u{1F3D7}\uFE0F', label: 'Building Architect', desc: 'Designs the building blueprint — floors, rooms, and agent assignments.' },
+  'discovery':          { icon: '\u{1F50D}', label: 'Discovery',          desc: 'Research and requirements gathering. Agents analyze the problem space.' },
+  'architecture':       { icon: '\u{1F4D0}', label: 'Architecture',       desc: 'System design and technical architecture. Produces design documents.' },
+  'code-lab':           { icon: '\u{1F4BB}', label: 'Code Lab',           desc: 'Active development room. Agents write, refactor, and generate code.' },
+  'testing-lab':        { icon: '\u{1F9EA}', label: 'Testing Lab',        desc: 'Test execution and QA. Agents run tests, generate test cases, and validate.' },
+  'review':             { icon: '\u{1F4DD}', label: 'Review',             desc: 'Code review and quality gates. Agents review PRs and verify standards.' },
+  'deploy':             { icon: '\u{1F680}', label: 'Deploy',             desc: 'Deployment and release management. Agents manage CI/CD and releases.' },
+  'war-room':           { icon: '\u{1F6A8}', label: 'War Room',           desc: 'Incident response and escalation. Created when critical issues arise.' },
+  'data-exchange':      { icon: '\u{1F4E6}', label: 'Data Exchange',      desc: 'Cross-room data sharing and artifact transfer between phases.' },
+  'provider-hub':       { icon: '\u2699\uFE0F', label: 'Provider Hub',     desc: 'AI provider management and configuration.' },
+  'plugin-bay':         { icon: '\u{1F9E9}', label: 'Plugin Bay',         desc: 'Plugin and extension management. Lua scripts and custom tools.' },
+};
+
+/** Which room types are recommended per floor type. */
+const FLOOR_ROOM_SUGGESTIONS = {
+  strategy:      ['strategist', 'building-architect'],
+  collaboration: ['discovery', 'architecture'],
+  execution:     ['code-lab', 'testing-lab'],
+  governance:    ['review', 'deploy'],
+  operations:    ['war-room'],
+  integration:   ['data-exchange', 'provider-hub', 'plugin-bay'],
+  lobby:         [],
+};
 
 
 export class BuildingView extends Component {
@@ -156,13 +185,34 @@ export class BuildingView extends Component {
       this.render();
     });
 
-    // Expanded content: room grid
-    if (isExpanded && floor.rooms && floor.rooms.length > 0) {
-      const roomGrid = h('div', { class: 'floor-room-grid' });
-      for (const room of floor.rooms) {
-        roomGrid.appendChild(this._renderRoomCard(room, floor.id));
+    // Expanded content: room grid + add button
+    if (isExpanded) {
+      const expandedContent = h('div', { class: 'floor-expanded-content' });
+      expandedContent.addEventListener('click', (e) => e.stopPropagation());
+
+      if (floor.rooms && floor.rooms.length > 0) {
+        const roomGrid = h('div', { class: 'floor-room-grid' });
+        for (const room of floor.rooms) {
+          roomGrid.appendChild(this._renderRoomCard(room, floor.id));
+        }
+        expandedContent.appendChild(roomGrid);
+      } else {
+        // Empty floor guidance
+        expandedContent.appendChild(h('div', { class: 'floor-empty-guidance' },
+          h('span', { class: 'floor-empty-icon' }, '\u{1F4AD}'),
+          h('p', null, `This floor has no rooms yet. Add a room to start working in the ${floorType} phase.`)
+        ));
       }
-      bar.appendChild(roomGrid);
+
+      // "Add Room" button
+      const addRoomBtn = h('button', { class: 'btn btn-primary btn-sm floor-add-room-btn' }, '+ Add Room');
+      addRoomBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._openAddRoomModal(floor);
+      });
+      expandedContent.appendChild(addRoomBtn);
+
+      bar.appendChild(expandedContent);
     }
 
     return bar;
@@ -222,6 +272,131 @@ export class BuildingView extends Component {
     return roomCard;
   }
 
+  /** Open modal to add a room to a floor. */
+  _openAddRoomModal(floor) {
+    const floorType = floor.type || 'default';
+    const suggested = FLOOR_ROOM_SUGGESTIONS[floorType] || [];
+    const allTypes = Object.entries(ROOM_TYPE_INFO);
+
+    // Sort: suggested types first, then the rest
+    const sorted = [...allTypes].sort((a, b) => {
+      const aS = suggested.includes(a[0]) ? 0 : 1;
+      const bS = suggested.includes(b[0]) ? 0 : 1;
+      return aS - bS;
+    });
+
+    let selectedType = suggested[0] || allTypes[0][0];
+    let roomName = '';
+
+    const container = h('div', { class: 'add-room-modal' });
+
+    // Guidance text
+    container.appendChild(h('div', { class: 'add-room-guidance' },
+      h('p', null, `Adding a room to `),
+      h('strong', null, floor.name || `Floor ${floor.ordinal || '?'}`),
+      h('span', null, ` (${floorType} floor)`),
+    ));
+
+    if (suggested.length > 0) {
+      container.appendChild(h('div', { class: 'add-room-suggestion' },
+        h('span', { class: 'add-room-suggestion-icon' }, '\u{1F4A1}'),
+        h('span', null, `Recommended for ${floorType}: ${suggested.map(t => ROOM_TYPE_INFO[t]?.label || t).join(', ')}`)
+      ));
+    }
+
+    // Room name input
+    const nameGroup = h('div', { class: 'add-room-field' });
+    nameGroup.appendChild(h('label', { class: 'form-label' }, 'Room Name (optional)'));
+    const nameInput = h('input', { class: 'form-input', type: 'text', placeholder: 'e.g., "Frontend Code Lab"' });
+    nameInput.addEventListener('input', () => { roomName = nameInput.value; });
+    nameGroup.appendChild(nameInput);
+    container.appendChild(nameGroup);
+
+    // Room type picker grid
+    container.appendChild(h('label', { class: 'form-label' }, 'Room Type'));
+    const typeGrid = h('div', { class: 'add-room-type-grid' });
+
+    for (const [typeKey, info] of sorted) {
+      const isSuggested = suggested.includes(typeKey);
+      const card = h('div', {
+        class: `add-room-type-card${selectedType === typeKey ? ' selected' : ''}${isSuggested ? ' suggested' : ''}`,
+        'data-type': typeKey
+      },
+        h('div', { class: 'add-room-type-icon' }, info.icon),
+        h('div', { class: 'add-room-type-info' },
+          h('div', { class: 'add-room-type-label' },
+            info.label,
+            isSuggested ? h('span', { class: 'add-room-type-badge' }, 'Recommended') : null
+          ),
+          h('div', { class: 'add-room-type-desc' }, info.desc)
+        )
+      );
+
+      card.addEventListener('click', () => {
+        selectedType = typeKey;
+        typeGrid.querySelectorAll('.add-room-type-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+      });
+
+      typeGrid.appendChild(card);
+    }
+    container.appendChild(typeGrid);
+
+    // Action buttons
+    const actions = h('div', { class: 'add-room-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('add-room'));
+
+    const createBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Create Room');
+    createBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) {
+        Toast.error('Not connected to server');
+        return;
+      }
+
+      createBtn.disabled = true;
+      createBtn.textContent = 'Creating...';
+
+      try {
+        const result = await window.overlordSocket.createRoom({
+          type: selectedType,
+          floorId: floor.id,
+          name: roomName.trim() || undefined,
+        });
+
+        if (result && result.ok) {
+          Toast.success(`Room "${ROOM_TYPE_INFO[selectedType]?.label || selectedType}" created`);
+          Modal.close('add-room');
+
+          // Refresh floor data to show new room
+          const store = OverlordUI.getStore();
+          const buildingId = store?.get('building.active');
+          if (buildingId && window.overlordSocket) {
+            window.overlordSocket.fetchFloors(buildingId);
+            window.overlordSocket.fetchRooms();
+          }
+        } else {
+          throw new Error(result?.error?.message || 'Failed to create room');
+        }
+      } catch (err) {
+        Toast.error(`Create failed: ${err.message}`);
+        createBtn.disabled = false;
+        createBtn.textContent = 'Create Room';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(createBtn);
+    container.appendChild(actions);
+
+    Modal.open('add-room', {
+      title: `Add Room to ${floor.name || 'Floor'}`,
+      content: container,
+      size: 'lg',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
+  }
+
   /**
    * Determine the room status based on its agents.
    * @returns {'active' | 'idle' | 'error'}
@@ -242,11 +417,22 @@ export class BuildingView extends Component {
   }
 
   _renderEmptyState() {
-    return h('div', { class: 'empty-state' },
+    const container = h('div', { class: 'empty-state building-empty-state' },
       h('div', { class: 'empty-state-icon' }, '\u{1F3D7}'),
-      h('p', { class: 'empty-state-title' }, 'No Building Selected'),
-      h('p', { class: 'empty-state-text' }, 'Create a project or select a building to see its structure.')
+      h('h3', { class: 'empty-state-title' }, 'No Building Selected'),
+      h('p', { class: 'empty-state-text' }, 'Create a project or select a building to see its structure.'),
+      h('div', { class: 'empty-state-guide' },
+        h('h4', null, 'Getting Started'),
+        h('ol', { class: 'empty-state-steps' },
+          h('li', null, 'Click "New Project" on the Dashboard to create a building'),
+          h('li', null, 'The Strategist will create a blueprint with floors and rooms'),
+          h('li', null, 'Expand a floor and click rooms to see details'),
+          h('li', null, 'Assign agents to rooms so they can start working'),
+          h('li', null, 'Use exit documents to advance through project phases')
+        )
+      )
     );
+    return container;
   }
 
   _getAgentsOnFloor(floorId) {

@@ -631,6 +631,24 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithFeedback('room:exit', { roomId, agentId });
     },
 
+    async moveAgent(agentId, roomId, tableType = 'focus') {
+      const res = await _emitWithFeedback('agent:move', { agentId, roomId, tableType });
+      if (res && res.ok) {
+        this.fetchAgents({});
+      }
+      return res;
+    },
+
+    async createTable(roomId, type, chairs = 1, description) {
+      return _emitWithFeedback('table:create', { roomId, type, chairs, description });
+    },
+
+    fetchTables(roomId) {
+      return new Promise((resolve) => {
+        socket.emit('table:list', { roomId }, (res) => resolve(res));
+      });
+    },
+
     sendMessage(params) {
       const { content, text, agentId, tokens, buildingId, roomId } = params;
       const messageText = text || content || '';

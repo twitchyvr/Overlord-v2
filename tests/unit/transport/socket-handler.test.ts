@@ -191,6 +191,9 @@ describe('Socket Handler (Transport Layer)', () => {
       expect(socket.listenerCount('raid:list')).toBeGreaterThan(0);
       expect(socket.listenerCount('exit-doc:submit')).toBeGreaterThan(0);
       expect(socket.listenerCount('building:apply-blueprint')).toBeGreaterThan(0);
+      expect(socket.listenerCount('table:create')).toBeGreaterThan(0);
+      expect(socket.listenerCount('table:list')).toBeGreaterThan(0);
+      expect(socket.listenerCount('agent:move')).toBeGreaterThan(0);
     });
   });
 
@@ -1237,6 +1240,106 @@ describe('Socket Handler (Transport Layer)', () => {
       const forwarded = io.broadcasted.find(b => b.event === 'citation:added');
       expect(forwarded).toBeDefined();
       expect(forwarded!.data).toMatchObject({ id: 'cit_1' });
+    });
+  });
+
+  // ─── Table Events ───
+
+  describe('table events', () => {
+    it('table:create creates a table and acks result', () => {
+      const mockDb = (getDb as ReturnType<typeof vi.fn>)();
+      const mockStmt = mockDb.prepare();
+      mockStmt.get.mockReturnValueOnce({ id: 'room_1', type: 'code-lab' }) // room lookup
+              .mockReturnValueOnce({ id: 'table_1', room_id: 'room_1', type: 'focus', chairs: 2 }); // table select
+
+      const ack = vi.fn();
+      socket.emit('table:create', { roomId: 'room_1', type: 'focus', chairs: 2 }, ack);
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+    });
+
+    it('table:create rejects for non-existent room', () => {
+      const mockDb = (getDb as ReturnType<typeof vi.fn>)();
+      const mockStmt = mockDb.prepare();
+      mockStmt.get.mockReturnValueOnce(null); // room not found
+
+      const ack = vi.fn();
+      socket.emit('table:create', { roomId: 'nonexistent', type: 'focus' }, ack);
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: 'ROOM_NOT_FOUND' }),
+      }));
+    });
+
+    it('table:list returns tables for a room', () => {
+      const mockDb = (getDb as ReturnType<typeof vi.fn>)();
+      const mockStmt = mockDb.prepare();
+      mockStmt.all.mockReturnValueOnce([{ id: 'table_1', room_id: 'room_1', type: 'focus', chairs: 2 }]);
+      mockStmt.get.mockReturnValueOnce({ count: 1 }); // agent count
+
+      const ack = vi.fn();
+      socket.emit('table:list', { roomId: 'room_1' }, ack);
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({
+        ok: true,
+        data: expect.arrayContaining([expect.objectContaining({ id: 'table_1', agentCount: 1 })]),
+      }));
+    });
+  });
+
+  // ─── Agent Move ───
+
+  describe('agent move', () => {
+    it('agent:move moves an agent to a new room', () => {
+      const mockDb = (getDb as ReturnType<typeof vi.fn>)();
+      const mockStmt = mockDb.prepare();
+      mockStmt.get.mockReturnValueOnce({ id: 'agent_1', current_room_id: null }); // agent lookup
+
+      const ack = vi.fn();
+      socket.emit('agent:move', { agentId: 'agent_1', roomId: 'room_1', tableType: 'focus' }, ack);
+
+      expect(rooms.enterRoom).toHaveBeenCalledWith({ roomId: 'room_1', agentId: 'agent_1', tableType: 'focus' });
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+    });
+
+    it('agent:move exits current room before entering new room', () => {
+      const mockDb = (getDb as ReturnType<typeof vi.fn>)();
+      const mockStmt = mockDb.prepare();
+      mockStmt.get.mockReturnValueOnce({ id: 'agent_1', current_room_id: 'room_old' }); // agent in old room
+
+      const ack = vi.fn();
+      socket.emit('agent:move', { agentId: 'agent_1', roomId: 'room_1', tableType: 'focus' }, ack);
+
+      expect(rooms.exitRoom).toHaveBeenCalledWith({ roomId: 'room_old', agentId: 'agent_1' });
+      expect(rooms.enterRoom).toHaveBeenCalledWith({ roomId: 'room_1', agentId: 'agent_1', tableType: 'focus' });
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+    });
+
+    it('agent:move rejects for non-existent agent', () => {
+      const mockDb = (getDb as ReturnType<typeof vi.fn>)();
+      const mockStmt = mockDb.prepare();
+      mockStmt.get.mockReturnValueOnce(null); // agent not found
+
+      const ack = vi.fn();
+      socket.emit('agent:move', { agentId: 'nonexistent', roomId: 'room_1' }, ack);
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: 'AGENT_NOT_FOUND' }),
+      }));
+    });
+  });
+
+  // ─── Table Bus Forwards ───
+
+  describe('table bus forwards', () => {
+    it('forwards table:created events to all clients', () => {
+      bus.emit('table:created', { id: 'table_1', roomId: 'room_1', type: 'focus' });
+
+      const forwarded = io.broadcasted.find(b => b.event === 'table:created');
+      expect(forwarded).toBeDefined();
+      expect(forwarded!.data).toMatchObject({ id: 'table_1' });
     });
   });
 });
