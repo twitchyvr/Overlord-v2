@@ -2,8 +2,7 @@
  * Overlord v2 — Layout Router
  *
  * Manages which view is active in the center panel.
- * Handles navigation between dashboard, chat, strategist,
- * and building views based on app state.
+ * All content lives in the center — no right panel.
  *
  * Routes:
  *   'dashboard'   → DashboardView (returning user with buildings)
@@ -12,10 +11,9 @@
  *   'building'    → BuildingView (rendered in left panel, always active)
  *   'tasks'       → TaskView (task management with filtering)
  *   'raid-log'    → RaidLogView (RAID log with type/status tabs)
- *
- * Mobile navigation adds:
- *   'raid'    → RAID panel full-screen
- *   'agents'  → Agents panel full-screen
+ *   'agents'      → AgentsView (agent roster, cards, detail)
+ *   'activity'    → ActivityView (real-time activity feed)
+ *   'phase'       → PhaseView (phase gates, progress, sign-off)
  */
 
 import { OverlordUI } from './engine.js';
@@ -46,6 +44,9 @@ export function initRouter({ centerPanel, buildingPanel }) {
   OverlordUI.subscribe('navigate:chat', () => navigateTo('chat'));
   OverlordUI.subscribe('navigate:tasks', () => navigateTo('tasks'));
   OverlordUI.subscribe('navigate:raid-log', () => navigateTo('raid-log'));
+  OverlordUI.subscribe('navigate:agents', () => navigateTo('agents'));
+  OverlordUI.subscribe('navigate:activity', () => navigateTo('activity'));
+  OverlordUI.subscribe('navigate:phase', () => navigateTo('phase'));
 
   // Mobile bottom nav
   document.querySelectorAll('#mobile-nav .mobile-nav-item').forEach(item => {
@@ -66,7 +67,7 @@ export function initRouter({ centerPanel, buildingPanel }) {
 
 /**
  * Navigate to a view.
- * @param {string} viewName — 'dashboard' | 'strategist' | 'chat' | 'building' | 'raid' | 'agents'
+ * @param {string} viewName
  */
 export async function navigateTo(viewName) {
   if (viewName === _activeViewName && _activeView) return;
@@ -94,12 +95,6 @@ export async function navigateTo(viewName) {
   }
 
   _activeViewName = viewName;
-
-  // Handle mobile-specific views
-  if (viewName === 'raid' || viewName === 'agents') {
-    _showMobilePanel(viewName);
-    return;
-  }
 
   // Clear center panel
   _centerPanel.textContent = '';
@@ -181,14 +176,20 @@ async function _loadViewModules() {
     { ChatView },
     { BuildingView },
     { TaskView },
-    { RaidLogView }
+    { RaidLogView },
+    { AgentsView },
+    { ActivityView },
+    { PhaseView }
   ] = await Promise.all([
     import('../views/dashboard-view.js'),
     import('../views/strategist-view.js'),
     import('../views/chat-view.js'),
     import('../views/building-view.js'),
     import('../views/task-view.js'),
-    import('../views/raid-log-view.js')
+    import('../views/raid-log-view.js'),
+    import('../views/agents-view.js'),
+    import('../views/activity-view.js'),
+    import('../views/phase-view.js')
   ]);
 
   return {
@@ -197,7 +198,10 @@ async function _loadViewModules() {
     chat:       ChatView,
     building:   BuildingView,
     tasks:      TaskView,
-    'raid-log': RaidLogView
+    'raid-log': RaidLogView,
+    agents:     AgentsView,
+    activity:   ActivityView,
+    phase:      PhaseView
   };
 }
 
@@ -215,19 +219,6 @@ function _updateMobileNav(viewName) {
     item.classList.toggle('active', isActive);
     item.setAttribute('aria-current', isActive ? 'page' : 'false');
   });
-}
-
-function _showMobilePanel(panelName) {
-  // On mobile, show the corresponding sidebar panel full-screen
-  const rp = document.getElementById('right-panel');
-  if (rp) {
-    rp.classList.add('mobile-visible');
-    // Scroll to the relevant panel
-    const panel = document.getElementById(`panel-${panelName}`);
-    if (panel) {
-      panel.scrollIntoView({ behavior: 'smooth' });
-    }
-  }
 }
 
 function _updatePhaseBarForView(viewName) {

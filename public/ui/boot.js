@@ -1,9 +1,13 @@
 /**
  * Overlord v2 — Application Bootstrap
  *
- * Initializes engine, store, socket bridge, router, panels, and views.
+ * Initializes engine, store, socket bridge, router, and views.
  * New users    -> Strategist (Phase Zero setup wizard)
  * Returning    -> Dashboard with building list
+ *
+ * The right-panel system has been replaced with:
+ *   - Full-page views (Agents, Activity, Phase, Tasks, RAID)
+ *   - Contextual Drawer component for entity detail
  */
 
 import { OverlordUI } from './engine/engine.js';
@@ -12,23 +16,11 @@ import { initSocketBridge } from './engine/socket-bridge.js';
 import { createLogger, setLogLevel } from './engine/logger.js';
 import { h, setContent } from './engine/helpers.js';
 import { initRouter, navigateTo, getInitialRoute, initBuildingView } from './engine/router.js';
-import { initPanelSystem } from './components/panel.js';
 import { Toast } from './components/toast.js';
 import { RoomView } from './views/room-view.js';
 import { ExitDocForm } from './views/exit-doc-form.js';
 import { SettingsView } from './views/settings-view.js';
 import { initEntityNav } from './engine/entity-nav.js';
-
-// ── Import panel classes (they self-register on construction) ──
-import { PhasePanel } from './panels/phase-panel.js';
-import { AgentsPanel } from './panels/agents-panel.js';
-import { RaidPanel } from './panels/raid-panel.js';
-import { ActivityPanel } from './panels/activity-panel.js';
-import { ProjectsPanel } from './panels/projects-panel.js';
-import { ToolsPanel } from './panels/tools-panel.js';
-import { LogsPanel } from './panels/logs-panel.js';
-import { TeamPanel } from './panels/team-panel.js';
-import { TasksPanel } from './panels/tasks-panel.js';
 
 // ═══════════════════════════════════════════════════════════
 //  THEME MANAGEMENT
@@ -91,7 +83,6 @@ const engine = OverlordUI.init(store);
 // ── DOM references ──
 const centerPanel = document.getElementById('center-panel');
 const buildingPanel = document.getElementById('building-panel');
-const rightPanel = document.getElementById('right-panel');
 
 // ── Connect Socket.IO ──
 const socket = typeof io !== 'undefined' ? io() : null;
@@ -102,34 +93,10 @@ if (socket) {
   // ── Initialize router ──
   initRouter({ centerPanel, buildingPanel });
 
-  // ── Construct panels (they self-register into the global PANELS map) ──
-  const phaseEl = document.getElementById('panel-phase');
-  const agentsEl = document.getElementById('panel-agents');
-  const tasksEl = document.getElementById('panel-tasks');
-  const raidEl = document.getElementById('panel-raid');
-  const activityEl = document.getElementById('panel-activity');
-  const projectsEl = document.getElementById('panel-projects');
-  const toolsEl = document.getElementById('panel-tools');
-  const logsEl = document.getElementById('panel-logs');
-  const teamEl = document.getElementById('panel-team');
-
-  if (phaseEl) new PhasePanel(phaseEl);
-  if (agentsEl) new AgentsPanel(agentsEl);
-  if (tasksEl) new TasksPanel(tasksEl);
-  if (raidEl) new RaidPanel(raidEl);
-  if (activityEl) new ActivityPanel(activityEl);
-  if (projectsEl) new ProjectsPanel(projectsEl);
-  if (toolsEl) new ToolsPanel(toolsEl);
-  if (logsEl) new LogsPanel(logsEl);
-  if (teamEl) new TeamPanel(teamEl);
-
-  // ── Initialize panel system (mounts, restores visibility/heights, drag-resize) ──
-  initPanelSystem();
-
   // ── Mount building view (always-on in left sidebar) ──
   initBuildingView();
 
-  // ── Initialize entity navigation (cross-panel linking) ──
+  // ── Initialize entity navigation (opens drawers for entity detail) ──
   initEntityNav();
 
   // ── Mount room view handler (listens for room-selected events) ──

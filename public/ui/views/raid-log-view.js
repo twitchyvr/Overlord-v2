@@ -22,6 +22,7 @@ import { Card } from '../components/card.js';
 import { Tabs } from '../components/tabs.js';
 import { Button } from '../components/button.js';
 import { Modal } from '../components/modal.js';
+import { Drawer } from '../components/drawer.js';
 import { Toast } from '../components/toast.js';
 
 
@@ -288,7 +289,7 @@ export class RaidLogView extends Component {
     }
   }
 
-  // ── Entry Detail Modal ─────────────────────────────────────
+  // ── Entry Detail Drawer ────────────────────────────────────
 
   _openEntryDetail(entryId) {
     const entry = this._entries.find(e => e.id === entryId);
@@ -296,11 +297,10 @@ export class RaidLogView extends Component {
 
     const content = this._buildDetailContent(entry);
 
-    Modal.open(`raid-detail-${entryId}`, {
+    Drawer.open(`raid-detail-${entryId}`, {
       title: `${RAID_TYPE_LABELS[entry.type] || 'RAID'} Entry`,
       content,
-      size: 'md',
-      position: window.innerWidth < 768 ? 'fullscreen' : 'center'
+      width: '440px',
     });
   }
 
@@ -386,7 +386,7 @@ export class RaidLogView extends Component {
       variant: 'secondary',
       size: 'sm',
       onClick: () => {
-        Modal.close(`raid-detail-${entry.id}`);
+        Drawer.close();
         this._openEditForm(entry);
       }
     }));
@@ -667,7 +667,7 @@ export class RaidLogView extends Component {
 
     if (result && result.ok) {
       Toast.success(`Entry marked as ${status}`);
-      Modal.close(`raid-detail-${entryId}`);
+      Drawer.close();
       this._fetchEntries();
     } else {
       Toast.error(result?.error?.message || 'Failed to update status');

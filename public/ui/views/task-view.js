@@ -23,6 +23,7 @@ import { Card } from '../components/card.js';
 import { Tabs } from '../components/tabs.js';
 import { Button } from '../components/button.js';
 import { Modal } from '../components/modal.js';
+import { Drawer } from '../components/drawer.js';
 import { Toast } from '../components/toast.js';
 
 
@@ -257,7 +258,7 @@ export class TaskView extends Component {
     this._tabs.setBadge('blocked', this._countByStatus('blocked') || null);
   }
 
-  // ── Task Detail Modal ──────────────────────────────────────
+  // ── Task Detail Drawer ─────────────────────────────────────
 
   _openTaskDetail(taskId) {
     const task = this._tasks.find(t => t.id === taskId);
@@ -277,11 +278,10 @@ export class TaskView extends Component {
 
     const content = this._buildDetailContent(task);
 
-    Modal.open(`task-detail-${taskId}`, {
+    Drawer.open(`task-detail-${taskId}`, {
       title: task.title || 'Task Detail',
       content,
-      size: 'lg',
-      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+      width: '460px',
       onClose: () => {
         this._selectedTask = null;
         this._todos = [];
@@ -540,8 +540,8 @@ export class TaskView extends Component {
 
     window.overlordSocket.updateTask({ id: taskId, status });
 
-    // Close detail modal if open
-    Modal.close(`task-detail-${taskId}`);
+    // Close detail drawer if open
+    Drawer.close();
   }
 
   // ── Helpers ────────────────────────────────────────────────
