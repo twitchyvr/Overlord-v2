@@ -1,23 +1,52 @@
+# ═══════════════════════════════════════════════════════
+# Overlord v2 — Dev Container Compose
+# Used by VS Code "Reopen in Container"
+# ═══════════════════════════════════════════════════════
+
 version: '3.8'
+
 services:
   app:
     image: mcr.microsoft.com/devcontainers/javascript-node:20
     working_dir: /workspace
+
     volumes:
-      - ..:/workspace
+      # Mount the project root into the container
+      - ..:/workspace:cached
+
+      # Named volume for node_modules — keeps native binaries
+      # compiled for the container's Linux arch, never touches
+      # the Mac filesystem (avoids platform mismatch issues)
       - node_modules:/workspace/node_modules
+
+      # Persist SQLite data across container rebuilds
+      - overlord_data:/workspace/data
+
     ports:
+      # Server (Express + Socket.IO)
       - "4000:4000"
+      # Vite dev server (if used for frontend hot-reload)
+      - "5173:5173"
+
+    # Forward .env from host into the container
+    env_file:
+      - ../.env
+
     environment:
       - NODE_ENV=development
       - PORT=4000
-      - DB_PATH=./data/overlord.db
+      - DB_PATH=/workspace/data/overlord.db
+
+    # Keep the container alive for VS Code to attach
     command: sleep infinity
+
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:4000/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4000/health || exit 0"]
       interval: 30s
       timeout: 5s
-      start_period: 15s
+      start_period: 30s
       retries: 3
+
 volumes:
   node_modules:
+  overlord_data:

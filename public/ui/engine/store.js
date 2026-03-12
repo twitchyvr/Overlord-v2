@@ -385,6 +385,10 @@ export function createV2Store() {
     // chat.history = persisted input history (survives refresh, used by TokenInput)
     // chat.messages = active conversation messages (transient, loaded from server on connect)
     store.persist('chat.history',          'overlord_v2_chat_history',   []);
+    // Active building + phase survive page refresh — server data re-fetched on reconnect
+    store.persist('building.active',       'overlord_v2_active_building', null);
+    store.persist('building.activePhase',  'overlord_v2_active_phase',   'strategy');
+    store.persist('rooms.active',          'overlord_v2_active_room',    null);
 
     // ── Non-persisted initial state ──
     store.set('ui.connected',             false, { silent: true });

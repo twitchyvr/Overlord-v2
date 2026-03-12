@@ -3,21 +3,51 @@
   "dockerComposeFile": "docker-compose.yml",
   "service": "app",
   "workspaceFolder": "/workspace",
-  "postCreateCommand": "npm install",
+
+  // Install deps + build native modules on container creation
+  "postCreateCommand": "npm install && npm run build",
+
+  // Forward both the server port and potential Vite dev port
+  "forwardPorts": [4000, 5173],
+
   "customizations": {
     "vscode": {
       "extensions": [
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
-        "ms-azuretools.vscode-docker"
+        "ms-azuretools.vscode-docker",
+        "ms-vscode.vscode-typescript-next",
+        "bradlc.vscode-tailwindcss",
+        "streetsidesoftware.code-spell-checker",
+        "eamodio.gitlens",
+        "vitest.explorer"
       ],
       "settings": {
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "esbenp.prettier-vscode",
-        "typescript.preferences.importModuleSpecifier": "relative"
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "typescript.preferences.importModuleSpecifier": "relative",
+        "typescript.tsdk": "/workspace/node_modules/typescript/lib",
+        "files.eol": "\n",
+        "files.trimTrailingWhitespace": true,
+        "files.insertFinalNewline": true
       }
     }
   },
-  "forwardPorts": [4000],
-  "remoteUser": "node"
+
+  // Run as the non-root 'node' user (matches the devcontainer image)
+  "remoteUser": "node",
+
+  // Environment variables for the dev container shell
+  "remoteEnv": {
+    "NODE_ENV": "development"
+  },
+
+  // Features to install inside the container
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  }
 }

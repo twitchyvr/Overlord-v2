@@ -131,7 +131,7 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('phase:advanced', (data) => {
-    store.set('building.activePhase', data.phase || data.nextPhase);
+    store.set('building.activePhase', data.to || data.nextPhase || data.phase);
     store.update('activity.items', (items) => [{ event: 'phase:advanced', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('phase:advanced', data);
     engine.dispatch('activity:new', { event: 'phase:advanced', ...data });
@@ -262,6 +262,47 @@ export function initSocketBridge(socket, store, engine) {
     store.update('activity.items', (items) => [{ event: 'deploy:check', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('deploy:check', data);
     engine.dispatch('activity:new', { event: 'deploy:check', ...data });
+  });
+
+  // ── Building onboarding events ──
+
+  socket.on('building:created', (data) => {
+    log.info('Building created:', data.buildingId, data.name);
+    store.update('building.list', (list) => {
+      const existing = (list || []).find((b) => b.id === data.buildingId);
+      if (existing) return list;
+      return [...(list || []), { id: data.buildingId, name: data.name }];
+    });
+    engine.dispatch('building:created', data);
+  });
+
+  socket.on('building:onboarded', (data) => {
+    log.info('Building onboarded — Strategist ready:', data.roomId);
+    // Auto-select the new building and its room
+    store.batch(() => {
+      store.set('building.active', data.buildingId);
+      store.set('rooms.active', data.roomId);
+      store.set('building.activePhase', 'strategy');
+    });
+    // Fetch full building data
+    if (window.overlordSocket && window.overlordSocket.selectBuilding) {
+      window.overlordSocket.selectBuilding(data.buildingId);
+    }
+    engine.dispatch('building:onboarded', data);
+    store.update('activity.items', (items) => [{ event: 'building:onboarded', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('activity:new', { event: 'building:onboarded', ...data });
+  });
+
+  socket.on('phase:room-provisioned', (data) => {
+    log.info('Phase room provisioned:', data.phase, data.roomType);
+    store.set('rooms.active', data.roomId);
+    // Refresh rooms list
+    if (window.overlordSocket && window.overlordSocket.fetchRooms) {
+      window.overlordSocket.fetchRooms();
+    }
+    engine.dispatch('phase:room-provisioned', data);
+    store.update('activity.items', (items) => [{ event: 'phase:room-provisioned', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('activity:new', { event: 'phase:room-provisioned', ...data });
   });
 
   socket.on('phase:gate:signed-off', (data) => {
@@ -507,10 +548,13 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     sendMessage(params) {
-      const { content, agentId, tokens, buildingId } = params;
-      store.update('chat.messages', (msgs) => [...(msgs || []), { content, agentId, type: 'user', timestamp: Date.now() }]);
+      const { content, text, agentId, tokens, buildingId, roomId } = params;
+      const messageText = text || content || '';
+      const activeRoom = roomId || store.get('rooms.active') || '';
+      const activeBuilding = buildingId || store.get('building.active') || '';
+      store.update('chat.messages', (msgs) => [...(msgs || []), { content: messageText, agentId, type: 'user', timestamp: Date.now() }]);
       store.set('ui.processing', true);
-      socket.emit('chat:message', { content, agentId, tokens, buildingId });
+      socket.emit('chat:message', { text: messageText, agentId: agentId || '', tokens: tokens || [], buildingId: activeBuilding, roomId: activeRoom });
     },
 
     submitExitDoc(params) {
@@ -711,7 +755,7 @@ export function initSocketBridge(socket, store, engine) {
 
     async selectBuilding(buildingId) {
       store.set('building.active', buildingId);
-      await Promise.all([
+      const results = await Promise.all([
         this.fetchBuilding(buildingId),
         this.fetchFloors(buildingId),
         this.fetchAgents({}),
@@ -721,6 +765,18 @@ export function initSocketBridge(socket, store, engine) {
         this.fetchRooms(),
         this.fetchTasks(buildingId),
       ]);
+      // Set active phase from building data
+      const buildingRes = results[0];
+      if (buildingRes && buildingRes.ok && buildingRes.data) {
+        store.set('building.activePhase', buildingRes.data.active_phase || 'strategy');
+      }
+      // Auto-select first available room if none active
+      if (!store.get('rooms.active')) {
+        const rooms = store.get('rooms.list') || [];
+        if (rooms.length > 0) {
+          store.set('rooms.active', rooms[0].id);
+        }
+      }
     },
   };
 

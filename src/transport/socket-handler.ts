@@ -137,7 +137,16 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
     handle(socket, 'building:create', BuildingCreateSchema, (parsed, ack) => {
       const result = createBuilding(parsed as Parameters<typeof createBuilding>[0]);
-      if (result.ok) broadcastLog('info', `Building created: ${(result as { ok: true; data: { name: string } }).data.name}`, 'building');
+      if (result.ok) {
+        const buildingData = result.data as { id: string; name: string; floorIds: string[] };
+        broadcastLog('info', `Building created: ${buildingData.name}`, 'building');
+        // Emit building:created so onboarding can auto-provision Strategist room + agent
+        bus.emit('building:created', {
+          buildingId: buildingData.id,
+          name: buildingData.name,
+          floorIds: buildingData.floorIds,
+        });
+      }
       if (ack) ack(result);
     });
 
@@ -614,12 +623,26 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     // ─── Phase Gate Events ───
 
     handle(socket, 'phase:gate:signoff', PhaseGateSignoffSchema, (parsed, ack) => {
+      // Look up the gate to get buildingId and phase before signoff
+      const gateRow = getDb().prepare('SELECT building_id, phase FROM phase_gates WHERE id = ?').get(parsed.gateId) as { building_id: string; phase: string } | undefined;
+
       const result = signoffGate({
         gateId: parsed.gateId, reviewer: parsed.reviewer, verdict: parsed.verdict,
         conditions: parsed.conditions, exitDocId: parsed.exitDocId, nextPhaseInput: parsed.nextPhaseInput,
       });
       if (result.ok) {
-        bus.emit('phase:gate:signed-off', result.data as Record<string, unknown>);
+        const signoffData = result.data as { gateId: string; verdict: string; phaseAdvanced?: boolean; nextPhase?: string };
+        bus.emit('phase:gate:signed-off', signoffData as unknown as Record<string, unknown>);
+        // If GO verdict advanced the phase, emit phase:advanced for auto-room provisioning
+        if (signoffData.phaseAdvanced && signoffData.nextPhase && gateRow) {
+          bus.emit('phase:advanced', {
+            buildingId: gateRow.building_id,
+            from: gateRow.phase,
+            to: signoffData.nextPhase,
+            gateId: signoffData.gateId,
+          });
+          bus.emit('building:updated', { id: gateRow.building_id, activePhase: signoffData.nextPhase });
+        }
       }
       if (ack) ack(result);
     });
@@ -737,6 +760,10 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   forward('todo:updated');
   forward('todo:deleted');
   forward('system:log');
+  forward('building:created');
+  forward('building:onboarded');
+  forward('building:onboard-failed');
+  forward('phase:room-provisioned');
 
   log.info('Transport layer initialized');
   broadcastLog('info', 'Transport layer initialized', 'transport');

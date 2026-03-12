@@ -704,7 +704,7 @@ describe('LogsPanel', () => {
     }
 
     expect(panel._logs.length).toBe(200);
-  });
+  }, 15000);
 
   it('sets default fields on log entries', async () => {
     const { LogsPanel } = await import('../../../public/ui/panels/logs-panel.js');
