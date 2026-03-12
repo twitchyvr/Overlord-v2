@@ -48,7 +48,7 @@ export function initRooms({ bus }: InitRoomsParams): RoomManagerAPI {
   bus.on('room:submit-exit-doc', (data: Record<string, unknown>) => submitExitDocument(data as unknown as SubmitExitDocParams));
 
   log.info('Room manager initialized');
-  return { createRoom, enterRoom, exitRoom, getRoom, listRooms, registerRoomType };
+  return { createRoom, enterRoom, exitRoom, getRoom, listRooms, registerRoomType, hydrateRoomsFromDb };
 }
 
 interface CreateRoomParams {
@@ -340,6 +340,62 @@ export function submitExitDocument({ roomId, agentId, document, buildingId, phas
 
 export function getRoom(roomId: string): BaseRoom | null {
   return activeRooms.get(roomId) || null;
+}
+
+/**
+ * Hydrate all rooms from the database into active in-memory instances.
+ *
+ * This bridges the gap between "rooms as DB records" (created by
+ * blueprint/custom plan) and "rooms as active BaseRoom objects" (needed
+ * by room-manager for getRoom, enterRoom, tool scoping, etc.).
+ *
+ * Called:
+ * - On server startup after room types are registered
+ * - After applyBlueprint/applyCustomPlan to activate newly created rooms
+ *
+ * Rooms that are already active (in the activeRooms Map) are skipped.
+ */
+export function hydrateRoomsFromDb(): { activated: number; skipped: number; failed: number } {
+  const db = getDb();
+  const allRooms = db.prepare('SELECT * FROM rooms ORDER BY created_at').all() as RoomRow[];
+
+  let activated = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const row of allRooms) {
+    // Skip if already active
+    if (activeRooms.has(row.id)) {
+      skipped++;
+      continue;
+    }
+
+    const Factory = roomTypeRegistry.get(row.type);
+    if (!Factory) {
+      log.warn({ roomId: row.id, type: row.type }, 'Cannot hydrate room — type not registered');
+      failed++;
+      continue;
+    }
+
+    try {
+      let roomConfig: Record<string, unknown> = {};
+      try {
+        roomConfig = JSON.parse(row.config || '{}');
+      } catch { /* use empty config */ }
+
+      const room = new Factory(row.id, { ...Factory.contract, ...roomConfig });
+      if (moduleBus) room.setBus(moduleBus);
+      activeRooms.set(row.id, room);
+      activated++;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log.error({ roomId: row.id, type: row.type, err: msg }, 'Failed to hydrate room from DB');
+      failed++;
+    }
+  }
+
+  log.info({ total: allRooms.length, activated, skipped, failed }, 'Room hydration complete');
+  return { activated, skipped, failed };
 }
 
 export function listRooms(): RoomRow[] {

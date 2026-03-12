@@ -87,6 +87,10 @@ vi.mock('../../src/rooms/room-manager.js', () => ({
       getRoom: vi.fn(),
       listRooms: vi.fn(() => []),
       enterRoom: vi.fn(),
+      hydrateRoomsFromDb: vi.fn(() => {
+        initOrder.push('room-hydration');
+        return { activated: 0, skipped: 0, failed: 0 };
+      }),
     };
   }),
 }));
@@ -195,7 +199,7 @@ describe('Server Bootstrap', () => {
     await import('../../src/server.js');
     // Allow async init to complete
     await vi.waitFor(() => {
-      expect(initOrder.length).toBeGreaterThanOrEqual(13);
+      expect(initOrder.length).toBeGreaterThanOrEqual(14);
     });
   });
 

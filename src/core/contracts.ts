@@ -246,6 +246,7 @@ export interface RoomManagerAPI {
   getRoom: (roomId: string) => import('./contracts.js').BaseRoomLike | null;
   listRooms: () => RoomRow[];
   registerRoomType: (type: string, factory: BaseRoomConstructor) => void;
+  hydrateRoomsFromDb: () => { activated: number; skipped: number; failed: number };
 }
 
 export interface AgentRegistryAPI {

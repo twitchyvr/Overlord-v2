@@ -58,7 +58,13 @@ async function start(): Promise<void> {
 
   const rooms = initRooms({ bus, agents, tools, ai });
   registerBuiltInRoomTypes(rooms.registerRoomType);
-  log.info('Room manager initialized (9 built-in room types registered)');
+  log.info('Room manager initialized (12 built-in room types registered)');
+
+  // Hydrate any rooms that already exist in the database from previous sessions.
+  // This turns DB records (from blueprint apply, custom plans, or prior runs)
+  // into active BaseRoom instances so getRoom() works and room details are available.
+  const hydration = rooms.hydrateRoomsFromDb();
+  log.info(hydration, 'Room hydration from database complete');
 
   // Wire bus handlers for Phase Zero and Scope Change protocols
   initPhaseZeroHandler(bus);

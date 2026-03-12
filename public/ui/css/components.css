@@ -58,6 +58,10 @@
   padding: var(--sp-1) var(--sp-3);
   font-size: var(--text-xs);
 }
+.btn-md {
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--text-sm);
+}
 .btn-lg {
   padding: var(--sp-3) var(--sp-6);
   font-size: var(--text-base);
@@ -1614,6 +1618,12 @@
 }
 
 /* RAID panel */
+.raid-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-2);
+}
 .raid-stats-row {
   display: flex;
   gap: var(--sp-3);
@@ -1831,6 +1841,12 @@
   margin-bottom: var(--sp-2);
   font-size: var(--text-sm);
   color: var(--status-success);
+}
+.phase-actions-row {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  margin-top: var(--sp-2);
 }
 
 /* Gate signoff button */
