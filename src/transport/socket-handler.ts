@@ -215,12 +215,36 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
     handle(socket, 'system:status', EmptyPayloadSchema, (_data, ack) => {
       const result = listBuildings();
-      const buildings = result.ok ? (result.data as Array<{ id: string; name: string; active_phase: string }>) : [];
+      const buildings = result.ok ? (result.data as Array<{ id: string; name: string; active_phase: string; config: Record<string, unknown>; repo_url?: string }>) : [];
+
+      // Enrich with floor/agent counts
+      const db = getDb();
+      const floorCounts = db.prepare(
+        'SELECT building_id, COUNT(*) as count FROM floors GROUP BY building_id'
+      ).all() as Array<{ building_id: string; count: number }>;
+      const floorMap = new Map(floorCounts.map(r => [r.building_id, r.count]));
+
+      const agentCounts = db.prepare(
+        `SELECT f.building_id, COUNT(DISTINCT a.id) as count
+         FROM agents a JOIN rooms r ON a.current_room_id = r.id
+         JOIN floors f ON r.floor_id = f.id
+         GROUP BY f.building_id`
+      ).all() as Array<{ building_id: string; count: number }>;
+      const agentMap = new Map(agentCounts.map(r => [r.building_id, r.count]));
+
       if (ack) ack({
         ok: true,
         data: {
           isNewUser: buildings.length === 0,
-          buildings: buildings.map((b) => ({ id: b.id, name: b.name, activePhase: b.active_phase })),
+          buildings: buildings.map((b) => ({
+            id: b.id,
+            name: b.name,
+            activePhase: b.active_phase,
+            description: (b.config as Record<string, unknown>)?.description || '',
+            repoUrl: b.repo_url || '',
+            floorCount: floorMap.get(b.id) || 0,
+            agentCount: agentMap.get(b.id) || 0,
+          })),
         },
       });
     });

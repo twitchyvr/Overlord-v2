@@ -219,10 +219,24 @@ export class Card {
     card.appendChild(header);
 
     const body = h('div', { class: 'card-body' });
-    if (data.description) body.appendChild(h('div', null, data.description));
-    if (data.floorCount !== undefined) {
-      body.appendChild(h('div', { class: 'building-stat' }, `${data.floorCount} floors`));
+    if (data.description) {
+      body.appendChild(h('div', { class: 'building-desc text-muted' }, data.description));
     }
+
+    // Stats row: floors, agents, repo
+    const stats = h('div', { class: 'building-stats' });
+    if (data.floorCount !== undefined) {
+      stats.appendChild(h('span', { class: 'building-stat' }, `${data.floorCount} floors`));
+    }
+    if (data.agentCount !== undefined && data.agentCount > 0) {
+      stats.appendChild(h('span', { class: 'building-stat' }, `${data.agentCount} agents`));
+    }
+    if (data.repoUrl) {
+      const repoName = data.repoUrl.split('/').slice(-2).join('/');
+      stats.appendChild(h('span', { class: 'building-stat building-repo' }, repoName));
+    }
+    if (stats.childNodes.length > 0) body.appendChild(stats);
+
     card.appendChild(body);
   }
 

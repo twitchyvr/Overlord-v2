@@ -176,6 +176,26 @@
   color: var(--text-secondary);
   line-height: var(--leading-normal);
 }
+.building-desc {
+  margin-bottom: var(--sp-2);
+  font-size: var(--text-xs);
+}
+.building-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+.building-stat {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+.building-repo {
+  font-family: var(--font-mono);
+}
 .card-footer {
   display: flex;
   align-items: center;
