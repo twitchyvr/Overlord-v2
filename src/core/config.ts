@@ -52,6 +52,10 @@ const ConfigSchema = z.object({
   // AI Request Timeout
   AI_REQUEST_TIMEOUT_MS: z.coerce.number().positive().default(60_000),
 
+  // MCP Settings
+  ENABLE_MCP: z.coerce.boolean().default(false),
+  MCP_TIMEOUT_MS: z.coerce.number().positive().default(60_000),
+
   // Features
   ENABLE_PLUGINS: z.coerce.boolean().default(false),
   ENABLE_LUA_SCRIPTING: z.coerce.boolean().default(false),

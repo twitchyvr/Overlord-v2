@@ -146,6 +146,12 @@ vi.mock('../../src/plugins/index.js', () => ({
   }),
 }));
 
+vi.mock('../../src/tools/mcp-manager.js', () => ({
+  initMcp: vi.fn(async () => {
+    initOrder.push('mcp');
+  }),
+}));
+
 // Mock HTTP/Express/Socket.IO
 const mockRoutes: Record<string, Function> = {};
 const mockApp = {
@@ -189,7 +195,7 @@ describe('Server Bootstrap', () => {
     await import('../../src/server.js');
     // Allow async init to complete
     await vi.waitFor(() => {
-      expect(initOrder.length).toBeGreaterThanOrEqual(12);
+      expect(initOrder.length).toBeGreaterThanOrEqual(13);
     });
   });
 
@@ -261,15 +267,18 @@ describe('Server Bootstrap', () => {
     expect(mockHttpServer.listen).toHaveBeenCalledWith(3999, expect.any(Function));
   });
 
-  it('initializes commands and plugins after rooms', () => {
+  it('initializes commands, plugins, and MCP after rooms', () => {
     const roomsIdx = initOrder.indexOf('rooms');
     const commandsIdx = initOrder.indexOf('commands');
     const pluginsIdx = initOrder.indexOf('plugins');
+    const mcpIdx = initOrder.indexOf('mcp');
     const transportIdx = initOrder.indexOf('transport');
 
     expect(commandsIdx).toBeGreaterThan(roomsIdx);
     expect(pluginsIdx).toBeGreaterThan(roomsIdx);
+    expect(mcpIdx).toBeGreaterThan(pluginsIdx);
     expect(commandsIdx).toBeLessThan(transportIdx);
     expect(pluginsIdx).toBeLessThan(transportIdx);
+    expect(mcpIdx).toBeLessThan(transportIdx);
   });
 });
