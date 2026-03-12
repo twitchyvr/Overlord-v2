@@ -9,6 +9,7 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  position: relative; /* anchor for scroll-to-bottom button */
 }
 
 /* ── Chat header ── */

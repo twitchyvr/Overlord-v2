@@ -92,6 +92,8 @@ export class ChatView extends Component {
     this._scrollLocked = true;   // auto-scroll when at bottom
     this._streamingMessage = null; // element being streamed into
     this._streamBuffer = '';      // accumulated stream text
+    this._renderedCount = 0;     // tracks how many messages are in DOM
+    this._lastRenderedId = null;  // last message id for incremental detection
 
     // Token suggestion caches (populated on first fetch, cleared on reconnect)
     this._cmdCache = null;
@@ -186,21 +188,58 @@ export class ChatView extends Component {
     this.el.appendChild(inputContainer);
   }
 
-  /** Render the message list. */
+  /**
+   * Render the message list.
+   *
+   * Uses incremental append when new messages arrive to preserve scroll
+   * position for users reading history.  Falls back to full re-render
+   * only when the message set diverges (clear, reload, etc.).
+   */
   _renderMessages(messages) {
     if (!this._messagesEl) return;
-    this._messagesEl.textContent = '';
 
     if (messages.length === 0) {
+      this._messagesEl.textContent = '';
       this._messagesEl.appendChild(this._renderEmptyChat());
+      this._renderedCount = 0;
       return;
     }
 
-    const frag = document.createDocumentFragment();
-    for (const msg of messages) {
-      frag.appendChild(this._createMessageEl(msg));
+    // Detect if we can incrementally append (messages grew at the end)
+    const prevCount = this._renderedCount || 0;
+    const canAppend = prevCount > 0
+      && messages.length > prevCount
+      && this._lastRenderedId === (messages[prevCount - 1]?.id || prevCount - 1);
+
+    if (canAppend) {
+      // Remove empty state if present
+      const emptyState = this._messagesEl.querySelector('.empty-state');
+      if (emptyState) emptyState.remove();
+
+      // Append only the new messages
+      const frag = document.createDocumentFragment();
+      for (let i = prevCount; i < messages.length; i++) {
+        frag.appendChild(this._createMessageEl(messages[i]));
+      }
+      this._messagesEl.appendChild(frag);
+    } else {
+      // Full re-render — save and restore scroll position if user scrolled up
+      const savedScroll = this._scrollLocked ? null : this._messagesEl.scrollTop;
+
+      this._messagesEl.textContent = '';
+      const frag = document.createDocumentFragment();
+      for (const msg of messages) {
+        frag.appendChild(this._createMessageEl(msg));
+      }
+      this._messagesEl.appendChild(frag);
+
+      if (savedScroll !== null) {
+        this._messagesEl.scrollTop = savedScroll;
+      }
     }
-    this._messagesEl.appendChild(frag);
+
+    this._renderedCount = messages.length;
+    this._lastRenderedId = messages[messages.length - 1]?.id || messages.length - 1;
 
     if (this._scrollLocked) this._scrollToBottom();
   }
