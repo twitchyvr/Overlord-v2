@@ -160,41 +160,85 @@ export class BuildingView extends Component {
     if (isExpanded && floor.rooms && floor.rooms.length > 0) {
       const roomGrid = h('div', { class: 'floor-room-grid' });
       for (const room of floor.rooms) {
-        const agentsInRoom = this._getAgentsInRoom(room.id);
-        const roomCard = h('div', {
-          class: `room-card${agentsInRoom.length > 0 ? ' room-occupied' : ''}`,
-          'data-room-id': room.id
-        },
-          h('div', { class: 'room-card-header' },
-            h('span', { class: `status-dot status-${agentsInRoom.length > 0 ? 'active' : 'idle'}` }),
-            h('span', { class: 'room-card-name' }, room.name || room.type)
-          ),
-          h('div', { class: 'room-card-meta' },
-            h('span', null, room.type)
-          )
-        );
-
-        if (agentsInRoom.length > 0) {
-          const avatarRow = h('div', { class: 'room-agent-avatars' });
-          for (const agent of agentsInRoom) {
-            avatarRow.appendChild(h('div', {
-              class: 'agent-avatar',
-              title: agent.name || agent.agentId
-            }, (agent.name || '?')[0].toUpperCase()));
-          }
-          roomCard.appendChild(avatarRow);
-        }
-
-        roomCard.addEventListener('click', (e) => {
-          e.stopPropagation();
-          OverlordUI.dispatch('building:room-selected', { roomId: room.id, floorId: floor.id });
-        });
-        roomGrid.appendChild(roomCard);
+        roomGrid.appendChild(this._renderRoomCard(room, floor.id));
       }
       bar.appendChild(roomGrid);
     }
 
     return bar;
+  }
+
+  /** Render a single room card within an expanded floor. */
+  _renderRoomCard(room, floorId) {
+    const agentsInRoom = this._getAgentsInRoom(room.id);
+    const roomStatus = this._getRoomStatus(agentsInRoom);
+
+    const roomCard = h('div', {
+      class: `room-card${agentsInRoom.length > 0 ? ' room-occupied' : ''}`,
+      'data-room-id': room.id
+    });
+
+    // Header: status badge + name
+    const header = h('div', { class: 'room-card-header' },
+      h('span', { class: `room-status-badge room-status-${roomStatus}` }, roomStatus),
+      h('span', { class: 'room-card-name' }, room.name || this._formatRoomType(room.type))
+    );
+    roomCard.appendChild(header);
+
+    // Meta row: room type + agent count
+    const meta = h('div', { class: 'room-card-meta' },
+      h('span', { class: 'room-card-type-tag' }, room.type),
+      h('span', { class: 'room-card-agent-count' },
+        `${agentsInRoom.length} agent${agentsInRoom.length !== 1 ? 's' : ''}`
+      )
+    );
+    roomCard.appendChild(meta);
+
+    // Last activity timestamp (if room has lastActivity)
+    if (room.lastActivity) {
+      roomCard.appendChild(h('div', { class: 'room-card-activity' },
+        h('span', { class: 'room-card-activity-label' }, 'Last:'),
+        h('span', { class: 'room-card-activity-time' }, formatTime(room.lastActivity))
+      ));
+    }
+
+    // Agent avatars
+    if (agentsInRoom.length > 0) {
+      const avatarRow = h('div', { class: 'room-agent-avatars' });
+      for (const agent of agentsInRoom) {
+        avatarRow.appendChild(h('div', {
+          class: `agent-avatar${agent.status === 'active' || agent.status === 'working' ? ' active' : ''}`,
+          title: agent.name || agent.agentId
+        }, (agent.name || '?')[0].toUpperCase()));
+      }
+      roomCard.appendChild(avatarRow);
+    }
+
+    roomCard.addEventListener('click', (e) => {
+      e.stopPropagation();
+      OverlordUI.dispatch('building:room-selected', { roomId: room.id, floorId });
+    });
+
+    return roomCard;
+  }
+
+  /**
+   * Determine the room status based on its agents.
+   * @returns {'active' | 'idle' | 'error'}
+   */
+  _getRoomStatus(agents) {
+    if (agents.length === 0) return 'idle';
+    const hasError = agents.some(a => a.status === 'error');
+    if (hasError) return 'error';
+    const hasActive = agents.some(a => a.status === 'active' || a.status === 'working');
+    if (hasActive) return 'active';
+    return 'idle';
+  }
+
+  /** Format room type slug as title (e.g., "code-lab" -> "Code Lab"). */
+  _formatRoomType(type) {
+    if (!type) return 'Room';
+    return type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   }
 
   _renderEmptyState() {
@@ -260,20 +304,28 @@ export class BuildingView extends Component {
         dotsRow.remove();
       }
 
-      // Update room card agent avatars (for expanded floors)
+      // Update room cards (for expanded floors)
       bar.querySelectorAll('.room-card').forEach(roomCard => {
         const roomId = roomCard.dataset.roomId;
         const agentsInRoom = this._getAgentsInRoom(roomId);
         const existingAvatarRow = roomCard.querySelector('.room-agent-avatars');
+        const roomStatus = this._getRoomStatus(agentsInRoom);
 
         // Update occupied class
         roomCard.classList.toggle('room-occupied', agentsInRoom.length > 0);
 
-        // Update status dot
-        const statusDot = roomCard.querySelector('.status-dot');
-        if (statusDot) {
-          statusDot.classList.remove('status-active', 'status-idle');
-          statusDot.classList.add(agentsInRoom.length > 0 ? 'status-active' : 'status-idle');
+        // Update status badge
+        const statusBadge = roomCard.querySelector('.room-status-badge');
+        if (statusBadge) {
+          statusBadge.classList.remove('room-status-active', 'room-status-idle', 'room-status-error');
+          statusBadge.classList.add(`room-status-${roomStatus}`);
+          statusBadge.textContent = roomStatus;
+        }
+
+        // Update agent count
+        const agentCount = roomCard.querySelector('.room-card-agent-count');
+        if (agentCount) {
+          agentCount.textContent = `${agentsInRoom.length} agent${agentsInRoom.length !== 1 ? 's' : ''}`;
         }
 
         if (agentsInRoom.length > 0) {
@@ -281,7 +333,7 @@ export class BuildingView extends Component {
           avatarRow.textContent = '';
           for (const agent of agentsInRoom) {
             avatarRow.appendChild(h('div', {
-              class: 'agent-avatar',
+              class: `agent-avatar${agent.status === 'active' || agent.status === 'working' ? ' active' : ''}`,
               title: agent.name || agent.agentId
             }, (agent.name || '?')[0].toUpperCase()));
           }
