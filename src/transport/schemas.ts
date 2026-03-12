@@ -143,6 +143,24 @@ export const ChatMessageSchema = z.object({
   agentId: optionalId(),
 }).passthrough();
 
+// ─── Read-only Event Schemas (no user data — reject unexpected fields) ───
+
+/** system:status, room:list, command:list, phase:order, system:health accept no payload */
+export const EmptyPayloadSchema = z.object({}).strict().optional().default({});
+
+// ─── Phase Event Schemas (phase:status, phase:gate) ───
+
+/** phase:status — client requests phase status for a building */
+export const PhaseStatusSchema = z.object({
+  buildingId: optionalId(),
+});
+
+/** phase:gate — client requests gate info for a building */
+export const PhaseGateSchema = z.object({
+  buildingId: optionalId(),
+  phase: optionalName(),
+});
+
 // ─── Phase Schemas ───
 
 export const PhaseGatesSchema = z.object({

@@ -573,6 +573,113 @@ describe('Socket Handler (Transport Layer)', () => {
     });
   });
 
+  describe('schema-less handler validation', () => {
+    it('system:status rejects unexpected fields', () => {
+      const ack = vi.fn();
+      socket.emit('system:status', { injected: 'malicious' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('system:health rejects unexpected fields', () => {
+      const ack = vi.fn();
+      socket.emit('system:health', { __proto__: { admin: true } }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('room:list rejects unexpected fields', () => {
+      const ack = vi.fn();
+      socket.emit('room:list', { evil: 'payload' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('command:list rejects unexpected fields', () => {
+      const ack = vi.fn();
+      socket.emit('command:list', { steal: 'data' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('phase:order rejects unexpected fields', () => {
+      const ack = vi.fn();
+      socket.emit('phase:order', { extra: 'junk' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('phase:status explicitly picks buildingId — no raw spread', () => {
+      const ack = vi.fn();
+      socket.emit('phase:status', { buildingId: 'b1' }, ack);
+
+      const event = bus.emitted.find((e) => e.event === 'phase:status');
+      expect(event).toBeDefined();
+      // Should contain only socketId and buildingId, NOT arbitrary injected properties
+      expect(event!.data).toEqual({
+        socketId: socket.id,
+        buildingId: 'b1',
+      });
+      expect(ack).toHaveBeenCalledWith({ ok: true });
+    });
+
+    it('phase:gate explicitly picks buildingId and phase — no raw spread', () => {
+      const ack = vi.fn();
+      socket.emit('phase:gate', { buildingId: 'b1', phase: 'strategy' }, ack);
+
+      const event = bus.emitted.find((e) => e.event === 'phase:gate');
+      expect(event).toBeDefined();
+      expect(event!.data).toEqual({
+        socketId: socket.id,
+        buildingId: 'b1',
+        phase: 'strategy',
+      });
+      expect(ack).toHaveBeenCalledWith({ ok: true });
+    });
+
+    it('phase:status emits undefined buildingId when not provided', () => {
+      const ack = vi.fn();
+      socket.emit('phase:status', {}, ack);
+
+      const event = bus.emitted.find((e) => e.event === 'phase:status');
+      expect(event).toBeDefined();
+      expect(event!.data).toEqual({
+        socketId: socket.id,
+        buildingId: undefined,
+      });
+    });
+  });
+
   describe('error handling', () => {
     it('building:create acks VALIDATION_ERROR when name is empty', () => {
       const ack = vi.fn();
