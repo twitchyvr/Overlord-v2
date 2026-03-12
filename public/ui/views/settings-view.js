@@ -240,11 +240,14 @@ export class SettingsView extends Component {
       label: 'Server',
       description: 'Backend server information',
       control: () => {
-        const port = this._serverConfig?.port || '4000';
-        const env = this._serverConfig?.environment || 'development';
+        const server = this._serverConfig?.server || {};
+        const env = server.environment || 'development';
+        const version = server.version || '0.1.0';
+        const uptime = server.uptime ? `${Math.round(server.uptime / 60)}m` : '—';
         return h('div', { class: 'settings-server-info' },
           h('span', { class: 'settings-info-badge' }, env),
-          h('span', { class: 'settings-info-detail' }, `Port ${port}`)
+          h('span', { class: 'settings-info-detail' }, `v${version}`),
+          h('span', { class: 'settings-info-detail' }, `Up ${uptime}`)
         );
       }
     }));
@@ -302,7 +305,7 @@ export class SettingsView extends Component {
 
     const mappingTable = h('div', { class: 'settings-mapping-table' });
     for (const [roomType, defaultProvider] of Object.entries(ROOM_PROVIDERS)) {
-      const serverOverride = this._serverConfig?.roomProviders?.[roomType];
+      const serverOverride = this._serverConfig?.roomProviderMap?.[roomType];
       const active = serverOverride || defaultProvider;
       const providerInfo = PROVIDERS[active] || { name: active, icon: '\u2753' };
 
