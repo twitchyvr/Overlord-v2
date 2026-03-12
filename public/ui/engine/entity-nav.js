@@ -6,15 +6,15 @@
  * routes to the correct detail view.
  *
  * Supported entity types:
- *   - 'agent'  → opens agent detail modal
- *   - 'room'   → dispatches building:room-selected (triggers RoomView modal)
- *   - 'task'   → opens task detail modal
- *   - 'raid'   → opens RAID entry detail modal
+ *   - 'agent'  → opens agent detail drawer
+ *   - 'room'   → dispatches building:room-selected (triggers RoomView)
+ *   - 'task'   → opens task detail drawer
+ *   - 'raid'   → opens RAID entry detail drawer
  */
 
 import { OverlordUI } from './engine.js';
 import { h, formatTime } from './helpers.js';
-import { Modal } from '../components/modal.js';
+import { Drawer } from '../components/drawer.js';
 import { Toast } from '../components/toast.js';
 import { createLogger } from './logger.js';
 
@@ -99,7 +99,7 @@ export function resolveRoom(roomId) {
   return { id: roomId, name: roomId, type: null };
 }
 
-// ── Agent Detail Modal ────────────────────────────────────────
+// ── Agent Detail Drawer ───────────────────────────────────────
 
 async function _openAgentDetail(agentId) {
   if (!window.overlordSocket) {
@@ -157,7 +157,7 @@ async function _openAgentDetail(agentId) {
   } else {
     assignmentSection.appendChild(h('div', { class: 'agent-detail-unassigned' },
       h('span', null, 'Not assigned to any room'),
-      h('span', { class: 'text-muted' }, ' — assign from the Agents panel or Building view')
+      h('span', { class: 'text-muted' }, ' — assign from the Agents view or Building view')
     ));
   }
   container.appendChild(assignmentSection);
@@ -260,15 +260,14 @@ async function _openAgentDetail(agentId) {
   }
   container.appendChild(infoSection);
 
-  Modal.open(`agent-detail-${agentId}`, {
-    title: `${agent.name || 'Agent'}`,
+  Drawer.open(`agent-detail-${agentId}`, {
+    title: agent.name || 'Agent',
     content: container,
-    size: 'lg',
-    position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    width: '480px',
   });
 }
 
-// ── Task Detail Modal ────────────────────────────────────────
+// ── Task Detail Drawer ───────────────────────────────────────
 
 async function _openTaskDetail(taskId) {
   if (!window.overlordSocket) {
@@ -354,15 +353,14 @@ async function _openTaskDetail(taskId) {
   }
   container.appendChild(timeSection);
 
-  Modal.open(`task-detail-${taskId}`, {
+  Drawer.open(`task-detail-${taskId}`, {
     title: task.title || 'Task Detail',
     content: container,
-    size: 'md',
-    position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    width: '440px',
   });
 }
 
-// ── RAID Detail Modal ────────────────────────────────────────
+// ── RAID Detail Drawer ───────────────────────────────────────
 
 function _openRaidDetail(entryId) {
   const store = OverlordUI.getStore();
@@ -448,11 +446,10 @@ function _openRaidDetail(entryId) {
 
   container.appendChild(ctxSection);
 
-  Modal.open(`raid-detail-${entryId}`, {
+  Drawer.open(`raid-detail-${entryId}`, {
     title: entry.title || entry.summary || 'RAID Entry',
     content: container,
-    size: 'md',
-    position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    width: '440px',
   });
 }
 
@@ -500,7 +497,7 @@ function _formatRoomType(type) {
 
 /**
  * Create a clickable entity link for use in any panel.
- * Import this in panels to render cross-navigable references.
+ * Import this in views to render cross-navigable references.
  */
 export const EntityLink = {
   /**
