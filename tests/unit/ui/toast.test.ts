@@ -351,6 +351,69 @@ describe('Toast — multiple toasts', () => {
     expect(container!.children.length).toBe(3);
   });
 
+  it('caps visible toasts at MAX_VISIBLE_TOASTS (5)', () => {
+    for (let i = 0; i < 6; i++) {
+      Toast.show(`Toast ${i}`, { duration: 0 });
+    }
+
+    const container = document.getElementById('toast-container');
+    // The 6th toast causes the 1st to be dismissed
+    // After animation (300ms), only 5 should remain
+    vi.advanceTimersByTime(300);
+    expect(container!.children.length).toBe(5);
+  });
+
+  it('dismisses the oldest toast when cap is exceeded', () => {
+    const first = Toast.show('First', { duration: 0 });
+    Toast.show('Second', { duration: 0 });
+    Toast.show('Third', { duration: 0 });
+    Toast.show('Fourth', { duration: 0 });
+    Toast.show('Fifth', { duration: 0 });
+
+    const container = document.getElementById('toast-container');
+    expect(container!.contains(first)).toBe(true);
+
+    // 6th toast should evict the first
+    Toast.show('Sixth', { duration: 0 });
+    vi.advanceTimersByTime(300);
+
+    expect(container!.contains(first)).toBe(false);
+    expect(container!.children.length).toBe(5);
+  });
+
+  it('evicts multiple oldest toasts when burst exceeds cap', () => {
+    // Show 5 toasts at once
+    for (let i = 0; i < 5; i++) {
+      Toast.show(`Batch ${i}`, { duration: 0 });
+    }
+
+    const container = document.getElementById('toast-container');
+    expect(container!.children.length).toBe(5);
+
+    // Show 3 more — should evict 3 oldest
+    Toast.show('New 1', { duration: 0 });
+    Toast.show('New 2', { duration: 0 });
+    Toast.show('New 3', { duration: 0 });
+
+    vi.advanceTimersByTime(300);
+    expect(container!.children.length).toBe(5);
+  });
+
+  it('stays at cap when rapidly adding and dismissing', () => {
+    // Fill to cap
+    for (let i = 0; i < 5; i++) {
+      Toast.show(`Toast ${i}`, { duration: 0 });
+    }
+
+    const container = document.getElementById('toast-container');
+    expect(container!.children.length).toBe(5);
+
+    // Add one more — should auto-evict oldest
+    Toast.show('Extra', { duration: 0 });
+    vi.advanceTimersByTime(300);
+    expect(container!.children.length).toBe(5);
+  });
+
   it('each toast is independent for dismissal', () => {
     const a = Toast.show('A', { duration: 0 });
     const b = Toast.show('B', { duration: 0 });
