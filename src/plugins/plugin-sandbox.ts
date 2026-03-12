@@ -25,6 +25,7 @@ import type {
   PluginHookHandler,
   PluginPermission,
 } from './contracts.js';
+import { createLuaSandbox } from './lua-sandbox.js';
 
 const log = logger.child({ module: 'plugin-sandbox' });
 
@@ -51,10 +52,14 @@ const BLOCKED_GLOBALS = [
  * Create a sandboxed execution environment for a plugin.
  *
  * For JS plugins: uses Node.js `vm.createContext()` with a restricted global set.
- * For Lua plugins: throws — Lua runtime is an optional dependency not yet implemented.
+ * For Lua plugins: uses wasmoon (Lua 5.4 via WASM) if ENABLE_LUA_SCRIPTING is true,
+ * otherwise returns a stub that rejects all execution.
  */
-export function createSandbox(manifest: PluginManifest, context: PluginContext): PluginSandbox {
+export async function createSandbox(manifest: PluginManifest, context: PluginContext): Promise<PluginSandbox> {
   if (manifest.engine === 'lua') {
+    if (process.env.ENABLE_LUA_SCRIPTING === 'true') {
+      return createLuaSandbox(manifest, context);
+    }
     return createLuaStub(manifest);
   }
   return createJsSandbox(manifest, context);

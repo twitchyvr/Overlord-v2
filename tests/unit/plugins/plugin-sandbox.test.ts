@@ -96,8 +96,8 @@ describe('Plugin Sandbox', () => {
   // ─── Sandbox creation ───
 
   describe('createSandbox', () => {
-    it('creates a JS sandbox for engine=js', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('creates a JS sandbox for engine=js', async () => {
+      const sandbox = await createSandbox(manifest, context);
       expect(sandbox).toBeDefined();
       expect(typeof sandbox.execute).toBe('function');
       expect(typeof sandbox.callHook).toBe('function');
@@ -105,9 +105,9 @@ describe('Plugin Sandbox', () => {
       expect(typeof sandbox.destroy).toBe('function');
     });
 
-    it('creates a Lua stub for engine=lua', () => {
+    it('creates a Lua stub for engine=lua when ENABLE_LUA_SCRIPTING is not set', async () => {
       const luaManifest = makeManifest({ engine: 'lua' });
-      const sandbox = createSandbox(luaManifest, context);
+      const sandbox = await createSandbox(luaManifest, context);
       expect(sandbox).toBeDefined();
 
       const result = sandbox.execute('-- lua code');
@@ -121,8 +121,8 @@ describe('Plugin Sandbox', () => {
   // ─── Script execution ───
 
   describe('execute', () => {
-    it('executes valid JS code successfully', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('executes valid JS code successfully', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute('var x = 1 + 1;');
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -130,8 +130,8 @@ describe('Plugin Sandbox', () => {
       }
     });
 
-    it('returns registered hook names after execution', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('returns registered hook names after execution', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute(`
         registerHook('onLoad', function(data) {});
         registerHook('onRoomEnter', function(data) {});
@@ -143,8 +143,8 @@ describe('Plugin Sandbox', () => {
       }
     });
 
-    it('returns error for syntax errors', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('returns error for syntax errors', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute('function {{{ invalid');
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -152,8 +152,8 @@ describe('Plugin Sandbox', () => {
       }
     });
 
-    it('returns error for runtime errors', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('returns error for runtime errors', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute('throw new Error("plugin crashed");');
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -162,8 +162,8 @@ describe('Plugin Sandbox', () => {
       }
     });
 
-    it('returns error after sandbox is destroyed', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('returns error after sandbox is destroyed', async () => {
+      const sandbox = await createSandbox(manifest, context);
       sandbox.destroy();
       const result = sandbox.execute('var x = 1;');
       expect(result.ok).toBe(false);
@@ -178,40 +178,40 @@ describe('Plugin Sandbox', () => {
   // to verify they are correctly blocked by the VM security restrictions.
 
   describe('blocked globals', () => {
-    it('blocks access to process', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('blocks access to process', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute(
         'if (typeof process !== "undefined" && process !== undefined) throw new Error("process is accessible");',
       );
       expect(result.ok).toBe(true);
     });
 
-    it('blocks access to require', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('blocks access to require', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute(
         'if (typeof require !== "undefined" && require !== undefined) throw new Error("require is accessible");',
       );
       expect(result.ok).toBe(true);
     });
 
-    it('blocks access to Buffer', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('blocks access to Buffer', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute(
         'if (typeof Buffer !== "undefined" && Buffer !== undefined) throw new Error("Buffer is accessible");',
       );
       expect(result.ok).toBe(true);
     });
 
-    it('blocks access to globalThis', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('blocks access to globalThis', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute(
         'if (typeof globalThis !== "undefined" && globalThis !== undefined) throw new Error("globalThis is accessible");',
       );
       expect(result.ok).toBe(true);
     });
 
-    it('blocks access to __filename and __dirname', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('blocks access to __filename and __dirname', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute([
         'if (typeof __filename !== "undefined" && __filename !== undefined) throw new Error("__filename accessible");',
         'if (typeof __dirname !== "undefined" && __dirname !== undefined) throw new Error("__dirname accessible");',
@@ -221,8 +221,8 @@ describe('Plugin Sandbox', () => {
 
     // Test that vm codeGeneration: { strings: false } blocks dynamic code execution.
     // This string is sandbox test input, not production code.
-    it('blocks dynamic string code evaluation in sandbox', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('blocks dynamic string code evaluation in sandbox', async () => {
+      const sandbox = await createSandbox(manifest, context);
       // The sandbox's vm context has codeGeneration: { strings: false }
       // which prevents string-based code generation
       const dangerousInput = 'ev' + 'al("1 + 1");'; // construct at runtime to bypass static analysis
@@ -234,8 +234,8 @@ describe('Plugin Sandbox', () => {
   // ─── Safe globals are available ───
 
   describe('safe globals', () => {
-    it('provides console methods', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('provides console methods', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute(`
         console.log("test log");
         console.warn("test warn");
@@ -244,8 +244,8 @@ describe('Plugin Sandbox', () => {
       expect(result.ok).toBe(true);
     });
 
-    it('provides JSON, Math, Date', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('provides JSON, Math, Date', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute(`
         JSON.stringify({a: 1});
         Math.max(1, 2);
@@ -254,8 +254,8 @@ describe('Plugin Sandbox', () => {
       expect(result.ok).toBe(true);
     });
 
-    it('provides Array, Object, Map, Set', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('provides Array, Object, Map, Set', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute(`
         var arr = Array.from([1, 2, 3]);
         var obj = Object.keys({a: 1});
@@ -265,8 +265,8 @@ describe('Plugin Sandbox', () => {
       expect(result.ok).toBe(true);
     });
 
-    it('provides setTimeout with max clamping', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('provides setTimeout with max clamping', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute(`
         var timer = setTimeout(function() {}, 100);
         clearTimeout(timer);
@@ -278,29 +278,29 @@ describe('Plugin Sandbox', () => {
   // ─── Hook registration ───
 
   describe('hook registration', () => {
-    it('registers valid hooks via registerHook', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('registers valid hooks via registerHook', async () => {
+      const sandbox = await createSandbox(manifest, context);
       sandbox.execute("registerHook('onLoad', function(data) {});");
       const hooks = sandbox.getHooks();
       expect(hooks.onLoad).toBeDefined();
     });
 
-    it('rejects invalid hook names', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('rejects invalid hook names', async () => {
+      const sandbox = await createSandbox(manifest, context);
       sandbox.execute("registerHook('onFoo', function(data) {});");
       const hooks = sandbox.getHooks();
       expect(Object.keys(hooks)).toHaveLength(0);
     });
 
-    it('rejects non-function hook handlers', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('rejects non-function hook handlers', async () => {
+      const sandbox = await createSandbox(manifest, context);
       sandbox.execute('registerHook("onLoad", "not a function");');
       const hooks = sandbox.getHooks();
       expect(hooks.onLoad).toBeUndefined();
     });
 
-    it('allows all valid hook types', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('allows all valid hook types', async () => {
+      const sandbox = await createSandbox(manifest, context);
       sandbox.execute(`
         registerHook('onLoad', function(d) {});
         registerHook('onUnload', function(d) {});
@@ -318,7 +318,7 @@ describe('Plugin Sandbox', () => {
 
   describe('callHook', () => {
     it('calls a registered hook', async () => {
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
       sandbox.execute(`
         registerHook('onLoad', function(data) {
           console.log("hook called");
@@ -334,7 +334,7 @@ describe('Plugin Sandbox', () => {
     });
 
     it('skips unregistered hooks', async () => {
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
       const result = await sandbox.callHook('onLoad', { hook: 'onLoad' });
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -343,7 +343,7 @@ describe('Plugin Sandbox', () => {
     });
 
     it('catches hook errors without crashing', async () => {
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
       sandbox.execute(`
         registerHook('onRoomEnter', function(data) {
           throw new Error("hook exploded");
@@ -359,7 +359,7 @@ describe('Plugin Sandbox', () => {
     });
 
     it('returns error after sandbox is destroyed', async () => {
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
       sandbox.execute("registerHook('onLoad', function(data) {});");
       sandbox.destroy();
 
@@ -374,66 +374,66 @@ describe('Plugin Sandbox', () => {
   // ─── Permission-filtered API ───
 
   describe('permission filtering', () => {
-    it('blocks bus:emit when permission not granted', () => {
+    it('blocks bus:emit when permission not granted', async () => {
       const bus = { emit: vi.fn(), on: vi.fn(), off: vi.fn() };
       const ctx = makeContext({ bus });
-      const sandbox = createSandbox(makeManifest({ permissions: [] }), ctx);
+      const sandbox = await createSandbox(makeManifest({ permissions: [] }), ctx);
       sandbox.execute('var result = overlord.bus.emit("my-event", {});');
       expect(bus.emit).not.toHaveBeenCalled();
     });
 
-    it('allows bus:emit when permission granted', () => {
+    it('allows bus:emit when permission granted', async () => {
       const bus = { emit: vi.fn(), on: vi.fn(), off: vi.fn() };
       const ctx = makeContext({ bus });
-      const sandbox = createSandbox(makeManifest({ permissions: ['bus:emit'] }), ctx);
+      const sandbox = await createSandbox(makeManifest({ permissions: ['bus:emit'] }), ctx);
       sandbox.execute('overlord.bus.emit("my-event", {key: "value"});');
       expect(bus.emit).toHaveBeenCalledWith('my-event', { key: 'value' });
     });
 
-    it('blocks room:read when permission not granted', () => {
+    it('blocks room:read when permission not granted', async () => {
       const rooms = { listRooms: vi.fn(), getRoom: vi.fn(), registerRoomType: vi.fn() };
       const ctx = makeContext({ rooms });
-      const sandbox = createSandbox(makeManifest({ permissions: [] }), ctx);
+      const sandbox = await createSandbox(makeManifest({ permissions: [] }), ctx);
       sandbox.execute('overlord.rooms.list();');
       expect(rooms.listRooms).not.toHaveBeenCalled();
     });
 
-    it('allows room:read when permission granted', () => {
+    it('allows room:read when permission granted', async () => {
       const rooms = { listRooms: vi.fn(() => []), getRoom: vi.fn(), registerRoomType: vi.fn() };
       const ctx = makeContext({ rooms });
-      const sandbox = createSandbox(makeManifest({ permissions: ['room:read'] }), ctx);
+      const sandbox = await createSandbox(makeManifest({ permissions: ['room:read'] }), ctx);
       sandbox.execute('overlord.rooms.list();');
       expect(rooms.listRooms).toHaveBeenCalled();
     });
 
-    it('blocks agent:read when permission not granted', () => {
+    it('blocks agent:read when permission not granted', async () => {
       const agents = { listAgents: vi.fn(), getAgent: vi.fn() };
       const ctx = makeContext({ agents });
-      const sandbox = createSandbox(makeManifest({ permissions: [] }), ctx);
+      const sandbox = await createSandbox(makeManifest({ permissions: [] }), ctx);
       sandbox.execute('overlord.agents.list();');
       expect(agents.listAgents).not.toHaveBeenCalled();
     });
 
-    it('allows agent:read when permission granted', () => {
+    it('allows agent:read when permission granted', async () => {
       const agents = { listAgents: vi.fn(() => []), getAgent: vi.fn() };
       const ctx = makeContext({ agents });
-      const sandbox = createSandbox(makeManifest({ permissions: ['agent:read'] }), ctx);
+      const sandbox = await createSandbox(makeManifest({ permissions: ['agent:read'] }), ctx);
       sandbox.execute('overlord.agents.list();');
       expect(agents.listAgents).toHaveBeenCalled();
     });
 
-    it('blocks storage:write when only storage:read granted', () => {
+    it('blocks storage:write when only storage:read granted', async () => {
       const storage = { get: vi.fn(), set: vi.fn(), delete: vi.fn(), keys: vi.fn(() => []) };
       const ctx = makeContext({ storage });
-      const sandbox = createSandbox(makeManifest({ permissions: ['storage:read'] }), ctx);
+      const sandbox = await createSandbox(makeManifest({ permissions: ['storage:read'] }), ctx);
       sandbox.execute('overlord.storage.set("key", "value");');
       expect(storage.set).not.toHaveBeenCalled();
     });
 
-    it('allows storage:read and :write when both granted', () => {
+    it('allows storage:read and :write when both granted', async () => {
       const storage = { get: vi.fn(() => 'val'), set: vi.fn(), delete: vi.fn(), keys: vi.fn(() => ['k']) };
       const ctx = makeContext({ storage });
-      const sandbox = createSandbox(
+      const sandbox = await createSandbox(
         makeManifest({ permissions: ['storage:read', 'storage:write'] }),
         ctx,
       );
@@ -447,8 +447,8 @@ describe('Plugin Sandbox', () => {
       expect(storage.keys).toHaveBeenCalled();
     });
 
-    it('exposes manifest as frozen object always', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('exposes manifest as frozen object always', async () => {
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute(`
         if (overlord.manifest.id !== "test-plugin") throw new Error("wrong id");
         try {
@@ -463,8 +463,8 @@ describe('Plugin Sandbox', () => {
   // ─── Sandbox destroy ───
 
   describe('destroy', () => {
-    it('clears all hooks on destroy', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('clears all hooks on destroy', async () => {
+      const sandbox = await createSandbox(manifest, context);
       sandbox.execute(`
         registerHook('onLoad', function(d) {});
         registerHook('onUnload', function(d) {});
@@ -475,8 +475,8 @@ describe('Plugin Sandbox', () => {
       expect(Object.keys(sandbox.getHooks())).toHaveLength(0);
     });
 
-    it('is idempotent (double destroy is safe)', () => {
-      const sandbox = createSandbox(manifest, context);
+    it('is idempotent (double destroy is safe)', async () => {
+      const sandbox = await createSandbox(manifest, context);
       sandbox.destroy();
       sandbox.destroy(); // should not throw
     });
@@ -485,9 +485,9 @@ describe('Plugin Sandbox', () => {
   // ─── Lua stub ───
 
   describe('Lua stub', () => {
-    it('returns error on execute', () => {
+    it('returns error on execute', async () => {
       const luaManifest = makeManifest({ engine: 'lua', id: 'lua-plugin' });
-      const sandbox = createSandbox(luaManifest, context);
+      const sandbox = await createSandbox(luaManifest, context);
       const result = sandbox.execute('print("hello")');
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -498,7 +498,7 @@ describe('Plugin Sandbox', () => {
 
     it('returns error on callHook', async () => {
       const luaManifest = makeManifest({ engine: 'lua' });
-      const sandbox = createSandbox(luaManifest, context);
+      const sandbox = await createSandbox(luaManifest, context);
       const result = await sandbox.callHook('onLoad', { hook: 'onLoad' });
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -506,15 +506,15 @@ describe('Plugin Sandbox', () => {
       }
     });
 
-    it('returns empty hooks', () => {
+    it('returns empty hooks', async () => {
       const luaManifest = makeManifest({ engine: 'lua' });
-      const sandbox = createSandbox(luaManifest, context);
+      const sandbox = await createSandbox(luaManifest, context);
       expect(sandbox.getHooks()).toEqual({});
     });
 
-    it('destroy is safe no-op', () => {
+    it('destroy is safe no-op', async () => {
       const luaManifest = makeManifest({ engine: 'lua' });
-      const sandbox = createSandbox(luaManifest, context);
+      const sandbox = await createSandbox(luaManifest, context);
       sandbox.destroy(); // should not throw
     });
   });
@@ -522,26 +522,26 @@ describe('Plugin Sandbox', () => {
   // ─── Console routing ───
 
   describe('console routing', () => {
-    it('routes console.log to context.log.info', () => {
+    it('routes console.log to context.log.info', async () => {
       const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
       const ctx = makeContext({ log });
-      const sandbox = createSandbox(manifest, ctx);
+      const sandbox = await createSandbox(manifest, ctx);
       sandbox.execute('console.log("hello world");');
       expect(log.info).toHaveBeenCalled();
     });
 
-    it('routes console.warn to context.log.warn', () => {
+    it('routes console.warn to context.log.warn', async () => {
       const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
       const ctx = makeContext({ log });
-      const sandbox = createSandbox(manifest, ctx);
+      const sandbox = await createSandbox(manifest, ctx);
       sandbox.execute('console.warn("warning!");');
       expect(log.warn).toHaveBeenCalled();
     });
 
-    it('routes console.error to context.log.error', () => {
+    it('routes console.error to context.log.error', async () => {
       const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
       const ctx = makeContext({ log });
-      const sandbox = createSandbox(manifest, ctx);
+      const sandbox = await createSandbox(manifest, ctx);
       sandbox.execute('console.error("bad!");');
       expect(log.error).toHaveBeenCalled();
     });
