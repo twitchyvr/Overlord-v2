@@ -502,6 +502,21 @@ export function initSocketBridge(socket, store, engine) {
         socket.emit('agent:list', filters, (res) => {
           if (res && res.ok) {
             store.set('agents.list', res.data);
+            // Build agent positions map from current_room_id data
+            const positions = {};
+            for (const agent of res.data) {
+              if (agent.current_room_id) {
+                positions[agent.id] = {
+                  agentId: agent.id,
+                  name: agent.name,
+                  roomId: agent.current_room_id,
+                  tableId: agent.current_table_id,
+                  status: agent.status || 'idle',
+                  floorId: null, // Not available from agent data alone
+                };
+              }
+            }
+            store.set('building.agentPositions', positions);
           }
           resolve(res);
         });

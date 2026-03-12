@@ -2517,6 +2517,17 @@
   color: var(--text-muted);
 }
 
+/* ── Agent Quick-Assign ── */
+.agent-quick-assign {
+  padding: var(--sp-1) var(--sp-3);
+  border-top: 1px solid var(--border-secondary);
+  margin-top: var(--sp-1);
+}
+.agent-quick-assign .btn {
+  width: 100%;
+  justify-content: center;
+}
+
 /* ── Empty State / Onboarding Guide ── */
 .building-empty-state {
   padding: var(--sp-6);
