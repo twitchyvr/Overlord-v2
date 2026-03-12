@@ -993,12 +993,236 @@
 }
 .todo-text {
   color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .empty-state-inline {
   font-size: var(--text-sm);
   color: var(--text-muted);
   padding: var(--sp-3);
   text-align: center;
+}
+
+/* Todo section header (title + add button) */
+.todo-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-2);
+}
+.todo-section-header h4 {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Todo progress summary */
+.todo-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  margin-bottom: var(--sp-2);
+}
+.todo-summary-text {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.todo-progress-track {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.todo-progress-fill {
+  height: 100%;
+  background: var(--accent-green);
+  border-radius: var(--radius-full);
+  transition: width var(--duration-normal) var(--ease-default);
+}
+
+/* Todo agent assignment controls */
+.todo-agent-control {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.todo-agent-badge {
+  font-size: 10px;
+  font-weight: var(--font-medium);
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-full);
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent-blue);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.todo-agent-badge:hover {
+  background: rgba(56, 189, 248, 0.22);
+}
+.todo-agent-select {
+  font-size: var(--text-xs);
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  max-width: 120px;
+  cursor: pointer;
+}
+
+/* Todo delete button */
+.todo-delete-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  opacity: 0;
+}
+.todo-row:hover .todo-delete-btn {
+  opacity: 1;
+}
+.todo-delete-btn:hover {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--accent-red);
+}
+
+/* Add todo inline form */
+.todo-add-form {
+  overflow: hidden;
+  max-height: 120px;
+  transition: max-height var(--duration-normal) var(--ease-default),
+              opacity var(--duration-normal) var(--ease-default),
+              margin var(--duration-normal) var(--ease-default);
+  opacity: 1;
+  margin-bottom: var(--sp-3);
+}
+.todo-add-form-hidden {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+}
+.todo-add-input-row {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+.todo-add-input {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+.todo-add-agent-select {
+  font-size: var(--text-xs);
+  padding: var(--sp-2);
+  max-width: 130px;
+  flex-shrink: 0;
+}
+
+/* ── Agent Todos (in agent detail drawer) ── */
+
+.agent-todos-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.agent-todo-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  transition: background var(--duration-fast);
+}
+.agent-todo-row:hover {
+  background: var(--bg-tertiary);
+}
+.agent-todo-row.agent-todo-done {
+  opacity: 0.6;
+}
+.agent-todo-status {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.agent-todo-status-pending {
+  background: var(--accent-yellow);
+}
+.agent-todo-status-done {
+  background: var(--accent-green);
+}
+.agent-todo-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.agent-todo-description {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-todo-row.agent-todo-done .agent-todo-description {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.agent-todo-task-link {
+  display: flex;
+}
+.agent-todo-task-btn {
+  font-size: var(--text-xs);
+  color: var(--accent-blue);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+.agent-todo-task-btn:hover {
+  text-decoration: underline;
+}
+.agent-todo-badge {
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.agent-todo-badge-pending {
+  background: rgba(250, 204, 21, 0.15);
+  color: var(--accent-yellow);
+}
+.agent-todo-badge-done {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--accent-green);
 }
 
 /* Create form */

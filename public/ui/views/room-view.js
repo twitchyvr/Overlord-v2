@@ -38,6 +38,31 @@ const STATUS_CLASSES = {
   waiting:  'waiting',
 };
 
+/** Table type definitions for the tycoon-game aesthetic. */
+const TABLE_TYPES = {
+  focus:         { icon: '\u{1F3AF}', label: 'Focus',         color: '#4fc3f7', defaultChairs: 1, desc: 'Solo deep-work station. One agent, no distractions.' },
+  collaboration: { icon: '\u{1F91D}', label: 'Collaboration', color: '#81c784', defaultChairs: 3, desc: 'Team table for 2\u20134 agents working together.' },
+  review:        { icon: '\u{1F50D}', label: 'Review',        color: '#ffb74d', defaultChairs: 2, desc: 'Peer-review station. Structured critique and sign-off.' },
+  boardroom:     { icon: '\u{1F3DB}\uFE0F', label: 'Boardroom',    color: '#ce93d8', defaultChairs: 6, desc: 'Large meeting table for 5+ agents. Strategy sessions.' },
+};
+
+/** File scope options with descriptions. */
+const FILE_SCOPE_OPTIONS = [
+  { value: 'assigned', label: 'Assigned files only', desc: 'Agent can only access files explicitly assigned to the room.' },
+  { value: 'read-only', label: 'Read-only',          desc: 'Agent can read any file but cannot write.' },
+  { value: 'full',     label: 'Full access',         desc: 'Agent has full read/write access to the project.' },
+  { value: 'none',     label: 'None',                desc: 'No file system access at all.' },
+];
+
+/** AI provider options. */
+const PROVIDER_OPTIONS = [
+  { value: '',          label: 'Default (configured)' },
+  { value: 'anthropic', label: 'Anthropic' },
+  { value: 'openai',    label: 'OpenAI' },
+  { value: 'minimax',   label: 'MiniMax' },
+  { value: 'ollama',    label: 'Ollama (local)' },
+];
+
 
 export class RoomView extends Component {
 
@@ -50,6 +75,8 @@ export class RoomView extends Component {
     this._exitDocHistory = [];
     this._citations = [];
     this._backlinks = [];
+    this._tables = [];
+    this._stylesInjected = false;
   }
 
   mount() {
@@ -83,6 +110,8 @@ export class RoomView extends Component {
   async _loadRoom(roomId) {
     if (!window.overlordSocket) return;
 
+    this._injectStyles();
+
     const result = await window.overlordSocket.fetchRoom(roomId);
     if (!result || !result.ok) {
       Toast.error(`Failed to load room: ${result?.error?.message || 'Unknown error'}`);
@@ -94,9 +123,38 @@ export class RoomView extends Component {
     this._exitDocHistory = [];
     this._citations = [];
     this._backlinks = [];
+    this._tables = [];
     this._openModal();
     this._fetchExitDocHistory(roomId);
     this._fetchCitations(roomId);
+    this._fetchTables(roomId);
+  }
+
+  /** Fetch active tables for this room from the server. */
+  async _fetchTables(roomId) {
+    if (!window.overlordSocket) return;
+    try {
+      const result = await window.overlordSocket.fetchTables(roomId);
+      if (result && result.ok && Array.isArray(result.data)) {
+        this._tables = result.data;
+        this._refreshTableSection();
+      }
+    } catch {
+      // Tables are supplementary
+    }
+  }
+
+  /** Re-render just the table management section in the open modal. */
+  _refreshTableSection() {
+    const modalBody = Modal.getBody(`room-${this._roomData?.id}`);
+    if (!modalBody) return;
+    const tableContainer = modalBody.querySelector('[data-testid="table-management"]');
+    if (!tableContainer) return;
+    tableContainer.textContent = '';
+    const room = this._roomData;
+    if (!room) return;
+    const inner = this._buildTableManagementInner(room);
+    tableContainer.appendChild(inner);
   }
 
   _openModal() {
@@ -132,8 +190,14 @@ export class RoomView extends Component {
     // ── Header section with status badge ──
     container.appendChild(this._buildHeaderSection(room));
 
-    // ── Room Configuration Panel ──
-    container.appendChild(this._buildRoomConfigSection(room));
+    // ── Room Configuration Panel (#220) ──
+    container.appendChild(this._buildConfigPanel(room));
+
+    // ── Tools Configuration (#220) ──
+    container.appendChild(this._buildToolsConfigSection(room));
+
+    // ── Room Rules Display (#220) ──
+    container.appendChild(this._buildRulesSection(room));
 
     // ── Stats summary bar ──
     container.appendChild(this._buildStatsBar(room));
@@ -141,30 +205,13 @@ export class RoomView extends Component {
     // ── Agent roster ──
     container.appendChild(this._buildAgentRoster(room));
 
-    // ── Table/Chair visualization with management ──
-    container.appendChild(this._buildTableLayout(room));
+    // ── Table & Seat Management (#221) ──
+    container.appendChild(this._buildTableManagement(room));
 
-    // ── Room info details ──
-    container.appendChild(this._buildInfoSection(room));
-
-    // ── Exit Document action ──
+    // ── Exit Template Display (#220) ──
     if (room.exitRequired && room.exitRequired.fields && room.exitRequired.fields.length > 0) {
+      container.appendChild(this._buildExitTemplateSection(room));
       container.appendChild(this._buildExitDocSection(room));
-    }
-
-    // ── Tools section ──
-    if (room.tools && room.tools.length > 0) {
-      container.appendChild(this._buildToolsSection(room));
-    }
-
-    // ── File scope section ──
-    if (room.fileScope && room.fileScope.length > 0) {
-      container.appendChild(this._buildFileScopeSection(room));
-    }
-
-    // ── Tables data section ──
-    if (room.tables && Object.keys(room.tables).length > 0) {
-      container.appendChild(this._buildTablesSection(room));
     }
 
     // ── Citations / Backlinks section ──
@@ -198,95 +245,148 @@ export class RoomView extends Component {
     return header;
   }
 
-  // ── Room Configuration Panel ──────────────────────────────────
+  // ── Room Configuration Panel (#220) ──────────────────────────
 
-  _buildRoomConfigSection(room) {
-    const section = h('div', { class: 'room-config-section' });
+  _buildConfigPanel(room) {
+    const section = h('div', { class: 'rv-config-panel' });
 
     const header = h('div', { class: 'room-section-header' },
       h('h4', null, 'Room Configuration')
     );
-
     const actionsRow = h('div', { class: 'room-config-actions' });
-
-    // Edit Room button
-    const editBtn = h('button', { class: 'btn btn-secondary btn-sm' }, 'Edit Room');
-    editBtn.addEventListener('click', () => this._openEditRoomModal(room));
+    const editBtn = h('button', { class: 'btn btn-secondary btn-sm' }, '\u270E Edit Config');
+    editBtn.addEventListener('click', () => this._openEditConfigModal(room));
     actionsRow.appendChild(editBtn);
-
-    // Delete Room button
-    const deleteBtn = h('button', { class: 'btn btn-danger btn-sm' }, 'Delete Room');
+    const deleteBtn = h('button', { class: 'btn btn-danger btn-sm' }, '\u2715 Delete');
     deleteBtn.addEventListener('click', () => this._openDeleteRoomConfirm(room));
     actionsRow.appendChild(deleteBtn);
-
     header.appendChild(actionsRow);
     section.appendChild(header);
 
-    // Config summary grid
-    const grid = h('div', { class: 'room-config-grid' });
+    // Config grid
+    const grid = h('div', { class: 'rv-config-grid' });
 
-    grid.appendChild(this._configItem('Name', room.name || this._formatRoomType(room.type)));
-    grid.appendChild(this._configItem('Type', this._formatRoomType(room.type)));
+    // Type (read-only badge)
+    const typeInfo = TABLE_TYPES[room.type] || {};
+    grid.appendChild(this._configRow('Type',
+      h('span', { class: 'rv-type-badge', style: `background:${typeInfo.color || 'var(--surface-2)'}` },
+        `${ROOM_ICONS[room.type] || '\u{1F3E0}'} ${this._formatRoomType(room.type)}`
+      ),
+      'Room type is set by the building contract and cannot be changed.'
+    ));
 
-    const fileScopeLabel =
-      room.fileScope === 'full' ? 'Full access' :
-      room.fileScope === 'read-only' ? 'Read-only' :
-      room.fileScope === 'assigned' ? 'Assigned files only' :
-      room.fileScope === 'none' ? 'None' :
-      room.fileScope || 'Not set';
-    grid.appendChild(this._configItem('File Scope', fileScopeLabel));
+    // Name (display)
+    grid.appendChild(this._configRow('Name',
+      h('span', { class: 'rv-config-val' }, room.name || this._formatRoomType(room.type))
+    ));
 
-    grid.appendChild(this._configItem('AI Provider', room.provider || 'Default'));
+    // Status indicator
+    const agentsInRoom = this._getAgentsInRoom(room.id);
+    const statusText = agentsInRoom.length > 0 ? 'Active' : 'Empty';
+    const statusColor = agentsInRoom.length > 0 ? '#81c784' : 'var(--text-3)';
+    grid.appendChild(this._configRow('Status',
+      h('span', { class: 'rv-status-dot', style: `color:${statusColor}` },
+        `\u25CF ${statusText}`
+      )
+    ));
 
-    const toolsList = room.tools && room.tools.length > 0
-      ? room.tools.join(', ')
-      : 'None';
-    grid.appendChild(this._configItem('Allowed Tools', toolsList));
+    // AI Provider
+    const provLabel = PROVIDER_OPTIONS.find(p => p.value === (room.provider || ''))?.label || room.provider || 'Default';
+    grid.appendChild(this._configRow('AI Provider',
+      h('span', { class: 'rv-config-val' }, provLabel)
+    ));
+
+    // File Scope
+    const scopeOpt = FILE_SCOPE_OPTIONS.find(s => s.value === room.fileScope) || FILE_SCOPE_OPTIONS[0];
+    grid.appendChild(this._configRow('File Scope',
+      h('span', { class: 'rv-config-val' }, scopeOpt.label),
+      scopeOpt.desc
+    ));
+
+    // Capacity bar
+    const totalChairs = this._getTotalChairs(room);
+    const occupied = agentsInRoom.length;
+    grid.appendChild(this._configRow('Capacity',
+      this._buildCapacityBar(occupied, totalChairs),
+      `${occupied} of ${totalChairs} chairs occupied across all tables.`
+    ));
 
     section.appendChild(grid);
     return section;
   }
 
-  _configItem(label, value) {
-    return h('div', { class: 'room-config-item' },
-      h('span', { class: 'room-config-item-label' }, label),
-      h('span', { class: 'room-config-item-value' }, value)
+  _configRow(label, valueEl, hint) {
+    const row = h('div', { class: 'rv-config-row' },
+      h('span', { class: 'rv-config-label' }, label),
+      h('div', { class: 'rv-config-value-wrap' },
+        typeof valueEl === 'string' ? h('span', null, valueEl) : valueEl,
+        hint ? h('span', { class: 'rv-config-hint' }, hint) : null
+      )
+    );
+    return row;
+  }
+
+  _buildCapacityBar(occupied, total) {
+    const pct = total > 0 ? Math.round((occupied / total) * 100) : 0;
+    const barColor = pct > 80 ? '#ef5350' : pct > 50 ? '#ffb74d' : '#81c784';
+    return h('div', { class: 'rv-capacity-wrap' },
+      h('div', { class: 'rv-capacity-bar' },
+        h('div', { class: 'rv-capacity-fill', style: `width:${pct}%;background:${barColor}` })
+      ),
+      h('span', { class: 'rv-capacity-text' }, `${occupied}/${total} (${pct}%)`)
     );
   }
 
-  /** Open modal to edit room configuration. */
-  _openEditRoomModal(room) {
+  _getTotalChairs(room) {
+    // Sum chairs from active tables
+    const activeTables = this._tables.length > 0 ? this._tables : (room.activeTables || []);
+    let total = 0;
+    for (const t of activeTables) {
+      total += (t.chairs || 1);
+    }
+    // Also count contract-defined tables if no active tables exist
+    if (total === 0 && room.tables && typeof room.tables === 'object') {
+      for (const cfg of Object.values(room.tables)) {
+        total += (cfg?.chairs || 1);
+      }
+    }
+    return total || 1;
+  }
+
+  /** Open the full edit configuration modal (#220). */
+  _openEditConfigModal(room) {
     let editName = room.name || '';
     let editFileScope = room.fileScope || 'assigned';
     let editProvider = room.provider || '';
     let editTools = (room.tools || []).join(', ');
 
-    const container = h('div', { class: 'edit-room-config-modal' });
+    const container = h('div', { class: 'rv-edit-config-modal' });
 
     // Name field
-    const nameGroup = h('div', { class: 'edit-room-field' });
+    const nameGroup = h('div', { class: 'rv-edit-field' });
     nameGroup.appendChild(h('label', { class: 'form-label' }, 'Room Name'));
-    const nameInput = h('input', {
-      class: 'form-input',
-      type: 'text',
-      value: editName,
-      placeholder: 'e.g., Backend Code Lab'
-    });
+    const nameInput = h('input', { class: 'form-input', type: 'text', value: editName, placeholder: 'e.g., Backend Code Lab' });
     nameInput.addEventListener('input', () => { editName = nameInput.value; });
     nameGroup.appendChild(nameInput);
     container.appendChild(nameGroup);
 
+    // Type (read-only display)
+    const typeGroup = h('div', { class: 'rv-edit-field' });
+    typeGroup.appendChild(h('label', { class: 'form-label' }, 'Room Type'));
+    const typeInfo = TABLE_TYPES[room.type] || {};
+    typeGroup.appendChild(h('div', { class: 'rv-edit-readonly' },
+      h('span', { class: 'rv-type-badge', style: `background:${typeInfo.color || 'var(--surface-2)'}` },
+        `${ROOM_ICONS[room.type] || '\u{1F3E0}'} ${this._formatRoomType(room.type)}`
+      ),
+      h('span', { class: 'form-hint' }, 'Type is defined by the building contract and cannot be changed.')
+    ));
+    container.appendChild(typeGroup);
+
     // File Scope dropdown
-    const scopeGroup = h('div', { class: 'edit-room-field' });
+    const scopeGroup = h('div', { class: 'rv-edit-field' });
     scopeGroup.appendChild(h('label', { class: 'form-label' }, 'File Scope'));
     const scopeSelect = h('select', { class: 'form-input' });
-    const scopeOptions = [
-      { value: 'assigned', label: 'Assigned files only' },
-      { value: 'read-only', label: 'Read-only' },
-      { value: 'full', label: 'Full access' },
-      { value: 'none', label: 'None' },
-    ];
-    for (const opt of scopeOptions) {
+    for (const opt of FILE_SCOPE_OPTIONS) {
       const optEl = h('option', { value: opt.value }, opt.label);
       if (opt.value === editFileScope) optEl.selected = true;
       scopeSelect.appendChild(optEl);
@@ -294,76 +394,57 @@ export class RoomView extends Component {
     scopeSelect.addEventListener('change', () => { editFileScope = scopeSelect.value; });
     scopeGroup.appendChild(scopeSelect);
     scopeGroup.appendChild(h('span', { class: 'form-hint' },
-      'Controls how agents in this room can access the project file system.'
+      FILE_SCOPE_OPTIONS.find(o => o.value === editFileScope)?.desc || ''
     ));
     container.appendChild(scopeGroup);
 
-    // AI Provider field
-    const providerGroup = h('div', { class: 'edit-room-field' });
-    providerGroup.appendChild(h('label', { class: 'form-label' }, 'AI Provider'));
-    const providerInput = h('input', {
-      class: 'form-input',
-      type: 'text',
-      value: editProvider,
-      placeholder: 'e.g., anthropic, openai, minimax'
-    });
-    providerInput.addEventListener('input', () => { editProvider = providerInput.value; });
-    providerGroup.appendChild(providerInput);
-    providerGroup.appendChild(h('span', { class: 'form-hint' },
-      'Leave blank to use the default provider.'
-    ));
-    container.appendChild(providerGroup);
+    // AI Provider select
+    const provGroup = h('div', { class: 'rv-edit-field' });
+    provGroup.appendChild(h('label', { class: 'form-label' }, 'AI Provider'));
+    const provSelect = h('select', { class: 'form-input' });
+    for (const opt of PROVIDER_OPTIONS) {
+      const optEl = h('option', { value: opt.value }, opt.label);
+      if (opt.value === editProvider) optEl.selected = true;
+      provSelect.appendChild(optEl);
+    }
+    provSelect.addEventListener('change', () => { editProvider = provSelect.value; });
+    provGroup.appendChild(provSelect);
+    container.appendChild(provGroup);
 
     // Allowed Tools textarea
-    const toolsGroup = h('div', { class: 'edit-room-field' });
+    const toolsGroup = h('div', { class: 'rv-edit-field' });
     toolsGroup.appendChild(h('label', { class: 'form-label' }, 'Allowed Tools'));
-    const toolsInput = h('textarea', {
-      class: 'form-input form-textarea',
-      rows: '3',
-      placeholder: 'read_file, write_file, search_code\n(comma-separated tool names)'
-    });
+    const toolsInput = h('textarea', { class: 'form-input form-textarea', rows: '3', placeholder: 'read_file, write_file, search_code\n(comma-separated tool names)' });
     toolsInput.value = editTools;
     toolsInput.addEventListener('input', () => { editTools = toolsInput.value; });
     toolsGroup.appendChild(toolsInput);
-    toolsGroup.appendChild(h('span', { class: 'form-hint' },
-      'Comma-separated list of tools available in this room. Only these tools will be accessible to agents.'
-    ));
+    toolsGroup.appendChild(h('span', { class: 'form-hint' }, 'Comma-separated list of tools available in this room.'));
     container.appendChild(toolsGroup);
 
     // Actions
-    const actions = h('div', { class: 'edit-room-actions' });
+    const actions = h('div', { class: 'rv-edit-actions' });
     const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
-    cancelBtn.addEventListener('click', () => Modal.close('edit-room-config'));
+    cancelBtn.addEventListener('click', () => Modal.close('rv-edit-config'));
 
     const saveBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Save Changes');
     saveBtn.addEventListener('click', async () => {
-      if (!window.overlordSocket) {
-        Toast.error('Not connected to server');
-        return;
-      }
-
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
-
       try {
         const updates = {
           name: editName.trim() || undefined,
           fileScope: editFileScope,
           provider: editProvider.trim() || undefined,
-          allowedTools: editTools
-            .split(',')
-            .map(t => t.trim())
-            .filter(Boolean),
+          allowedTools: editTools.split(',').map(t => t.trim()).filter(Boolean),
         };
-
         const result = await window.overlordSocket.updateRoom(room.id, updates);
         if (result && result.ok) {
           Toast.success('Room configuration updated');
-          Modal.close('edit-room-config');
-          // Reload room to reflect changes
+          Modal.close('rv-edit-config');
           this._loadRoom(room.id);
         } else {
-          throw new Error(result?.error?.message || 'Failed to update room');
+          throw new Error(result?.error?.message || 'Failed to update');
         }
       } catch (err) {
         Toast.error(`Save failed: ${err.message}`);
@@ -371,18 +452,19 @@ export class RoomView extends Component {
         saveBtn.textContent = 'Save Changes';
       }
     });
-
     actions.appendChild(cancelBtn);
     actions.appendChild(saveBtn);
     container.appendChild(actions);
 
-    Modal.open('edit-room-config', {
-      title: `Edit Room: ${room.name || this._formatRoomType(room.type)}`,
+    Modal.open('rv-edit-config', {
+      title: `Edit: ${room.name || this._formatRoomType(room.type)}`,
       content: container,
       size: 'md',
       position: window.innerWidth < 768 ? 'fullscreen' : 'center',
     });
   }
+
+  /* _openEditRoomModal replaced by _openEditConfigModal above */
 
   /** Open confirmation dialog to delete a room. */
   _openDeleteRoomConfirm(room) {
@@ -532,227 +614,444 @@ export class RoomView extends Component {
     return section;
   }
 
-  _buildInfoSection(room) {
-    const infoSection = h('div', { class: 'room-info-section' },
-      h('h4', null, 'Room Details')
+  // ── Tools Configuration (#220) ─────────────────────────────────
+
+  _buildToolsConfigSection(room) {
+    const tools = room.tools || [];
+    const section = h('div', { class: 'rv-tools-section' });
+
+    const header = h('div', { class: 'room-section-header' },
+      h('h4', null, `Allowed Tools (${tools.length})`)
     );
+    const addToolBtn = h('button', { class: 'btn btn-ghost btn-sm' }, '+ Add Tool');
+    addToolBtn.addEventListener('click', () => this._openAddToolInput(room));
+    header.appendChild(addToolBtn);
+    section.appendChild(header);
 
-    infoSection.appendChild(h('div', { class: 'room-info-row' },
-      h('span', { class: 'room-info-label' }, 'Type'),
-      h('span', { class: 'room-info-value' }, this._formatRoomType(room.type))
-    ));
-
-    if (room.fileScope) {
-      infoSection.appendChild(h('div', { class: 'room-info-row' },
-        h('span', { class: 'room-info-label' }, 'File Access'),
-        h('span', { class: 'room-info-value' },
-          room.fileScope === 'full' ? 'Full access' :
-          room.fileScope === 'read-only' ? 'Read-only' :
-          room.fileScope === 'assigned' ? 'Assigned files only' :
-          room.fileScope)
+    if (tools.length === 0) {
+      section.appendChild(h('div', { class: 'rv-tools-empty text-muted' },
+        'No tools configured. Agents in this room will have no tool access. Click "+ Add Tool" to grant tools.'
       ));
+      return section;
     }
 
-    if (room.exitRequired && room.exitRequired.fields) {
-      infoSection.appendChild(h('div', { class: 'room-info-row' },
-        h('span', { class: 'room-info-label' }, 'Exit Required'),
-        h('span', { class: 'room-info-value text-warning' },
-          `Yes \u2014 ${room.exitRequired.fields.length} field${room.exitRequired.fields.length !== 1 ? 's' : ''}`)
-      ));
-    } else {
-      infoSection.appendChild(h('div', { class: 'room-info-row' },
-        h('span', { class: 'room-info-label' }, 'Exit Required'),
-        h('span', { class: 'room-info-value' }, 'No')
-      ));
-    }
-
-    if (room.escalation && Object.keys(room.escalation).length > 0) {
-      for (const [trigger, target] of Object.entries(room.escalation)) {
-        infoSection.appendChild(h('div', { class: 'room-info-row' },
-          h('span', { class: 'room-info-label' }, `Escalation: ${trigger}`),
-          h('span', { class: 'room-info-value' }, target)
-        ));
-      }
-    }
-
-    if (room.provider) {
-      infoSection.appendChild(h('div', { class: 'room-info-row' },
-        h('span', { class: 'room-info-label' }, 'AI Provider'),
-        h('span', { class: 'room-info-value' }, room.provider)
-      ));
-    }
-
-    return infoSection;
-  }
-
-  _buildToolsSection(room) {
-    const section = h('div', { class: 'room-tools-section' },
-      h('h4', null, `Available Tools (${room.tools.length})`)
-    );
-    const grid = h('div', { class: 'room-tool-grid' });
-    for (const tool of room.tools) {
-      grid.appendChild(h('span', { class: 'tool-tag' }, tool));
+    const grid = h('div', { class: 'rv-tools-grid' });
+    for (const tool of tools) {
+      const tag = h('div', { class: 'rv-tool-tag' },
+        h('span', { class: 'rv-tool-name' }, tool)
+      );
+      const removeBtn = h('button', { class: 'rv-tool-remove', title: `Remove ${tool}` }, '\u2715');
+      removeBtn.addEventListener('click', () => this._removeTool(room, tool));
+      tag.appendChild(removeBtn);
+      grid.appendChild(tag);
     }
     section.appendChild(grid);
     return section;
   }
 
-  _buildFileScopeSection(room) {
-    const patterns = Array.isArray(room.fileScope) ? room.fileScope :
-      typeof room.fileScope === 'string' ? [room.fileScope] : [];
-    if (patterns.length === 0) return h('span');
+  /** Add a single tool to the room's allowed list. */
+  _openAddToolInput(room) {
+    let toolName = '';
+    const container = h('div', { class: 'rv-add-tool-modal' });
 
-    const section = h('div', { class: 'room-file-section' },
-      h('h4', null, 'File Scope')
-    );
-    const list = h('div', { class: 'room-file-list' });
-    for (const pattern of patterns) {
-      list.appendChild(h('div', { class: 'room-file-pattern' }, pattern));
+    container.appendChild(h('p', { class: 'text-muted' },
+      'Enter the tool name to add to this room. Only tools in the allowed list will be available to agents.'
+    ));
+
+    const inputGroup = h('div', { class: 'rv-edit-field' });
+    inputGroup.appendChild(h('label', { class: 'form-label' }, 'Tool Name'));
+    const input = h('input', { class: 'form-input', type: 'text', placeholder: 'e.g., read_file' });
+    input.addEventListener('input', () => { toolName = input.value; });
+    inputGroup.appendChild(input);
+    container.appendChild(inputGroup);
+
+    const actions = h('div', { class: 'rv-edit-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('rv-add-tool'));
+    const addBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Add Tool');
+    addBtn.addEventListener('click', async () => {
+      const name = toolName.trim();
+      if (!name) { Toast.warning('Enter a tool name'); return; }
+      if ((room.tools || []).includes(name)) { Toast.warning('Tool already in list'); return; }
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+      addBtn.disabled = true;
+      addBtn.textContent = 'Adding...';
+      try {
+        const newTools = [...(room.tools || []), name];
+        const result = await window.overlordSocket.updateRoom(room.id, { allowedTools: newTools });
+        if (result && result.ok) {
+          Toast.success(`Tool "${name}" added`);
+          Modal.close('rv-add-tool');
+          this._loadRoom(room.id);
+        } else {
+          throw new Error(result?.error?.message || 'Failed');
+        }
+      } catch (err) {
+        Toast.error(`Add failed: ${err.message}`);
+        addBtn.disabled = false;
+        addBtn.textContent = 'Add Tool';
+      }
+    });
+    actions.appendChild(cancelBtn);
+    actions.appendChild(addBtn);
+    container.appendChild(actions);
+
+    Modal.open('rv-add-tool', {
+      title: 'Add Tool',
+      content: container,
+      size: 'sm',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
+  }
+
+  /** Remove a tool from the room's allowed list. */
+  async _removeTool(room, toolName) {
+    if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+    const newTools = (room.tools || []).filter(t => t !== toolName);
+    try {
+      const result = await window.overlordSocket.updateRoom(room.id, { allowedTools: newTools });
+      if (result && result.ok) {
+        Toast.success(`Removed "${toolName}"`);
+        this._loadRoom(room.id);
+      } else {
+        throw new Error(result?.error?.message || 'Failed');
+      }
+    } catch (err) {
+      Toast.error(`Remove failed: ${err.message}`);
+    }
+  }
+
+  // ── Room Rules Display (#220) ─────────────────────────────────
+
+  _buildRulesSection(room) {
+    const rules = room.rules || room.systemPromptRules || [];
+    const section = h('div', { class: 'rv-rules-section' });
+
+    section.appendChild(h('div', { class: 'room-section-header' },
+      h('h4', null, `Room Rules (${Array.isArray(rules) ? rules.length : 0})`)
+    ));
+
+    if (!Array.isArray(rules) || rules.length === 0) {
+      section.appendChild(h('div', { class: 'rv-rules-empty text-muted' },
+        'No explicit rules defined for this room. Agent behavior is governed by the room type contract.'
+      ));
+      return section;
+    }
+
+    const list = h('ul', { class: 'rv-rules-list' });
+    for (const rule of rules) {
+      const text = typeof rule === 'string' ? rule : (rule.text || rule.description || JSON.stringify(rule));
+      list.appendChild(h('li', { class: 'rv-rule-item' }, text));
     }
     section.appendChild(list);
     return section;
   }
 
-  _buildTablesSection(room) {
-    const tables = room.tables;
-    const entries = typeof tables === 'object' && !Array.isArray(tables)
-      ? Object.entries(tables) : [];
+  // ── Exit Template Display (#220) ──────────────────────────────
 
-    const section = h('div', { class: 'room-tables-section' },
-      h('h4', null, `Tables (${entries.length})`)
+  _buildExitTemplateSection(room) {
+    const exitReq = room.exitRequired;
+    if (!exitReq || !exitReq.fields || exitReq.fields.length === 0) {
+      return h('span');
+    }
+
+    const section = h('div', { class: 'rv-exit-template-section' });
+    section.appendChild(h('div', { class: 'room-section-header' },
+      h('h4', null, 'Exit Template')
+    ));
+
+    // Structured fields display
+    const fieldsGrid = h('div', { class: 'rv-exit-fields' });
+    for (const field of exitReq.fields) {
+      const label = typeof field === 'string'
+        ? field.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).trim()
+        : (field.label || field.name || 'Field');
+      const type = typeof field === 'object' ? (field.type || 'text') : 'text';
+      const required = typeof field === 'object' ? (field.required !== false) : true;
+
+      fieldsGrid.appendChild(h('div', { class: 'rv-exit-field-card' },
+        h('div', { class: 'rv-exit-field-name' }, label),
+        h('div', { class: 'rv-exit-field-meta' },
+          h('span', { class: 'rv-exit-field-type badge' }, type),
+          required ? h('span', { class: 'rv-exit-field-req' }, 'required') : null
+        )
+      ));
+    }
+    section.appendChild(fieldsGrid);
+
+    // JSON viewer toggle
+    const toggleBtn = h('button', { class: 'btn btn-ghost btn-xs rv-exit-json-toggle' }, 'View as JSON');
+    const jsonPre = h('pre', { class: 'rv-exit-json hidden' }, JSON.stringify(exitReq, null, 2));
+    toggleBtn.addEventListener('click', () => {
+      jsonPre.classList.toggle('hidden');
+      toggleBtn.textContent = jsonPre.classList.contains('hidden') ? 'View as JSON' : 'Hide JSON';
+    });
+    section.appendChild(toggleBtn);
+    section.appendChild(jsonPre);
+
+    return section;
+  }
+
+  /* _buildFileScopeSection and _buildTablesSection removed -- replaced by config panel and table management */
+
+  // ── Table & Seat Management (#221) ─────────────────────────────
+
+  _buildTableManagement(room) {
+    const section = h('div', { class: 'rv-table-mgmt' });
+
+    const header = h('div', { class: 'room-section-header' },
+      h('h4', null, 'Tables & Seating')
     );
+    const addTableBtn = h('button', { class: 'btn btn-primary btn-sm' }, '+ Add Table');
+    addTableBtn.addEventListener('click', () => this._openAddTableModal(room));
+    header.appendChild(addTableBtn);
+    section.appendChild(header);
 
-    for (const [name, config] of entries) {
-      const purpose = config && typeof config === 'object' ? (config.purpose || '') : '';
-      const card = h('div', { class: 'room-table-card' },
-        h('div', { class: 'room-table-name' }, name),
-        purpose ? h('div', { class: 'room-table-purpose' }, purpose) : null
-      );
-      section.appendChild(card);
+    // Container for dynamic refresh
+    const inner = h('div', { 'data-testid': 'table-management' });
+    inner.appendChild(this._buildTableManagementInner(room));
+    section.appendChild(inner);
+
+    return section;
+  }
+
+  /** Inner content for table management -- called on initial render and refresh. */
+  _buildTableManagementInner(room) {
+    const frag = document.createDocumentFragment();
+    const activeTables = this._tables.length > 0 ? this._tables : (room.activeTables || []);
+    const agentsInRoom = room.agents || this._getAgentsInRoom(room.id);
+
+    if (activeTables.length > 0) {
+      const grid = h('div', { class: 'rv-tables-grid' });
+      for (const table of activeTables) {
+        const tableAgents = agentsInRoom.filter(a => a.current_table_id === table.id);
+        grid.appendChild(this._buildTableCard(table, tableAgents, room));
+      }
+      frag.appendChild(grid);
+    } else {
+      // Empty state with table type hints
+      const emptyState = h('div', { class: 'rv-tables-empty' });
+      emptyState.appendChild(h('p', { class: 'rv-tables-empty-text' },
+        'No tables yet. Add a table to start seating agents.'
+      ));
+
+      // Table type explanations
+      const typeHints = h('div', { class: 'rv-type-hints-grid' });
+      for (const [key, info] of Object.entries(TABLE_TYPES)) {
+        typeHints.appendChild(h('div', { class: 'rv-type-hint-card' },
+          h('span', { class: 'rv-type-hint-icon', style: `color:${info.color}` }, info.icon),
+          h('div', { class: 'rv-type-hint-text' },
+            h('strong', null, info.label),
+            h('span', { class: 'text-muted' }, info.desc)
+          )
+        ));
+      }
+      emptyState.appendChild(typeHints);
+      frag.appendChild(emptyState);
+    }
+
+    // Contract-defined tables (if any)
+    if (room.tables && typeof room.tables === 'object' && Object.keys(room.tables).length > 0) {
+      frag.appendChild(this._buildContractTables(room));
+    }
+
+    return frag;
+  }
+
+  /** Build a single table card with full management UI (#221). */
+  _buildTableCard(table, tableAgents, room) {
+    const chairCount = table.chairs || 1;
+    const occupancy = tableAgents.length;
+    const typeInfo = TABLE_TYPES[table.type] || TABLE_TYPES.focus;
+    const typeColor = typeInfo?.color || '#4fc3f7';
+
+    const card = h('div', { class: 'rv-table-card' });
+
+    // ── Card header: type badge, occupancy, action buttons
+    const cardHeader = h('div', { class: 'rv-table-card-header' });
+    cardHeader.appendChild(h('div', { class: 'rv-table-card-title' },
+      h('span', { class: 'rv-table-type-badge', style: `background:${typeColor}` },
+        `${typeInfo?.icon || '\u{1F4CB}'} ${typeInfo?.label || table.type || 'Table'}`
+      ),
+      h('span', { class: 'rv-table-occupancy' }, `${occupancy}/${chairCount}`)
+    ));
+
+    const cardActions = h('div', { class: 'rv-table-card-actions' });
+    // Seat agent button
+    if (occupancy < chairCount) {
+      const seatBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Seat an agent' }, '\u{1F4BA} Seat');
+      seatBtn.addEventListener('click', (e) => { e.stopPropagation(); this._openSeatAgentModal(table, room); });
+      cardActions.appendChild(seatBtn);
+    }
+    // Edit button
+    const editBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Edit table' }, '\u270E');
+    editBtn.addEventListener('click', (e) => { e.stopPropagation(); this._openEditTableModal(table, room); });
+    cardActions.appendChild(editBtn);
+    // Delete button
+    const delBtn = h('button', { class: 'btn btn-ghost btn-xs rv-table-action-danger', title: 'Delete table' }, '\u2715');
+    delBtn.addEventListener('click', (e) => { e.stopPropagation(); this._openDeleteTableConfirm(table, room); });
+    cardActions.appendChild(delBtn);
+    cardHeader.appendChild(cardActions);
+    card.appendChild(cardHeader);
+
+    // Description
+    if (table.description) {
+      card.appendChild(h('div', { class: 'rv-table-desc text-muted' }, table.description));
+    }
+
+    // ── Table surface visualization with chair layout
+    const surface = h('div', { class: 'rv-table-surface' });
+    const tableTop = h('div', { class: 'rv-table-top', style: `border-color:${typeColor}` });
+
+    // Chair circle layout
+    const chairRow = h('div', { class: 'rv-chair-layout' });
+    for (let i = 0; i < chairCount; i++) {
+      const agent = tableAgents[i];
+      if (agent) {
+        // Occupied chair: solid green border
+        const statusClass = STATUS_CLASSES[agent.status] || 'idle';
+        const chair = h('div', { class: `rv-chair rv-chair-occupied rv-chair-${statusClass}`, title: `${agent.name || agent.id} (${agent.status || 'idle'})` },
+          h('div', { class: 'rv-chair-avatar' }, (agent.name || '?')[0].toUpperCase()),
+          h('div', { class: 'rv-chair-name' }, agent.name || agent.id)
+        );
+        chairRow.appendChild(chair);
+      } else {
+        // Empty chair: dashed border
+        const chair = h('div', { class: 'rv-chair rv-chair-empty', title: 'Empty seat' },
+          h('div', { class: 'rv-chair-empty-icon' }, '+')
+        );
+        chairRow.appendChild(chair);
+      }
+    }
+    tableTop.appendChild(chairRow);
+    surface.appendChild(tableTop);
+    card.appendChild(surface);
+
+    // ── Seated agents detail list
+    if (tableAgents.length > 0) {
+      const agentList = h('div', { class: 'rv-table-agents' });
+      for (const agent of tableAgents) {
+        const statusClass = STATUS_CLASSES[agent.status] || 'idle';
+        agentList.appendChild(h('div', { class: 'rv-table-agent-row' },
+          h('div', { class: `rv-table-agent-dot rv-table-agent-dot-${statusClass}` }),
+          h('div', { class: 'rv-table-agent-avatar' }, (agent.name || '?')[0].toUpperCase()),
+          h('div', { class: 'rv-table-agent-info' },
+            h('span', { class: 'rv-table-agent-name' }, agent.name || agent.id),
+            h('span', { class: 'rv-table-agent-role text-muted' }, agent.role || '')
+          ),
+          h('span', { class: `rv-table-agent-status rv-table-agent-status-${statusClass}` }, agent.status || 'idle')
+        ));
+      }
+      card.appendChild(agentList);
+    }
+
+    return card;
+  }
+
+  /** Display contract-defined table types from the room definition. */
+  _buildContractTables(room) {
+    const section = h('div', { class: 'rv-contract-tables' });
+    section.appendChild(h('div', { class: 'rv-contract-tables-header text-muted' },
+      'Contract-defined table types (auto-created when agents are assigned):'
+    ));
+    for (const [name, config] of Object.entries(room.tables)) {
+      const cfg = config || {};
+      const typeInfo = TABLE_TYPES[name] || {};
+      section.appendChild(h('div', { class: 'rv-contract-table-item' },
+        h('span', { class: 'rv-contract-table-icon' }, typeInfo.icon || '\u{1F4CB}'),
+        h('span', { class: 'rv-contract-table-name' }, name),
+        h('span', { class: 'rv-contract-table-chairs text-muted' },
+          `${cfg.chairs || 1} chair${(cfg.chairs || 1) > 1 ? 's' : ''}`
+        ),
+        cfg.description ? h('span', { class: 'rv-contract-table-desc text-muted' }, cfg.description) : null
+      ));
     }
     return section;
   }
 
-  _buildTableLayout(room) {
-    const layout = h('div', { class: 'room-table-layout' });
-
-    // Header with add table button
-    const tableHeader = h('div', { class: 'room-section-header' },
-      h('h4', null, 'Tables & Seating')
-    );
-    const addTableBtn = h('button', { class: 'btn btn-ghost btn-sm' }, '+ Add Table');
-    addTableBtn.addEventListener('click', () => this._openAddTableModal(room));
-    tableHeader.appendChild(addTableBtn);
-    layout.appendChild(tableHeader);
-
-    // Show active tables from DB (with agents seated at each)
-    const activeTables = room.activeTables || [];
+  /** Open modal to seat a specific agent at a specific table (#221). */
+  _openSeatAgentModal(table, room) {
     const agentsInRoom = room.agents || this._getAgentsInRoom(room.id);
+    const seatedAtTable = new Set(agentsInRoom.filter(a => a.current_table_id === table.id).map(a => a.id));
+    const store = OverlordUI.getStore();
+    const allAgents = store?.get('agents.list') || [];
+    // Available = in room but not seated at this table, OR unassigned
+    const available = allAgents.filter(a => !seatedAtTable.has(a.id));
+    let selectedAgent = null;
 
-    if (activeTables.length > 0) {
-      // Table list with management columns
-      const tableList = h('div', { class: 'room-table-list' });
+    const container = h('div', { class: 'rv-seat-agent-modal' });
+    const typeInfo = TABLE_TYPES[table.type] || TABLE_TYPES.focus;
 
-      for (const table of activeTables) {
-        const tableAgents = agentsInRoom.filter(a => a.current_table_id === table.id);
-        const chairCount = table.chairs || 1;
-        const occupancy = tableAgents.length;
+    container.appendChild(h('div', { class: 'rv-seat-agent-header' },
+      h('span', { class: 'rv-table-type-badge', style: `background:${typeInfo?.color || '#4fc3f7'}` },
+        `${typeInfo?.icon || ''} ${typeInfo?.label || table.type || 'Table'}`
+      ),
+      h('span', { class: 'text-muted' },
+        `${seatedAtTable.size} of ${table.chairs || 1} chairs occupied`
+      )
+    ));
 
-        const tableCard = h('div', { class: 'room-table-card-vis' });
-
-        // Header row with type, occupancy, and action buttons
-        const cardHeader = h('div', { class: 'room-table-card-header' });
-        cardHeader.appendChild(h('span', { class: 'room-table-card-type' }, table.type || 'focus'));
-        cardHeader.appendChild(h('span', { class: 'room-table-card-occupancy' }, `${occupancy}/${chairCount}`));
-
-        // Table action buttons (edit / delete)
-        const tableActions = h('div', { class: 'room-table-card-actions' });
-
-        const editTableBtn = h('button', {
-          class: 'btn btn-ghost btn-xs room-table-action-btn',
-          title: 'Edit table'
-        }, '\u270E');
-        editTableBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this._openEditTableModal(table, room);
-        });
-        tableActions.appendChild(editTableBtn);
-
-        const deleteTableBtn = h('button', {
-          class: 'btn btn-ghost btn-xs room-table-action-btn room-table-action-danger',
-          title: 'Delete table'
-        }, '\u2715');
-        deleteTableBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this._openDeleteTableConfirm(table, room);
-        });
-        tableActions.appendChild(deleteTableBtn);
-
-        cardHeader.appendChild(tableActions);
-        tableCard.appendChild(cardHeader);
-
-        if (table.description) {
-          tableCard.appendChild(h('div', { class: 'room-table-card-desc text-muted' }, table.description));
-        }
-
-        // Seated agents list
-        if (tableAgents.length > 0) {
-          const seatedList = h('div', { class: 'room-table-seated-agents' });
-          seatedList.appendChild(h('span', { class: 'room-table-seated-label' }, 'Seated:'));
-          for (const agent of tableAgents) {
-            const statusClass = STATUS_CLASSES[agent.status] || 'idle';
-            seatedList.appendChild(h('span', {
-              class: `room-table-seated-agent room-table-seated-agent-${statusClass}`,
-              title: `${agent.name || agent.id} (${agent.status || 'idle'})`
-            }, agent.name || agent.id));
-          }
-          tableCard.appendChild(seatedList);
-        }
-
-        // Chair visualization
-        const chairRow = h('div', { class: 'room-chair-row' });
-        for (let i = 0; i < chairCount; i++) {
-          const agent = tableAgents[i];
-          const chair = h('div', {
-            class: `room-chair${agent ? ' room-chair-occupied' : ' room-chair-empty'}`,
-            title: agent ? (agent.name || agent.id) : 'Empty seat'
-          });
-          if (agent) {
-            const statusClass = STATUS_CLASSES[agent.status] || 'idle';
-            chair.appendChild(h('div', {
-              class: `room-chair-avatar room-chair-avatar-${statusClass}`
-            }, (agent.name || '?')[0].toUpperCase()));
-            chair.appendChild(h('div', { class: 'room-chair-name' }, agent.name || agent.id));
-          }
-          chairRow.appendChild(chair);
-        }
-        tableCard.appendChild(chairRow);
-        tableList.appendChild(tableCard);
-      }
-
-      layout.appendChild(tableList);
-    } else if (room.tables && Object.keys(room.tables).length > 0) {
-      // Show contract-defined tables (from room type definition)
-      const contractInfo = h('div', { class: 'room-tables-contract' });
-      contractInfo.appendChild(h('p', { class: 'text-muted' },
-        'This room type defines the following table types. Tables are auto-created when agents are assigned.'
+    if (available.length === 0) {
+      container.appendChild(h('div', { class: 'rv-seat-agent-empty' },
+        h('p', null, 'No agents available to seat.'),
+        h('p', { class: 'text-muted' }, 'Assign agents to this room first from the Agent Roster above.')
       ));
-      for (const [tableName, config] of Object.entries(room.tables)) {
-        const cfg = config || {};
-        contractInfo.appendChild(h('div', { class: 'room-table-contract-item' },
-          h('span', { class: 'room-table-contract-name' }, tableName),
-          h('span', { class: 'room-table-contract-chairs text-muted' }, `${cfg.chairs || 1} chair${(cfg.chairs || 1) > 1 ? 's' : ''}`),
-          cfg.description ? h('span', { class: 'room-table-contract-desc text-muted' }, cfg.description) : null
-        ));
-      }
-      layout.appendChild(contractInfo);
-    } else {
-      layout.appendChild(h('div', { class: 'room-tables-empty text-muted' },
-        'No tables configured. Add a table or assign an agent to auto-create one.'
-      ));
+      Modal.open('rv-seat-agent', { title: 'Seat Agent', content: container, size: 'sm' });
+      return;
     }
 
-    return layout;
+    const agentList = h('div', { class: 'assign-agent-list' });
+    for (const agent of available) {
+      const card = h('div', { class: 'assign-agent-card', 'data-agent-id': agent.id },
+        h('div', { class: 'assign-agent-avatar' }, (agent.name || '?')[0].toUpperCase()),
+        h('div', { class: 'assign-agent-info' },
+          h('div', { class: 'assign-agent-name' }, agent.name || agent.id),
+          h('div', { class: 'assign-agent-role text-muted' }, agent.role || 'agent')
+        )
+      );
+      card.addEventListener('click', () => {
+        selectedAgent = agent.id;
+        agentList.querySelectorAll('.assign-agent-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+      });
+      agentList.appendChild(card);
+    }
+    container.appendChild(agentList);
+
+    const actions = h('div', { class: 'rv-edit-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('rv-seat-agent'));
+    const seatBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Seat Agent');
+    seatBtn.addEventListener('click', async () => {
+      if (!selectedAgent) { Toast.warning('Select an agent'); return; }
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+      seatBtn.disabled = true;
+      seatBtn.textContent = 'Seating...';
+      try {
+        const result = await window.overlordSocket.moveAgent(selectedAgent, room.id, table.type || 'focus');
+        if (result && result.ok) {
+          Toast.success('Agent seated');
+          Modal.close('rv-seat-agent');
+          this._loadRoom(room.id);
+        } else {
+          throw new Error(result?.error?.message || 'Failed');
+        }
+      } catch (err) {
+        Toast.error(`Seat failed: ${err.message}`);
+        seatBtn.disabled = false;
+        seatBtn.textContent = 'Seat Agent';
+      }
+    });
+    actions.appendChild(cancelBtn);
+    actions.appendChild(seatBtn);
+    container.appendChild(actions);
+
+    Modal.open('rv-seat-agent', {
+      title: `Seat Agent at ${typeInfo?.label || table.type || 'Table'}`,
+      content: container,
+      size: 'md',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
   }
 
   _buildActivityFeed() {

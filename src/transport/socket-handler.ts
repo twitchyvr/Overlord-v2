@@ -46,6 +46,8 @@ import {
   TodoAssignAgentSchema, TodoUnassignAgentSchema,
   ExitDocSubmitSchema, ExitDocGetSchema, ExitDocListSchema,
   CitationListSchema, CitationBacklinksSchema,
+  TableSetContextSchema, TableGetContextSchema, TableClearContextSchema,
+  TableGetAssignmentsSchema, TableDivideWorkSchema,
 } from './schemas.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
@@ -405,6 +407,155 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         bus.emit('table:deleted', { tableId: parsed.tableId });
       }
       if (ack) ack(result);
+    });
+
+    // ─── Table Context Events (Fleet Coordination) ───
+
+    handle(socket, 'table:set-context', TableSetContextSchema, (parsed, ack) => {
+      const db = getDb();
+
+      // Verify table exists
+      const table = db.prepare('SELECT id, config FROM tables_v2 WHERE id = ?').get(parsed.tableId) as { id: string; config: string | null } | undefined;
+      if (!table) {
+        if (ack) ack({ ok: false, error: { code: 'TABLE_NOT_FOUND', message: `Table ${parsed.tableId} does not exist`, retryable: false } });
+        return;
+      }
+
+      // Parse existing config, set the key, write back
+      let config: Record<string, unknown>;
+      try {
+        config = JSON.parse(table.config || '{}') as Record<string, unknown>;
+      } catch {
+        config = {};
+      }
+      config[parsed.key] = parsed.value;
+
+      db.prepare('UPDATE tables_v2 SET config = ? WHERE id = ?')
+        .run(JSON.stringify(config), parsed.tableId);
+
+      log.info({ tableId: parsed.tableId, key: parsed.key }, 'Table context updated');
+      broadcastLog('info', `Table context key "${parsed.key}" set on table ${parsed.tableId}`, 'rooms');
+      bus.emit('table:context-updated', { tableId: parsed.tableId, key: parsed.key, value: parsed.value, context: config });
+      if (ack) ack({ ok: true, data: { tableId: parsed.tableId, context: config } });
+    });
+
+    handle(socket, 'table:get-context', TableGetContextSchema, (parsed, ack) => {
+      const db = getDb();
+
+      const table = db.prepare('SELECT id, config FROM tables_v2 WHERE id = ?').get(parsed.tableId) as { id: string; config: string | null } | undefined;
+      if (!table) {
+        if (ack) ack({ ok: false, error: { code: 'TABLE_NOT_FOUND', message: `Table ${parsed.tableId} does not exist`, retryable: false } });
+        return;
+      }
+
+      let context: Record<string, unknown>;
+      try {
+        context = JSON.parse(table.config || '{}') as Record<string, unknown>;
+      } catch {
+        context = {};
+      }
+
+      if (ack) ack({ ok: true, data: { tableId: parsed.tableId, context } });
+    });
+
+    handle(socket, 'table:clear-context', TableClearContextSchema, (parsed, ack) => {
+      const db = getDb();
+
+      const table = db.prepare('SELECT id FROM tables_v2 WHERE id = ?').get(parsed.tableId) as { id: string } | undefined;
+      if (!table) {
+        if (ack) ack({ ok: false, error: { code: 'TABLE_NOT_FOUND', message: `Table ${parsed.tableId} does not exist`, retryable: false } });
+        return;
+      }
+
+      db.prepare('UPDATE tables_v2 SET config = ? WHERE id = ?')
+        .run('{}', parsed.tableId);
+
+      log.info({ tableId: parsed.tableId }, 'Table context cleared');
+      broadcastLog('info', `Table context cleared for table ${parsed.tableId}`, 'rooms');
+      bus.emit('table:context-updated', { tableId: parsed.tableId, key: null, value: null, context: {} });
+      if (ack) ack({ ok: true, data: { tableId: parsed.tableId, context: {} } });
+    });
+
+    // ─── Table Work Division Events (Fleet Coordination) ───
+
+    handle(socket, 'table:get-assignments', TableGetAssignmentsSchema, (parsed, ack) => {
+      const db = getDb();
+
+      // Verify table exists
+      const table = db.prepare('SELECT id, room_id FROM tables_v2 WHERE id = ?').get(parsed.tableId) as { id: string; room_id: string } | undefined;
+      if (!table) {
+        if (ack) ack({ ok: false, error: { code: 'TABLE_NOT_FOUND', message: `Table ${parsed.tableId} does not exist`, retryable: false } });
+        return;
+      }
+
+      // Get tasks assigned to this table
+      const tasks = db.prepare('SELECT * FROM tasks WHERE table_id = ? ORDER BY created_at DESC').all(parsed.tableId);
+
+      // Get agents seated at this table
+      const agents = db.prepare('SELECT id, name, role, status FROM agents WHERE current_table_id = ?').all(parsed.tableId) as Array<{ id: string; name: string; role: string; status: string }>;
+
+      // Get todos assigned to agents seated at this table
+      const agentIds = agents.map(a => a.id);
+      let todos: unknown[] = [];
+      if (agentIds.length > 0) {
+        const placeholders = agentIds.map(() => '?').join(', ');
+        todos = db.prepare(`SELECT * FROM todos WHERE agent_id IN (${placeholders}) ORDER BY created_at`).all(...agentIds);
+      }
+
+      if (ack) ack({ ok: true, data: { tableId: parsed.tableId, tasks, todos, agents } });
+    });
+
+    handle(socket, 'table:divide-work', TableDivideWorkSchema, (parsed, ack) => {
+      const db = getDb();
+
+      // Verify table exists
+      const table = db.prepare('SELECT id FROM tables_v2 WHERE id = ?').get(parsed.tableId) as { id: string } | undefined;
+      if (!table) {
+        if (ack) ack({ ok: false, error: { code: 'TABLE_NOT_FOUND', message: `Table ${parsed.tableId} does not exist`, retryable: false } });
+        return;
+      }
+
+      // Verify task exists
+      const task = db.prepare('SELECT id, title FROM tasks WHERE id = ?').get(parsed.taskId) as { id: string; title: string } | undefined;
+      if (!task) {
+        if (ack) ack({ ok: false, error: { code: 'TASK_NOT_FOUND', message: `Task ${parsed.taskId} does not exist`, retryable: false } });
+        return;
+      }
+
+      // Verify all agents exist and are seated at this table
+      for (const item of parsed.todoDescriptions) {
+        const agent = db.prepare('SELECT id, current_table_id FROM agents WHERE id = ?').get(item.agentId) as { id: string; current_table_id: string | null } | undefined;
+        if (!agent) {
+          if (ack) ack({ ok: false, error: { code: 'AGENT_NOT_FOUND', message: `Agent ${item.agentId} does not exist`, retryable: false } });
+          return;
+        }
+        if (agent.current_table_id !== parsed.tableId) {
+          if (ack) ack({ ok: false, error: { code: 'AGENT_NOT_AT_TABLE', message: `Agent ${item.agentId} is not seated at table ${parsed.tableId}`, retryable: false } });
+          return;
+        }
+      }
+
+      // Create todos for each agent
+      const now = new Date().toISOString();
+      const createdTodos: unknown[] = [];
+
+      const insertStmt = db.prepare(`
+        INSERT INTO todos (id, task_id, agent_id, description, status, created_at)
+        VALUES (?, ?, ?, ?, 'pending', datetime(?))
+      `);
+
+      for (const item of parsed.todoDescriptions) {
+        const todoId = randomUUID();
+        insertStmt.run(todoId, parsed.taskId, item.agentId, item.description, now);
+        const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(todoId);
+        createdTodos.push(todo);
+        bus.emit('todo:created', todo as Record<string, unknown>);
+      }
+
+      log.info({ tableId: parsed.tableId, taskId: parsed.taskId, todoCount: createdTodos.length }, 'Work divided at table');
+      broadcastLog('info', `Work divided: ${createdTodos.length} todos created for task "${task.title}" at table ${parsed.tableId}`, 'tasks');
+      bus.emit('table:work-divided', { tableId: parsed.tableId, taskId: parsed.taskId, todos: createdTodos });
+      if (ack) ack({ ok: true, data: { tableId: parsed.tableId, taskId: parsed.taskId, todos: createdTodos } });
     });
 
     // ─── Agent Move (convenience: exit old room + enter new room in one step) ───
@@ -1384,6 +1535,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('table:created');
   forward('table:updated');
   forward('table:deleted');
+  forward('table:context-updated');
+  forward('table:work-divided');
   forward('floor:created');
   forward('floor:updated');
   forward('floor:deleted');

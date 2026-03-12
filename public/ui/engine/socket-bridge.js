@@ -923,6 +923,19 @@ export function initSocketBridge(socket, store, engine) {
       return res;
     },
 
+    /**
+     * Fetch tasks filtered by table ID.
+     * Returns tasks assigned to a specific table without overwriting
+     * the global tasks.list store key.
+     */
+    listTasksByTable(tableId) {
+      return new Promise((resolve) => {
+        socket.emit('task:list', { tableId }, (res) => {
+          resolve(res);
+        });
+      });
+    },
+
     async assignTodoToAgent(todoId, agentId) {
       const res = await _emitWithFeedback('todo:assign-agent', { todoId, agentId });
       if (res && res.ok) {

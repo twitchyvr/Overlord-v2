@@ -62,6 +62,7 @@ const SCHEMA_SQL = `
     type TEXT NOT NULL DEFAULT 'focus',
     chairs INTEGER DEFAULT 1,
     description TEXT,
+    config TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now'))
   );
 
@@ -249,6 +250,7 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['agents', 'specialization', 'TEXT'],
   ['agents', 'profile_generated', 'INTEGER DEFAULT 0'],
   ['tasks', 'table_id', 'TEXT REFERENCES tables_v2(id)'],
+  ['tables_v2', 'config', "TEXT DEFAULT '{}'"],
 ];
 
 /**
