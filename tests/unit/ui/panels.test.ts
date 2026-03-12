@@ -817,3 +817,172 @@ describe('TeamPanel', () => {
     expect(panel._getRoleIcon('xyznonexistent')).toBeDefined();
   });
 });
+
+// ─── TasksPanel ────────────────────────────────────────────
+
+describe('TasksPanel', () => {
+  it('exports TasksPanel class', async () => {
+    const mod = await import('../../../public/ui/panels/tasks-panel.js');
+    expect(mod.TasksPanel).toBeDefined();
+  });
+
+  it('renders with empty state when no tasks', async () => {
+    const { TasksPanel } = await import('../../../public/ui/panels/tasks-panel.js');
+    const el = createPanelEl('panel-tasks', 'Tasks');
+    const panel = new TasksPanel(el);
+    panel.mount();
+
+    const body = el.querySelector('.panel-body');
+    expect(body).not.toBeNull();
+    expect(body!.querySelector('.panel-empty')).not.toBeNull();
+    expect(body!.querySelector('.panel-empty')!.textContent).toContain('No tasks yet');
+
+    panel.destroy();
+  });
+
+  it('renders status counts in stats row', async () => {
+    const store = OverlordUI.getStore();
+
+    const { TasksPanel } = await import('../../../public/ui/panels/tasks-panel.js');
+    const el = createPanelEl('panel-tasks', 'Tasks');
+    const panel = new TasksPanel(el);
+    panel.mount();
+
+    store.set('tasks.list', [
+      { id: '1', title: 'A', status: 'pending', priority: 'normal' },
+      { id: '2', title: 'B', status: 'in-progress', priority: 'high' },
+      { id: '3', title: 'C', status: 'done', priority: 'normal' },
+      { id: '4', title: 'D', status: 'blocked', priority: 'critical' },
+      { id: '5', title: 'E', status: 'pending', priority: 'low' },
+    ]);
+
+    const statsRow = el.querySelector('.task-stats-row');
+    expect(statsRow).not.toBeNull();
+    const counts = statsRow!.querySelectorAll('.task-stat-count');
+    expect(counts.length).toBe(4);
+    // pending: 2, in-progress: 1, done: 1, blocked: 1
+    const countValues = Array.from(counts).map(c => c.textContent);
+    expect(countValues).toEqual(['2', '1', '1', '1']);
+
+    panel.destroy();
+  });
+
+  it('renders task items sorted by status priority', async () => {
+    const store = OverlordUI.getStore();
+
+    const { TasksPanel } = await import('../../../public/ui/panels/tasks-panel.js');
+    const el = createPanelEl('panel-tasks', 'Tasks');
+    const panel = new TasksPanel(el);
+    panel.mount();
+
+    store.set('tasks.list', [
+      { id: '1', title: 'Pending Task', status: 'pending', priority: 'normal' },
+      { id: '2', title: 'Active Task', status: 'in-progress', priority: 'normal' },
+      { id: '3', title: 'Blocked Task', status: 'blocked', priority: 'high' },
+    ]);
+
+    const items = el.querySelectorAll('.drill-item');
+    expect(items.length).toBe(3);
+    // in-progress first, then blocked, then pending
+    expect(items[0].textContent).toContain('Active Task');
+    expect(items[1].textContent).toContain('Blocked Task');
+    expect(items[2].textContent).toContain('Pending Task');
+
+    panel.destroy();
+  });
+
+  it('shows View All Tasks button', async () => {
+    const { TasksPanel } = await import('../../../public/ui/panels/tasks-panel.js');
+    const el = createPanelEl('panel-tasks', 'Tasks');
+    const panel = new TasksPanel(el);
+    panel.mount();
+
+    const footer = el.querySelector('.panel-footer-action');
+    expect(footer).not.toBeNull();
+    expect(footer!.textContent).toContain('View All Tasks');
+
+    panel.destroy();
+  });
+
+  it('shows truncation message when over MAX_VISIBLE_TASKS', async () => {
+    const store = OverlordUI.getStore();
+
+    const { TasksPanel } = await import('../../../public/ui/panels/tasks-panel.js');
+    const el = createPanelEl('panel-tasks', 'Tasks');
+    const panel = new TasksPanel(el);
+    panel.mount();
+
+    const tasks = Array.from({ length: 20 }, (_, i) => ({
+      id: `t${i}`, title: `Task ${i}`, status: 'pending', priority: 'normal'
+    }));
+    store.set('tasks.list', tasks);
+
+    const truncated = el.querySelector('.panel-truncated');
+    expect(truncated).not.toBeNull();
+    expect(truncated!.textContent).toContain('15 of 20');
+
+    panel.destroy();
+  });
+
+  it('updates when tasks.list store key changes', async () => {
+    const store = OverlordUI.getStore();
+    const { TasksPanel } = await import('../../../public/ui/panels/tasks-panel.js');
+    const el = createPanelEl('panel-tasks', 'Tasks');
+    const panel = new TasksPanel(el);
+    panel.mount();
+
+    // Initially empty
+    expect(el.querySelector('.panel-empty')).not.toBeNull();
+
+    // Add tasks
+    store.set('tasks.list', [
+      { id: '1', title: 'New Task', status: 'in-progress', priority: 'high' }
+    ]);
+
+    // Now should show a drill-item
+    expect(el.querySelector('.panel-empty')).toBeNull();
+    const items = el.querySelectorAll('.drill-item');
+    expect(items.length).toBe(1);
+    expect(items[0].textContent).toContain('New Task');
+
+    panel.destroy();
+  });
+
+  it('shows HIGH badge for high-priority tasks', async () => {
+    const store = OverlordUI.getStore();
+
+    const { TasksPanel } = await import('../../../public/ui/panels/tasks-panel.js');
+    const el = createPanelEl('panel-tasks', 'Tasks');
+    const panel = new TasksPanel(el);
+    panel.mount();
+
+    store.set('tasks.list', [
+      { id: '1', title: 'Urgent', status: 'pending', priority: 'high' }
+    ]);
+
+    const badge = el.querySelector('.drill-badge');
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toContain('HIGH');
+
+    panel.destroy();
+  });
+
+  it('shows CRIT badge for critical-priority tasks', async () => {
+    const store = OverlordUI.getStore();
+
+    const { TasksPanel } = await import('../../../public/ui/panels/tasks-panel.js');
+    const el = createPanelEl('panel-tasks', 'Tasks');
+    const panel = new TasksPanel(el);
+    panel.mount();
+
+    store.set('tasks.list', [
+      { id: '1', title: 'Critical Fix', status: 'blocked', priority: 'critical' }
+    ]);
+
+    const badge = el.querySelector('.drill-badge');
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toContain('CRIT');
+
+    panel.destroy();
+  });
+});

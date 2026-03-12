@@ -24,6 +24,7 @@ import { ProjectsPanel } from './panels/projects-panel.js';
 import { ToolsPanel } from './panels/tools-panel.js';
 import { LogsPanel } from './panels/logs-panel.js';
 import { TeamPanel } from './panels/team-panel.js';
+import { TasksPanel } from './panels/tasks-panel.js';
 
 // ── Initialize core ──
 const store = createV2Store();
@@ -46,6 +47,7 @@ if (socket) {
   // ── Construct panels (they self-register into the global PANELS map) ──
   const phaseEl = document.getElementById('panel-phase');
   const agentsEl = document.getElementById('panel-agents');
+  const tasksEl = document.getElementById('panel-tasks');
   const raidEl = document.getElementById('panel-raid');
   const activityEl = document.getElementById('panel-activity');
   const projectsEl = document.getElementById('panel-projects');
@@ -55,6 +57,7 @@ if (socket) {
 
   if (phaseEl) new PhasePanel(phaseEl);
   if (agentsEl) new AgentsPanel(agentsEl);
+  if (tasksEl) new TasksPanel(tasksEl);
   if (raidEl) new RaidPanel(raidEl);
   if (activityEl) new ActivityPanel(activityEl);
   if (projectsEl) new ProjectsPanel(projectsEl);
