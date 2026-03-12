@@ -132,13 +132,16 @@ export class RoomView extends Component {
     // ── Header section with status badge ──
     container.appendChild(this._buildHeaderSection(room));
 
+    // ── Room Configuration Panel ──
+    container.appendChild(this._buildRoomConfigSection(room));
+
     // ── Stats summary bar ──
     container.appendChild(this._buildStatsBar(room));
 
     // ── Agent roster ──
     container.appendChild(this._buildAgentRoster(room));
 
-    // ── Table/Chair visualization ──
+    // ── Table/Chair visualization with management ──
     container.appendChild(this._buildTableLayout(room));
 
     // ── Room info details ──
@@ -193,6 +196,252 @@ export class RoomView extends Component {
       )
     );
     return header;
+  }
+
+  // ── Room Configuration Panel ──────────────────────────────────
+
+  _buildRoomConfigSection(room) {
+    const section = h('div', { class: 'room-config-section' });
+
+    const header = h('div', { class: 'room-section-header' },
+      h('h4', null, 'Room Configuration')
+    );
+
+    const actionsRow = h('div', { class: 'room-config-actions' });
+
+    // Edit Room button
+    const editBtn = h('button', { class: 'btn btn-secondary btn-sm' }, 'Edit Room');
+    editBtn.addEventListener('click', () => this._openEditRoomModal(room));
+    actionsRow.appendChild(editBtn);
+
+    // Delete Room button
+    const deleteBtn = h('button', { class: 'btn btn-danger btn-sm' }, 'Delete Room');
+    deleteBtn.addEventListener('click', () => this._openDeleteRoomConfirm(room));
+    actionsRow.appendChild(deleteBtn);
+
+    header.appendChild(actionsRow);
+    section.appendChild(header);
+
+    // Config summary grid
+    const grid = h('div', { class: 'room-config-grid' });
+
+    grid.appendChild(this._configItem('Name', room.name || this._formatRoomType(room.type)));
+    grid.appendChild(this._configItem('Type', this._formatRoomType(room.type)));
+
+    const fileScopeLabel =
+      room.fileScope === 'full' ? 'Full access' :
+      room.fileScope === 'read-only' ? 'Read-only' :
+      room.fileScope === 'assigned' ? 'Assigned files only' :
+      room.fileScope === 'none' ? 'None' :
+      room.fileScope || 'Not set';
+    grid.appendChild(this._configItem('File Scope', fileScopeLabel));
+
+    grid.appendChild(this._configItem('AI Provider', room.provider || 'Default'));
+
+    const toolsList = room.tools && room.tools.length > 0
+      ? room.tools.join(', ')
+      : 'None';
+    grid.appendChild(this._configItem('Allowed Tools', toolsList));
+
+    section.appendChild(grid);
+    return section;
+  }
+
+  _configItem(label, value) {
+    return h('div', { class: 'room-config-item' },
+      h('span', { class: 'room-config-item-label' }, label),
+      h('span', { class: 'room-config-item-value' }, value)
+    );
+  }
+
+  /** Open modal to edit room configuration. */
+  _openEditRoomModal(room) {
+    let editName = room.name || '';
+    let editFileScope = room.fileScope || 'assigned';
+    let editProvider = room.provider || '';
+    let editTools = (room.tools || []).join(', ');
+
+    const container = h('div', { class: 'edit-room-config-modal' });
+
+    // Name field
+    const nameGroup = h('div', { class: 'edit-room-field' });
+    nameGroup.appendChild(h('label', { class: 'form-label' }, 'Room Name'));
+    const nameInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      value: editName,
+      placeholder: 'e.g., Backend Code Lab'
+    });
+    nameInput.addEventListener('input', () => { editName = nameInput.value; });
+    nameGroup.appendChild(nameInput);
+    container.appendChild(nameGroup);
+
+    // File Scope dropdown
+    const scopeGroup = h('div', { class: 'edit-room-field' });
+    scopeGroup.appendChild(h('label', { class: 'form-label' }, 'File Scope'));
+    const scopeSelect = h('select', { class: 'form-input' });
+    const scopeOptions = [
+      { value: 'assigned', label: 'Assigned files only' },
+      { value: 'read-only', label: 'Read-only' },
+      { value: 'full', label: 'Full access' },
+      { value: 'none', label: 'None' },
+    ];
+    for (const opt of scopeOptions) {
+      const optEl = h('option', { value: opt.value }, opt.label);
+      if (opt.value === editFileScope) optEl.selected = true;
+      scopeSelect.appendChild(optEl);
+    }
+    scopeSelect.addEventListener('change', () => { editFileScope = scopeSelect.value; });
+    scopeGroup.appendChild(scopeSelect);
+    scopeGroup.appendChild(h('span', { class: 'form-hint' },
+      'Controls how agents in this room can access the project file system.'
+    ));
+    container.appendChild(scopeGroup);
+
+    // AI Provider field
+    const providerGroup = h('div', { class: 'edit-room-field' });
+    providerGroup.appendChild(h('label', { class: 'form-label' }, 'AI Provider'));
+    const providerInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      value: editProvider,
+      placeholder: 'e.g., anthropic, openai, minimax'
+    });
+    providerInput.addEventListener('input', () => { editProvider = providerInput.value; });
+    providerGroup.appendChild(providerInput);
+    providerGroup.appendChild(h('span', { class: 'form-hint' },
+      'Leave blank to use the default provider.'
+    ));
+    container.appendChild(providerGroup);
+
+    // Allowed Tools textarea
+    const toolsGroup = h('div', { class: 'edit-room-field' });
+    toolsGroup.appendChild(h('label', { class: 'form-label' }, 'Allowed Tools'));
+    const toolsInput = h('textarea', {
+      class: 'form-input form-textarea',
+      rows: '3',
+      placeholder: 'read_file, write_file, search_code\n(comma-separated tool names)'
+    });
+    toolsInput.value = editTools;
+    toolsInput.addEventListener('input', () => { editTools = toolsInput.value; });
+    toolsGroup.appendChild(toolsInput);
+    toolsGroup.appendChild(h('span', { class: 'form-hint' },
+      'Comma-separated list of tools available in this room. Only these tools will be accessible to agents.'
+    ));
+    container.appendChild(toolsGroup);
+
+    // Actions
+    const actions = h('div', { class: 'edit-room-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('edit-room-config'));
+
+    const saveBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Save Changes');
+    saveBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) {
+        Toast.error('Not connected to server');
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+
+      try {
+        const updates = {
+          name: editName.trim() || undefined,
+          fileScope: editFileScope,
+          provider: editProvider.trim() || undefined,
+          allowedTools: editTools
+            .split(',')
+            .map(t => t.trim())
+            .filter(Boolean),
+        };
+
+        const result = await window.overlordSocket.updateRoom(room.id, updates);
+        if (result && result.ok) {
+          Toast.success('Room configuration updated');
+          Modal.close('edit-room-config');
+          // Reload room to reflect changes
+          this._loadRoom(room.id);
+        } else {
+          throw new Error(result?.error?.message || 'Failed to update room');
+        }
+      } catch (err) {
+        Toast.error(`Save failed: ${err.message}`);
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
+    container.appendChild(actions);
+
+    Modal.open('edit-room-config', {
+      title: `Edit Room: ${room.name || this._formatRoomType(room.type)}`,
+      content: container,
+      size: 'md',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
+  }
+
+  /** Open confirmation dialog to delete a room. */
+  _openDeleteRoomConfirm(room) {
+    const container = h('div', { class: 'confirm-delete-modal' });
+
+    container.appendChild(h('p', { class: 'confirm-delete-message' },
+      `Are you sure you want to delete the room "${room.name || this._formatRoomType(room.type)}"?`
+    ));
+
+    const warning = h('div', { class: 'confirm-delete-warning' },
+      h('span', { class: 'confirm-delete-warning-icon' }, '\u26A0\uFE0F'),
+      h('div', null,
+        h('p', null, 'This action cannot be undone.'),
+        h('p', null, 'All tables, agent assignments, and activity history for this room will be permanently removed.')
+      )
+    );
+    container.appendChild(warning);
+
+    const actions = h('div', { class: 'edit-room-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('delete-room-confirm'));
+
+    const deleteBtn = h('button', { class: 'btn btn-danger btn-md' }, 'Delete Room');
+    deleteBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) {
+        Toast.error('Not connected to server');
+        return;
+      }
+
+      deleteBtn.disabled = true;
+      deleteBtn.textContent = 'Deleting...';
+
+      try {
+        const result = await window.overlordSocket.deleteRoom(room.id);
+        if (result && result.ok) {
+          Toast.success('Room deleted');
+          Modal.close('delete-room-confirm');
+          // Close the room detail modal
+          Modal.close(`room-${room.id}`);
+        } else {
+          throw new Error(result?.error?.message || 'Failed to delete room');
+        }
+      } catch (err) {
+        Toast.error(`Delete failed: ${err.message}`);
+        deleteBtn.disabled = false;
+        deleteBtn.textContent = 'Delete Room';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(deleteBtn);
+    container.appendChild(actions);
+
+    Modal.open('delete-room-confirm', {
+      title: 'Delete Room',
+      content: container,
+      size: 'sm',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
   }
 
   _buildStatsBar(room) {
@@ -401,7 +650,8 @@ export class RoomView extends Component {
     const agentsInRoom = room.agents || this._getAgentsInRoom(room.id);
 
     if (activeTables.length > 0) {
-      const tablesGrid = h('div', { class: 'room-tables-grid' });
+      // Table list with management columns
+      const tableList = h('div', { class: 'room-table-list' });
 
       for (const table of activeTables) {
         const tableAgents = agentsInRoom.filter(a => a.current_table_id === table.id);
@@ -409,13 +659,54 @@ export class RoomView extends Component {
         const occupancy = tableAgents.length;
 
         const tableCard = h('div', { class: 'room-table-card-vis' });
-        tableCard.appendChild(h('div', { class: 'room-table-card-header' },
-          h('span', { class: 'room-table-card-type' }, table.type || 'focus'),
-          h('span', { class: 'room-table-card-occupancy' }, `${occupancy}/${chairCount}`)
-        ));
+
+        // Header row with type, occupancy, and action buttons
+        const cardHeader = h('div', { class: 'room-table-card-header' });
+        cardHeader.appendChild(h('span', { class: 'room-table-card-type' }, table.type || 'focus'));
+        cardHeader.appendChild(h('span', { class: 'room-table-card-occupancy' }, `${occupancy}/${chairCount}`));
+
+        // Table action buttons (edit / delete)
+        const tableActions = h('div', { class: 'room-table-card-actions' });
+
+        const editTableBtn = h('button', {
+          class: 'btn btn-ghost btn-xs room-table-action-btn',
+          title: 'Edit table'
+        }, '\u270E');
+        editTableBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._openEditTableModal(table, room);
+        });
+        tableActions.appendChild(editTableBtn);
+
+        const deleteTableBtn = h('button', {
+          class: 'btn btn-ghost btn-xs room-table-action-btn room-table-action-danger',
+          title: 'Delete table'
+        }, '\u2715');
+        deleteTableBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._openDeleteTableConfirm(table, room);
+        });
+        tableActions.appendChild(deleteTableBtn);
+
+        cardHeader.appendChild(tableActions);
+        tableCard.appendChild(cardHeader);
 
         if (table.description) {
           tableCard.appendChild(h('div', { class: 'room-table-card-desc text-muted' }, table.description));
+        }
+
+        // Seated agents list
+        if (tableAgents.length > 0) {
+          const seatedList = h('div', { class: 'room-table-seated-agents' });
+          seatedList.appendChild(h('span', { class: 'room-table-seated-label' }, 'Seated:'));
+          for (const agent of tableAgents) {
+            const statusClass = STATUS_CLASSES[agent.status] || 'idle';
+            seatedList.appendChild(h('span', {
+              class: `room-table-seated-agent room-table-seated-agent-${statusClass}`,
+              title: `${agent.name || agent.id} (${agent.status || 'idle'})`
+            }, agent.name || agent.id));
+          }
+          tableCard.appendChild(seatedList);
         }
 
         // Chair visualization
@@ -436,10 +727,10 @@ export class RoomView extends Component {
           chairRow.appendChild(chair);
         }
         tableCard.appendChild(chairRow);
-        tablesGrid.appendChild(tableCard);
+        tableList.appendChild(tableCard);
       }
 
-      layout.appendChild(tablesGrid);
+      layout.appendChild(tableList);
     } else if (room.tables && Object.keys(room.tables).length > 0) {
       // Show contract-defined tables (from room type definition)
       const contractInfo = h('div', { class: 'room-tables-contract' });
@@ -924,6 +1215,184 @@ export class RoomView extends Component {
 
     Modal.open('add-table', {
       title: 'Add Table',
+      content: container,
+      size: 'sm',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
+  }
+
+  /** Open modal to edit a table's configuration. */
+  _openEditTableModal(table, room) {
+    let editType = table.type || 'focus';
+    let editChairs = table.chairs || 1;
+    let editDescription = table.description || '';
+
+    const container = h('div', { class: 'edit-table-modal' });
+
+    // Table ID (read-only)
+    const idGroup = h('div', { class: 'edit-table-field' });
+    idGroup.appendChild(h('label', { class: 'form-label' }, 'Table ID'));
+    idGroup.appendChild(h('div', { class: 'form-input-readonly mono' }, table.id));
+    container.appendChild(idGroup);
+
+    // Type input
+    const typeGroup = h('div', { class: 'edit-table-field' });
+    typeGroup.appendChild(h('label', { class: 'form-label' }, 'Table Type'));
+    const typeInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      value: editType,
+      placeholder: 'e.g., focus, pair, review'
+    });
+    typeInput.addEventListener('input', () => { editType = typeInput.value; });
+    typeGroup.appendChild(typeInput);
+    container.appendChild(typeGroup);
+
+    // Chairs input
+    const chairGroup = h('div', { class: 'edit-table-field' });
+    chairGroup.appendChild(h('label', { class: 'form-label' }, 'Chairs (max agents)'));
+    const chairInput = h('input', {
+      class: 'form-input',
+      type: 'number',
+      value: String(editChairs),
+      min: '1',
+      max: '20'
+    });
+    chairInput.addEventListener('input', () => {
+      const val = parseInt(chairInput.value);
+      editChairs = val >= 1 && val <= 20 ? val : editChairs;
+    });
+    chairGroup.appendChild(chairInput);
+    chairGroup.appendChild(h('span', { class: 'form-hint' },
+      'Number of agents that can sit at this table simultaneously (1-20).'
+    ));
+    container.appendChild(chairGroup);
+
+    // Description textarea
+    const descGroup = h('div', { class: 'edit-table-field' });
+    descGroup.appendChild(h('label', { class: 'form-label' }, 'Description'));
+    const descInput = h('textarea', {
+      class: 'form-input form-textarea',
+      rows: '3',
+      placeholder: 'What is this table used for?'
+    });
+    descInput.value = editDescription;
+    descInput.addEventListener('input', () => { editDescription = descInput.value; });
+    descGroup.appendChild(descInput);
+    container.appendChild(descGroup);
+
+    // Actions
+    const actions = h('div', { class: 'edit-table-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('edit-table'));
+
+    const saveBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Save Changes');
+    saveBtn.addEventListener('click', async () => {
+      if (!editType.trim()) {
+        Toast.warning('Table type cannot be empty');
+        return;
+      }
+      if (!window.overlordSocket) {
+        Toast.error('Not connected to server');
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+
+      try {
+        const updates = {
+          type: editType.trim(),
+          chairs: editChairs,
+          description: editDescription.trim() || undefined,
+        };
+
+        const result = await window.overlordSocket.updateTable(table.id, updates);
+        if (result && result.ok) {
+          Toast.success(`Table "${editType}" updated`);
+          Modal.close('edit-table');
+          this._loadRoom(room.id);
+        } else {
+          throw new Error(result?.error?.message || 'Failed to update table');
+        }
+      } catch (err) {
+        Toast.error(`Update failed: ${err.message}`);
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
+    container.appendChild(actions);
+
+    Modal.open('edit-table', {
+      title: `Edit Table: ${table.type || 'Table'}`,
+      content: container,
+      size: 'sm',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
+  }
+
+  /** Open confirmation dialog to delete a table. */
+  _openDeleteTableConfirm(table, room) {
+    const container = h('div', { class: 'confirm-delete-modal' });
+
+    container.appendChild(h('p', { class: 'confirm-delete-message' },
+      `Are you sure you want to delete the "${table.type || 'Table'}" table?`
+    ));
+
+    // Show seated agents warning if any
+    const agentsInRoom = room.agents || this._getAgentsInRoom(room.id);
+    const seatedAgents = agentsInRoom.filter(a => a.current_table_id === table.id);
+
+    const warning = h('div', { class: 'confirm-delete-warning' },
+      h('span', { class: 'confirm-delete-warning-icon' }, '\u26A0\uFE0F'),
+      h('div', null,
+        h('p', null, 'This action cannot be undone.'),
+        seatedAgents.length > 0
+          ? h('p', null, `${seatedAgents.length} agent${seatedAgents.length !== 1 ? 's are' : ' is'} currently seated at this table and will be unseated.`)
+          : h('p', null, 'The table and its configuration will be permanently removed.')
+      )
+    );
+    container.appendChild(warning);
+
+    const actions = h('div', { class: 'edit-table-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('delete-table-confirm'));
+
+    const deleteBtn = h('button', { class: 'btn btn-danger btn-md' }, 'Delete Table');
+    deleteBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) {
+        Toast.error('Not connected to server');
+        return;
+      }
+
+      deleteBtn.disabled = true;
+      deleteBtn.textContent = 'Deleting...';
+
+      try {
+        const result = await window.overlordSocket.deleteTable(table.id);
+        if (result && result.ok) {
+          Toast.success('Table deleted');
+          Modal.close('delete-table-confirm');
+          this._loadRoom(room.id);
+        } else {
+          throw new Error(result?.error?.message || 'Failed to delete table');
+        }
+      } catch (err) {
+        Toast.error(`Delete failed: ${err.message}`);
+        deleteBtn.disabled = false;
+        deleteBtn.textContent = 'Delete Table';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(deleteBtn);
+    container.appendChild(actions);
+
+    Modal.open('delete-table-confirm', {
+      title: 'Delete Table',
       content: container,
       size: 'sm',
       position: window.innerWidth < 768 ? 'fullscreen' : 'center',

@@ -41,7 +41,9 @@ import {
   PhaseResolveConditionsSchema, PhaseStaleGatesSchema, PhaseGateSignoffSchema, PhaseAdvanceSchema,
   RaidSearchSchema, RaidListSchema, RaidAddSchema, RaidUpdateSchema, RaidEditSchema,
   TaskCreateSchema, TaskUpdateSchema, TaskListSchema, TaskGetSchema,
+  TaskAssignTableSchema, TaskUnassignTableSchema,
   TodoCreateSchema, TodoToggleSchema, TodoListSchema, TodoDeleteSchema,
+  TodoAssignAgentSchema, TodoUnassignAgentSchema,
   ExitDocSubmitSchema, ExitDocGetSchema, ExitDocListSchema,
   CitationListSchema, CitationBacklinksSchema,
 } from './schemas.js';
@@ -824,18 +826,27 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       const id = randomUUID();
       const now = new Date().toISOString();
 
+      // Validate table_id references a real table if provided
+      if (parsed.tableId) {
+        const tableExists = db.prepare('SELECT id FROM tables_v2 WHERE id = ?').get(parsed.tableId);
+        if (!tableExists) {
+          if (ack) ack({ ok: false, error: { code: 'TABLE_NOT_FOUND', message: `Table ${parsed.tableId} does not exist`, retryable: false } });
+          return;
+        }
+      }
+
       db.prepare(`
-        INSERT INTO tasks (id, building_id, title, description, status, parent_id, milestone_id, assignee_id, room_id, phase, priority, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(?), datetime(?))
+        INSERT INTO tasks (id, building_id, title, description, status, parent_id, milestone_id, assignee_id, room_id, table_id, phase, priority, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(?), datetime(?))
       `).run(
         id, parsed.buildingId, parsed.title, parsed.description || null,
         parsed.status, parsed.parentId || null, parsed.milestoneId || null,
-        parsed.assigneeId || null, parsed.roomId || null, parsed.phase || null,
-        parsed.priority, now, now,
+        parsed.assigneeId || null, parsed.roomId || null, parsed.tableId || null,
+        parsed.phase || null, parsed.priority, now, now,
       );
 
       const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
-      log.info({ id, buildingId: parsed.buildingId, title: parsed.title }, 'Task created');
+      log.info({ id, buildingId: parsed.buildingId, title: parsed.title, tableId: parsed.tableId }, 'Task created');
       broadcastLog('info', `Task created: ${parsed.title}`, 'tasks');
       bus.emit('task:created', task as Record<string, unknown>);
       if (ack) ack({ ok: true, data: task });
@@ -856,7 +867,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       const columnMap: Record<string, string> = {
         title: 'title', description: 'description', status: 'status',
         parentId: 'parent_id', milestoneId: 'milestone_id', assigneeId: 'assignee_id',
-        roomId: 'room_id', phase: 'phase', priority: 'priority',
+        roomId: 'room_id', tableId: 'table_id', phase: 'phase', priority: 'priority',
       };
 
       for (const key of Object.keys(columnMap)) {
@@ -891,6 +902,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (parsed.status) { sql += ' AND status = ?'; params.push(parsed.status); }
       if (parsed.phase) { sql += ' AND phase = ?'; params.push(parsed.phase); }
       if (parsed.assigneeId) { sql += ' AND assignee_id = ?'; params.push(parsed.assigneeId); }
+      if (parsed.tableId) { sql += ' AND table_id = ?'; params.push(parsed.tableId); }
+      if (parsed.roomId) { sql += ' AND room_id = ?'; params.push(parsed.roomId); }
       sql += ' ORDER BY created_at DESC';
 
       if (ack) ack({ ok: true, data: db.prepare(sql).all(...params) });
@@ -905,6 +918,56 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       }
       const todos = db.prepare('SELECT * FROM todos WHERE task_id = ? ORDER BY created_at').all(parsed.id);
       if (ack) ack({ ok: true, data: { ...(task as Record<string, unknown>), todos } });
+    });
+
+    // ─── Task Assignment Events ───
+
+    handle(socket, 'task:assign-table', TaskAssignTableSchema, (parsed, ack) => {
+      const db = getDb();
+
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(parsed.taskId) as Record<string, unknown> | undefined;
+      if (!task) {
+        if (ack) ack({ ok: false, error: { code: 'TASK_NOT_FOUND', message: `Task ${parsed.taskId} does not exist`, retryable: false } });
+        return;
+      }
+
+      const tableExists = db.prepare('SELECT id FROM tables_v2 WHERE id = ?').get(parsed.tableId);
+      if (!tableExists) {
+        if (ack) ack({ ok: false, error: { code: 'TABLE_NOT_FOUND', message: `Table ${parsed.tableId} does not exist`, retryable: false } });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      db.prepare('UPDATE tasks SET table_id = ?, updated_at = datetime(?) WHERE id = ?')
+        .run(parsed.tableId, now, parsed.taskId);
+
+      const updated = db.prepare('SELECT * FROM tasks WHERE id = ?').get(parsed.taskId);
+      log.info({ taskId: parsed.taskId, tableId: parsed.tableId }, 'Task assigned to table');
+      broadcastLog('info', `Task ${parsed.taskId} assigned to table ${parsed.tableId}`, 'tasks');
+      bus.emit('task:assigned', { ...(updated as Record<string, unknown>), tableId: parsed.tableId });
+      bus.emit('task:updated', updated as Record<string, unknown>);
+      if (ack) ack({ ok: true, data: updated });
+    });
+
+    handle(socket, 'task:unassign-table', TaskUnassignTableSchema, (parsed, ack) => {
+      const db = getDb();
+
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(parsed.taskId) as Record<string, unknown> | undefined;
+      if (!task) {
+        if (ack) ack({ ok: false, error: { code: 'TASK_NOT_FOUND', message: `Task ${parsed.taskId} does not exist`, retryable: false } });
+        return;
+      }
+
+      const previousTableId = task.table_id;
+      const now = new Date().toISOString();
+      db.prepare('UPDATE tasks SET table_id = NULL, updated_at = datetime(?) WHERE id = ?')
+        .run(now, parsed.taskId);
+
+      const updated = db.prepare('SELECT * FROM tasks WHERE id = ?').get(parsed.taskId);
+      log.info({ taskId: parsed.taskId, previousTableId }, 'Task unassigned from table');
+      broadcastLog('info', `Task ${parsed.taskId} unassigned from table`, 'tasks');
+      bus.emit('task:updated', updated as Record<string, unknown>);
+      if (ack) ack({ ok: true, data: updated });
     });
 
     // ─── TODO Events ───
@@ -957,7 +1020,14 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
     handle(socket, 'todo:list', TodoListSchema, (parsed, ack) => {
       const db = getDb();
-      if (ack) ack({ ok: true, data: db.prepare('SELECT * FROM todos WHERE task_id = ? ORDER BY created_at').all(parsed.taskId) });
+      let sql = 'SELECT * FROM todos WHERE 1=1';
+      const params: unknown[] = [];
+
+      if (parsed.taskId) { sql += ' AND task_id = ?'; params.push(parsed.taskId); }
+      if (parsed.agentId) { sql += ' AND agent_id = ?'; params.push(parsed.agentId); }
+      sql += ' ORDER BY created_at';
+
+      if (ack) ack({ ok: true, data: db.prepare(sql).all(...params) });
     });
 
     handle(socket, 'todo:delete', TodoDeleteSchema, (parsed, ack) => {
@@ -972,6 +1042,54 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       log.info({ todoId: parsed.id, taskId: existing.task_id }, 'TODO deleted');
       bus.emit('todo:deleted', { id: parsed.id, taskId: existing.task_id });
       if (ack) ack({ ok: true, data: { id: parsed.id } });
+    });
+
+    // ─── TODO Assignment Events ───
+
+    handle(socket, 'todo:assign-agent', TodoAssignAgentSchema, (parsed, ack) => {
+      const db = getDb();
+
+      const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(parsed.todoId) as Record<string, unknown> | undefined;
+      if (!todo) {
+        if (ack) ack({ ok: false, error: { code: 'TODO_NOT_FOUND', message: `TODO ${parsed.todoId} does not exist`, retryable: false } });
+        return;
+      }
+
+      const agentExists = db.prepare('SELECT id FROM agents WHERE id = ?').get(parsed.agentId);
+      if (!agentExists) {
+        if (ack) ack({ ok: false, error: { code: 'AGENT_NOT_FOUND', message: `Agent ${parsed.agentId} does not exist`, retryable: false } });
+        return;
+      }
+
+      db.prepare('UPDATE todos SET agent_id = ? WHERE id = ?')
+        .run(parsed.agentId, parsed.todoId);
+
+      const updated = db.prepare('SELECT * FROM todos WHERE id = ?').get(parsed.todoId);
+      log.info({ todoId: parsed.todoId, agentId: parsed.agentId }, 'TODO assigned to agent');
+      broadcastLog('info', `TODO ${parsed.todoId} assigned to agent ${parsed.agentId}`, 'todos');
+      bus.emit('todo:assigned', { ...(updated as Record<string, unknown>), agentId: parsed.agentId });
+      bus.emit('todo:updated', updated as Record<string, unknown>);
+      if (ack) ack({ ok: true, data: updated });
+    });
+
+    handle(socket, 'todo:unassign-agent', TodoUnassignAgentSchema, (parsed, ack) => {
+      const db = getDb();
+
+      const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(parsed.todoId) as Record<string, unknown> | undefined;
+      if (!todo) {
+        if (ack) ack({ ok: false, error: { code: 'TODO_NOT_FOUND', message: `TODO ${parsed.todoId} does not exist`, retryable: false } });
+        return;
+      }
+
+      const previousAgentId = todo.agent_id;
+      db.prepare('UPDATE todos SET agent_id = NULL WHERE id = ?')
+        .run(parsed.todoId);
+
+      const updated = db.prepare('SELECT * FROM todos WHERE id = ?').get(parsed.todoId);
+      log.info({ todoId: parsed.todoId, previousAgentId }, 'TODO unassigned from agent');
+      broadcastLog('info', `TODO ${parsed.todoId} unassigned from agent`, 'todos');
+      bus.emit('todo:updated', updated as Record<string, unknown>);
+      if (ack) ack({ ok: true, data: updated });
     });
 
     // ─── Exit Document Events ───
@@ -1245,11 +1363,13 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('deploy:check');
   forward('task:created');
   forward('task:updated');
+  forward('task:assigned');
   forward('phase:gate:created');
   forward('phase:gate:signed-off');
   forward('phase:conditions:resolved');
   forward('todo:created');
   forward('todo:updated');
+  forward('todo:assigned');
   forward('todo:deleted');
   forward('escalation:stale-gate');
   forward('escalation:war-room');

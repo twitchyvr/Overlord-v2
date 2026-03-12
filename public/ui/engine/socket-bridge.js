@@ -901,6 +901,58 @@ export function initSocketBridge(socket, store, engine) {
       return res;
     },
 
+    async assignTaskToTable(taskId, tableId) {
+      const res = await _emitWithFeedback('task:assign-table', { taskId, tableId });
+      if (res && res.ok) {
+        store.update('tasks.list', (tasks) => {
+          const list = tasks || [];
+          return list.map((t) => t.id === taskId ? { ...t, table_id: tableId } : t);
+        });
+      }
+      return res;
+    },
+
+    async unassignTaskFromTable(taskId) {
+      const res = await _emitWithFeedback('task:unassign-table', { taskId });
+      if (res && res.ok) {
+        store.update('tasks.list', (tasks) => {
+          const list = tasks || [];
+          return list.map((t) => t.id === taskId ? { ...t, table_id: null } : t);
+        });
+      }
+      return res;
+    },
+
+    async assignTodoToAgent(todoId, agentId) {
+      const res = await _emitWithFeedback('todo:assign-agent', { todoId, agentId });
+      if (res && res.ok) {
+        store.update('todos.list', (todos) => {
+          const list = todos || [];
+          return list.map((t) => t.id === todoId ? { ...t, agent_id: agentId } : t);
+        });
+      }
+      return res;
+    },
+
+    async unassignTodoFromAgent(todoId) {
+      const res = await _emitWithFeedback('todo:unassign-agent', { todoId });
+      if (res && res.ok) {
+        store.update('todos.list', (todos) => {
+          const list = todos || [];
+          return list.map((t) => t.id === todoId ? { ...t, agent_id: null } : t);
+        });
+      }
+      return res;
+    },
+
+    async listTodosByAgent(agentId) {
+      const res = await _emitWithFeedback('todo:list', { agentId });
+      if (res && res.ok) {
+        store.set('todos.byAgent.' + agentId, res.data);
+      }
+      return res;
+    },
+
     // ── Command methods ──
 
     fetchCommands() {

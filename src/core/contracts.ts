@@ -215,6 +215,35 @@ export interface RoomRow {
   created_at: string;
 }
 
+export interface TaskRow {
+  id: string;
+  building_id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  parent_id: string | null;
+  milestone_id: string | null;
+  assignee_id: string | null;
+  room_id: string | null;
+  table_id: string | null;
+  phase: string | null;
+  priority: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TodoRow {
+  id: string;
+  task_id: string;
+  agent_id: string | null;
+  room_id: string | null;
+  description: string;
+  status: string;
+  exit_doc_ref: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
 // ─── Tool Types ───
 
 export interface ToolDefinition {

@@ -266,6 +266,50 @@ export class AgentsView extends Component {
 
   // ── Agent Card ───────────────────────────────────────────────
 
+  /** Resolve the display name: prefer display_name, then name, then id. */
+  _resolveDisplayName(agent) {
+    return agent.display_name || agent.name || agent.id;
+  }
+
+  /** Get the avatar initial(s) from display_name or name. */
+  _getAvatarInitial(agent) {
+    const displayName = this._resolveDisplayName(agent);
+    return (displayName || '?')[0].toUpperCase();
+  }
+
+  /** Build an avatar element — photo img if photo_url, else initial letter. */
+  _buildAvatarElement(agent, size, statusColor) {
+    const container = h('div', {
+      class: `agents-view-card-avatar agents-view-avatar-${size}`,
+      style: { borderColor: statusColor }
+    });
+
+    if (agent.photo_url) {
+      const img = h('img', {
+        class: 'agents-view-avatar-img',
+        src: agent.photo_url,
+        alt: this._resolveDisplayName(agent),
+        loading: 'lazy'
+      });
+      // On load error, fall back to initial
+      img.addEventListener('error', () => {
+        img.remove();
+        container.textContent = this._getAvatarInitial(agent);
+        container.classList.add('agents-view-avatar-fallback');
+      });
+      // On load success, mark as loaded for fade-in
+      img.addEventListener('load', () => {
+        img.classList.add('agents-view-avatar-img-loaded');
+      });
+      container.appendChild(img);
+    } else {
+      container.textContent = this._getAvatarInitial(agent);
+      container.classList.add('agents-view-avatar-fallback');
+    }
+
+    return container;
+  }
+
   _renderAgentCard(agent, roomNameMap) {
     const status = this._resolveStatus(agent);
     const roomId = this._resolveRoomId(agent);
@@ -274,6 +318,7 @@ export class AgentsView extends Component {
 
     const capabilities = this._parseArray(agent.capabilities);
     const roomAccess = this._parseArray(agent.room_access);
+    const displayName = this._resolveDisplayName(agent);
 
     // ── Card wrapper ──
     const card = h('div', {
@@ -281,7 +326,7 @@ export class AgentsView extends Component {
       'data-agent-id': agent.id,
       role: 'button',
       tabindex: '0',
-      'aria-label': `Agent: ${agent.name || agent.id}`
+      'aria-label': `Agent: ${displayName}`
     });
 
     // ── Status border accent (top border colored by status) ──
@@ -290,12 +335,8 @@ export class AgentsView extends Component {
     // ── Card header row ──
     const cardHeader = h('div', { class: 'agents-view-card-header' });
 
-    // Avatar circle
-    const avatarLetter = (agent.name || '?')[0].toUpperCase();
-    const avatar = h('div', {
-      class: 'agents-view-card-avatar',
-      style: { borderColor: statusCfg.color }
-    }, avatarLetter);
+    // Avatar circle (48x48) — photo or initial
+    const avatar = this._buildAvatarElement(agent, 'sm', statusCfg.color);
     cardHeader.appendChild(avatar);
 
     // Status dot (overlaid on avatar)
@@ -305,9 +346,12 @@ export class AgentsView extends Component {
     });
     cardHeader.appendChild(statusDot);
 
-    // Name and role
+    // Name, specialization, and role
     const nameGroup = h('div', { class: 'agents-view-card-name-group' },
-      h('div', { class: 'agents-view-card-name' }, agent.name || agent.id),
+      h('div', { class: 'agents-view-card-name' }, displayName),
+      agent.specialization
+        ? h('div', { class: 'agents-view-card-specialization' }, agent.specialization)
+        : null,
       h('div', { class: 'agents-view-card-role' },
         h('span', { class: 'agents-view-role-badge' }, agent.role || 'agent')
       )
@@ -408,21 +452,42 @@ export class AgentsView extends Component {
     const statusCfg = STATUS_CONFIG[status] || STATUS_CONFIG.idle;
     const capabilities = this._parseArray(agent.capabilities);
     const roomAccess = this._parseArray(agent.room_access);
+    const displayName = this._resolveDisplayName(agent);
 
     const content = h('div', { class: 'agents-view-detail' });
 
-    // ── Avatar + Identity Header ──
-    const detailHeader = h('div', { class: 'agents-view-detail-header' });
+    // ── Large Profile Photo + Identity Header ──
+    const detailHeader = h('div', { class: 'agents-view-detail-header agents-view-detail-header-profile' });
 
-    const avatarLetter = (agent.name || '?')[0].toUpperCase();
-    const detailAvatar = h('div', {
-      class: 'agents-view-detail-avatar',
-      style: { borderColor: statusCfg.color, color: statusCfg.color }
-    }, avatarLetter);
+    // Large avatar (120x120) with photo or initial
+    const detailAvatar = this._buildAvatarElement(agent, 'lg', statusCfg.color);
+    detailAvatar.classList.add('agents-view-detail-avatar');
+    detailAvatar.style.color = statusCfg.color;
     detailHeader.appendChild(detailAvatar);
 
-    const identityGroup = h('div', { class: 'agents-view-detail-identity' },
-      h('h3', { class: 'agents-view-detail-name' }, agent.name || agent.id),
+    const identityGroup = h('div', { class: 'agents-view-detail-identity' });
+
+    // Display name (primary)
+    identityGroup.appendChild(
+      h('h3', { class: 'agents-view-detail-name' }, displayName)
+    );
+
+    // If display_name differs from name, show original name as subtitle
+    if (agent.display_name && agent.name && agent.display_name !== agent.name) {
+      identityGroup.appendChild(
+        h('div', { class: 'agents-view-detail-codename' }, agent.name)
+      );
+    }
+
+    // Specialization as secondary text
+    if (agent.specialization) {
+      identityGroup.appendChild(
+        h('div', { class: 'agents-view-detail-specialization' }, agent.specialization)
+      );
+    }
+
+    // Role badge + status
+    identityGroup.appendChild(
       h('div', { class: 'agents-view-detail-meta' },
         h('span', { class: 'agents-view-role-badge' }, agent.role || 'agent'),
         h('span', {
@@ -431,8 +496,60 @@ export class AgentsView extends Component {
         }, statusCfg.label)
       )
     );
+
     detailHeader.appendChild(identityGroup);
     content.appendChild(detailHeader);
+
+    // ── Bio Section ──
+    if (agent.bio) {
+      const bioSection = h('div', { class: 'agents-view-detail-section' });
+      bioSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Bio'));
+      const bioContent = h('div', { class: 'agents-view-detail-bio' });
+      // Render bio with proper paragraph formatting
+      const paragraphs = agent.bio.split(/\n\n+/);
+      for (const para of paragraphs) {
+        if (para.trim()) {
+          // Handle single newlines within a paragraph as line breaks
+          const lines = para.trim().split(/\n/);
+          const p = h('p', { class: 'agents-view-detail-bio-paragraph' });
+          for (let i = 0; i < lines.length; i++) {
+            if (i > 0) p.appendChild(h('br'));
+            p.appendChild(document.createTextNode(lines[i]));
+          }
+          bioContent.appendChild(p);
+        }
+      }
+      bioSection.appendChild(bioContent);
+      content.appendChild(bioSection);
+    }
+
+    // ── Profile Fields (first_name, last_name, etc.) ──
+    const profileSection = h('div', { class: 'agents-view-detail-section' });
+    profileSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Profile'));
+
+    const profileRows = [];
+    if (agent.first_name || agent.last_name) {
+      const fullName = [agent.first_name, agent.last_name].filter(Boolean).join(' ');
+      profileRows.push(['Full Name', fullName]);
+    }
+    if (agent.first_name && agent.last_name) {
+      const emailStyle = `${agent.first_name.toLowerCase()}.${agent.last_name.toLowerCase()}@overlord.ai`;
+      profileRows.push(['Contact', emailStyle]);
+    }
+    if (agent.specialization) {
+      profileRows.push(['Specialization', agent.specialization]);
+    }
+    profileRows.push(['Status', statusCfg.label]);
+    profileRows.push(['Role', agent.role || 'agent']);
+    profileRows.push(['Profile Generated', agent.profile_generated ? 'Yes' : 'No']);
+
+    for (const [label, value] of profileRows) {
+      profileSection.appendChild(h('div', { class: 'agents-view-detail-row' },
+        h('span', { class: 'agents-view-detail-label' }, label),
+        h('span', null, value)
+      ));
+    }
+    content.appendChild(profileSection);
 
     // ── Current Room Assignment ──
     const roomSection = h('div', { class: 'agents-view-detail-section' });
@@ -491,8 +608,8 @@ export class AgentsView extends Component {
       accessSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Room Access'));
       const accessGrid = h('div', { class: 'agents-view-detail-cap-grid' });
       for (const access of roomAccess) {
-        const displayName = access === '*' ? 'All rooms' : this._formatRoomType(access);
-        accessGrid.appendChild(h('span', { class: 'agents-view-detail-cap-tag' }, displayName));
+        const accessDisplayName = access === '*' ? 'All rooms' : this._formatRoomType(access);
+        accessGrid.appendChild(h('span', { class: 'agents-view-detail-cap-tag' }, accessDisplayName));
       }
       accessSection.appendChild(accessGrid);
       content.appendChild(accessSection);
@@ -504,8 +621,6 @@ export class AgentsView extends Component {
 
     const infoRows = [
       ['ID', agent.id],
-      ['Status', statusCfg.label],
-      ['Role', agent.role || 'agent'],
       ['Created', agent.created_at ? new Date(agent.created_at).toLocaleString() : '\u2014'],
       ['Updated', agent.updated_at ? new Date(agent.updated_at).toLocaleString() : '\u2014'],
     ];
@@ -517,6 +632,210 @@ export class AgentsView extends Component {
       ));
     }
     content.appendChild(infoSection);
+
+    // ── Profile Generation Actions ──
+    const profileActionsSection = h('div', { class: 'agents-view-detail-section' });
+    profileActionsSection.appendChild(
+      h('h4', { class: 'agents-view-detail-section-title' }, 'Profile Actions')
+    );
+
+    const profileBtnRow = h('div', { class: 'agents-view-detail-profile-actions' });
+
+    // Generate Profile button (if not yet generated)
+    if (!agent.profile_generated) {
+      const generateProfileBtn = h('button', {
+        class: 'btn btn-primary btn-sm'
+      }, 'Generate Profile');
+      generateProfileBtn.addEventListener('click', async () => {
+        if (!window.overlordSocket) { Toast.error('Socket not connected.'); return; }
+        generateProfileBtn.disabled = true;
+        generateProfileBtn.textContent = 'Generating...';
+        try {
+          const res = await window.overlordSocket.generateAgentProfile(agent.id);
+          if (res && res.ok) {
+            Toast.success('Profile generated successfully');
+            this._fetchAgents();
+            // Re-open the drawer with updated agent data after a short delay
+            setTimeout(() => {
+              const updatedAgent = this._findAgentById(agent.id);
+              if (updatedAgent) this._openAgentDetail(updatedAgent);
+            }, 1000);
+          } else {
+            throw new Error(res?.error?.message || 'Profile generation failed');
+          }
+        } catch (err) {
+          Toast.error(`Generate failed: ${err.message}`);
+          generateProfileBtn.disabled = false;
+          generateProfileBtn.textContent = 'Generate Profile';
+        }
+      });
+      profileBtnRow.appendChild(generateProfileBtn);
+    } else {
+      // Regenerate profile button
+      const regenProfileBtn = h('button', {
+        class: 'btn btn-ghost btn-sm'
+      }, 'Regenerate Profile');
+      regenProfileBtn.addEventListener('click', async () => {
+        if (!window.overlordSocket) { Toast.error('Socket not connected.'); return; }
+        regenProfileBtn.disabled = true;
+        regenProfileBtn.textContent = 'Regenerating...';
+        try {
+          const res = await window.overlordSocket.generateAgentProfile(agent.id);
+          if (res && res.ok) {
+            Toast.success('Profile regenerated');
+            this._fetchAgents();
+            setTimeout(() => {
+              const updatedAgent = this._findAgentById(agent.id);
+              if (updatedAgent) this._openAgentDetail(updatedAgent);
+            }, 1000);
+          } else {
+            throw new Error(res?.error?.message || 'Profile regeneration failed');
+          }
+        } catch (err) {
+          Toast.error(`Regenerate failed: ${err.message}`);
+          regenProfileBtn.disabled = false;
+          regenProfileBtn.textContent = 'Regenerate Profile';
+        }
+      });
+      profileBtnRow.appendChild(regenProfileBtn);
+    }
+
+    // Regenerate Photo button
+    const regenPhotoBtn = h('button', {
+      class: 'btn btn-ghost btn-sm'
+    }, 'Regenerate Photo');
+    regenPhotoBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) { Toast.error('Socket not connected.'); return; }
+      regenPhotoBtn.disabled = true;
+      regenPhotoBtn.textContent = 'Generating Photo...';
+      try {
+        const res = await window.overlordSocket.generateAgentPhoto(agent.id);
+        if (res && res.ok) {
+          Toast.success('Photo generated successfully');
+          this._fetchAgents();
+          setTimeout(() => {
+            const updatedAgent = this._findAgentById(agent.id);
+            if (updatedAgent) this._openAgentDetail(updatedAgent);
+          }, 1500);
+        } else {
+          throw new Error(res?.error?.message || 'Photo generation failed');
+        }
+      } catch (err) {
+        Toast.error(`Photo generation failed: ${err.message}`);
+        regenPhotoBtn.disabled = false;
+        regenPhotoBtn.textContent = 'Regenerate Photo';
+      }
+    });
+    profileBtnRow.appendChild(regenPhotoBtn);
+
+    profileActionsSection.appendChild(profileBtnRow);
+    content.appendChild(profileActionsSection);
+
+    // ── Edit Profile Section ──
+    const editSection = h('div', { class: 'agents-view-detail-section agents-view-detail-edit-section' });
+    editSection.appendChild(
+      h('h4', { class: 'agents-view-detail-section-title agents-view-detail-edit-toggle' }, 'Edit Profile')
+    );
+
+    const editForm = h('div', { class: 'agents-view-detail-edit-form agents-view-detail-edit-collapsed' });
+
+    // Toggle edit form visibility
+    const editToggle = editSection.querySelector('.agents-view-detail-edit-toggle');
+    editToggle.style.cursor = 'pointer';
+    editToggle.addEventListener('click', () => {
+      editForm.classList.toggle('agents-view-detail-edit-collapsed');
+      editToggle.classList.toggle('agents-view-detail-edit-toggle-open');
+    });
+
+    // First Name
+    const firstNameGroup = h('div', { class: 'agents-view-detail-edit-field' });
+    firstNameGroup.appendChild(h('label', { class: 'agents-view-detail-edit-label' }, 'First Name'));
+    const firstNameInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      value: agent.first_name || '',
+      placeholder: 'First name'
+    });
+    firstNameGroup.appendChild(firstNameInput);
+    editForm.appendChild(firstNameGroup);
+
+    // Last Name
+    const lastNameGroup = h('div', { class: 'agents-view-detail-edit-field' });
+    lastNameGroup.appendChild(h('label', { class: 'agents-view-detail-edit-label' }, 'Last Name'));
+    const lastNameInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      value: agent.last_name || '',
+      placeholder: 'Last name'
+    });
+    lastNameGroup.appendChild(lastNameInput);
+    editForm.appendChild(lastNameGroup);
+
+    // Specialization
+    const specGroup = h('div', { class: 'agents-view-detail-edit-field' });
+    specGroup.appendChild(h('label', { class: 'agents-view-detail-edit-label' }, 'Specialization'));
+    const specInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      value: agent.specialization || '',
+      placeholder: 'e.g., Full-Stack Development, Security Analysis'
+    });
+    specGroup.appendChild(specInput);
+    editForm.appendChild(specGroup);
+
+    // Bio
+    const bioGroup = h('div', { class: 'agents-view-detail-edit-field' });
+    bioGroup.appendChild(h('label', { class: 'agents-view-detail-edit-label' }, 'Bio'));
+    const bioInput = h('textarea', {
+      class: 'form-input agents-view-detail-edit-textarea',
+      placeholder: 'Agent bio and background...',
+      rows: '5'
+    });
+    bioInput.value = agent.bio || '';
+    bioGroup.appendChild(bioInput);
+    editForm.appendChild(bioGroup);
+
+    // Save button
+    const editActions = h('div', { class: 'agents-view-detail-edit-actions' });
+    const saveProfileBtn = h('button', { class: 'btn btn-primary btn-sm' }, 'Save Changes');
+    saveProfileBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) { Toast.error('Socket not connected.'); return; }
+      saveProfileBtn.disabled = true;
+      saveProfileBtn.textContent = 'Saving...';
+      try {
+        const profileUpdate = {
+          firstName: firstNameInput.value.trim() || undefined,
+          lastName: lastNameInput.value.trim() || undefined,
+          specialization: specInput.value.trim() || undefined,
+          bio: bioInput.value.trim() || undefined,
+        };
+        // Build displayName from first + last
+        if (profileUpdate.firstName || profileUpdate.lastName) {
+          profileUpdate.displayName = [profileUpdate.firstName, profileUpdate.lastName]
+            .filter(Boolean).join(' ');
+        }
+        const res = await window.overlordSocket.updateAgentProfile(agent.id, profileUpdate);
+        if (res && res.ok) {
+          Toast.success('Profile updated');
+          this._fetchAgents();
+          setTimeout(() => {
+            const updatedAgent = this._findAgentById(agent.id);
+            if (updatedAgent) this._openAgentDetail(updatedAgent);
+          }, 500);
+        } else {
+          throw new Error(res?.error?.message || 'Update failed');
+        }
+      } catch (err) {
+        Toast.error(`Update failed: ${err.message}`);
+        saveProfileBtn.disabled = false;
+        saveProfileBtn.textContent = 'Save Changes';
+      }
+    });
+    editActions.appendChild(saveProfileBtn);
+    editForm.appendChild(editActions);
+
+    editSection.appendChild(editForm);
+    content.appendChild(editSection);
 
     // ── Actions bar ──
     const actionsBar = h('div', { class: 'agents-view-detail-actions' });
@@ -548,10 +867,15 @@ export class AgentsView extends Component {
 
     // ── Open the Drawer ──
     Drawer.open('agent-detail', {
-      title: `Agent: ${agent.name || agent.id}`,
-      width: '480px',
+      title: `Agent: ${displayName}`,
+      width: '520px',
       content
     });
+  }
+
+  /** Find an agent by ID from the current agent list. */
+  _findAgentById(agentId) {
+    return this._agents.find(a => a.id === agentId) || null;
   }
 
   // ── Create Agent Modal ───────────────────────────────────────
@@ -561,14 +885,20 @@ export class AgentsView extends Component {
       name: '',
       role: 'developer',
       capabilities: ['chat'],
-      roomAccess: ['*']
+      roomAccess: ['*'],
+      autoGenerateProfile: true,
+      // Manual profile fields (used when auto-generate is off)
+      first_name: '',
+      last_name: '',
+      bio: '',
+      specialization: '',
     };
 
     const container = h('div', { class: 'agent-create-form' });
 
     // ── Name field ──
     const nameGroup = h('div', { class: 'agent-create-field' });
-    nameGroup.appendChild(h('label', { class: 'agent-create-label' }, 'Agent Name'));
+    nameGroup.appendChild(h('label', { class: 'agent-create-label' }, 'Agent Name *'));
     const nameInput = h('input', {
       class: 'form-input',
       type: 'text',
@@ -580,7 +910,7 @@ export class AgentsView extends Component {
 
     // ── Role select ──
     const roleGroup = h('div', { class: 'agent-create-field' });
-    roleGroup.appendChild(h('label', { class: 'agent-create-label' }, 'Role'));
+    roleGroup.appendChild(h('label', { class: 'agent-create-label' }, 'Role *'));
     const roleSelect = h('select', { class: 'form-input' });
     for (const role of ROLES) {
       const opt = h('option', { value: role }, role.charAt(0).toUpperCase() + role.slice(1));
@@ -612,6 +942,92 @@ export class AgentsView extends Component {
     }
     capGroup.appendChild(capGrid);
     container.appendChild(capGroup);
+
+    // ── Profile Generation Options ──
+    const profileSection = h('div', { class: 'agent-create-field agent-create-profile-section' });
+    profileSection.appendChild(h('label', { class: 'agent-create-label' }, 'Profile Generation'));
+
+    // Auto-generate checkbox
+    const autoGenRow = h('label', { class: 'agent-create-autogen-label' });
+    const autoGenCheckbox = h('input', { type: 'checkbox' });
+    autoGenCheckbox.checked = formData.autoGenerateProfile;
+    autoGenRow.appendChild(autoGenCheckbox);
+    autoGenRow.appendChild(h('span', { class: 'agent-create-autogen-text' }, ' Auto-generate profile'));
+    profileSection.appendChild(autoGenRow);
+
+    // Auto-generate info note
+    const autoGenNote = h('div', { class: 'agent-create-autogen-note' },
+      h('span', { class: 'agent-create-autogen-note-icon' }, '\u2728'),
+      h('span', null, 'A professional name, bio, and photo will be generated based on the role and capabilities.')
+    );
+    profileSection.appendChild(autoGenNote);
+
+    // Manual profile fields container (hidden when auto-generate is on)
+    const manualFields = h('div', { class: 'agent-create-manual-fields agent-create-manual-hidden' });
+
+    // First Name
+    const fnGroup = h('div', { class: 'agent-create-field' });
+    fnGroup.appendChild(h('label', { class: 'agent-create-label agent-create-label-sub' }, 'First Name'));
+    const fnInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      placeholder: 'Agent first name'
+    });
+    fnInput.addEventListener('input', () => { formData.first_name = fnInput.value; });
+    fnGroup.appendChild(fnInput);
+    manualFields.appendChild(fnGroup);
+
+    // Last Name
+    const lnGroup = h('div', { class: 'agent-create-field' });
+    lnGroup.appendChild(h('label', { class: 'agent-create-label agent-create-label-sub' }, 'Last Name'));
+    const lnInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      placeholder: 'Agent last name'
+    });
+    lnInput.addEventListener('input', () => { formData.last_name = lnInput.value; });
+    lnGroup.appendChild(lnInput);
+    manualFields.appendChild(lnGroup);
+
+    // Specialization
+    const specManualGroup = h('div', { class: 'agent-create-field' });
+    specManualGroup.appendChild(h('label', { class: 'agent-create-label agent-create-label-sub' }, 'Specialization'));
+    const specManualInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      placeholder: 'e.g., Full-Stack Development, Security Analysis'
+    });
+    specManualInput.addEventListener('input', () => { formData.specialization = specManualInput.value; });
+    specManualGroup.appendChild(specManualInput);
+    manualFields.appendChild(specManualGroup);
+
+    // Bio
+    const bioManualGroup = h('div', { class: 'agent-create-field' });
+    bioManualGroup.appendChild(h('label', { class: 'agent-create-label agent-create-label-sub' }, 'Bio'));
+    const bioManualInput = h('textarea', {
+      class: 'form-input agent-create-textarea',
+      placeholder: 'Brief agent background and description...',
+      rows: '4'
+    });
+    bioManualInput.addEventListener('input', () => { formData.bio = bioManualInput.value; });
+    bioManualGroup.appendChild(bioManualInput);
+    manualFields.appendChild(bioManualGroup);
+
+    profileSection.appendChild(manualFields);
+
+    // Toggle between auto-generate and manual fields
+    autoGenCheckbox.addEventListener('change', () => {
+      formData.autoGenerateProfile = autoGenCheckbox.checked;
+      if (autoGenCheckbox.checked) {
+        autoGenNote.classList.remove('agent-create-autogen-note-hidden');
+        manualFields.classList.add('agent-create-manual-hidden');
+      } else {
+        autoGenNote.classList.add('agent-create-autogen-note-hidden');
+        manualFields.classList.remove('agent-create-manual-hidden');
+      }
+    });
+
+    container.appendChild(profileSection);
 
     // ── Room access ──
     const roomGroup = h('div', { class: 'agent-create-field' });
@@ -650,9 +1066,9 @@ export class AgentsView extends Component {
           formData.roomAccess = formData.roomAccess.filter(r => r !== roomType);
         }
       });
-      const displayName = roomType.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const roomDisplayName = roomType.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       label.appendChild(checkbox);
-      label.appendChild(h('span', null, ` ${displayName}`));
+      label.appendChild(h('span', null, ` ${roomDisplayName}`));
       roomGrid.appendChild(label);
     }
     roomGroup.appendChild(roomGrid);
@@ -698,16 +1114,36 @@ export class AgentsView extends Component {
       const store = OverlordUI.getStore();
       const buildingId = store?.get('building.active');
 
-      const result = await window.overlordSocket.registerAgent({
+      // Build the registration payload
+      const payload = {
         name: formData.name.trim(),
         role: formData.role,
         capabilities: formData.capabilities,
         roomAccess: formData.roomAccess,
         buildingId: buildingId || undefined,
-      });
+        autoGenerateProfile: formData.autoGenerateProfile,
+      };
+
+      // Include manual profile fields when auto-generate is off
+      // Backend expects camelCase field names (matching Zod schema)
+      if (!formData.autoGenerateProfile) {
+        if (formData.first_name.trim()) payload.firstName = formData.first_name.trim();
+        if (formData.last_name.trim()) payload.lastName = formData.last_name.trim();
+        if (formData.specialization.trim()) payload.specialization = formData.specialization.trim();
+        if (formData.bio.trim()) payload.bio = formData.bio.trim();
+        // Build displayName from first + last name
+        if (payload.firstName || payload.lastName) {
+          payload.displayName = [payload.firstName, payload.lastName].filter(Boolean).join(' ');
+        }
+      }
+
+      const result = await window.overlordSocket.registerAgent(payload);
 
       if (result && result.ok) {
-        Toast.success(`Agent "${formData.name}" created successfully`);
+        const successMsg = formData.autoGenerateProfile
+          ? `Agent "${formData.name}" created. Profile generation in progress...`
+          : `Agent "${formData.name}" created successfully`;
+        Toast.success(successMsg);
         Modal.close('agent-create');
         this._fetchAgents();
       } else {
@@ -921,21 +1357,61 @@ export class AgentsView extends Component {
   position: relative;
 }
 
-/* Avatar */
+/* Avatar base */
 .agents-view-card-avatar {
-  width: 48px;
-  height: 48px;
   border-radius: var(--radius-full);
   background: var(--bg-tertiary);
   border: 2px solid var(--status-idle);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--text-xl);
   font-weight: var(--font-bold);
   color: var(--text-primary);
   flex-shrink: 0;
   position: relative;
+  overflow: hidden;
+}
+
+/* Avatar sizes */
+.agents-view-avatar-sm {
+  width: 48px;
+  height: 48px;
+  font-size: var(--text-xl);
+}
+.agents-view-avatar-lg {
+  width: 120px;
+  height: 120px;
+  font-size: 3rem;
+  border-width: 3px;
+}
+
+/* Avatar photo image */
+.agents-view-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-full);
+  opacity: 0;
+  transition: opacity var(--duration-normal, 200ms) ease;
+}
+.agents-view-avatar-img-loaded {
+  opacity: 1;
+}
+
+/* Avatar fallback (initial letter) */
+.agents-view-avatar-fallback {
+  background: var(--bg-tertiary);
+}
+
+/* Card specialization text */
+.agents-view-card-specialization {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+  font-style: italic;
 }
 
 /* Status dot (bottom-right of avatar) */
@@ -1136,7 +1612,7 @@ export class AgentsView extends Component {
   gap: var(--sp-5);
 }
 
-/* Detail header */
+/* Detail header — profile layout */
 .agents-view-detail-header {
   display: flex;
   align-items: center;
@@ -1144,22 +1620,22 @@ export class AgentsView extends Component {
   padding-bottom: var(--sp-4);
   border-bottom: 1px solid var(--border-secondary);
 }
-.agents-view-detail-avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: var(--radius-full);
-  background: var(--bg-tertiary);
-  border: 3px solid var(--status-idle);
-  display: flex;
+.agents-view-detail-header-profile {
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  font-size: var(--text-3xl);
-  font-weight: var(--font-bold);
-  flex-shrink: 0;
+  text-align: center;
+}
+.agents-view-detail-avatar {
+  /* Size and border are driven by avatar-lg class */
 }
 .agents-view-detail-identity {
   flex: 1;
   min-width: 0;
+}
+.agents-view-detail-header-profile .agents-view-detail-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .agents-view-detail-name {
   font-size: var(--text-xl);
@@ -1167,11 +1643,95 @@ export class AgentsView extends Component {
   color: var(--text-primary);
   margin: 0 0 var(--sp-1) 0;
 }
+.agents-view-detail-codename {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-bottom: var(--sp-1);
+}
+.agents-view-detail-specialization {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-bottom: var(--sp-2);
+}
 .agents-view-detail-meta {
   display: flex;
   align-items: center;
   gap: var(--sp-1);
   flex-wrap: wrap;
+}
+
+/* Bio section */
+.agents-view-detail-bio {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  line-height: var(--leading-relaxed, 1.65);
+}
+.agents-view-detail-bio-paragraph {
+  margin: 0 0 var(--sp-3) 0;
+}
+.agents-view-detail-bio-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+/* Profile generation actions */
+.agents-view-detail-profile-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+/* Edit profile section */
+.agents-view-detail-edit-section {
+  /* container */
+}
+.agents-view-detail-edit-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  user-select: none;
+}
+.agents-view-detail-edit-toggle::after {
+  content: '\u25B6';
+  font-size: 0.65rem;
+  transition: transform var(--duration-fast, 150ms) ease;
+  color: var(--text-muted);
+}
+.agents-view-detail-edit-toggle-open::after {
+  transform: rotate(90deg);
+}
+.agents-view-detail-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+}
+.agents-view-detail-edit-collapsed {
+  display: none;
+}
+.agents-view-detail-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.agents-view-detail-edit-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.agents-view-detail-edit-textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+.agents-view-detail-edit-actions {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+  padding-top: var(--sp-2);
 }
 
 /* Detail sections */
@@ -1270,7 +1830,7 @@ export class AgentsView extends Component {
   .agents-view-actions .btn {
     flex: 1;
   }
-  .agents-view-card-avatar {
+  .agents-view-avatar-sm {
     width: 40px;
     height: 40px;
     font-size: var(--text-lg);
@@ -1281,10 +1841,10 @@ export class AgentsView extends Component {
     width: 12px;
     height: 12px;
   }
-  .agents-view-detail-avatar {
-    width: 48px;
-    height: 48px;
-    font-size: var(--text-2xl);
+  .agents-view-avatar-lg {
+    width: 80px;
+    height: 80px;
+    font-size: var(--text-3xl);
   }
 }
 
