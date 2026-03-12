@@ -86,10 +86,11 @@ if (socket) {
   // ── Connection indicator ──
   const connectionEl = document.getElementById('toolbar-connection');
   if (connectionEl) {
-    store.subscribe('ui.connected', (connected) => {
-      connectionEl.classList.toggle('connected', connected === true);
-      connectionEl.classList.toggle('disconnected', connected === false);
-      connectionEl.title = connected ? 'Connected' : 'Disconnected';
+    store.subscribe('ui.connectionState', (state) => {
+      connectionEl.classList.remove('connected', 'disconnected', 'reconnecting');
+      connectionEl.classList.add(state || 'disconnected');
+      const labels = { connected: 'Connected', disconnected: 'Disconnected', reconnecting: 'Reconnecting...', failed: 'Connection failed' };
+      connectionEl.title = labels[state] || 'Unknown';
     });
   }
 
@@ -113,10 +114,23 @@ if (socket) {
     Toast.warning('Connection lost. Reconnecting...');
   });
 
+  engine.subscribe('connection:reconnected', (data) => {
+    Toast.success(`Reconnected after ${data.attempt} attempt${data.attempt === 1 ? '' : 's'}`);
+  });
+
+  engine.subscribe('connection:failed', () => {
+    Toast.error('Connection failed. Please refresh the page.');
+  });
+
   store.subscribe('ui.connected', (connected) => {
     if (connected) {
       Toast.success('Connected to Overlord');
     }
+  });
+
+  // ── Operation error feedback ──
+  engine.subscribe('operation:error', (data) => {
+    Toast.error(`${data.message}`);
   });
 
   // ── Phase bar reactivity ──

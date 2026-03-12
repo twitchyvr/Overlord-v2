@@ -992,3 +992,155 @@ describe('window.overlordSocket.submitGate()', () => {
     expect(result).toEqual(response);
   });
 });
+
+// ─── Connection state management ─────────────────────────────
+
+describe('connection state (ui.connectionState)', () => {
+  it('sets connectionState to "connected" on connect', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    mockSocket._trigger('connect');
+    expect(mockStore.set).toHaveBeenCalledWith('ui.connectionState', 'connected');
+  });
+
+  it('sets connectionState to "disconnected" on disconnect', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    mockSocket._trigger('disconnect', 'io server disconnect');
+    expect(mockStore.set).toHaveBeenCalledWith('ui.connectionState', 'disconnected');
+  });
+
+  it('sets connectionState to "reconnecting" on connect_error', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    mockSocket._trigger('connect_error', { message: 'timeout' });
+    expect(mockStore.set).toHaveBeenCalledWith('ui.connectionState', 'reconnecting');
+    spy.mockRestore();
+  });
+});
+
+describe('reconnection events (socket.io manager)', () => {
+  it('registers reconnect_attempt handler on socket.io manager', () => {
+    const ioHandlers: Record<string, any> = {};
+    (mockSocket as any).io = {
+      on(event: string, fn: any) { ioHandlers[event] = fn; }
+    };
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    expect(ioHandlers['reconnect_attempt']).toBeTypeOf('function');
+    expect(ioHandlers['reconnect']).toBeTypeOf('function');
+    expect(ioHandlers['reconnect_failed']).toBeTypeOf('function');
+  });
+
+  it('sets connectionState to "reconnecting" on reconnect_attempt', () => {
+    const ioHandlers: Record<string, any> = {};
+    (mockSocket as any).io = {
+      on(event: string, fn: any) { ioHandlers[event] = fn; }
+    };
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    ioHandlers['reconnect_attempt'](3);
+    expect(mockStore.set).toHaveBeenCalledWith('ui.connectionState', 'reconnecting');
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('connection:reconnecting', { attempt: 3 });
+  });
+
+  it('dispatches connection:reconnected on successful reconnect', () => {
+    const ioHandlers: Record<string, any> = {};
+    (mockSocket as any).io = {
+      on(event: string, fn: any) { ioHandlers[event] = fn; }
+    };
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    ioHandlers['reconnect'](2);
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('connection:reconnected', { attempt: 2 });
+  });
+
+  it('sets connectionState to "failed" on reconnect_failed', () => {
+    const ioHandlers: Record<string, any> = {};
+    (mockSocket as any).io = {
+      on(event: string, fn: any) { ioHandlers[event] = fn; }
+    };
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    ioHandlers['reconnect_failed']();
+    expect(mockStore.set).toHaveBeenCalledWith('ui.connectionState', 'failed');
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('connection:failed', {});
+  });
+
+  it('skips manager handlers when socket.io is not available', () => {
+    // No socket.io property — should not throw
+    delete (mockSocket as any).io;
+    expect(() => initSocketBridge(mockSocket, mockStore, mockEngine)).not.toThrow();
+  });
+});
+
+describe('reconnect data re-fetching', () => {
+  it('re-fetches active building data on reconnect if building.active is set', () => {
+    vi.useFakeTimers();
+    mockStore._data['building.active'] = 'b-123';
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+
+    // Trigger connect (simulates reconnect)
+    mockSocket._trigger('connect');
+
+    // Fast forward past the 100ms setTimeout
+    vi.advanceTimersByTime(150);
+
+    // selectBuilding should have been called — which calls multiple emit methods
+    // The key indicator is that building:get was emitted for b-123
+    expect(mockSocket.emit).toHaveBeenCalledWith('building:get', { buildingId: 'b-123' }, expect.any(Function));
+
+    vi.useRealTimers();
+  });
+});
+
+// ─── Error feedback on failed operations ──────────────────────
+
+describe('operation error feedback (_emitWithFeedback)', () => {
+  it('dispatches operation:error when emit callback returns ok=false', async () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const api = (window as any).overlordSocket;
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
+      if (ack) ack({ ok: false, error: { code: 'ROOM_NOT_FOUND', message: 'Room does not exist' } });
+    });
+
+    await api.enterRoom('r-bad', 'a1', 'focus');
+
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('operation:error', {
+      event: 'room:enter',
+      code: 'ROOM_NOT_FOUND',
+      message: 'Room does not exist'
+    });
+
+    warnSpy.mockRestore();
+  });
+
+  it('handles string error in response', async () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const api = (window as any).overlordSocket;
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
+      if (ack) ack({ ok: false, error: 'Something went wrong' });
+    });
+
+    await api.createRoom({ type: 'test' });
+
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('operation:error', {
+      event: 'room:create',
+      code: 'UNKNOWN',
+      message: 'Something went wrong'
+    });
+
+    warnSpy.mockRestore();
+  });
+
+  it('does not dispatch error when emit callback returns ok=true', async () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const api = (window as any).overlordSocket;
+
+    mockSocket.emit.mockImplementation((_e: string, _d: any, ack?: (...args: unknown[]) => void) => {
+      if (ack) ack({ ok: true, data: { id: 'r1' } });
+    });
+
+    await api.createRoom({ type: 'test' });
+
+    expect(mockEngine.dispatch).not.toHaveBeenCalledWith('operation:error', expect.anything());
+  });
+});

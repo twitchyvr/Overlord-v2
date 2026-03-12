@@ -20,6 +20,7 @@ export function initSocketBridge(socket, store, engine) {
   socket.on('connect', () => {
     console.log('[SocketBridge] Connected:', socket.id);
     store.set('ui.connected', true);
+    store.set('ui.connectionState', 'connected');
 
     // Hydrate initial state
     socket.emit('system:status', {}, (res) => {
@@ -37,18 +38,53 @@ export function initSocketBridge(socket, store, engine) {
         store.set('system.health', res.data);
       }
     });
+
+    // Re-fetch active building data on reconnect
+    const activeBuildingId = store.get('building.active');
+    if (activeBuildingId) {
+      console.log('[SocketBridge] Reconnected — re-fetching active building data');
+      // Use setTimeout to avoid race with system:status hydration
+      setTimeout(() => {
+        if (window.overlordSocket && window.overlordSocket.selectBuilding) {
+          window.overlordSocket.selectBuilding(activeBuildingId);
+        }
+      }, 100);
+    }
   });
 
   socket.on('disconnect', (reason) => {
     console.log('[SocketBridge] Disconnected:', reason);
     store.set('ui.connected', false);
+    store.set('ui.connectionState', 'disconnected');
     engine.dispatch('connection:lost', { reason });
   });
 
   socket.on('connect_error', (error) => {
     console.error('[SocketBridge] Connection error:', error.message);
+    store.set('ui.connectionState', 'reconnecting');
     engine.dispatch('connection:error', { message: error.message });
   });
+
+  // ── Reconnection events (Socket.IO Manager) ──
+
+  if (socket.io) {
+    socket.io.on('reconnect_attempt', (attempt) => {
+      console.log('[SocketBridge] Reconnection attempt:', attempt);
+      store.set('ui.connectionState', 'reconnecting');
+      engine.dispatch('connection:reconnecting', { attempt });
+    });
+
+    socket.io.on('reconnect', (attempt) => {
+      console.log('[SocketBridge] Reconnected after', attempt, 'attempts');
+      engine.dispatch('connection:reconnected', { attempt });
+    });
+
+    socket.io.on('reconnect_failed', () => {
+      console.error('[SocketBridge] Reconnection failed permanently');
+      store.set('ui.connectionState', 'failed');
+      engine.dispatch('connection:failed', {});
+    });
+  }
 
   // ── Server → Client broadcasts ──
 
@@ -230,14 +266,31 @@ export function initSocketBridge(socket, store, engine) {
 
   // ── Client emit wrappers (convenience for components) ──
 
+  /**
+   * Emit a socket event with error feedback.
+   * On error responses (res.ok === false), dispatches an engine event
+   * so the UI can show error feedback (toast, banner, etc).
+   */
+  function _emitWithFeedback(event, data) {
+    return new Promise((resolve) => {
+      socket.emit(event, data, (res) => {
+        if (res && !res.ok) {
+          const errorMsg = res.error?.message || res.error || 'Operation failed';
+          const errorCode = res.error?.code || 'UNKNOWN';
+          console.warn(`[SocketBridge] ${event} failed:`, errorMsg);
+          engine.dispatch('operation:error', { event, code: errorCode, message: errorMsg });
+        }
+        resolve(res);
+      });
+    });
+  }
+
   /** Fetch a building with floors */
   window.overlordSocket = {
     socket,
 
     emit(event, data) {
-      return new Promise((resolve) => {
-        socket.emit(event, data, (res) => resolve(res));
-      });
+      return _emitWithFeedback(event, data);
     },
 
     fetchBuilding(buildingId) {
@@ -387,50 +440,36 @@ export function initSocketBridge(socket, store, engine) {
       });
     },
 
-    createBuilding(params) {
-      return new Promise((resolve) => {
-        socket.emit('building:create', params, (res) => {
-          if (res && res.ok) {
-            store.update('building.list', (list) => [...(list || []), res.data]);
-          }
-          resolve(res);
-        });
-      });
+    async createBuilding(params) {
+      const res = await _emitWithFeedback('building:create', params);
+      if (res && res.ok) {
+        store.update('building.list', (list) => [...(list || []), res.data]);
+      }
+      return res;
     },
 
     applyBlueprint(params) {
-      return new Promise((resolve) => {
-        socket.emit('building:apply-blueprint', params, (res) => resolve(res));
-      });
+      return _emitWithFeedback('building:apply-blueprint', params);
     },
 
-    registerAgent(params) {
-      return new Promise((resolve) => {
-        socket.emit('agent:register', params, (res) => {
-          if (res && res.ok) {
-            store.update('agents.list', (list) => [...(list || []), res.data]);
-          }
-          resolve(res);
-        });
-      });
+    async registerAgent(params) {
+      const res = await _emitWithFeedback('agent:register', params);
+      if (res && res.ok) {
+        store.update('agents.list', (list) => [...(list || []), res.data]);
+      }
+      return res;
     },
 
     createRoom(params) {
-      return new Promise((resolve) => {
-        socket.emit('room:create', params, (res) => resolve(res));
-      });
+      return _emitWithFeedback('room:create', params);
     },
 
     enterRoom(roomId, agentId, tableType) {
-      return new Promise((resolve) => {
-        socket.emit('room:enter', { roomId, agentId, tableType }, (res) => resolve(res));
-      });
+      return _emitWithFeedback('room:enter', { roomId, agentId, tableType });
     },
 
     exitRoom(roomId, agentId) {
-      return new Promise((resolve) => {
-        socket.emit('room:exit', { roomId, agentId }, (res) => resolve(res));
-      });
+      return _emitWithFeedback('room:exit', { roomId, agentId });
     },
 
     sendMessage(params) {
@@ -441,9 +480,7 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     submitExitDoc(params) {
-      return new Promise((resolve) => {
-        socket.emit('exit-doc:submit', params, (res) => resolve(res));
-      });
+      return _emitWithFeedback('exit-doc:submit', params);
     },
 
     fetchExitDocs(roomId) {
@@ -469,9 +506,7 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     submitGate(data) {
-      return new Promise((resolve) => {
-        socket.emit('phase:gate', data, (res) => resolve(res));
-      });
+      return _emitWithFeedback('phase:gate', data);
     },
 
     // ── Task methods ──
@@ -487,35 +522,29 @@ export function initSocketBridge(socket, store, engine) {
       });
     },
 
-    createTask(params) {
-      return new Promise((resolve) => {
-        socket.emit('task:create', params, (res) => {
-          if (res && res.ok) {
-            store.update('tasks.list', (tasks) => [res.data, ...(tasks || [])]);
-          }
-          resolve(res);
-        });
-      });
+    async createTask(params) {
+      const res = await _emitWithFeedback('task:create', params);
+      if (res && res.ok) {
+        store.update('tasks.list', (tasks) => [res.data, ...(tasks || [])]);
+      }
+      return res;
     },
 
-    updateTask(params) {
-      return new Promise((resolve) => {
-        socket.emit('task:update', params, (res) => {
-          if (res && res.ok) {
-            store.update('tasks.list', (tasks) => {
-              const list = tasks || [];
-              const idx = list.findIndex((t) => t.id === res.data.id);
-              if (idx >= 0) {
-                const next = [...list];
-                next[idx] = res.data;
-                return next;
-              }
-              return list;
-            });
+    async updateTask(params) {
+      const res = await _emitWithFeedback('task:update', params);
+      if (res && res.ok) {
+        store.update('tasks.list', (tasks) => {
+          const list = tasks || [];
+          const idx = list.findIndex((t) => t.id === res.data.id);
+          if (idx >= 0) {
+            const next = [...list];
+            next[idx] = res.data;
+            return next;
           }
-          resolve(res);
+          return list;
         });
-      });
+      }
+      return res;
     },
 
     getTask(taskId) {
@@ -537,35 +566,29 @@ export function initSocketBridge(socket, store, engine) {
       });
     },
 
-    createTodo(params) {
-      return new Promise((resolve) => {
-        socket.emit('todo:create', params, (res) => {
-          if (res && res.ok) {
-            store.update('todos.list', (todos) => [...(todos || []), res.data]);
-          }
-          resolve(res);
-        });
-      });
+    async createTodo(params) {
+      const res = await _emitWithFeedback('todo:create', params);
+      if (res && res.ok) {
+        store.update('todos.list', (todos) => [...(todos || []), res.data]);
+      }
+      return res;
     },
 
-    toggleTodo(todoId) {
-      return new Promise((resolve) => {
-        socket.emit('todo:toggle', { id: todoId }, (res) => {
-          if (res && res.ok) {
-            store.update('todos.list', (todos) => {
-              const list = todos || [];
-              const idx = list.findIndex((t) => t.id === res.data.id);
-              if (idx >= 0) {
-                const next = [...list];
-                next[idx] = res.data;
-                return next;
-              }
-              return list;
-            });
+    async toggleTodo(todoId) {
+      const res = await _emitWithFeedback('todo:toggle', { id: todoId });
+      if (res && res.ok) {
+        store.update('todos.list', (todos) => {
+          const list = todos || [];
+          const idx = list.findIndex((t) => t.id === res.data.id);
+          if (idx >= 0) {
+            const next = [...list];
+            next[idx] = res.data;
+            return next;
           }
-          resolve(res);
+          return list;
         });
-      });
+      }
+      return res;
     },
 
     // ── Command methods ──
@@ -583,56 +606,45 @@ export function initSocketBridge(socket, store, engine) {
 
     // ── RAID methods ──
 
-    addRaidEntry(params) {
-      return new Promise((resolve) => {
-        socket.emit('raid:add', params, (res) => {
-          if (res && res.ok) {
-            store.update('raid.entries', (entries) => [res.data, ...(entries || [])]);
-          }
-          resolve(res);
-        });
-      });
+    async addRaidEntry(params) {
+      const res = await _emitWithFeedback('raid:add', params);
+      if (res && res.ok) {
+        store.update('raid.entries', (entries) => [res.data, ...(entries || [])]);
+      }
+      return res;
     },
 
-    updateRaidStatus(params) {
-      return new Promise((resolve) => {
-        socket.emit('raid:update', params, (res) => {
-          if (res && res.ok) {
-            store.update('raid.entries', (entries) => {
-              const list = entries || [];
-              const idx = list.findIndex((e) => e.id === params.id);
-              if (idx >= 0) {
-                const next = [...list];
-                next[idx] = { ...next[idx], status: params.status };
-                return next;
-              }
-              return list;
-            });
+    async updateRaidStatus(params) {
+      const res = await _emitWithFeedback('raid:update', params);
+      if (res && res.ok) {
+        store.update('raid.entries', (entries) => {
+          const list = entries || [];
+          const idx = list.findIndex((e) => e.id === params.id);
+          if (idx >= 0) {
+            const next = [...list];
+            next[idx] = { ...next[idx], status: params.status };
+            return next;
           }
-          resolve(res);
+          return list;
         });
-      });
+      }
+      return res;
     },
 
     // ── Phase Gate methods ──
 
     signoffGate(params) {
-      return new Promise((resolve) => {
-        socket.emit('phase:gate:signoff', params, (res) => resolve(res));
-      });
+      return _emitWithFeedback('phase:gate:signoff', params);
     },
 
-    advancePhase(buildingId, reviewer) {
-      return new Promise((resolve) => {
-        socket.emit('phase:advance', { buildingId, reviewer }, (res) => {
-          if (res && res.ok) {
-            // Refresh phase state after advancement
-            this.fetchGates(buildingId);
-            this.fetchCanAdvance(buildingId);
-          }
-          resolve(res);
-        });
-      });
+    async advancePhase(buildingId, reviewer) {
+      const res = await _emitWithFeedback('phase:advance', { buildingId, reviewer });
+      if (res && res.ok) {
+        // Refresh phase state after advancement
+        this.fetchGates(buildingId);
+        this.fetchCanAdvance(buildingId);
+      }
+      return res;
     },
 
     async selectBuilding(buildingId) {
