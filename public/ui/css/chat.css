@@ -352,6 +352,110 @@
   opacity: 1;
 }
 
+/* ── Chat header layout ── */
+.chat-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.chat-conversations-btn {
+  font-size: var(--text-lg);
+  padding: var(--sp-1);
+}
+
+/* ── Conversations sidebar ── */
+.chat-conversations {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100%;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-primary);
+  z-index: var(--z-above);
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: slideInLeft var(--duration-fast) var(--ease-default);
+}
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.chat-conv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border-primary);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+.chat-conv-empty {
+  padding: var(--sp-6) var(--sp-4);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.chat-conv-list {
+  padding: var(--sp-2) 0;
+}
+.chat-conv-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-4);
+  cursor: pointer;
+  position: relative;
+  border-left: 3px solid transparent;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+.chat-conv-item:hover {
+  background: var(--bg-hover);
+}
+.chat-conv-item.active {
+  background: var(--bg-active);
+  border-left-color: var(--accent-blue);
+}
+.chat-conv-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: var(--sp-6);
+}
+.chat-conv-meta {
+  display: flex;
+  gap: var(--sp-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.chat-conv-delete {
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast), background var(--duration-fast);
+}
+.chat-conv-item:hover .chat-conv-delete {
+  opacity: 1;
+}
+.chat-conv-delete:hover {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--accent-red);
+}
+
 /* ── Mobile ── */
 @media (max-width: 640px) {
   .chat-messages {

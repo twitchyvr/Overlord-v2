@@ -153,8 +153,20 @@ export class ChatView extends Component {
 
     // Chat header
     const header = h('div', { class: 'chat-header' },
-      h('span', { class: 'chat-header-title' }, 'Chat'),
+      h('div', { class: 'chat-header-left' },
+        h('button', {
+          class: 'btn btn-ghost btn-sm chat-conversations-btn',
+          title: 'Conversations',
+          onClick: () => this._toggleConversations()
+        }, '\u{1F4AC}'),
+        h('span', { class: 'chat-header-title' }, 'Chat')
+      ),
       h('div', { class: 'chat-header-actions' },
+        h('button', {
+          class: 'btn btn-ghost btn-sm',
+          title: 'New conversation',
+          onClick: () => this._newConversation()
+        }, '+ New'),
         h('button', {
           class: 'btn btn-ghost btn-sm',
           title: 'Clear chat',
@@ -163,6 +175,10 @@ export class ChatView extends Component {
       )
     );
     this.el.appendChild(header);
+
+    // Conversations sidebar (hidden by default)
+    this._conversationsEl = h('div', { class: 'chat-conversations', hidden: true });
+    this.el.appendChild(this._conversationsEl);
 
     // Messages area
     this._messagesEl = h('div', { class: 'chat-messages' });
@@ -696,5 +712,89 @@ export class ChatView extends Component {
         }
       }
     );
+  }
+
+  // ── Conversations ──────────────────────────────────────────
+
+  _toggleConversations() {
+    if (!this._conversationsEl) return;
+    const showing = !this._conversationsEl.hidden;
+    this._conversationsEl.hidden = showing;
+    if (!showing) this._fetchConversations();
+  }
+
+  async _fetchConversations() {
+    if (!window.overlordSocket) return;
+    await window.overlordSocket.fetchConversations();
+    this._renderConversations();
+  }
+
+  _renderConversations() {
+    if (!this._conversationsEl) return;
+    const store = OverlordUI.getStore();
+    const conversations = store?.get('conversations.list') || [];
+    const activeThread = store?.get('conversations.active') || '';
+
+    this._conversationsEl.textContent = '';
+
+    const header = h('div', { class: 'chat-conv-header' },
+      h('span', null, 'Conversations'),
+      h('button', {
+        class: 'btn btn-ghost btn-xs',
+        onClick: () => this._newConversation()
+      }, '+ New')
+    );
+    this._conversationsEl.appendChild(header);
+
+    if (conversations.length === 0) {
+      this._conversationsEl.appendChild(
+        h('div', { class: 'chat-conv-empty' }, 'No conversations yet. Start chatting!')
+      );
+      return;
+    }
+
+    const list = h('div', { class: 'chat-conv-list' });
+    for (const conv of conversations) {
+      const isActive = conv.threadId === activeThread;
+      const item = h('div', {
+        class: `chat-conv-item${isActive ? ' active' : ''}`,
+        onClick: () => this._loadConversation(conv.threadId)
+      },
+        h('div', { class: 'chat-conv-title' }, conv.title || 'Untitled'),
+        h('div', { class: 'chat-conv-meta' },
+          h('span', null, `${conv.messageCount} msgs`),
+          h('span', null, conv.lastMessageAt ? formatTime(new Date(conv.lastMessageAt).getTime()) : '')
+        ),
+        h('button', {
+          class: 'chat-conv-delete',
+          title: 'Delete conversation',
+          onClick: (e) => { e.stopPropagation(); this._deleteConversation(conv.threadId); }
+        }, '\u00D7')
+      );
+      list.appendChild(item);
+    }
+    this._conversationsEl.appendChild(list);
+  }
+
+  async _loadConversation(threadId) {
+    if (!window.overlordSocket) return;
+    await window.overlordSocket.loadConversation(threadId);
+    this._conversationsEl.hidden = true;
+    this._renderedCount = 0;
+    this._lastRenderedId = null;
+  }
+
+  async _newConversation() {
+    if (!window.overlordSocket) return;
+    await window.overlordSocket.createConversation('');
+    this._renderedCount = 0;
+    this._lastRenderedId = null;
+    if (this._conversationsEl) this._conversationsEl.hidden = true;
+  }
+
+  async _deleteConversation(threadId) {
+    if (!window.overlordSocket) return;
+    await window.overlordSocket.deleteConversation(threadId);
+    this._renderConversations();
   }
 }

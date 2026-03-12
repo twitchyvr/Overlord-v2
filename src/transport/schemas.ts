@@ -269,6 +269,32 @@ export const ChatMessageSchema = z.object({
   agentId: z.string().max(MAX_ID).optional().default(''),
 }).passthrough();
 
+// ─── Conversation Schemas ───
+
+/** conversation:list — list conversations for a building/room */
+export const ConversationListSchema = z.object({
+  buildingId: z.string().max(MAX_ID).optional().default(''),
+  roomId: z.string().max(MAX_ID).optional().default(''),
+}).passthrough();
+
+/** conversation:load — load messages for a conversation thread */
+export const ConversationLoadSchema = z.object({
+  threadId: z.string().max(MAX_ID),
+  limit: z.number().int().min(1).max(200).optional().default(100),
+}).passthrough();
+
+/** conversation:create — create a new conversation thread */
+export const ConversationCreateSchema = z.object({
+  buildingId: z.string().max(MAX_ID).optional().default(''),
+  roomId: z.string().max(MAX_ID).optional().default(''),
+  title: z.string().max(MAX_NAME).optional().default(''),
+}).passthrough();
+
+/** conversation:delete — delete a conversation thread */
+export const ConversationDeleteSchema = z.object({
+  threadId: z.string().max(MAX_ID),
+}).passthrough();
+
 // ─── Read-only Event Schemas (no user data — reject unexpected fields) ───
 
 /** system:status, room:list, command:list, phase:order, system:health accept no payload */

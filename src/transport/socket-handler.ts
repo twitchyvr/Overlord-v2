@@ -36,6 +36,7 @@ import {
   AgentGenerateProfileSchema,
   AgentGeneratePhotoSchema,
   ChatMessageSchema,
+  ConversationListSchema, ConversationLoadSchema, ConversationCreateSchema, ConversationDeleteSchema,
   EmptyPayloadSchema, PhaseStatusSchema, PhaseGateSchema,
   PhaseGatesSchema, PhaseCanAdvanceSchema, PhasePendingGatesSchema,
   PhaseResolveConditionsSchema, PhaseStaleGatesSchema, PhaseGateSignoffSchema, PhaseAdvanceSchema,
@@ -937,8 +938,86 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         }
       }
 
-      // 4. Regular message — forward to bus
+      // 4. Regular message — forward to bus (include threadId for persistence)
       bus.emit('chat:message', { socketId: socket.id, ...parsed });
+    });
+
+    // ─── Conversation Events ───
+
+    handle(socket, 'conversation:list', ConversationListSchema, (parsed, ack) => {
+      const db = getDb();
+      const buildingId = parsed.buildingId || '';
+      const roomId = parsed.roomId || '';
+      // Get distinct threads with their latest message and metadata
+      const rows = db.prepare(`
+        SELECT
+          m.thread_id,
+          m.room_id,
+          MAX(m.created_at) as last_message_at,
+          COUNT(*) as message_count,
+          (SELECT content FROM messages WHERE thread_id = m.thread_id AND role = 'user' ORDER BY created_at ASC LIMIT 1) as first_message
+        FROM messages m
+        WHERE (? = '' OR m.room_id IN (SELECT id FROM rooms WHERE floor_id IN (SELECT id FROM floors WHERE building_id = ?)))
+          AND (? = '' OR m.room_id = ?)
+        GROUP BY m.thread_id
+        ORDER BY last_message_at DESC
+        LIMIT 50
+      `).all(buildingId, buildingId, roomId, roomId) as Array<{
+        thread_id: string;
+        room_id: string;
+        last_message_at: string;
+        message_count: number;
+        first_message: string;
+      }>;
+
+      const conversations = rows.map((r) => ({
+        threadId: r.thread_id,
+        roomId: r.room_id,
+        lastMessageAt: r.last_message_at,
+        messageCount: r.message_count,
+        title: r.first_message ? r.first_message.slice(0, 80) + (r.first_message.length > 80 ? '...' : '') : 'Untitled',
+      }));
+
+      if (ack) ack({ ok: true, data: conversations });
+    });
+
+    handle(socket, 'conversation:load', ConversationLoadSchema, (parsed, ack) => {
+      const db = getDb();
+      const messages = db.prepare(`
+        SELECT id, room_id, agent_id, role, content, tool_calls, thread_id, created_at
+        FROM messages
+        WHERE thread_id = ?
+        ORDER BY created_at ASC
+        LIMIT ?
+      `).all(parsed.threadId, parsed.limit || 100) as Array<{
+        id: string; room_id: string; agent_id: string | null;
+        role: string; content: string; tool_calls: string | null;
+        thread_id: string; created_at: string;
+      }>;
+
+      const formatted = messages.map((m) => ({
+        id: m.id,
+        roomId: m.room_id,
+        agentId: m.agent_id,
+        role: m.role,
+        content: m.content,
+        toolCalls: m.tool_calls ? JSON.parse(m.tool_calls) : undefined,
+        threadId: m.thread_id,
+        timestamp: new Date(m.created_at).getTime(),
+      }));
+
+      if (ack) ack({ ok: true, data: formatted });
+    });
+
+    handle(socket, 'conversation:create', ConversationCreateSchema, (parsed, ack) => {
+      const threadId = `thread_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      if (ack) ack({ ok: true, data: { threadId, title: parsed.title || 'New Conversation', roomId: parsed.roomId } });
+    });
+
+    handle(socket, 'conversation:delete', ConversationDeleteSchema, (parsed, ack) => {
+      const db = getDb();
+      db.prepare('DELETE FROM messages WHERE thread_id = ?').run(parsed.threadId);
+      if (ack) ack({ ok: true });
     });
 
     // ─── Phase Events ───
