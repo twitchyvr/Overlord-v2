@@ -47,6 +47,7 @@ export class RoomView extends Component {
     this._agents = [];
     this._agentPositions = {};
     this._activityItems = [];
+    this._exitDocHistory = [];
   }
 
   mount() {
@@ -88,7 +89,9 @@ export class RoomView extends Component {
 
     this._roomData = result.data;
     this._activityItems = [];
+    this._exitDocHistory = [];
     this._openModal();
+    this._fetchExitDocHistory(roomId);
   }
 
   _openModal() {
@@ -463,7 +466,85 @@ export class RoomView extends Component {
     });
 
     section.appendChild(submitBtn);
+
+    // Exit doc history placeholder (populated async)
+    const historyContainer = h('div', {
+      class: 'room-exit-doc-history',
+      'data-testid': 'exit-doc-history'
+    });
+    section.appendChild(historyContainer);
+
+    // Render history if already loaded
+    if (this._exitDocHistory.length > 0) {
+      this._renderExitDocHistory(historyContainer);
+    }
+
     return section;
+  }
+
+  async _fetchExitDocHistory(roomId) {
+    if (!window.overlordSocket) return;
+    try {
+      const result = await window.overlordSocket.fetchExitDocs(roomId);
+      if (result && result.ok && Array.isArray(result.data)) {
+        this._exitDocHistory = result.data;
+        // Update the history container in the modal
+        const modalBody = Modal.getBody(`room-${roomId}`);
+        if (modalBody) {
+          const histEl = modalBody.querySelector('[data-testid="exit-doc-history"]');
+          if (histEl) this._renderExitDocHistory(histEl);
+        }
+      }
+    } catch {
+      // Silently fail — history is supplementary
+    }
+  }
+
+  _renderExitDocHistory(container) {
+    container.textContent = '';
+    if (this._exitDocHistory.length === 0) return;
+
+    container.appendChild(h('div', { class: 'room-exit-doc-history-header' },
+      h('span', null, `Previous Submissions (${this._exitDocHistory.length})`)
+    ));
+
+    for (const doc of this._exitDocHistory.slice(0, 5)) {
+      const fields = typeof doc.fields === 'string' ? JSON.parse(doc.fields || '{}') : (doc.fields || {});
+      const fieldCount = Object.keys(fields).length;
+      const date = doc.created_at ? new Date(doc.created_at).toLocaleString() : '—';
+
+      const row = h('div', { class: 'room-exit-doc-history-row' },
+        h('div', { class: 'room-exit-doc-history-meta' },
+          h('span', { class: 'badge' }, doc.type || 'unknown'),
+          h('span', { class: 'room-exit-doc-history-by' }, `by ${doc.completed_by || 'unknown'}`),
+          h('span', { class: 'room-exit-doc-history-date' }, date)
+        ),
+        h('div', { class: 'room-exit-doc-history-summary' },
+          `${fieldCount} field${fieldCount !== 1 ? 's' : ''} documented`
+        )
+      );
+
+      // Expandable: click to show field details
+      row.addEventListener('click', () => {
+        const existing = row.querySelector('.room-exit-doc-history-detail');
+        if (existing) {
+          existing.remove();
+          return;
+        }
+        const detail = h('div', { class: 'room-exit-doc-history-detail' });
+        for (const [key, val] of Object.entries(fields)) {
+          const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()).trim();
+          const value = typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val);
+          detail.appendChild(h('div', { class: 'room-exit-doc-history-field' },
+            h('span', { class: 'room-exit-doc-history-field-label' }, label),
+            h('div', { class: 'room-exit-doc-history-field-value' }, value.length > 200 ? value.slice(0, 200) + '...' : value)
+          ));
+        }
+        row.appendChild(detail);
+      });
+
+      container.appendChild(row);
+    }
   }
 
   // ── Data Helpers ──────────────────────────────────────────────
