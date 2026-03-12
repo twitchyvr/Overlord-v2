@@ -2162,3 +2162,390 @@
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ═══════════════════════════════════════════════════
+   Interactive Room Management — Add Room, Assign Agent, Tables
+   ═══════════════════════════════════════════════════ */
+
+/* ── Floor Expanded Content ── */
+.floor-expanded-content {
+  padding: var(--sp-3) 0 var(--sp-2);
+  animation: fadeIn 0.2s ease;
+}
+.floor-add-room-btn {
+  margin-top: var(--sp-3);
+  width: 100%;
+}
+.floor-empty-guidance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-2);
+  text-align: center;
+  color: var(--text-muted);
+}
+.floor-empty-guidance .floor-empty-icon {
+  font-size: 1.5rem;
+}
+
+/* ── Add Room Modal ── */
+.add-room-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.add-room-guidance {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.add-room-suggestion {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--electric);
+  border: 1px solid var(--border-secondary);
+}
+.add-room-suggestion-icon {
+  flex-shrink: 0;
+}
+.add-room-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.add-room-type-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: var(--sp-1);
+}
+.add-room-type-card {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.add-room-type-card:hover {
+  border-color: var(--electric);
+  background: var(--bg-tertiary);
+}
+.add-room-type-card.selected {
+  border-color: var(--electric);
+  background: color-mix(in srgb, var(--electric) 10%, var(--bg-secondary));
+  box-shadow: 0 0 0 1px var(--electric);
+}
+.add-room-type-card.suggested {
+  border-color: color-mix(in srgb, var(--electric) 30%, var(--border-secondary));
+}
+.add-room-type-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  width: 2rem;
+  text-align: center;
+}
+.add-room-type-info {
+  flex: 1;
+  min-width: 0;
+}
+.add-room-type-label {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.add-room-type-badge {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--electric);
+  background: color-mix(in srgb, var(--electric) 15%, transparent);
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-sm);
+}
+.add-room-type-desc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: var(--sp-1);
+  line-height: 1.4;
+}
+.add-room-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-secondary);
+}
+
+/* ── Assign Agent Modal ── */
+.assign-agent-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.assign-agent-guidance {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.assign-agent-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-6) var(--sp-4);
+  text-align: center;
+  color: var(--text-muted);
+}
+.assign-agent-empty-icon {
+  font-size: 2rem;
+}
+.assign-agent-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-height: 280px;
+  overflow-y: auto;
+}
+.assign-agent-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.assign-agent-card:hover {
+  border-color: var(--electric);
+}
+.assign-agent-card.selected {
+  border-color: var(--electric);
+  background: color-mix(in srgb, var(--electric) 10%, var(--bg-secondary));
+  box-shadow: 0 0 0 1px var(--electric);
+}
+.assign-agent-avatar {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  color: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-bold);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+.assign-agent-info {
+  flex: 1;
+  min-width: 0;
+}
+.assign-agent-name {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+}
+.assign-agent-role {
+  font-size: var(--text-xs);
+}
+.assign-agent-current {
+  font-size: var(--text-xs);
+}
+.assign-agent-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.assign-agent-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-secondary);
+}
+
+/* ── Add Table Modal ── */
+.add-table-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.add-table-guidance {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.add-table-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.add-table-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-secondary);
+}
+
+/* ── Room Section Headers (with action buttons) ── */
+.room-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-2);
+}
+.room-section-header h4 {
+  margin: 0;
+}
+
+/* ── Room Roster Enhancements ── */
+.room-roster-empty-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.room-roster-empty-text p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.room-roster-table {
+  font-size: var(--text-xs);
+}
+.room-roster-row {
+  position: relative;
+}
+.room-roster-remove {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-size: var(--text-xs);
+  padding: var(--sp-1);
+  min-width: auto;
+}
+.room-roster-row:hover .room-roster-remove {
+  opacity: 1;
+}
+
+/* ── Tables Grid in Room View ── */
+.room-tables-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--sp-3);
+}
+.room-table-card-vis {
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+}
+.room-table-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--sp-2);
+}
+.room-table-card-type {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  text-transform: capitalize;
+}
+.room-table-card-occupancy {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-sm);
+}
+.room-table-card-desc {
+  font-size: var(--text-xs);
+  margin-bottom: var(--sp-2);
+}
+.room-tables-contract {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.room-table-contract-item {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  font-size: var(--text-sm);
+}
+.room-table-contract-name {
+  font-weight: var(--font-semibold);
+  text-transform: capitalize;
+}
+.room-tables-empty {
+  text-align: center;
+  padding: var(--sp-4);
+  font-size: var(--text-sm);
+}
+
+/* ── Button extra size ── */
+.btn-xs {
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--text-xs);
+  min-width: auto;
+}
+
+/* ── Form Elements ── */
+.form-label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+.text-muted {
+  color: var(--text-muted);
+}
+
+/* ── Empty State / Onboarding Guide ── */
+.building-empty-state {
+  padding: var(--sp-6);
+}
+.empty-state-guide {
+  margin-top: var(--sp-4);
+  text-align: left;
+  width: 100%;
+  max-width: 360px;
+}
+.empty-state-guide h4 {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--electric);
+  margin-bottom: var(--sp-2);
+}
+.empty-state-steps {
+  padding-left: var(--sp-5);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.empty-state-steps li {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.empty-state-steps li::marker {
+  color: var(--electric);
+  font-weight: var(--font-bold);
+}

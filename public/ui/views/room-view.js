@@ -224,15 +224,25 @@ export class RoomView extends Component {
   }
 
   _buildAgentRoster(room) {
-    const agentsInRoom = this._getAgentsInRoom(room.id);
-    const section = h('div', { class: 'room-agent-roster' },
-      h('h4', null, 'Agent Roster')
+    const agentsInRoom = room.agents || this._getAgentsInRoom(room.id);
+    const section = h('div', { class: 'room-agent-roster' });
+
+    // Header with assign button
+    const rosterHeader = h('div', { class: 'room-section-header' },
+      h('h4', null, `Agent Roster (${agentsInRoom.length})`),
     );
+    const assignBtn = h('button', { class: 'btn btn-primary btn-sm' }, '+ Assign Agent');
+    assignBtn.addEventListener('click', () => this._openAssignAgentModal(room));
+    rosterHeader.appendChild(assignBtn);
+    section.appendChild(rosterHeader);
 
     if (agentsInRoom.length === 0) {
       section.appendChild(h('div', { class: 'room-roster-empty' },
         h('span', { class: 'room-roster-empty-icon' }, '\u{1F465}'),
-        h('span', null, 'No agents in this room')
+        h('div', { class: 'room-roster-empty-text' },
+          h('p', null, 'No agents assigned to this room yet.'),
+          h('p', { class: 'text-muted' }, 'Click "Assign Agent" to seat an agent here. Agents gain access to the room\'s tools and participate in its workflow.')
+        )
       ));
       return section;
     }
@@ -241,6 +251,7 @@ export class RoomView extends Component {
     for (const agent of agentsInRoom) {
       const status = agent.status || 'idle';
       const statusClass = STATUS_CLASSES[status] || 'idle';
+      const tableName = agent.current_table_id ? 'Seated' : 'Not seated';
 
       const row = h('div', { class: 'room-roster-row' },
         h('div', { class: `room-roster-dot room-roster-dot-${statusClass}` }),
@@ -248,11 +259,24 @@ export class RoomView extends Component {
           (agent.name || '?')[0].toUpperCase()
         ),
         h('div', { class: 'room-roster-info' },
-          h('span', { class: 'room-roster-name' }, agent.name || agent.agentId),
-          h('span', { class: 'room-roster-role' }, agent.role || '')
+          h('span', { class: 'room-roster-name' }, agent.name || agent.id || 'Agent'),
+          h('span', { class: 'room-roster-role' }, agent.role || ''),
+          h('span', { class: 'room-roster-table text-muted' }, tableName)
         ),
         h('span', { class: `room-roster-status room-roster-status-${statusClass}` }, status)
       );
+
+      // Remove agent button
+      const removeBtn = h('button', {
+        class: 'btn btn-ghost btn-xs room-roster-remove',
+        title: 'Remove from room'
+      }, '\u2715');
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._removeAgentFromRoom(agent.id, room.id);
+      });
+      row.appendChild(removeBtn);
+
       list.appendChild(row);
     }
     section.appendChild(list);
@@ -361,43 +385,81 @@ export class RoomView extends Component {
   }
 
   _buildTableLayout(room) {
-    const layout = h('div', { class: 'room-table-layout' },
-      h('h4', null, 'Room Layout')
+    const layout = h('div', { class: 'room-table-layout' });
+
+    // Header with add table button
+    const tableHeader = h('div', { class: 'room-section-header' },
+      h('h4', null, 'Tables & Seating')
     );
+    const addTableBtn = h('button', { class: 'btn btn-ghost btn-sm' }, '+ Add Table');
+    addTableBtn.addEventListener('click', () => this._openAddTableModal(room));
+    tableHeader.appendChild(addTableBtn);
+    layout.appendChild(tableHeader);
 
-    const tableVis = h('div', { class: 'room-table-vis' });
+    // Show active tables from DB (with agents seated at each)
+    const activeTables = room.activeTables || [];
+    const agentsInRoom = room.agents || this._getAgentsInRoom(room.id);
 
-    // Central table
-    const tableEl = h('div', { class: 'room-table-center' },
-      h('span', null, this._formatRoomType(room.type))
-    );
-    tableVis.appendChild(tableEl);
+    if (activeTables.length > 0) {
+      const tablesGrid = h('div', { class: 'room-tables-grid' });
 
-    // Chair positions (around the table)
-    const chairRow = h('div', { class: 'room-chair-row' });
-    const agentsInRoom = this._getAgentsInRoom(room.id);
-    const maxChairs = Math.max(4, agentsInRoom.length + 2); // At least 4, plus empty chairs
+      for (const table of activeTables) {
+        const tableAgents = agentsInRoom.filter(a => a.current_table_id === table.id);
+        const chairCount = table.chairs || 1;
+        const occupancy = tableAgents.length;
 
-    for (let i = 0; i < maxChairs; i++) {
-      const agent = agentsInRoom[i];
-      const chair = h('div', {
-        class: `room-chair${agent ? ' room-chair-occupied' : ' room-chair-empty'}`,
-        title: agent ? (agent.name || agent.agentId) : 'Empty seat'
-      });
+        const tableCard = h('div', { class: 'room-table-card-vis' });
+        tableCard.appendChild(h('div', { class: 'room-table-card-header' },
+          h('span', { class: 'room-table-card-type' }, table.type || 'focus'),
+          h('span', { class: 'room-table-card-occupancy' }, `${occupancy}/${chairCount}`)
+        ));
 
-      if (agent) {
-        const statusClass = STATUS_CLASSES[agent.status] || 'idle';
-        chair.appendChild(h('div', {
-          class: `room-chair-avatar room-chair-avatar-${statusClass}`
-        }, (agent.name || '?')[0].toUpperCase()));
-        chair.appendChild(h('div', { class: 'room-chair-name' }, agent.name || agent.agentId));
+        if (table.description) {
+          tableCard.appendChild(h('div', { class: 'room-table-card-desc text-muted' }, table.description));
+        }
+
+        // Chair visualization
+        const chairRow = h('div', { class: 'room-chair-row' });
+        for (let i = 0; i < chairCount; i++) {
+          const agent = tableAgents[i];
+          const chair = h('div', {
+            class: `room-chair${agent ? ' room-chair-occupied' : ' room-chair-empty'}`,
+            title: agent ? (agent.name || agent.id) : 'Empty seat'
+          });
+          if (agent) {
+            const statusClass = STATUS_CLASSES[agent.status] || 'idle';
+            chair.appendChild(h('div', {
+              class: `room-chair-avatar room-chair-avatar-${statusClass}`
+            }, (agent.name || '?')[0].toUpperCase()));
+            chair.appendChild(h('div', { class: 'room-chair-name' }, agent.name || agent.id));
+          }
+          chairRow.appendChild(chair);
+        }
+        tableCard.appendChild(chairRow);
+        tablesGrid.appendChild(tableCard);
       }
 
-      chairRow.appendChild(chair);
+      layout.appendChild(tablesGrid);
+    } else if (room.tables && Object.keys(room.tables).length > 0) {
+      // Show contract-defined tables (from room type definition)
+      const contractInfo = h('div', { class: 'room-tables-contract' });
+      contractInfo.appendChild(h('p', { class: 'text-muted' },
+        'This room type defines the following table types. Tables are auto-created when agents are assigned.'
+      ));
+      for (const [tableName, config] of Object.entries(room.tables)) {
+        const cfg = config || {};
+        contractInfo.appendChild(h('div', { class: 'room-table-contract-item' },
+          h('span', { class: 'room-table-contract-name' }, tableName),
+          h('span', { class: 'room-table-contract-chairs text-muted' }, `${cfg.chairs || 1} chair${(cfg.chairs || 1) > 1 ? 's' : ''}`),
+          cfg.description ? h('span', { class: 'room-table-contract-desc text-muted' }, cfg.description) : null
+        ));
+      }
+      layout.appendChild(contractInfo);
+    } else {
+      layout.appendChild(h('div', { class: 'room-tables-empty text-muted' },
+        'No tables configured. Add a table or assign an agent to auto-create one.'
+      ));
     }
-
-    tableVis.appendChild(chairRow);
-    layout.appendChild(tableVis);
 
     return layout;
   }
@@ -630,6 +692,242 @@ export class RoomView extends Component {
         ));
       }
     }
+  }
+
+  // ── Interactive Actions ─────────────────────────────────────────
+
+  /** Open modal to assign an agent to this room. */
+  async _openAssignAgentModal(room) {
+    if (!window.overlordSocket) {
+      Toast.error('Not connected to server');
+      return;
+    }
+
+    // Fetch all agents and filter to unassigned ones
+    const store = OverlordUI.getStore();
+    const allAgents = store?.get('agents.list') || [];
+    const agentsInRoom = room.agents || [];
+    const assignedIds = new Set(agentsInRoom.map(a => a.id));
+    const available = allAgents.filter(a => !assignedIds.has(a.id));
+
+    // Get table types from room contract
+    const tableTypes = room.tables ? Object.keys(room.tables) : ['focus'];
+    let selectedAgent = null;
+    let selectedTable = tableTypes[0] || 'focus';
+
+    const container = h('div', { class: 'assign-agent-modal' });
+
+    // Guidance
+    container.appendChild(h('div', { class: 'assign-agent-guidance' },
+      h('p', null, `Assign an agent to `),
+      h('strong', null, room.name || this._formatRoomType(room.type)),
+      h('span', null, '. The agent will gain access to this room\'s tools and participate in its workflow.')
+    ));
+
+    if (available.length === 0) {
+      container.appendChild(h('div', { class: 'assign-agent-empty' },
+        h('span', { class: 'assign-agent-empty-icon' }, '\u{1F916}'),
+        h('p', null, 'No agents available to assign.'),
+        h('p', { class: 'text-muted' }, 'All registered agents are already in rooms, or no agents have been created yet. Create an agent first from the Agents panel.')
+      ));
+
+      Modal.open('assign-agent', {
+        title: 'Assign Agent',
+        content: container,
+        size: 'md',
+        position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+      });
+      return;
+    }
+
+    // Agent picker
+    container.appendChild(h('label', { class: 'form-label' }, 'Select Agent'));
+    const agentList = h('div', { class: 'assign-agent-list' });
+
+    for (const agent of available) {
+      const card = h('div', {
+        class: `assign-agent-card${selectedAgent === agent.id ? ' selected' : ''}`,
+        'data-agent-id': agent.id
+      },
+        h('div', { class: 'assign-agent-avatar' }, (agent.name || '?')[0].toUpperCase()),
+        h('div', { class: 'assign-agent-info' },
+          h('div', { class: 'assign-agent-name' }, agent.name || agent.id),
+          h('div', { class: 'assign-agent-role text-muted' }, agent.role || 'agent'),
+          agent.current_room_id
+            ? h('div', { class: 'assign-agent-current text-muted' }, `Currently in another room`)
+            : h('div', { class: 'assign-agent-current text-muted' }, 'Unassigned')
+        )
+      );
+
+      card.addEventListener('click', () => {
+        selectedAgent = agent.id;
+        agentList.querySelectorAll('.assign-agent-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+      });
+
+      agentList.appendChild(card);
+    }
+    container.appendChild(agentList);
+
+    // Table type selector (if room has multiple table types)
+    if (tableTypes.length > 1) {
+      const tableGroup = h('div', { class: 'assign-agent-field' });
+      tableGroup.appendChild(h('label', { class: 'form-label' }, 'Table Type'));
+      const tableSelect = h('select', { class: 'form-input' });
+      for (const tt of tableTypes) {
+        const config = room.tables[tt] || {};
+        const opt = h('option', { value: tt }, `${tt} (${config.chairs || 1} chair${(config.chairs || 1) > 1 ? 's' : ''})`);
+        if (tt === selectedTable) opt.selected = true;
+        tableSelect.appendChild(opt);
+      }
+      tableSelect.addEventListener('change', () => { selectedTable = tableSelect.value; });
+      tableGroup.appendChild(tableSelect);
+      container.appendChild(tableGroup);
+    }
+
+    // Actions
+    const actions = h('div', { class: 'assign-agent-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('assign-agent'));
+
+    const assignBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Assign Agent');
+    assignBtn.addEventListener('click', async () => {
+      if (!selectedAgent) {
+        Toast.warning('Please select an agent');
+        return;
+      }
+
+      assignBtn.disabled = true;
+      assignBtn.textContent = 'Assigning...';
+
+      try {
+        const result = await window.overlordSocket.moveAgent(selectedAgent, room.id, selectedTable);
+        if (result && result.ok) {
+          Toast.success('Agent assigned to room');
+          Modal.close('assign-agent');
+          // Reload room data to update the view
+          this._loadRoom(room.id);
+        } else {
+          throw new Error(result?.error?.message || 'Assignment failed');
+        }
+      } catch (err) {
+        Toast.error(`Assign failed: ${err.message}`);
+        assignBtn.disabled = false;
+        assignBtn.textContent = 'Assign Agent';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(assignBtn);
+    container.appendChild(actions);
+
+    Modal.open('assign-agent', {
+      title: `Assign Agent to ${room.name || this._formatRoomType(room.type)}`,
+      content: container,
+      size: 'md',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
+  }
+
+  /** Remove an agent from this room. */
+  async _removeAgentFromRoom(agentId, roomId) {
+    if (!window.overlordSocket) return;
+
+    try {
+      const result = await window.overlordSocket.exitRoom(roomId, agentId);
+      if (result && result.ok) {
+        Toast.success('Agent removed from room');
+        this._loadRoom(roomId);
+      } else {
+        Toast.error(result?.error?.message || 'Failed to remove agent');
+      }
+    } catch (err) {
+      Toast.error(`Remove failed: ${err.message}`);
+    }
+  }
+
+  /** Open modal to add a table to the room. */
+  _openAddTableModal(room) {
+    let tableType = 'focus';
+    let chairs = 1;
+    let description = '';
+
+    const container = h('div', { class: 'add-table-modal' });
+
+    container.appendChild(h('div', { class: 'add-table-guidance' },
+      h('p', null, 'Add a new table to this room. Tables define seating capacity for agents.'),
+      h('p', { class: 'text-muted' }, 'Each table has a type (e.g., focus, pair, review) and a number of chairs limiting how many agents can sit there.')
+    ));
+
+    // Type input
+    const typeGroup = h('div', { class: 'add-table-field' });
+    typeGroup.appendChild(h('label', { class: 'form-label' }, 'Table Type'));
+    const typeInput = h('input', { class: 'form-input', type: 'text', value: 'focus', placeholder: 'e.g., focus, pair, review' });
+    typeInput.addEventListener('input', () => { tableType = typeInput.value; });
+    typeGroup.appendChild(typeInput);
+    container.appendChild(typeGroup);
+
+    // Chairs input
+    const chairGroup = h('div', { class: 'add-table-field' });
+    chairGroup.appendChild(h('label', { class: 'form-label' }, 'Chairs (max agents)'));
+    const chairInput = h('input', { class: 'form-input', type: 'number', value: '1', min: '1', max: '20' });
+    chairInput.addEventListener('input', () => { chairs = parseInt(chairInput.value) || 1; });
+    chairGroup.appendChild(chairInput);
+    container.appendChild(chairGroup);
+
+    // Description
+    const descGroup = h('div', { class: 'add-table-field' });
+    descGroup.appendChild(h('label', { class: 'form-label' }, 'Description (optional)'));
+    const descInput = h('input', { class: 'form-input', type: 'text', placeholder: 'What is this table for?' });
+    descInput.addEventListener('input', () => { description = descInput.value; });
+    descGroup.appendChild(descInput);
+    container.appendChild(descGroup);
+
+    // Actions
+    const actions = h('div', { class: 'add-table-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('add-table'));
+
+    const createBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Create Table');
+    createBtn.addEventListener('click', async () => {
+      if (!tableType.trim()) {
+        Toast.warning('Please enter a table type');
+        return;
+      }
+      if (!window.overlordSocket) {
+        Toast.error('Not connected to server');
+        return;
+      }
+
+      createBtn.disabled = true;
+      createBtn.textContent = 'Creating...';
+
+      try {
+        const result = await window.overlordSocket.createTable(room.id, tableType.trim(), chairs, description.trim() || undefined);
+        if (result && result.ok) {
+          Toast.success(`Table "${tableType}" created`);
+          Modal.close('add-table');
+          this._loadRoom(room.id);
+        } else {
+          throw new Error(result?.error?.message || 'Failed to create table');
+        }
+      } catch (err) {
+        Toast.error(`Create failed: ${err.message}`);
+        createBtn.disabled = false;
+        createBtn.textContent = 'Create Table';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(createBtn);
+    container.appendChild(actions);
+
+    Modal.open('add-table', {
+      title: 'Add Table',
+      content: container,
+      size: 'sm',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
   }
 
   // ── Data Helpers ──────────────────────────────────────────────

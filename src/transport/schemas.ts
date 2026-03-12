@@ -115,6 +115,27 @@ export const RoomExitSchema = z.object({
   agentId: id(),
 }).passthrough();
 
+// ─── Table Schemas ───
+
+export const TableCreateSchema = z.object({
+  roomId: id(),
+  type: name(),
+  chairs: z.number().int().min(1).max(20).optional().default(1),
+  description: optionalDescription(),
+});
+
+export const TableListSchema = z.object({
+  roomId: id(),
+});
+
+// ─── Agent Move Schema ───
+
+export const AgentMoveSchema = z.object({
+  agentId: id(),
+  roomId: id(),
+  tableType: z.string().max(100).optional().default('focus'),
+});
+
 // ─── Agent Schemas ───
 
 export const AgentRegisterSchema = z.object({
