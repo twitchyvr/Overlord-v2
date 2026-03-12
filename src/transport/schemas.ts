@@ -267,6 +267,7 @@ export const ChatMessageSchema = z.object({
   buildingId: z.string().max(MAX_ID).optional().default(''),
   roomId: z.string().max(MAX_ID).optional().default(''),
   agentId: z.string().max(MAX_ID).optional().default(''),
+  threadId: z.string().max(MAX_ID).optional().default(''),
 }).passthrough();
 
 // ─── Conversation Schemas ───
@@ -279,7 +280,7 @@ export const ConversationListSchema = z.object({
 
 /** conversation:load — load messages for a conversation thread */
 export const ConversationLoadSchema = z.object({
-  threadId: z.string().max(MAX_ID),
+  threadId: z.string().min(1).max(MAX_ID),
   limit: z.number().int().min(1).max(200).optional().default(100),
 }).passthrough();
 
@@ -292,7 +293,7 @@ export const ConversationCreateSchema = z.object({
 
 /** conversation:delete — delete a conversation thread */
 export const ConversationDeleteSchema = z.object({
-  threadId: z.string().max(MAX_ID),
+  threadId: z.string().min(1).max(MAX_ID),
 }).passthrough();
 
 // ─── Read-only Event Schemas (no user data — reject unexpected fields) ───

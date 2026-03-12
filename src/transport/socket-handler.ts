@@ -995,16 +995,22 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         thread_id: string; created_at: string;
       }>;
 
-      const formatted = messages.map((m) => ({
-        id: m.id,
-        roomId: m.room_id,
-        agentId: m.agent_id,
-        role: m.role,
-        content: m.content,
-        toolCalls: m.tool_calls ? JSON.parse(m.tool_calls) : undefined,
-        threadId: m.thread_id,
-        timestamp: new Date(m.created_at).getTime(),
-      }));
+      const formatted = messages.map((m) => {
+        let toolCalls: unknown;
+        if (m.tool_calls) {
+          try { toolCalls = JSON.parse(m.tool_calls); } catch { /* corrupted — skip */ }
+        }
+        return {
+          id: m.id,
+          roomId: m.room_id,
+          agentId: m.agent_id,
+          role: m.role,
+          content: m.content,
+          toolCalls,
+          threadId: m.thread_id,
+          timestamp: new Date(m.created_at).getTime(),
+        };
+      });
 
       if (ack) ack({ ok: true, data: formatted });
     });
