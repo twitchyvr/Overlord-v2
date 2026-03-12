@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { webSearch, fetchWebpage } from '../../../src/tools/providers/web.js';
+import { webSearch, fetchWebpage, MAX_RESULTS_CAP, MAX_LENGTH_CAP, MAX_QUERY_LENGTH } from '../../../src/tools/providers/web.js';
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -265,6 +265,184 @@ describe('Web Tool Provider', () => {
       expect(result.title).toBe('Entities & Test');
       expect(result.content).toContain('<$10');
       expect(result.content).toContain('>$5');
+    });
+  });
+
+  describe('input validation — URL scheme', () => {
+    it('rejects file:// URLs', async () => {
+      await expect(fetchWebpage({ url: 'file:///etc/passwd' }))
+        .rejects.toThrow('URL scheme "file:" is not allowed');
+    });
+
+    it('rejects ftp:// URLs', async () => {
+      await expect(fetchWebpage({ url: 'ftp://example.com/pub' }))
+        .rejects.toThrow('URL scheme "ftp:" is not allowed');
+    });
+
+    it('rejects data: URLs', async () => {
+      await expect(fetchWebpage({ url: 'data:text/html,<script>alert(1)</script>' }))
+        .rejects.toThrow('URL scheme "data:" is not allowed');
+    });
+
+    it('rejects javascript: URLs', async () => {
+      await expect(fetchWebpage({ url: 'javascript:alert(1)' }))
+        .rejects.toThrow('URL scheme "javascript:" is not allowed');
+    });
+
+    it('rejects invalid URLs', async () => {
+      await expect(fetchWebpage({ url: 'not a url' }))
+        .rejects.toThrow('Invalid URL');
+    });
+
+    it('allows http:// URLs', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        headers: new Map([['content-type', 'text/plain']]),
+        text: async () => 'ok',
+      });
+      const result = await fetchWebpage({ url: 'http://example.com' });
+      expect(result.content).toBe('ok');
+    });
+
+    it('allows https:// URLs', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        headers: new Map([['content-type', 'text/plain']]),
+        text: async () => 'ok',
+      });
+      const result = await fetchWebpage({ url: 'https://example.com' });
+      expect(result.content).toBe('ok');
+    });
+  });
+
+  describe('input validation — SSRF prevention', () => {
+    it('blocks localhost', async () => {
+      await expect(fetchWebpage({ url: 'http://localhost:3000' }))
+        .rejects.toThrow('localhost/loopback');
+    });
+
+    it('blocks 127.0.0.1', async () => {
+      await expect(fetchWebpage({ url: 'http://127.0.0.1:8080' }))
+        .rejects.toThrow('localhost/loopback');
+    });
+
+    it('blocks ::1 (IPv6 loopback)', async () => {
+      await expect(fetchWebpage({ url: 'http://[::1]:8080' }))
+        .rejects.toThrow('localhost/loopback');
+    });
+
+    it('blocks 10.x.x.x (RFC-1918)', async () => {
+      await expect(fetchWebpage({ url: 'http://10.0.0.1' }))
+        .rejects.toThrow('private network (10.x.x.x)');
+    });
+
+    it('blocks 172.16.x.x (RFC-1918)', async () => {
+      await expect(fetchWebpage({ url: 'http://172.16.0.1' }))
+        .rejects.toThrow('private network (172.16-31.x.x)');
+    });
+
+    it('blocks 172.31.x.x (RFC-1918 upper bound)', async () => {
+      await expect(fetchWebpage({ url: 'http://172.31.255.255' }))
+        .rejects.toThrow('private network (172.16-31.x.x)');
+    });
+
+    it('blocks 192.168.x.x (RFC-1918)', async () => {
+      await expect(fetchWebpage({ url: 'http://192.168.1.1' }))
+        .rejects.toThrow('private network (192.168.x.x)');
+    });
+
+    it('blocks 169.254.x.x (link-local)', async () => {
+      await expect(fetchWebpage({ url: 'http://169.254.169.254' }))
+        .rejects.toThrow('link-local');
+    });
+
+    it('allows public IP addresses', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        headers: new Map([['content-type', 'text/plain']]),
+        text: async () => 'ok',
+      });
+      const result = await fetchWebpage({ url: 'http://93.184.216.34' });
+      expect(result.content).toBe('ok');
+    });
+  });
+
+  describe('input validation — bounds checking', () => {
+    it('caps maxResults at MAX_RESULTS_CAP', async () => {
+      // Create 30 results
+      let html = '';
+      for (let i = 0; i < 30; i++) {
+        html += `<a class="result__a" href="https://example.com/${i}">Result ${i}</a>\n`;
+        html += `<a class="result__snippet" href="#">Snippet ${i}</a>\n`;
+      }
+      mockFetch.mockResolvedValue({ ok: true, text: async () => html });
+
+      const results = await webSearch({ query: 'test', maxResults: 999 });
+      expect(results.length).toBe(MAX_RESULTS_CAP);
+    });
+
+    it('caps maxLength at MAX_LENGTH_CAP', async () => {
+      const longContent = 'A'.repeat(200_000);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        headers: new Map([['content-type', 'text/plain']]),
+        text: async () => longContent,
+      });
+
+      const result = await fetchWebpage({ url: 'https://example.com', maxLength: 999_999 });
+      expect(result.content.length).toBe(MAX_LENGTH_CAP);
+    });
+
+    it('rejects query longer than MAX_QUERY_LENGTH', async () => {
+      const longQuery = 'a'.repeat(MAX_QUERY_LENGTH + 1);
+      await expect(webSearch({ query: longQuery }))
+        .rejects.toThrow(`Query too long: ${longQuery.length} characters`);
+    });
+
+    it('accepts query at exactly MAX_QUERY_LENGTH', async () => {
+      const exactQuery = 'a'.repeat(MAX_QUERY_LENGTH);
+      mockFetch.mockResolvedValue({ ok: true, text: async () => '' });
+
+      const results = await webSearch({ query: exactQuery });
+      expect(results).toEqual([]);
+    });
+
+    it('ensures maxResults is at least 1', async () => {
+      const html = `
+        <a class="result__a" href="https://example.com/1">R1</a>
+        <a class="result__snippet" href="#">S1</a>
+      `;
+      mockFetch.mockResolvedValue({ ok: true, text: async () => html });
+
+      const results = await webSearch({ query: 'test', maxResults: 0 });
+      expect(results.length).toBe(1);
+    });
+
+    it('ensures maxLength is at least 1', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        headers: new Map([['content-type', 'text/plain']]),
+        text: async () => 'Some content',
+      });
+
+      const result = await fetchWebpage({ url: 'https://example.com', maxLength: 0 });
+      expect(result.content.length).toBe(1);
+    });
+  });
+
+  describe('response body size limiting', () => {
+    it('truncates oversized response bodies', async () => {
+      // Simulate a 2MB response (over the 1MB limit)
+      const hugeBody = 'X'.repeat(2_000_000);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        headers: new Map([['content-type', 'text/plain']]),
+        text: async () => hugeBody,
+      });
+
+      const result = await fetchWebpage({ url: 'https://example.com' });
+      // Content should be limited by both response body cap and maxLength
+      expect(result.content.length).toBeLessThanOrEqual(10000); // default maxLength
     });
   });
 });
