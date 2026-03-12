@@ -8,7 +8,7 @@
 
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
-import { ok, err } from '../core/contracts.js';
+import { ok, err, safeJsonParse } from '../core/contracts.js';
 import type { Result, RaidEntryRow } from '../core/contracts.js';
 
 const log = logger.child({ module: 'raid-log' });
@@ -65,7 +65,7 @@ export function searchRaid({ buildingId, type, phase, status, query }: SearchRai
   sql += ' ORDER BY created_at DESC';
 
   const entries = db.prepare(sql).all(...params) as RaidEntryRow[];
-  return ok(entries.map((e) => ({ ...e, affected_areas: JSON.parse(e.affected_areas || '[]') as string[] })));
+  return ok(entries.map((e) => ({ ...e, affected_areas: safeJsonParse<string[]>(e.affected_areas, []) })));
 }
 
 /**
@@ -123,7 +123,7 @@ export function updateRaidEntry({ id, summary, rationale, decidedBy, affectedAre
 
   const updated = db.prepare('SELECT * FROM raid_entries WHERE id = ?').get(id) as RaidEntryRow;
   log.info({ id, updatedFields: updates.length - 1 }, 'RAID entry updated');
-  return ok({ ...updated, affected_areas: JSON.parse(updated.affected_areas || '[]') as string[] });
+  return ok({ ...updated, affected_areas: safeJsonParse<string[]>(updated.affected_areas, []) });
 }
 
 /**

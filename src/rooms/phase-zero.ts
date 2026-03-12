@@ -14,7 +14,7 @@
 
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
-import { ok, err } from '../core/contracts.js';
+import { ok, err, safeJsonParse } from '../core/contracts.js';
 import type { Result, BuildingRow } from '../core/contracts.js';
 import type { Bus } from '../core/bus.js';
 import { applyBlueprint, applyCustomPlan, getFloorByType } from './building-manager.js';
@@ -182,7 +182,7 @@ export function suggestNextRoom(buildingId: string): Result {
   ).all() as Array<{ id: string; name: string; role: string; room_access: string }>;
 
   const eligibleAgents = agents.filter((a) => {
-    const access = JSON.parse(a.room_access || '[]') as string[];
+    const access = safeJsonParse<string[]>(a.room_access, []);
     return access.includes('discovery') || access.includes('*');
   });
 
