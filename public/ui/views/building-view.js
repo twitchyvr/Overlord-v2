@@ -78,6 +78,19 @@ export class BuildingView extends Component {
       this.render();
     });
 
+    // Subscribe to phase changes so sidebar badge updates
+    this.subscribe(store, 'building.activePhase', (phase) => {
+      if (this._buildingData && phase) {
+        this._buildingData = { ...this._buildingData, active_phase: phase };
+        this.render();
+      }
+    });
+
+    // Hydrate from store — data may have arrived before this view mounted
+    this._buildingData = store.get('building.data') || null;
+    this._agentPositions = store.get('building.agentPositions') || {};
+    this._floors = store.get('building.floors') || [];
+
     this.render();
   }
 
