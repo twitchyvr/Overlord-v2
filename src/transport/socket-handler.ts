@@ -151,14 +151,21 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     // ─── Building Events ───
 
     handle(socket, 'building:create', BuildingCreateSchema, (parsed, ack) => {
-      const result = createBuilding(parsed as Parameters<typeof createBuilding>[0]);
+      const result = createBuilding({
+        name: parsed.name,
+        projectId: parsed.projectId,
+        workingDirectory: parsed.workingDirectory,
+        repoUrl: parsed.repoUrl,
+        config: {},
+      });
       if (result.ok) {
-        const buildingData = result.data as { id: string; name: string; floorIds: string[] };
+        const buildingData = result.data as { id: string; name: string; workingDirectory: string | null; repoUrl: string | null; floorIds: string[] };
         broadcastLog('info', `Building created: ${buildingData.name}`, 'building');
-        // Emit building:created so onboarding can auto-provision Strategist room + agent
         bus.emit('building:created', {
           buildingId: buildingData.id,
           name: buildingData.name,
+          workingDirectory: buildingData.workingDirectory,
+          repoUrl: buildingData.repoUrl,
           floorIds: buildingData.floorIds,
         });
       }
@@ -174,10 +181,20 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     });
 
     handle(socket, 'building:update', BuildingUpdateSchema, (parsed, ack) => {
-      const result = updateBuilding(parsed.buildingId, { name: parsed.name, config: parsed.config });
+      const result = updateBuilding(parsed.buildingId, {
+        name: parsed.name,
+        workingDirectory: parsed.workingDirectory,
+        repoUrl: parsed.repoUrl,
+        config: parsed.config,
+      });
       if (result.ok) {
         broadcastLog('info', `Building updated: ${parsed.buildingId}`, 'building');
-        bus.emit('building:updated', { id: parsed.buildingId, name: parsed.name });
+        bus.emit('building:updated', {
+          id: parsed.buildingId,
+          name: parsed.name,
+          workingDirectory: parsed.workingDirectory,
+          repoUrl: parsed.repoUrl,
+        });
       }
       if (ack) ack(result);
     });

@@ -67,6 +67,8 @@ export const BuildingCreateSchema = z.object({
   name: name(),
   projectId: optionalId(),
   description: optionalDescription(),
+  workingDirectory: z.string().max(1000).optional(),
+  repoUrl: z.string().max(1000).optional(),
 }).passthrough();
 
 export const BuildingGetSchema = z.object({
@@ -88,6 +90,8 @@ export const BuildingApplyBlueprintSchema = z.object({
 export const BuildingUpdateSchema = z.object({
   buildingId: id(),
   name: optionalName(),
+  workingDirectory: z.string().max(1000).optional(),
+  repoUrl: z.string().max(1000).optional(),
   config: z.record(z.unknown()).optional(),
 });
 

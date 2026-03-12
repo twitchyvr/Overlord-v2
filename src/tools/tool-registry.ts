@@ -107,7 +107,7 @@ function registerBuiltinTools(): void {
       },
       required: ['command'],
     },
-    execute: async (p) => {
+    execute: async (p, ctx) => {
       const timeout = p.timeout as number | undefined;
       if (timeout !== undefined && (timeout <= 0 || timeout > 300_000)) {
         throw new Error('Timeout must be between 1 and 300000 ms');
@@ -115,6 +115,7 @@ function registerBuiltinTools(): void {
       const result = await executeShell({
         command: p.command as string,
         timeout,
+        cwd: ctx?.workingDirectory,
       });
       if (result.timedOut) {
         return { output: `Command timed out.\nPartial stdout: ${result.stdout}\nPartial stderr: ${result.stderr}` };
@@ -136,8 +137,8 @@ function registerBuiltinTools(): void {
       properties: { path: { type: 'string', description: 'File path to read' } },
       required: ['path'],
     },
-    execute: async (p) => {
-      const result = await readFileImpl({ path: p.path as string });
+    execute: async (p, ctx) => {
+      const result = await readFileImpl({ path: p.path as string, cwd: ctx?.workingDirectory });
       return { output: result.content, path: result.path, size: result.size };
     },
   });
@@ -154,8 +155,8 @@ function registerBuiltinTools(): void {
       },
       required: ['path', 'content'],
     },
-    execute: async (p) => {
-      const result = await writeFileImpl({ path: p.path as string, content: p.content as string });
+    execute: async (p, ctx) => {
+      const result = await writeFileImpl({ path: p.path as string, content: p.content as string, cwd: ctx?.workingDirectory });
       return { output: `Written ${result.bytesWritten} bytes to ${result.path}`, path: result.path };
     },
   });
@@ -173,11 +174,12 @@ function registerBuiltinTools(): void {
       },
       required: ['path', 'search', 'replace'],
     },
-    execute: async (p) => {
+    execute: async (p, ctx) => {
       const result = await patchFileImpl({
         path: p.path as string,
         search: p.search as string,
         replace: p.replace as string,
+        cwd: ctx?.workingDirectory,
       });
       if (!result.matched) {
         return { output: `Search string not found in ${result.path}`, matched: false };
@@ -195,8 +197,8 @@ function registerBuiltinTools(): void {
       properties: { path: { type: 'string', description: 'Directory path to list' } },
       required: ['path'],
     },
-    execute: async (p) => {
-      const result = await listDirImpl({ path: p.path as string });
+    execute: async (p, ctx) => {
+      const result = await listDirImpl({ path: p.path as string, cwd: ctx?.workingDirectory });
       const listing = result.entries
         .map((e) => `${e.type === 'directory' ? '[dir]' : `[${e.size}B]`} ${e.name}`)
         .join('\n');
@@ -265,11 +267,11 @@ function registerBuiltinTools(): void {
         type: 'object',
         properties: { args: { type: 'string', description: 'Additional arguments' } },
       },
-      execute: async (p) => {
+      execute: async (p, ctx) => {
         const args = p.args as string | undefined;
         if (args) rejectShellMeta(args, `${qa} args`);
         const cmd = `${cmdMap[qa]}${args ? ` ${args}` : ''}`;
-        const result = await executeShell({ command: cmd, timeout: 120_000 });
+        const result = await executeShell({ command: cmd, timeout: 120_000, cwd: ctx?.workingDirectory });
         return { output: result.stdout + (result.stderr ? `\n${result.stderr}` : ''), exitCode: result.exitCode };
       },
     });
@@ -288,10 +290,10 @@ function registerBuiltinTools(): void {
       },
       required: ['action'],
     },
-    execute: async (p) => {
+    execute: async (p, ctx) => {
       const action = p.action as string;
       rejectShellMeta(action, 'github action');
-      const result = await executeShell({ command: `gh ${action}`, timeout: 30_000 });
+      const result = await executeShell({ command: `gh ${action}`, timeout: 30_000, cwd: ctx?.workingDirectory });
       return { output: result.stdout + (result.stderr ? `\n${result.stderr}` : ''), exitCode: result.exitCode };
     },
   });

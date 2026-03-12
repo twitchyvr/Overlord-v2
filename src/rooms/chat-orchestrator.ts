@@ -16,6 +16,7 @@
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { runConversationLoop } from '../agents/conversation-loop.js';
+import { getDb } from '../storage/db.js';
 import type { Bus, BusEventData } from '../core/bus.js';
 import type {
   RoomManagerAPI,
@@ -23,6 +24,7 @@ import type {
   ToolRegistryAPI,
   AIProviderAPI,
   BaseRoomLike,
+  BuildingRow,
   ParsedAgent,
 } from '../core/contracts.js';
 
@@ -206,7 +208,21 @@ async function handleChatMessage(
       status: 'thinking',
     });
 
-    // 8. Run the conversation loop — this is where the AI magic happens
+    // 8. Resolve building working directory for tool scoping
+    let workingDirectory: string | undefined;
+    if (buildingId) {
+      try {
+        const db = getDb();
+        const building = db.prepare('SELECT working_directory FROM buildings WHERE id = ?').get(buildingId) as Pick<BuildingRow, 'working_directory'> | undefined;
+        if (building?.working_directory) {
+          workingDirectory = building.working_directory;
+        }
+      } catch {
+        // DB not ready — not fatal, tools will use process.cwd()
+      }
+    }
+
+    // 9. Run the conversation loop — this is where the AI magic happens
     const result = await runConversationLoop({
       provider,
       room,
@@ -215,6 +231,7 @@ async function handleChatMessage(
       ai,
       tools,
       bus,
+      workingDirectory,
       options: {
         buildingId,
         socketId,
