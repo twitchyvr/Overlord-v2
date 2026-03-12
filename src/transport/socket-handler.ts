@@ -32,6 +32,7 @@ import {
   RoomCreateSchema, RoomGetSchema, RoomEnterSchema, RoomExitSchema,
   AgentRegisterSchema, AgentGetSchema, AgentListSchema,
   ChatMessageSchema,
+  EmptyPayloadSchema, PhaseStatusSchema, PhaseGateSchema,
   PhaseGatesSchema, PhaseCanAdvanceSchema, PhasePendingGatesSchema,
   PhaseResolveConditionsSchema, PhaseStaleGatesSchema, PhaseGateSignoffSchema, PhaseAdvanceSchema,
   RaidSearchSchema, RaidListSchema, RaidAddSchema, RaidUpdateSchema, RaidEditSchema,
@@ -154,7 +155,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       if (ack) ack(result);
     });
 
-    handle(socket, 'system:status', null, (_data, ack) => {
+    handle(socket, 'system:status', EmptyPayloadSchema, (_data, ack) => {
       const result = listBuildings();
       const buildings = result.ok ? (result.data as Array<{ id: string; name: string; active_phase: string }>) : [];
       if (ack) ack({
@@ -202,7 +203,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       });
     });
 
-    handle(socket, 'room:list', null, (_data, ack) => {
+    handle(socket, 'room:list', EmptyPayloadSchema, (_data, ack) => {
       if (ack) ack({ ok: true, data: rooms.listRooms() });
     });
 
@@ -248,7 +249,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
     // ─── Command List ───
 
-    handle(socket, 'command:list', null, (_data, ack) => {
+    handle(socket, 'command:list', EmptyPayloadSchema, (_data, ack) => {
       const commands = listCommands().map(cmd => ({
         id: cmd.name,
         name: cmd.name,
@@ -326,13 +327,13 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
     // ─── Phase Events ───
 
-    handle(socket, 'phase:status', null, (data, ack) => {
-      bus.emit('phase:status', { socketId: socket.id, ...(data as Record<string, unknown>) });
+    handle(socket, 'phase:status', PhaseStatusSchema, (parsed, ack) => {
+      bus.emit('phase:status', { socketId: socket.id, buildingId: parsed.buildingId });
       if (ack) ack({ ok: true });
     });
 
-    handle(socket, 'phase:gate', null, (data, ack) => {
-      bus.emit('phase:gate', { socketId: socket.id, ...(data as Record<string, unknown>) });
+    handle(socket, 'phase:gate', PhaseGateSchema, (parsed, ack) => {
+      bus.emit('phase:gate', { socketId: socket.id, buildingId: parsed.buildingId, phase: parsed.phase });
       if (ack) ack({ ok: true });
     });
 
@@ -370,7 +371,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       if (ack) ack(getStalePendingGates(parsed.thresholdMs || 30 * 60 * 1000));
     });
 
-    handle(socket, 'phase:order', null, (_data, ack) => {
+    handle(socket, 'phase:order', EmptyPayloadSchema, (_data, ack) => {
       if (ack) ack({ ok: true, data: getPhaseOrder() });
     });
 
@@ -649,7 +650,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
     // ─── System Events ───
 
-    handle(socket, 'system:health', null, (_data, ack) => {
+    handle(socket, 'system:health', EmptyPayloadSchema, (_data, ack) => {
       if (ack) ack({ ok: true, data: { uptime: process.uptime(), version: '0.1.0' } });
     });
 
