@@ -151,6 +151,49 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'task:updated', ...data });
   });
 
+  socket.on('agent:mentioned', (data) => {
+    store.update('activity.items', (items) => [{ event: 'agent:mentioned', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('agent:mentioned', data);
+    engine.dispatch('activity:new', { event: 'agent:mentioned', ...data });
+  });
+
+  socket.on('agent:status-changed', (data) => {
+    store.update('agents.list', (agents) => {
+      const list = agents || [];
+      const idx = list.findIndex((a) => a.id === data.agentId);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], status: data.status };
+        return next;
+      }
+      return list;
+    });
+    engine.dispatch('agent:status-changed', data);
+  });
+
+  socket.on('building:updated', (data) => {
+    store.update('building.list', (buildings) => {
+      const list = buildings || [];
+      const idx = list.findIndex((b) => b.id === data.id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], ...data };
+        return next;
+      }
+      return list;
+    });
+    if (data.id === store.get('building.active')) {
+      store.set('building.data', data);
+    }
+    engine.dispatch('building:updated', data);
+  });
+
+  socket.on('deploy:check', (data) => {
+    store.update('activity.items', (items) => [{ event: 'deploy:check', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('deploy:check', data);
+    engine.dispatch('activity:new', { event: 'deploy:check', ...data });
+  });
+
   socket.on('phase:gate:signed-off', (data) => {
     // Update gates list in store
     store.update('phase.gates', (gates) => {

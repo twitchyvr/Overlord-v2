@@ -161,6 +161,7 @@ export class BaseRoom {
   onAgentEnter(agentId: string, _tableType: string): Result {
     this.agents.add(agentId);
     this.bus?.emit('room:agent:entered', { roomId: this.id, roomType: this.type, agentId, tableType: _tableType });
+    this.bus?.emit('agent:status-changed', { agentId, status: 'active', roomId: this.id, roomType: this.type });
     return ok({ roomId: this.id, agentId });
   }
 
@@ -171,6 +172,7 @@ export class BaseRoom {
   onAgentExit(agentId: string): Result {
     this.agents.delete(agentId);
     this.bus?.emit('room:agent:exited', { roomId: this.id, roomType: this.type, agentId });
+    this.bus?.emit('agent:status-changed', { agentId, status: 'idle', roomId: this.id, roomType: this.type });
     return ok({ roomId: this.id, agentId });
   }
 
