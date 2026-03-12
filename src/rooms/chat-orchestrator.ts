@@ -229,21 +229,27 @@ async function handleChatMessage(
           socketId, roomId: room.id, agentId: resolvedAgentId,
           iterations: data.iterations, tokens: data.totalTokens,
           toolCalls: data.toolCalls.length,
+          maxIterationsReached: data.maxIterationsReached,
         },
         'Chat message processed successfully',
       );
+
+      const content = data.maxIterationsReached
+        ? `${data.finalText}\n\n[Warning: maximum tool iterations reached. Response may be incomplete.]`
+        : data.finalText;
 
       bus.emit('chat:response', {
         socketId,
         type: 'message',
         agentId: resolvedAgentId,
         roomId: room.id,
-        content: data.finalText,
+        content,
         thinking: data.thinking,
         toolCalls: data.toolCalls.map((tc) => ({ name: tc.name, input: tc.input })),
         tokens: data.totalTokens,
         iterations: data.iterations,
         sessionId: data.sessionId,
+        maxIterationsReached: data.maxIterationsReached,
       });
     } else {
       log.error({ socketId, error: result.error }, 'Conversation loop failed');
