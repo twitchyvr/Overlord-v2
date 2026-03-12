@@ -10,6 +10,9 @@
 
 import { h } from '../engine/helpers.js';
 
+// ── Constants ────────────────────────────────────────────────────
+const MAX_VISIBLE_TOASTS = 5;
+
 // ── Container reference ──────────────────────────────────────────
 let _container = null;
 
@@ -93,6 +96,16 @@ export class Toast {
     }
 
     container.appendChild(toast);
+
+    // Evict oldest toasts if over the cap
+    const allToasts = Array.from(container.querySelectorAll('.toast'));
+    const active = allToasts.filter(t => !t._dismissing);
+    if (active.length > MAX_VISIBLE_TOASTS) {
+      const excess = active.length - MAX_VISIBLE_TOASTS;
+      for (let i = 0; i < excess; i++) {
+        Toast.dismiss(active[i]);
+      }
+    }
 
     // Auto-dismiss
     if (duration > 0) {
