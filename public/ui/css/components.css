@@ -2560,3 +2560,369 @@
   color: var(--electric);
   font-weight: var(--font-bold);
 }
+
+/* ═══════════════════════════════════════════════════
+   Entity Links — Clickable Cross-Panel Navigation
+   ═══════════════════════════════════════════════════ */
+
+.entity-link {
+  color: var(--electric);
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--electric);
+  padding: 0 2px;
+  border-radius: 2px;
+  transition: background 0.15s ease, color 0.15s ease;
+  font-weight: var(--font-medium);
+}
+.entity-link:hover {
+  background: color-mix(in srgb, var(--electric) 15%, transparent);
+  border-bottom-style: solid;
+}
+.entity-link:focus-visible {
+  outline: 2px solid var(--electric);
+  outline-offset: 1px;
+}
+.entity-link-agent { color: var(--accent-green); border-bottom-color: var(--accent-green); }
+.entity-link-agent:hover { background: color-mix(in srgb, var(--accent-green) 15%, transparent); }
+.entity-link-room { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+.entity-link-room:hover { background: color-mix(in srgb, var(--accent-blue) 15%, transparent); }
+.entity-link-task { color: var(--accent-amber); border-bottom-color: var(--accent-amber); }
+.entity-link-task:hover { background: color-mix(in srgb, var(--accent-amber) 15%, transparent); }
+.entity-link-raid { color: var(--accent-red); border-bottom-color: var(--accent-red); }
+.entity-link-raid:hover { background: color-mix(in srgb, var(--accent-red) 15%, transparent); }
+
+/* ═══════════════════════════════════════════════════
+   DrillItem Action Buttons
+   ═══════════════════════════════════════════════════ */
+
+.drill-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+.drill-action-btn {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.drill-action-btn:hover {
+  background: var(--surface-3);
+  border-color: var(--electric);
+  color: var(--electric);
+}
+.drill-action-btn.danger {
+  color: var(--accent-red);
+  border-color: var(--accent-red);
+}
+.drill-action-btn.danger:hover {
+  background: color-mix(in srgb, var(--accent-red) 10%, transparent);
+}
+
+/* ═══════════════════════════════════════════════════
+   Entity Detail Modals — Agent, Task, RAID
+   ═══════════════════════════════════════════════════ */
+
+.entity-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Agent Detail ── */
+
+.agent-detail-header {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.agent-detail-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--electric), var(--accent-blue));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: var(--font-bold);
+  flex-shrink: 0;
+}
+.agent-detail-title h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+.agent-detail-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.agent-role-badge {
+  background: var(--surface-2);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  text-transform: capitalize;
+}
+.agent-status-indicator {
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  text-transform: capitalize;
+}
+.agent-status-active, .agent-status-working {
+  background: color-mix(in srgb, var(--accent-green) 15%, transparent);
+  color: var(--accent-green);
+}
+.agent-status-idle {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+.agent-status-paused {
+  background: color-mix(in srgb, var(--accent-amber) 15%, transparent);
+  color: var(--accent-amber);
+}
+
+.agent-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.agent-detail-section-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.agent-detail-assignment {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.agent-detail-unassigned {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.agent-detail-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: var(--text-sm);
+}
+.agent-detail-label {
+  color: var(--text-muted);
+  min-width: 70px;
+  font-size: var(--text-xs);
+}
+
+.agent-detail-cap-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.agent-detail-cap-tag {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.agent-detail-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.agent-detail-task-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+.agent-detail-task-row:hover {
+  background: var(--surface-2);
+}
+.agent-detail-task-icon {
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+}
+.agent-task-status-done { background: color-mix(in srgb, var(--accent-green) 15%, transparent); color: var(--accent-green); }
+.agent-task-status-in-progress { background: color-mix(in srgb, var(--accent-blue) 15%, transparent); color: var(--accent-blue); }
+.agent-task-status-blocked { background: color-mix(in srgb, var(--accent-red) 15%, transparent); color: var(--accent-red); }
+.agent-task-status-pending { background: var(--surface-2); color: var(--text-muted); }
+
+.agent-detail-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.agent-detail-activity-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 6px;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-sm);
+}
+.agent-detail-activity-row:hover {
+  background: var(--surface-2);
+}
+.agent-detail-activity-time {
+  color: var(--text-muted);
+  min-width: 55px;
+  flex-shrink: 0;
+}
+.agent-detail-activity-event {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.agent-detail-empty {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  padding: 6px 0;
+}
+
+/* ── Task Detail ── */
+
+.task-detail-header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.task-detail-header h3 {
+  margin: 0;
+  flex: 1;
+  min-width: 150px;
+}
+.task-detail-status-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.task-detail-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.task-status-badge-done { background: color-mix(in srgb, var(--accent-green) 15%, transparent); color: var(--accent-green); }
+.task-status-badge-in-progress { background: color-mix(in srgb, var(--accent-blue) 15%, transparent); color: var(--accent-blue); }
+.task-status-badge-blocked { background: color-mix(in srgb, var(--accent-red) 15%, transparent); color: var(--accent-red); }
+.task-status-badge-pending { background: var(--surface-2); color: var(--text-muted); }
+.task-priority-badge-critical { background: color-mix(in srgb, var(--accent-red) 15%, transparent); color: var(--accent-red); }
+.task-priority-badge-high { background: color-mix(in srgb, var(--accent-orange) 15%, transparent); color: var(--accent-orange); }
+
+.task-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.task-detail-section-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+.task-detail-description {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin: 0;
+}
+.task-detail-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: var(--text-sm);
+}
+.task-detail-label {
+  color: var(--text-muted);
+  min-width: 70px;
+  font-size: var(--text-xs);
+}
+
+/* ── RAID Detail ── */
+
+.raid-detail-header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.raid-detail-header h3 {
+  margin: 0;
+  flex: 1;
+  min-width: 150px;
+}
+.raid-detail-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.raid-detail-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.raid-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.raid-detail-section h4 {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+.raid-detail-section p {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin: 0;
+}
+.raid-detail-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: var(--text-sm);
+}
+.raid-detail-label {
+  color: var(--text-muted);
+  min-width: 80px;
+  font-size: var(--text-xs);
+}
+.raid-severity-critical { background: color-mix(in srgb, var(--accent-red) 15%, transparent); color: var(--accent-red); }
+.raid-severity-high { background: color-mix(in srgb, var(--accent-orange) 15%, transparent); color: var(--accent-orange); }
+.raid-severity-medium { background: color-mix(in srgb, var(--accent-amber) 15%, transparent); color: var(--accent-amber); }
+.raid-severity-low { background: var(--surface-2); color: var(--text-muted); }

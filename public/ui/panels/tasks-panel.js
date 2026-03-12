@@ -12,6 +12,7 @@ import { h, formatTime } from '../engine/helpers.js';
 import { DrillItem } from '../components/drill-item.js';
 import { Button } from '../components/button.js';
 import { navigateTo } from '../engine/router.js';
+import { EntityLink, resolveAgent } from '../engine/entity-nav.js';
 
 
 const STATUS_CONFIG = {
@@ -111,16 +112,27 @@ export class TasksPanel extends PanelComponent {
             const parts = [];
             if (d.status) parts.push(statusCfg.label);
             if (d.phase) parts.push(d.phase);
+            if (d.assignee_id) {
+              const agent = resolveAgent(d.assignee_id);
+              if (agent) parts.push(agent.name);
+            }
             return parts.join(' \u2022 ');
           },
           detail: [
             { label: 'Status', key: 'status' },
             { label: 'Priority', key: 'priority' },
             { label: 'Phase', key: 'phase' },
-            { label: 'Assignee', key: 'assignee_id' },
+            { label: 'Assignee', key: 'assignee_id', value: (d) => {
+              if (!d.assignee_id) return null;
+              return EntityLink.agent(d.assignee_id);
+            }},
             { label: 'Description', key: 'description' },
             { label: 'Created', key: 'created_at', format: 'date' },
             { label: 'Updated', key: 'updated_at', format: 'date' }
+          ],
+          actions: (d) => [
+            { label: 'View Full Detail', onClick: () => OverlordUI.dispatch('navigate:entity', { type: 'task', id: d.id }) },
+            ...(d.assignee_id ? [{ label: 'View Assignee', onClick: () => OverlordUI.dispatch('navigate:entity', { type: 'agent', id: d.assignee_id }) }] : []),
           ]
         });
         list.appendChild(item);

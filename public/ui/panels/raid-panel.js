@@ -12,6 +12,7 @@ import { h, formatTime } from '../engine/helpers.js';
 import { DrillItem } from '../components/drill-item.js';
 import { SearchInput } from '../components/search-input.js';
 import { Toast } from '../components/toast.js';
+import { EntityLink } from '../engine/entity-nav.js';
 
 
 const RAID_TYPES = [
@@ -178,10 +179,24 @@ export class RaidPanel extends PanelComponent {
           { label: 'Description', key: 'description' },
           { label: 'Summary', key: 'summary' },
           { label: 'Mitigation', key: 'mitigation' },
-          { label: 'Owner', key: 'owner' },
-          { label: 'Decided By', key: 'decided_by' },
-          { label: 'Room', key: 'room_id' },
+          { label: 'Owner', key: 'owner', value: (d) => {
+            if (!d.owner) return null;
+            return EntityLink.agent(d.owner);
+          }},
+          { label: 'Decided By', key: 'decided_by', value: (d) => {
+            if (!d.decided_by) return null;
+            return EntityLink.agent(d.decided_by);
+          }},
+          { label: 'Room', key: 'room_id', value: (d) => {
+            if (!d.room_id) return null;
+            return EntityLink.room(d.room_id);
+          }},
           { label: 'Created', key: 'created_at', format: 'date' }
+        ],
+        actions: (d) => [
+          { label: 'View Full Detail', onClick: () => OverlordUI.dispatch('navigate:entity', { type: 'raid', id: d.id }) },
+          ...(d.owner ? [{ label: 'View Owner', onClick: () => OverlordUI.dispatch('navigate:entity', { type: 'agent', id: d.owner }) }] : []),
+          ...(d.room_id ? [{ label: 'View Room', onClick: () => OverlordUI.dispatch('navigate:entity', { type: 'room', id: d.room_id }) }] : []),
         ]
       });
 
