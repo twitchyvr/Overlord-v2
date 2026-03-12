@@ -5,6 +5,10 @@
  *   - agents-panel.js
  *   - raid-panel.js
  *   - activity-panel.js
+ *   - projects-panel.js
+ *   - tools-panel.js
+ *   - logs-panel.js
+ *   - team-panel.js
  *
  * Tests class structure, rendering, and filtering behavior.
  */
@@ -60,6 +64,11 @@ beforeEach(async () => {
   store.set('phase.gates', [], { silent: true });
   store.set('phase.canAdvance', null, { silent: true });
   store.set('activity.items', [], { silent: true });
+  store.set('building.list', [], { silent: true });
+  store.set('building.active', null, { silent: true });
+  store.set('rooms.list', [], { silent: true });
+  store.set('tasks.list', [], { silent: true });
+  store.set('ui.connected', false, { silent: true });
   store.set('panels.states', {}, { silent: true });
   store.set('panels.visibility', {}, { silent: true });
   store.set('panels.heights', {}, { silent: true });
@@ -377,5 +386,434 @@ describe('ActivityPanel', () => {
     }
 
     expect(panel._items.length).toBe(100);
+  });
+});
+
+// ─── ProjectsPanel ─────────────────────────────────────────
+
+describe('ProjectsPanel', () => {
+  it('exports the ProjectsPanel class', async () => {
+    const mod = await import('../../../public/ui/panels/projects-panel.js');
+    expect(mod.ProjectsPanel).toBeDefined();
+  });
+
+  it('shows empty state when no buildings', async () => {
+    const { ProjectsPanel } = await import('../../../public/ui/panels/projects-panel.js');
+    const el = createPanelEl('panel-projects', 'Projects');
+    document.body.appendChild(el);
+
+    const panel = new ProjectsPanel(el);
+    panel.mount();
+
+    expect(el.querySelector('.panel-empty')).not.toBeNull();
+  });
+
+  it('renders summary with building count', async () => {
+    const { ProjectsPanel } = await import('../../../public/ui/panels/projects-panel.js');
+    const el = createPanelEl('panel-projects', 'Projects');
+    document.body.appendChild(el);
+
+    const panel = new ProjectsPanel(el);
+    panel.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('building.list', [
+      { id: 'b1', name: 'Alpha', activePhase: 'strategy' },
+      { id: 'b2', name: 'Beta', activePhase: 'execution' }
+    ]);
+
+    const summary = el.querySelector('.panel-summary');
+    expect(summary).not.toBeNull();
+    expect(summary!.textContent).toContain('2 buildings');
+  });
+
+  it('renders building entries in projects list', async () => {
+    const { ProjectsPanel } = await import('../../../public/ui/panels/projects-panel.js');
+    const el = createPanelEl('panel-projects', 'Projects');
+    document.body.appendChild(el);
+
+    const panel = new ProjectsPanel(el);
+    panel.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('building.list', [
+      { id: 'b1', name: 'Alpha', activePhase: 'strategy' },
+      { id: 'b2', name: 'Beta', activePhase: 'execution' },
+      { id: 'b3', name: 'Gamma', activePhase: 'review' }
+    ]);
+
+    const list = el.querySelector('.projects-list');
+    expect(list).not.toBeNull();
+    expect(list!.children.length).toBe(3);
+  });
+
+  it('tracks active building from store', async () => {
+    const { ProjectsPanel } = await import('../../../public/ui/panels/projects-panel.js');
+    const el = createPanelEl('panel-projects', 'Projects');
+    document.body.appendChild(el);
+
+    const panel = new ProjectsPanel(el);
+    panel.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('building.list', [
+      { id: 'b1', name: 'Alpha', activePhase: 'strategy' }
+    ]);
+    store.set('building.active', 'b1');
+
+    expect(panel._activeId).toBe('b1');
+  });
+
+  it('shows singular "building" for count of 1', async () => {
+    const { ProjectsPanel } = await import('../../../public/ui/panels/projects-panel.js');
+    const el = createPanelEl('panel-projects', 'Projects');
+    document.body.appendChild(el);
+
+    const panel = new ProjectsPanel(el);
+    panel.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('building.list', [
+      { id: 'b1', name: 'Solo', activePhase: 'discovery' }
+    ]);
+
+    const summary = el.querySelector('.panel-summary');
+    expect(summary!.textContent).toContain('1 building');
+    expect(summary!.textContent).not.toContain('1 buildings');
+  });
+});
+
+// ─── ToolsPanel ────────────────────────────────────────────
+
+describe('ToolsPanel', () => {
+  it('exports the ToolsPanel class', async () => {
+    const mod = await import('../../../public/ui/panels/tools-panel.js');
+    expect(mod.ToolsPanel).toBeDefined();
+  });
+
+  it('shows empty state when no room selected', async () => {
+    const { ToolsPanel } = await import('../../../public/ui/panels/tools-panel.js');
+    const el = createPanelEl('panel-tools', 'Tools');
+    document.body.appendChild(el);
+
+    const panel = new ToolsPanel(el);
+    panel.mount();
+
+    expect(el.querySelector('.panel-empty')).not.toBeNull();
+    expect(el.querySelector('.panel-empty')!.textContent).toContain('Select a room');
+  });
+
+  it('renders tools list when room tools provided', async () => {
+    const { ToolsPanel } = await import('../../../public/ui/panels/tools-panel.js');
+    const el = createPanelEl('panel-tools', 'Tools');
+    document.body.appendChild(el);
+
+    const panel = new ToolsPanel(el);
+    panel.mount();
+
+    // Simulate room selection via engine event
+    panel._roomTools = ['bash', 'read_file', 'write_file'];
+    panel._renderContent();
+
+    const list = el.querySelector('.tools-list');
+    expect(list).not.toBeNull();
+    expect(list!.children.length).toBe(3);
+  });
+
+  it('switches between available and history tabs', async () => {
+    const { ToolsPanel } = await import('../../../public/ui/panels/tools-panel.js');
+    const el = createPanelEl('panel-tools', 'Tools');
+    document.body.appendChild(el);
+
+    const panel = new ToolsPanel(el);
+    panel.mount();
+
+    // Default tab is 'available'
+    expect(panel._tab).toBe('available');
+
+    // Switch to history
+    panel._tab = 'history';
+    panel._renderContent();
+
+    // Should show empty state for history
+    expect(el.querySelector('.panel-empty')!.textContent).toContain('No tool executions');
+  });
+
+  it('renders execution history entries', async () => {
+    const { ToolsPanel } = await import('../../../public/ui/panels/tools-panel.js');
+    const el = createPanelEl('panel-tools', 'Tools');
+    document.body.appendChild(el);
+
+    const panel = new ToolsPanel(el);
+    panel.mount();
+
+    panel._tab = 'history';
+    panel._executions = [
+      { event: 'tool:executed', toolName: 'bash', timestamp: Date.now(), result: { ok: true } },
+      { event: 'tool:executed', toolName: 'read_file', timestamp: Date.now(), result: { ok: false } }
+    ];
+    panel._renderContent();
+
+    const list = el.querySelector('.tools-history-list');
+    expect(list).not.toBeNull();
+    expect(list!.children.length).toBe(2);
+  });
+
+  it('filters tool executions from activity items', async () => {
+    const { ToolsPanel } = await import('../../../public/ui/panels/tools-panel.js');
+    const el = createPanelEl('panel-tools', 'Tools');
+    document.body.appendChild(el);
+
+    const panel = new ToolsPanel(el);
+    panel.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('activity.items', [
+      { event: 'tool:executed', toolName: 'bash' },
+      { event: 'phase:advanced', newPhase: 'discovery' },
+      { event: 'tool:executed', toolName: 'write_file' },
+      { event: 'room:agent:entered', agentId: 'a1' }
+    ]);
+
+    // Only tool:executed items should be captured
+    expect(panel._executions.length).toBe(2);
+  });
+});
+
+// ─── LogsPanel ─────────────────────────────────────────────
+
+describe('LogsPanel', () => {
+  it('exports the LogsPanel class', async () => {
+    const mod = await import('../../../public/ui/panels/logs-panel.js');
+    expect(mod.LogsPanel).toBeDefined();
+  });
+
+  it('shows empty state when no logs', async () => {
+    const { LogsPanel } = await import('../../../public/ui/panels/logs-panel.js');
+    const el = createPanelEl('panel-logs', 'Logs');
+    document.body.appendChild(el);
+
+    const panel = new LogsPanel(el);
+    panel.mount();
+
+    expect(el.querySelector('.panel-empty')).not.toBeNull();
+  });
+
+  it('adds log entries via _addLog', async () => {
+    const { LogsPanel } = await import('../../../public/ui/panels/logs-panel.js');
+    const el = createPanelEl('panel-logs', 'Logs');
+    document.body.appendChild(el);
+
+    const panel = new LogsPanel(el);
+    panel.mount();
+
+    panel._addLog({ level: 'info', message: 'Test info log' });
+    panel._addLog({ level: 'warn', message: 'Test warning' });
+    panel._addLog({ level: 'error', message: 'Test error' });
+
+    expect(panel._logs.length).toBe(3);
+
+    const list = el.querySelector('.logs-list');
+    expect(list).not.toBeNull();
+    expect(list!.children.length).toBe(3);
+  });
+
+  it('filters logs by level', async () => {
+    const { LogsPanel } = await import('../../../public/ui/panels/logs-panel.js');
+    const el = createPanelEl('panel-logs', 'Logs');
+    document.body.appendChild(el);
+
+    const panel = new LogsPanel(el);
+    panel.mount();
+
+    panel._addLog({ level: 'info', message: 'Info 1' });
+    panel._addLog({ level: 'warn', message: 'Warning 1' });
+    panel._addLog({ level: 'error', message: 'Error 1' });
+    panel._addLog({ level: 'info', message: 'Info 2' });
+
+    panel._filter = 'warn';
+    const warnLogs = panel._getFiltered();
+    expect(warnLogs.length).toBe(1);
+
+    panel._filter = 'error';
+    const errorLogs = panel._getFiltered();
+    expect(errorLogs.length).toBe(1);
+
+    panel._filter = 'all';
+    const allLogs = panel._getFiltered();
+    expect(allLogs.length).toBe(4);
+  });
+
+  it('counts logs by level', async () => {
+    const { LogsPanel } = await import('../../../public/ui/panels/logs-panel.js');
+    const el = createPanelEl('panel-logs', 'Logs');
+
+    const panel = new LogsPanel(el);
+
+    panel._logs = [
+      { level: 'info', message: 'a', timestamp: Date.now() },
+      { level: 'warn', message: 'b', timestamp: Date.now() },
+      { level: 'warn', message: 'c', timestamp: Date.now() },
+      { level: 'error', message: 'd', timestamp: Date.now() }
+    ];
+
+    expect(panel._countByLevel('warn')).toBe(2);
+    expect(panel._countByLevel('error')).toBe(1);
+    expect(panel._countByLevel('info')).toBe(1);
+  });
+
+  it('caps logs at MAX_LOGS (200)', async () => {
+    const { LogsPanel } = await import('../../../public/ui/panels/logs-panel.js');
+    const el = createPanelEl('panel-logs', 'Logs');
+    document.body.appendChild(el);
+
+    const panel = new LogsPanel(el);
+    panel.mount();
+
+    for (let i = 0; i < 220; i++) {
+      panel._addLog({ level: 'info', message: `Log ${i}` });
+    }
+
+    expect(panel._logs.length).toBe(200);
+  });
+
+  it('sets default fields on log entries', async () => {
+    const { LogsPanel } = await import('../../../public/ui/panels/logs-panel.js');
+    const el = createPanelEl('panel-logs', 'Logs');
+
+    const panel = new LogsPanel(el);
+    panel._addLog({ message: 'Bare log' });
+
+    expect(panel._logs[0].level).toBe('info');
+    expect(panel._logs[0].source).toBe('server');
+    expect(panel._logs[0].timestamp).toBeDefined();
+  });
+});
+
+// ─── TeamPanel ─────────────────────────────────────────────
+
+describe('TeamPanel', () => {
+  it('exports the TeamPanel class', async () => {
+    const mod = await import('../../../public/ui/panels/team-panel.js');
+    expect(mod.TeamPanel).toBeDefined();
+  });
+
+  it('shows empty state when no agents', async () => {
+    const { TeamPanel } = await import('../../../public/ui/panels/team-panel.js');
+    const el = createPanelEl('panel-team', 'Team');
+    document.body.appendChild(el);
+
+    const panel = new TeamPanel(el);
+    panel.mount();
+
+    expect(el.querySelector('.panel-empty')).not.toBeNull();
+    expect(el.querySelector('.panel-empty')!.textContent).toContain('No team members');
+  });
+
+  it('groups agents by role', async () => {
+    const { TeamPanel } = await import('../../../public/ui/panels/team-panel.js');
+    const el = createPanelEl('panel-team', 'Team');
+    document.body.appendChild(el);
+
+    const panel = new TeamPanel(el);
+    panel.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('agents.list', [
+      { id: 'a1', name: 'Alice', role: 'developer', status: 'active' },
+      { id: 'a2', name: 'Bob', role: 'developer', status: 'idle' },
+      { id: 'a3', name: 'Carol', role: 'tester', status: 'active' }
+    ]);
+
+    const groups = panel._groupByRole();
+    expect(Object.keys(groups)).toContain('developer');
+    expect(Object.keys(groups)).toContain('tester');
+    expect(groups['developer'].length).toBe(2);
+    expect(groups['tester'].length).toBe(1);
+  });
+
+  it('renders role headers with correct counts', async () => {
+    const { TeamPanel } = await import('../../../public/ui/panels/team-panel.js');
+    const el = createPanelEl('panel-team', 'Team');
+    document.body.appendChild(el);
+
+    const panel = new TeamPanel(el);
+    panel.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('agents.list', [
+      { id: 'a1', name: 'Alice', role: 'developer' },
+      { id: 'a2', name: 'Bob', role: 'developer' },
+      { id: 'a3', name: 'Carol', role: 'tester' }
+    ]);
+
+    const roleHeaders = el.querySelectorAll('.team-role-header');
+    expect(roleHeaders.length).toBe(2);
+
+    const roleCounts = el.querySelectorAll('.team-role-count');
+    // One of them should be (2), the other (1)
+    const counts = Array.from(roleCounts).map(e => e.textContent);
+    expect(counts).toContain('(2)');
+    expect(counts).toContain('(1)');
+  });
+
+  it('shows summary with agent count and active count', async () => {
+    const { TeamPanel } = await import('../../../public/ui/panels/team-panel.js');
+    const el = createPanelEl('panel-team', 'Team');
+    document.body.appendChild(el);
+
+    const panel = new TeamPanel(el);
+    panel.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('agents.list', [
+      { id: 'a1', name: 'Alice', role: 'developer', status: 'active' },
+      { id: 'a2', name: 'Bob', role: 'tester', status: 'idle' }
+    ]);
+    store.set('building.agentPositions', {
+      'a1': { status: 'active', roomId: 'r1' }
+    });
+
+    const summary = el.querySelector('.panel-summary');
+    expect(summary).not.toBeNull();
+    expect(summary!.textContent).toContain('2 agents');
+    expect(summary!.textContent).toContain('1 active');
+  });
+
+  it('resolves room names from rooms list', async () => {
+    const { TeamPanel } = await import('../../../public/ui/panels/team-panel.js');
+    const el = createPanelEl('panel-team', 'Team');
+
+    const panel = new TeamPanel(el);
+    panel._rooms = [
+      { id: 'r1', name: 'War Room', type: 'strategy' },
+      { id: 'r2', name: 'Dev Lab', type: 'execution' }
+    ];
+
+    expect(panel._getRoomName('r1')).toBe('War Room');
+    expect(panel._getRoomName('r2')).toBe('Dev Lab');
+    expect(panel._getRoomName('r999')).toBe('r999'); // unknown room returns ID
+    expect(panel._getRoomName(null)).toBeNull();
+  });
+
+  it('formats role names with capitalization', async () => {
+    const { TeamPanel } = await import('../../../public/ui/panels/team-panel.js');
+    const el = createPanelEl('panel-team', 'Team');
+
+    const panel = new TeamPanel(el);
+    expect(panel._formatRole('developer')).toBe('Developer');
+    expect(panel._formatRole('tester')).toBe('Tester');
+    expect(panel._formatRole('lead')).toBe('Lead');
+  });
+
+  it('assigns correct role icons', async () => {
+    const { TeamPanel } = await import('../../../public/ui/panels/team-panel.js');
+    const el = createPanelEl('panel-team', 'Team');
+
+    const panel = new TeamPanel(el);
+    // Known roles should get their specific icons
+    expect(panel._getRoleIcon('developer')).not.toBe(panel._getRoleIcon('unknown_role'));
+    // Unknown roles should get the default icon
+    expect(panel._getRoleIcon('xyznonexistent')).toBeDefined();
   });
 });

@@ -353,7 +353,11 @@ export class PanelComponent extends Component {
       'panel-phase':    'phase',
       'panel-agents':   'agents',
       'panel-raid':     'raid',
-      'panel-activity': 'activity'
+      'panel-activity': 'activity',
+      'panel-projects': 'projects',
+      'panel-tools':    'tools',
+      'panel-logs':     'logs',
+      'panel-team':     'team'
     };
     return map[this.id];
   }
