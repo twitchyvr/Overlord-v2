@@ -83,6 +83,14 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
         input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
       }));
 
+      // Clamp temperature for MiniMax: must be strictly (0.0, 1.0]
+      // Anthropic allows 0.0, but MiniMax rejects it.
+      let temperature = options.temperature as number | undefined;
+      if (temperature !== undefined) {
+        if (temperature <= 0) temperature = 0.01;
+        if (temperature > 1) temperature = 1.0;
+      }
+
       // Build request — identical to Anthropic adapter since MiniMax is Anthropic-compatible
       const requestParams: Anthropic.MessageCreateParams = {
         model,
@@ -90,7 +98,7 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
         messages: messages as Anthropic.MessageParam[],
         ...(anthropicTools.length > 0 ? { tools: anthropicTools } : {}),
         ...(options.system ? { system: options.system as string } : {}),
-        ...(options.temperature !== undefined ? { temperature: options.temperature as number } : {}),
+        ...(temperature !== undefined ? { temperature } : {}),
       };
 
       log.info(

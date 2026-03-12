@@ -27,6 +27,8 @@ export interface GeneratedIdentity {
 export interface GenerateIdentityOpts {
   gender?: string;
   provider?: string;
+  /** If set, the AI must use this as the first name (generate only lastName, bio, etc.) */
+  firstName?: string;
 }
 
 // ─── System Prompt ───
@@ -62,11 +64,15 @@ RESPOND WITH VALID JSON ONLY. No markdown, no code fences, no explanation. Just 
 /**
  * Build the user prompt for identity generation.
  */
-function buildUserPrompt(role: string, specialization?: string, gender?: string): string {
+function buildUserPrompt(role: string, specialization?: string, gender?: string, firstName?: string): string {
   let prompt = `Generate a professional identity for an AI agent with the following role: "${role}"`;
 
   if (specialization) {
     prompt += `\n\nTheir area of specialization: "${specialization}"`;
+  }
+
+  if (firstName) {
+    prompt += `\n\nIMPORTANT: The first name MUST be "${firstName}". Generate only a matching last name, display name, specialization, and bio. The display name must be "${firstName} <LastName>".`;
   }
 
   if (gender) {
@@ -122,7 +128,7 @@ export async function generateAgentIdentity(
   specialization?: string,
   opts?: GenerateIdentityOpts,
 ): Promise<Result<GeneratedIdentity>> {
-  const provider = opts?.provider || 'anthropic';
+  const provider = opts?.provider || 'minimax';
 
   // Check if the provider adapter exists and is configured
   const adapter = ai.getAdapter(provider);
@@ -142,7 +148,7 @@ export async function generateAgentIdentity(
     });
   }
 
-  const userPrompt = buildUserPrompt(role, specialization, opts?.gender);
+  const userPrompt = buildUserPrompt(role, specialization, opts?.gender, opts?.firstName);
 
   log.info({ role, specialization, provider }, 'Generating agent identity via AI');
 

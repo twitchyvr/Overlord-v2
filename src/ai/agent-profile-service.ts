@@ -27,7 +27,7 @@ export interface GenerateFullProfileOpts {
   skipPhoto?: boolean;
   /** Gender preference for name generation */
   gender?: string;
-  /** AI provider to use (defaults to 'anthropic') */
+  /** AI provider to use (defaults to 'minimax') */
   provider?: string;
   /** Existing profile fields to preserve (won't be overwritten) */
   existing?: Partial<AgentProfileFields>;
@@ -86,7 +86,11 @@ export async function generateFullProfile(
       ai,
       role,
       specializationHint,
-      { gender: options.gender, provider: options.provider },
+      {
+        gender: options.gender,
+        provider: options.provider,
+        firstName: options.existing?.firstName ?? undefined,
+      },
     );
 
     if (identityResult.ok) {
@@ -96,9 +100,13 @@ export async function generateFullProfile(
       // Apply generated values, but don't overwrite existing fields
       profile.firstName = options.existing?.firstName ?? identity.firstName;
       profile.lastName = options.existing?.lastName ?? identity.lastName;
-      profile.displayName = options.existing?.displayName ?? identity.displayName;
       profile.bio = options.existing?.bio ?? identity.bio;
       profile.specialization = options.existing?.specialization ?? identity.specialization;
+
+      // Always compute displayName from the final first+last names.
+      // This ensures consistency: if firstName was preserved from existing and lastName
+      // was AI-generated, displayName reflects both (e.g., "Aria Chen" not just "Aria").
+      profile.displayName = `${profile.firstName} ${profile.lastName}`.trim() || identity.displayName;
     } else {
       generation.identity = 'failed';
       const errorMsg = `Identity generation failed: ${identityResult.error.message}`;

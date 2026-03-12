@@ -236,7 +236,7 @@ export const AgentGenerateProfileSchema = z.object({
   skipPhoto: z.boolean().optional(),
   /** Gender preference for name generation */
   gender: optionalName(),
-  /** AI provider override (defaults to 'anthropic') */
+  /** AI provider override (defaults to 'minimax') */
   provider: optionalName(),
 });
 
