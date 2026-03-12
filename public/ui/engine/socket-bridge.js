@@ -398,6 +398,18 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'escalation:stale-gate', ...data });
   });
 
+  socket.on('escalation:war-room', (data) => {
+    log.warn('Escalation: War Room activated', data);
+    store.update('escalation.warRooms', (rooms) => {
+      const list = rooms || [];
+      if (list.some((r) => r.warRoomId === data.warRoomId)) return list;
+      return [{ ...data, timestamp: Date.now() }, ...list].slice(0, 20);
+    });
+    store.update('activity.items', (items) => [{ event: 'escalation:war-room', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('escalation:war-room', data);
+    engine.dispatch('activity:new', { event: 'escalation:war-room', ...data });
+  });
+
   // ── Client emit wrappers (convenience for components) ──
 
   /**

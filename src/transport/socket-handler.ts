@@ -851,6 +851,9 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   forward('todo:updated');
   forward('todo:deleted');
   forward('escalation:stale-gate');
+  forward('escalation:war-room');
+  forward('escalation:failed');
+  forward('scope-change:detected');
   forward('system:log');
   forward('building:created');
   forward('building:onboarded');
