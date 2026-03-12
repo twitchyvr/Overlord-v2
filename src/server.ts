@@ -30,6 +30,7 @@ import { listBuildings } from './rooms/building-manager.js';
 import { initCommands } from './commands/index.js';
 import { initPlugins } from './plugins/index.js';
 import type { InitPluginsParams } from './plugins/index.js';
+import { initMcp } from './tools/mcp-manager.js';
 
 import type { Request, Response } from 'express';
 
@@ -82,6 +83,9 @@ async function start(): Promise<void> {
 
   await initPlugins({ bus, rooms, agents, tools } as InitPluginsParams);
   log.info('Plugin system initialized');
+
+  await initMcp({ bus, tools });
+  log.info('MCP system initialized');
 
   // 3. HTTP + Socket.IO
   const app = express();
