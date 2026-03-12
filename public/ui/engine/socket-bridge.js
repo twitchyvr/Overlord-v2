@@ -828,6 +828,11 @@ export function initSocketBridge(socket, store, engine) {
         }
       }
     },
+
+    /** Fetch server configuration for settings display. */
+    async getServerConfig() {
+      return _emitWithFeedback('settings:get-config', {});
+    },
   };
 
   log.info('v2 bridge initialized');

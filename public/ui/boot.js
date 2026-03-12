@@ -16,6 +16,7 @@ import { initPanelSystem } from './components/panel.js';
 import { Toast } from './components/toast.js';
 import { RoomView } from './views/room-view.js';
 import { ExitDocForm } from './views/exit-doc-form.js';
+import { SettingsView } from './views/settings-view.js';
 
 // ── Import panel classes (they self-register on construction) ──
 import { PhasePanel } from './panels/phase-panel.js';
@@ -134,6 +135,18 @@ if (socket) {
   // ── Mount exit document form handler (listens for exit-doc:open-form events) ──
   const exitDocForm = new ExitDocForm(document.createElement('div'));
   exitDocForm.mount();
+
+  // ── Mount settings view handler (listens for settings:open events) ──
+  const settingsView = new SettingsView(document.createElement('div'));
+  settingsView.mount();
+
+  // Wire settings button
+  const settingsBtn = document.getElementById('settings-btn');
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+      OverlordUI.dispatch('settings:open');
+    });
+  }
 
   // ── Toolbar navigation click handlers ──
   document.querySelectorAll('#app-toolbar .toolbar-btn').forEach(btn => {
