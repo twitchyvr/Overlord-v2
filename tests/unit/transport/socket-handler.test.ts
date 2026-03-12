@@ -812,6 +812,90 @@ describe('Socket Handler (Transport Layer)', () => {
     });
   });
 
+  // ─── Max-length validation ──────────────────────────────────────
+
+  describe('max-length validation', () => {
+    it('rejects building name exceeding 500 chars', () => {
+      const ack = vi.fn();
+      socket.emit('building:create', { name: 'x'.repeat(501) }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+      expect(createBuilding).not.toHaveBeenCalled();
+    });
+
+    it('accepts building name at exactly 500 chars', () => {
+      const ack = vi.fn();
+      socket.emit('building:create', { name: 'x'.repeat(500) }, ack);
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+    });
+
+    it('rejects buildingId exceeding 100 chars', () => {
+      const ack = vi.fn();
+      socket.emit('building:get', { buildingId: 'x'.repeat(101) }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('rejects chat message text exceeding 50000 chars', () => {
+      const ack = vi.fn();
+      socket.emit('chat:message', { text: 'x'.repeat(50001) }, ack);
+
+      // chat:message doesn't use ack for validation (emits to bus)
+      // but validation should prevent bus emission
+      const chatEvent = bus.emitted.find((e) => e.event === 'chat:message');
+      expect(chatEvent).toBeUndefined();
+    });
+
+    it('rejects task description exceeding 10000 chars', () => {
+      const ack = vi.fn();
+      socket.emit('task:create', {
+        buildingId: 'bld_1',
+        title: 'Test Task',
+        description: 'x'.repeat(10001),
+      }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('rejects arrays exceeding 500 items', () => {
+      const ack = vi.fn();
+      const hugeConditions = Array.from({ length: 501 }, (_, i) => `cond_${i}`);
+      socket.emit('phase:gate:signoff', {
+        gateId: 'g1',
+        reviewer: 'alice',
+        verdict: 'CONDITIONAL',
+        conditions: hugeConditions,
+      }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+  });
+
   describe('connection lifecycle (continued)', () => {
     it('disconnect event fires without error', () => {
       expect(() => {

@@ -7,6 +7,28 @@
 
 import { z } from 'zod';
 
+// ─── Field Length Limits ───
+
+/** Max length for identifier fields (IDs, keys) */
+const MAX_ID = 100;
+/** Max length for short text fields (names, titles, statuses) */
+const MAX_NAME = 500;
+/** Max length for medium text fields (descriptions, summaries, rationale) */
+const MAX_DESCRIPTION = 10_000;
+/** Max length for long text fields (chat messages) */
+const MAX_TEXT = 50_000;
+/** Max number of items in array fields */
+const MAX_ARRAY_ITEMS = 500;
+
+// ─── Reusable field helpers ───
+
+const id = () => z.string().min(1).max(MAX_ID);
+const name = () => z.string().min(1).max(MAX_NAME);
+const optionalId = () => z.string().max(MAX_ID).optional();
+const optionalName = () => z.string().max(MAX_NAME).optional();
+const optionalDescription = () => z.string().max(MAX_DESCRIPTION).optional();
+const stringArray = () => z.array(z.string().max(MAX_NAME)).max(MAX_ARRAY_ITEMS);
+
 // ─── Validation Helper ───
 
 /**
@@ -42,66 +64,66 @@ export function validate<T>(
 // ─── Building Schemas ───
 
 export const BuildingCreateSchema = z.object({
-  name: z.string().min(1),
-  projectId: z.string().optional(),
-  description: z.string().optional(),
+  name: name(),
+  projectId: optionalId(),
+  description: optionalDescription(),
 }).passthrough();
 
 export const BuildingGetSchema = z.object({
-  buildingId: z.string().min(1),
+  buildingId: id(),
 });
 
 export const BuildingListSchema = z.object({
-  projectId: z.string().optional(),
+  projectId: optionalId(),
 }).optional().default({});
 
 export const BuildingApplyBlueprintSchema = z.object({
-  buildingId: z.string().min(1),
+  buildingId: id(),
   blueprint: z.record(z.unknown()),
-  agentId: z.string().min(1),
+  agentId: id(),
 });
 
 // ─── Floor Schemas ───
 
 export const FloorListSchema = z.object({
-  buildingId: z.string().min(1),
+  buildingId: id(),
 });
 
 export const FloorGetSchema = z.object({
-  floorId: z.string().min(1),
+  floorId: id(),
 });
 
 // ─── Room Schemas ───
 
 export const RoomCreateSchema = z.object({
-  type: z.string().min(1),
-  floorId: z.string().min(1),
-  name: z.string().optional(),
+  type: name(),
+  floorId: id(),
+  name: optionalName(),
 }).passthrough();
 
 export const RoomGetSchema = z.object({
-  roomId: z.string().min(1),
+  roomId: id(),
 });
 
 export const RoomEnterSchema = z.object({
-  roomId: z.string().min(1),
-  agentId: z.string().min(1),
+  roomId: id(),
+  agentId: id(),
 }).passthrough();
 
 export const RoomExitSchema = z.object({
-  roomId: z.string().min(1),
-  agentId: z.string().min(1),
+  roomId: id(),
+  agentId: id(),
 }).passthrough();
 
 // ─── Agent Schemas ───
 
 export const AgentRegisterSchema = z.object({
-  name: z.string().min(1),
-  role: z.string().optional(),
+  name: name(),
+  role: optionalName(),
 }).passthrough();
 
 export const AgentGetSchema = z.object({
-  agentId: z.string().min(1),
+  agentId: id(),
 });
 
 export const AgentListSchema = z.object({}).passthrough().optional().default({});
@@ -109,36 +131,36 @@ export const AgentListSchema = z.object({}).passthrough().optional().default({})
 // ─── Chat Schemas ───
 
 export const ChatMessageSchema = z.object({
-  text: z.string().optional().default(''),
+  text: z.string().max(MAX_TEXT).optional().default(''),
   tokens: z.array(z.object({
-    id: z.string().optional(),
-    type: z.string().optional(),
-    char: z.string().optional(),
-    value: z.string().optional(),
-  }).passthrough()).optional().default([]),
-  buildingId: z.string().optional(),
-  roomId: z.string().optional(),
-  agentId: z.string().optional(),
+    id: optionalId(),
+    type: optionalName(),
+    char: z.string().max(10).optional(),
+    value: z.string().max(MAX_NAME).optional(),
+  }).passthrough()).max(MAX_ARRAY_ITEMS).optional().default([]),
+  buildingId: optionalId(),
+  roomId: optionalId(),
+  agentId: optionalId(),
 }).passthrough();
 
 // ─── Phase Schemas ───
 
 export const PhaseGatesSchema = z.object({
-  buildingId: z.string().min(1),
+  buildingId: id(),
 });
 
 export const PhaseCanAdvanceSchema = z.object({
-  buildingId: z.string().min(1),
+  buildingId: id(),
 });
 
 export const PhasePendingGatesSchema = z.object({
-  buildingId: z.string().optional(),
+  buildingId: optionalId(),
 }).optional().default({});
 
 export const PhaseResolveConditionsSchema = z.object({
-  gateId: z.string().min(1),
-  resolvedConditions: z.array(z.string()).optional().default([]),
-  resolver: z.string().optional().default('system'),
+  gateId: id(),
+  resolvedConditions: stringArray().optional().default([]),
+  resolver: z.string().max(MAX_NAME).optional().default('system'),
 });
 
 export const PhaseStaleGatesSchema = z.object({
@@ -146,128 +168,128 @@ export const PhaseStaleGatesSchema = z.object({
 }).optional().default({});
 
 export const PhaseGateSignoffSchema = z.object({
-  gateId: z.string().min(1),
-  reviewer: z.string().min(1),
+  gateId: id(),
+  reviewer: name(),
   verdict: z.enum(['GO', 'NO-GO', 'CONDITIONAL']),
-  conditions: z.array(z.string()).optional().default([]),
-  exitDocId: z.string().optional(),
+  conditions: stringArray().optional().default([]),
+  exitDocId: optionalId(),
   nextPhaseInput: z.record(z.unknown()).optional().default({}),
 });
 
 export const PhaseAdvanceSchema = z.object({
-  buildingId: z.string().min(1),
-  reviewer: z.string().optional(),
+  buildingId: id(),
+  reviewer: optionalName(),
   nextPhaseInput: z.record(z.unknown()).optional().default({}),
 });
 
 // ─── RAID Schemas ───
 
 export const RaidSearchSchema = z.object({
-  buildingId: z.string().optional(),
-  type: z.string().optional(),
-  status: z.string().optional(),
+  buildingId: optionalId(),
+  type: optionalName(),
+  status: optionalName(),
 }).passthrough();
 
 export const RaidListSchema = z.object({
-  buildingId: z.string().min(1),
+  buildingId: id(),
 });
 
 export const RaidAddSchema = z.object({
-  buildingId: z.string().min(1),
-  type: z.string().min(1),
-  summary: z.string().min(1),
+  buildingId: id(),
+  type: name(),
+  summary: z.string().min(1).max(MAX_DESCRIPTION),
 }).passthrough();
 
 export const RaidUpdateSchema = z.object({
-  id: z.string().min(1),
-  status: z.string().min(1),
+  id: id(),
+  status: name(),
 });
 
 export const RaidEditSchema = z.object({
-  id: z.string().min(1),
-  summary: z.string().optional(),
-  rationale: z.string().optional(),
-  decidedBy: z.string().optional(),
-  affectedAreas: z.array(z.string()).optional(),
+  id: id(),
+  summary: optionalDescription(),
+  rationale: optionalDescription(),
+  decidedBy: optionalName(),
+  affectedAreas: z.array(z.string().max(MAX_NAME)).max(MAX_ARRAY_ITEMS).optional(),
 });
 
 // ─── Task Schemas ───
 
 export const TaskCreateSchema = z.object({
-  buildingId: z.string().min(1),
-  title: z.string().min(1),
-  description: z.string().optional(),
-  status: z.string().optional().default('pending'),
-  parentId: z.string().optional(),
-  milestoneId: z.string().optional(),
-  assigneeId: z.string().optional(),
-  roomId: z.string().optional(),
-  phase: z.string().optional(),
-  priority: z.string().optional().default('normal'),
+  buildingId: id(),
+  title: name(),
+  description: optionalDescription(),
+  status: z.string().max(MAX_NAME).optional().default('pending'),
+  parentId: optionalId(),
+  milestoneId: optionalId(),
+  assigneeId: optionalId(),
+  roomId: optionalId(),
+  phase: optionalName(),
+  priority: z.string().max(MAX_NAME).optional().default('normal'),
 });
 
 export const TaskUpdateSchema = z.object({
-  id: z.string().min(1),
-  title: z.string().optional(),
-  description: z.string().optional(),
-  status: z.string().optional(),
-  parentId: z.string().optional(),
-  milestoneId: z.string().optional(),
-  assigneeId: z.string().optional(),
-  roomId: z.string().optional(),
-  phase: z.string().optional(),
-  priority: z.string().optional(),
+  id: id(),
+  title: optionalName(),
+  description: optionalDescription(),
+  status: optionalName(),
+  parentId: optionalId(),
+  milestoneId: optionalId(),
+  assigneeId: optionalId(),
+  roomId: optionalId(),
+  phase: optionalName(),
+  priority: optionalName(),
 });
 
 export const TaskListSchema = z.object({
-  buildingId: z.string().min(1),
-  status: z.string().optional(),
-  phase: z.string().optional(),
-  assigneeId: z.string().optional(),
+  buildingId: id(),
+  status: optionalName(),
+  phase: optionalName(),
+  assigneeId: optionalId(),
 });
 
 export const TaskGetSchema = z.object({
-  id: z.string().min(1),
+  id: id(),
 });
 
 // ─── TODO Schemas ───
 
 export const TodoCreateSchema = z.object({
-  taskId: z.string().min(1),
-  description: z.string().min(1),
-  agentId: z.string().optional(),
-  roomId: z.string().optional(),
-  status: z.string().optional().default('pending'),
-  exitDocRef: z.string().optional(),
+  taskId: id(),
+  description: z.string().min(1).max(MAX_DESCRIPTION),
+  agentId: optionalId(),
+  roomId: optionalId(),
+  status: z.string().max(MAX_NAME).optional().default('pending'),
+  exitDocRef: optionalId(),
 });
 
 export const TodoToggleSchema = z.object({
-  id: z.string().min(1),
+  id: id(),
 });
 
 export const TodoListSchema = z.object({
-  taskId: z.string().min(1),
+  taskId: id(),
 });
 
 export const TodoDeleteSchema = z.object({
-  id: z.string().min(1),
+  id: id(),
 });
 
 // ─── Exit Document Schemas ───
 
 export const ExitDocSubmitSchema = z.object({
-  roomId: z.string().min(1),
-  agentId: z.string().min(1),
+  roomId: id(),
+  agentId: id(),
   document: z.record(z.unknown()).optional().default({}),
-  buildingId: z.string().optional(),
-  phase: z.string().optional(),
-  roomType: z.string().optional(),
+  buildingId: optionalId(),
+  phase: optionalName(),
+  roomType: optionalName(),
 });
 
 export const ExitDocGetSchema = z.object({
-  roomId: z.string().min(1),
+  roomId: id(),
 });
 
 export const ExitDocListSchema = z.object({
-  buildingId: z.string().min(1),
+  buildingId: id(),
 });
