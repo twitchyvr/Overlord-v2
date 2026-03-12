@@ -76,6 +76,7 @@ export class RoomView extends Component {
     this._citations = [];
     this._backlinks = [];
     this._tables = [];
+    this._tasks = [];            // all building tasks (for table task counts)
     this._stylesInjected = false;
   }
 
@@ -95,6 +96,11 @@ export class RoomView extends Component {
     this.subscribe(store, 'building.agentPositions', (positions) => {
       this._agentPositions = positions || {};
       if (this._roomData) this._updateAgentDisplay();
+    });
+
+    // Subscribe to tasks list (for table task count badges — #225)
+    this.subscribe(store, 'tasks.list', (tasks) => {
+      this._tasks = tasks || [];
     });
 
     // Subscribe to activity/log events
@@ -865,18 +871,39 @@ export class RoomView extends Component {
     const typeInfo = TABLE_TYPES[table.type] || TABLE_TYPES.focus;
     const typeColor = typeInfo?.color || '#4fc3f7';
 
+    // Count tasks assigned to this table (#225)
+    const tableTasks = this._tasks.filter(t => t.table_id === table.id);
+    const taskCount = tableTasks.length;
+
     const card = h('div', { class: 'rv-table-card' });
 
-    // ── Card header: type badge, occupancy, action buttons
+    // ── Card header: type badge, occupancy, task badge, action buttons
     const cardHeader = h('div', { class: 'rv-table-card-header' });
-    cardHeader.appendChild(h('div', { class: 'rv-table-card-title' },
+    const titleGroup = h('div', { class: 'rv-table-card-title' },
       h('span', { class: 'rv-table-type-badge', style: `background:${typeColor}` },
         `${typeInfo?.icon || '\u{1F4CB}'} ${typeInfo?.label || table.type || 'Table'}`
       ),
       h('span', { class: 'rv-table-occupancy' }, `${occupancy}/${chairCount}`)
-    ));
+    );
+    // Task count badge (clickable → opens task list for this table)
+    if (taskCount > 0) {
+      const taskBadge = h('span', {
+        class: 'rv-table-task-badge',
+        title: `${taskCount} task${taskCount !== 1 ? 's' : ''} assigned`
+      }, `${taskCount} task${taskCount !== 1 ? 's' : ''}`);
+      taskBadge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._openTableTaskList(table, tableTasks);
+      });
+      titleGroup.appendChild(taskBadge);
+    }
+    cardHeader.appendChild(titleGroup);
 
     const cardActions = h('div', { class: 'rv-table-card-actions' });
+    // Assign task button (#225)
+    const assignTaskBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Assign a task to this table' }, '\u{1F4CB} Task');
+    assignTaskBtn.addEventListener('click', (e) => { e.stopPropagation(); this._openAssignTaskToTableModal(table, room); });
+    cardActions.appendChild(assignTaskBtn);
     // Seat agent button
     if (occupancy < chairCount) {
       const seatBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Seat an agent' }, '\u{1F4BA} Seat');
@@ -1436,37 +1463,61 @@ export class RoomView extends Component {
     }
   }
 
-  /** Open modal to add a table to the room. */
+  /** Open modal to add a table with type picker cards (#221). */
   _openAddTableModal(room) {
-    let tableType = 'focus';
-    let chairs = 1;
+    let selectedType = 'focus';
+    let chairs = TABLE_TYPES.focus.defaultChairs;
     let description = '';
 
-    const container = h('div', { class: 'add-table-modal' });
+    const container = h('div', { class: 'rv-add-table-modal' });
 
-    container.appendChild(h('div', { class: 'add-table-guidance' },
-      h('p', null, 'Add a new table to this room. Tables define seating capacity for agents.'),
-      h('p', { class: 'text-muted' }, 'Each table has a type (e.g., focus, pair, review) and a number of chairs limiting how many agents can sit there.')
-    ));
+    // Type picker cards
+    container.appendChild(h('label', { class: 'form-label' }, 'Select Table Type'));
+    const typePicker = h('div', { class: 'rv-type-picker' });
 
-    // Type input
-    const typeGroup = h('div', { class: 'add-table-field' });
-    typeGroup.appendChild(h('label', { class: 'form-label' }, 'Table Type'));
-    const typeInput = h('input', { class: 'form-input', type: 'text', value: 'focus', placeholder: 'e.g., focus, pair, review' });
-    typeInput.addEventListener('input', () => { tableType = typeInput.value; });
-    typeGroup.appendChild(typeInput);
-    container.appendChild(typeGroup);
+    for (const [key, info] of Object.entries(TABLE_TYPES)) {
+      const card = h('div', {
+        class: `rv-type-picker-card${key === selectedType ? ' selected' : ''}`,
+        'data-type': key
+      },
+        h('div', { class: 'rv-type-picker-icon', style: `color:${info.color}` }, info.icon),
+        h('div', { class: 'rv-type-picker-label' }, info.label),
+        h('div', { class: 'rv-type-picker-desc text-muted' }, info.desc),
+        h('div', { class: 'rv-type-picker-chairs text-muted' }, `Default: ${info.defaultChairs} chair${info.defaultChairs > 1 ? 's' : ''}`)
+      );
+      card.addEventListener('click', () => {
+        selectedType = key;
+        chairs = info.defaultChairs;
+        chairInput.value = String(chairs);
+        typePicker.querySelectorAll('.rv-type-picker-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        this._updateChairPreview(previewEl, chairs);
+      });
+      typePicker.appendChild(card);
+    }
+    container.appendChild(typePicker);
 
     // Chairs input
-    const chairGroup = h('div', { class: 'add-table-field' });
-    chairGroup.appendChild(h('label', { class: 'form-label' }, 'Chairs (max agents)'));
-    const chairInput = h('input', { class: 'form-input', type: 'number', value: '1', min: '1', max: '20' });
-    chairInput.addEventListener('input', () => { chairs = parseInt(chairInput.value) || 1; });
+    const chairGroup = h('div', { class: 'rv-edit-field' });
+    chairGroup.appendChild(h('label', { class: 'form-label' }, 'Number of Chairs'));
+    const chairInput = h('input', { class: 'form-input', type: 'number', value: String(chairs), min: '1', max: '20' });
+    chairInput.addEventListener('input', () => {
+      const val = parseInt(chairInput.value);
+      if (val >= 1 && val <= 20) {
+        chairs = val;
+        this._updateChairPreview(previewEl, chairs);
+      }
+    });
     chairGroup.appendChild(chairInput);
     container.appendChild(chairGroup);
 
+    // Live chair preview
+    const previewEl = h('div', { class: 'rv-chair-preview' });
+    this._updateChairPreview(previewEl, chairs);
+    container.appendChild(previewEl);
+
     // Description
-    const descGroup = h('div', { class: 'add-table-field' });
+    const descGroup = h('div', { class: 'rv-edit-field' });
     descGroup.appendChild(h('label', { class: 'form-label' }, 'Description (optional)'));
     const descInput = h('input', { class: 'form-input', type: 'text', placeholder: 'What is this table for?' });
     descInput.addEventListener('input', () => { description = descInput.value; });
@@ -1474,29 +1525,20 @@ export class RoomView extends Component {
     container.appendChild(descGroup);
 
     // Actions
-    const actions = h('div', { class: 'add-table-actions' });
+    const actions = h('div', { class: 'rv-edit-actions' });
     const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
-    cancelBtn.addEventListener('click', () => Modal.close('add-table'));
+    cancelBtn.addEventListener('click', () => Modal.close('rv-add-table'));
 
     const createBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Create Table');
     createBtn.addEventListener('click', async () => {
-      if (!tableType.trim()) {
-        Toast.warning('Please enter a table type');
-        return;
-      }
-      if (!window.overlordSocket) {
-        Toast.error('Not connected to server');
-        return;
-      }
-
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
       createBtn.disabled = true;
       createBtn.textContent = 'Creating...';
-
       try {
-        const result = await window.overlordSocket.createTable(room.id, tableType.trim(), chairs, description.trim() || undefined);
+        const result = await window.overlordSocket.createTable(room.id, selectedType, chairs, description.trim() || undefined);
         if (result && result.ok) {
-          Toast.success(`Table "${tableType}" created`);
-          Modal.close('add-table');
+          Toast.success(`${TABLE_TYPES[selectedType]?.label || selectedType} table created`);
+          Modal.close('rv-add-table');
           this._loadRoom(room.id);
         } else {
           throw new Error(result?.error?.message || 'Failed to create table');
@@ -1512,50 +1554,61 @@ export class RoomView extends Component {
     actions.appendChild(createBtn);
     container.appendChild(actions);
 
-    Modal.open('add-table', {
+    Modal.open('rv-add-table', {
       title: 'Add Table',
       content: container,
-      size: 'sm',
+      size: 'md',
       position: window.innerWidth < 768 ? 'fullscreen' : 'center',
     });
   }
 
-  /** Open modal to edit a table's configuration. */
+  /** Render a live preview of empty chairs in the add-table modal. */
+  _updateChairPreview(container, count) {
+    container.textContent = '';
+    const row = h('div', { class: 'rv-chair-layout rv-chair-preview-row' });
+    for (let i = 0; i < Math.min(count, 20); i++) {
+      row.appendChild(h('div', { class: 'rv-chair rv-chair-empty' },
+        h('div', { class: 'rv-chair-empty-icon' }, '+')
+      ));
+    }
+    container.appendChild(row);
+    container.appendChild(h('div', { class: 'rv-chair-preview-label text-muted' },
+      `${count} chair${count > 1 ? 's' : ''}`
+    ));
+  }
+
+  /** Open modal to edit a table's configuration (#221 enhanced). */
   _openEditTableModal(table, room) {
-    let editType = table.type || 'focus';
     let editChairs = table.chairs || 1;
     let editDescription = table.description || '';
 
-    const container = h('div', { class: 'edit-table-modal' });
+    const container = h('div', { class: 'rv-edit-config-modal' });
 
     // Table ID (read-only)
-    const idGroup = h('div', { class: 'edit-table-field' });
+    const idGroup = h('div', { class: 'rv-edit-field' });
     idGroup.appendChild(h('label', { class: 'form-label' }, 'Table ID'));
-    idGroup.appendChild(h('div', { class: 'form-input-readonly mono' }, table.id));
+    idGroup.appendChild(h('div', { class: 'rv-edit-readonly' },
+      h('span', { class: 'mono' }, table.id)
+    ));
     container.appendChild(idGroup);
 
-    // Type input
-    const typeGroup = h('div', { class: 'edit-table-field' });
+    // Type (read-only with badge)
+    const typeInfo = TABLE_TYPES[table.type] || TABLE_TYPES.focus;
+    const typeGroup = h('div', { class: 'rv-edit-field' });
     typeGroup.appendChild(h('label', { class: 'form-label' }, 'Table Type'));
-    const typeInput = h('input', {
-      class: 'form-input',
-      type: 'text',
-      value: editType,
-      placeholder: 'e.g., focus, pair, review'
-    });
-    typeInput.addEventListener('input', () => { editType = typeInput.value; });
-    typeGroup.appendChild(typeInput);
+    typeGroup.appendChild(h('div', { class: 'rv-edit-readonly' },
+      h('span', { class: 'rv-table-type-badge', style: `background:${typeInfo?.color || '#4fc3f7'}` },
+        `${typeInfo?.icon || ''} ${typeInfo?.label || table.type}`
+      )
+    ));
     container.appendChild(typeGroup);
 
     // Chairs input
-    const chairGroup = h('div', { class: 'edit-table-field' });
+    const chairGroup = h('div', { class: 'rv-edit-field' });
     chairGroup.appendChild(h('label', { class: 'form-label' }, 'Chairs (max agents)'));
     const chairInput = h('input', {
-      class: 'form-input',
-      type: 'number',
-      value: String(editChairs),
-      min: '1',
-      max: '20'
+      class: 'form-input', type: 'number',
+      value: String(editChairs), min: '1', max: '20'
     });
     chairInput.addEventListener('input', () => {
       const val = parseInt(chairInput.value);
@@ -1568,47 +1621,32 @@ export class RoomView extends Component {
     container.appendChild(chairGroup);
 
     // Description textarea
-    const descGroup = h('div', { class: 'edit-table-field' });
+    const descGroup = h('div', { class: 'rv-edit-field' });
     descGroup.appendChild(h('label', { class: 'form-label' }, 'Description'));
-    const descInput = h('textarea', {
-      class: 'form-input form-textarea',
-      rows: '3',
-      placeholder: 'What is this table used for?'
-    });
+    const descInput = h('textarea', { class: 'form-input form-textarea', rows: '3', placeholder: 'What is this table used for?' });
     descInput.value = editDescription;
     descInput.addEventListener('input', () => { editDescription = descInput.value; });
     descGroup.appendChild(descInput);
     container.appendChild(descGroup);
 
     // Actions
-    const actions = h('div', { class: 'edit-table-actions' });
+    const actions = h('div', { class: 'rv-edit-actions' });
     const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
     cancelBtn.addEventListener('click', () => Modal.close('edit-table'));
 
     const saveBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Save Changes');
     saveBtn.addEventListener('click', async () => {
-      if (!editType.trim()) {
-        Toast.warning('Table type cannot be empty');
-        return;
-      }
-      if (!window.overlordSocket) {
-        Toast.error('Not connected to server');
-        return;
-      }
-
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
-
       try {
         const updates = {
-          type: editType.trim(),
           chairs: editChairs,
           description: editDescription.trim() || undefined,
         };
-
         const result = await window.overlordSocket.updateTable(table.id, updates);
         if (result && result.ok) {
-          Toast.success(`Table "${editType}" updated`);
+          Toast.success('Table updated');
           Modal.close('edit-table');
           this._loadRoom(room.id);
         } else {
@@ -1626,7 +1664,7 @@ export class RoomView extends Component {
     container.appendChild(actions);
 
     Modal.open('edit-table', {
-      title: `Edit Table: ${table.type || 'Table'}`,
+      title: `Edit Table: ${typeInfo?.label || table.type || 'Table'}`,
       content: container,
       size: 'sm',
       position: window.innerWidth < 768 ? 'fullscreen' : 'center',
@@ -1742,6 +1780,168 @@ export class RoomView extends Component {
       }
     }
   }
+  // ── Table Task Assignment (#225) ─────────────────────────────
+
+  /**
+   * Open a small modal listing all tasks assigned to a table.
+   * Triggered by clicking the task count badge on a table card.
+   */
+  _openTableTaskList(table, tableTasks) {
+    const typeInfo = TABLE_TYPES[table.type] || TABLE_TYPES.focus;
+    const container = h('div', { class: 'room-table-tasklist-modal' });
+
+    if (tableTasks.length === 0) {
+      container.appendChild(h('div', { class: 'empty-state-inline' }, 'No tasks assigned to this table.'));
+    } else {
+      const list = h('div', { class: 'room-table-tasklist' });
+      for (const task of tableTasks) {
+        const statusClass = task.status || 'pending';
+        const taskRow = h('div', { class: 'room-table-tasklist-item' },
+          h('span', { class: `room-table-tasklist-status room-table-tasklist-status-${statusClass}` }),
+          h('div', { class: 'room-table-tasklist-info' },
+            h('span', { class: 'room-table-tasklist-title' }, task.title || 'Untitled'),
+            h('span', { class: 'room-table-tasklist-meta text-muted' },
+              `${task.priority || 'normal'} \u2022 ${task.status || 'pending'}`)
+          ),
+          (() => {
+            const unassignBtn = h('button', {
+              class: 'btn btn-ghost btn-xs rv-table-action-danger',
+              title: 'Unassign from table'
+            }, '\u2715');
+            unassignBtn.addEventListener('click', async (e) => {
+              e.stopPropagation();
+              if (!window.overlordSocket) return;
+              try {
+                const res = await window.overlordSocket.unassignTaskFromTable(task.id);
+                if (res && res.ok) {
+                  Toast.success('Task unassigned from table');
+                  Modal.close(`table-tasks-${table.id}`);
+                } else {
+                  Toast.error(res?.error?.message || 'Failed to unassign task');
+                }
+              } catch {
+                Toast.error('Failed to unassign task');
+              }
+            });
+            return unassignBtn;
+          })()
+        );
+        list.appendChild(taskRow);
+      }
+      container.appendChild(list);
+    }
+
+    // Close button
+    container.appendChild(h('div', { class: 'room-table-tasklist-actions' },
+      (() => {
+        const closeBtn = h('button', { class: 'btn btn-ghost btn-sm' }, 'Close');
+        closeBtn.addEventListener('click', () => Modal.close(`table-tasks-${table.id}`));
+        return closeBtn;
+      })()
+    ));
+
+    Modal.open(`table-tasks-${table.id}`, {
+      title: `Tasks: ${typeInfo?.label || table.type || 'Table'}`,
+      content: container,
+      size: 'sm',
+      position: 'center'
+    });
+  }
+
+  /**
+   * Open a task picker modal showing unassigned tasks from the building.
+   * Selecting a task assigns it to the given table.
+   */
+  _openAssignTaskToTableModal(table, room) {
+    const unassignedTasks = this._tasks.filter(t => !t.table_id && t.status !== 'done');
+
+    const container = h('div', { class: 'room-table-taskpicker-modal' });
+
+    container.appendChild(h('p', { class: 'text-muted' },
+      `Assign an unassigned task to the "${table.type || 'focus'}" table in ${room.name || this._formatRoomType(room.type)}.`));
+
+    if (unassignedTasks.length === 0) {
+      container.appendChild(h('div', { class: 'empty-state-inline' },
+        'No unassigned tasks available. Create tasks first from the Tasks view.'));
+    } else {
+      // Search filter for task picker
+      const searchInput = h('input', {
+        class: 'form-input room-table-taskpicker-search',
+        type: 'text',
+        placeholder: 'Search tasks...'
+      });
+      container.appendChild(searchInput);
+
+      const taskList = h('div', { class: 'room-table-taskpicker-list' });
+
+      const renderTaskList = (filter) => {
+        taskList.textContent = '';
+        let filtered = unassignedTasks;
+        if (filter) {
+          const q = filter.toLowerCase();
+          filtered = unassignedTasks.filter(t =>
+            (t.title || '').toLowerCase().includes(q) ||
+            (t.description || '').toLowerCase().includes(q)
+          );
+        }
+
+        if (filtered.length === 0) {
+          taskList.appendChild(h('div', { class: 'empty-state-inline' }, 'No matching tasks.'));
+          return;
+        }
+
+        for (const task of filtered) {
+          const taskItem = h('div', { class: 'room-table-taskpicker-item' });
+
+          taskItem.appendChild(h('div', { class: 'room-table-taskpicker-item-info' },
+            h('span', { class: 'room-table-taskpicker-item-title' }, task.title || 'Untitled'),
+            h('span', { class: 'room-table-taskpicker-item-meta text-muted' },
+              `${task.priority || 'normal'} \u2022 ${task.status || 'pending'}`)
+          ));
+
+          const assignBtn = h('button', { class: 'btn btn-secondary btn-sm' }, 'Assign');
+          assignBtn.addEventListener('click', async () => {
+            if (!window.overlordSocket) return;
+            try {
+              const res = await window.overlordSocket.assignTaskToTable(task.id, table.id);
+              if (res && res.ok) {
+                Toast.success(`Task "${task.title}" assigned to table`);
+                Modal.close(`assign-task-table-${table.id}`);
+              } else {
+                Toast.error(res?.error?.message || 'Failed to assign task');
+              }
+            } catch {
+              Toast.error('Failed to assign task to table');
+            }
+          });
+          taskItem.appendChild(assignBtn);
+
+          taskList.appendChild(taskItem);
+        }
+      };
+
+      searchInput.addEventListener('input', (e) => renderTaskList(e.target.value));
+      renderTaskList('');
+      container.appendChild(taskList);
+    }
+
+    // Cancel button
+    container.appendChild(h('div', { class: 'room-table-taskpicker-actions' },
+      (() => {
+        const cancelBtn = h('button', { class: 'btn btn-ghost btn-sm' }, 'Cancel');
+        cancelBtn.addEventListener('click', () => Modal.close(`assign-task-table-${table.id}`));
+        return cancelBtn;
+      })()
+    ));
+
+    Modal.open(`assign-task-table-${table.id}`, {
+      title: 'Assign Task to Table',
+      content: container,
+      size: 'md',
+      position: 'center'
+    });
+  }
+
   // ── Inline Styles (#220 + #221) ──────────────────────────────
 
   _injectStyles() {
@@ -1799,6 +1999,8 @@ export class RoomView extends Component {
 .rv-table-type-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--radius-sm,4px);font-size:var(--font-xs,.75rem);font-weight:600;color:#111}
 .rv-table-occupancy{font-size:var(--font-xs,.75rem);color:var(--text-2,#aaa);font-family:var(--font-mono,monospace)}
 .rv-table-card-actions{display:flex;gap:4px}
+.rv-table-task-badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:var(--radius-full,12px);font-size:var(--font-xs,.75rem);font-weight:600;background:rgba(79,195,247,.15);color:#4fc3f7;cursor:pointer;transition:background .2s;white-space:nowrap;margin-left:4px}
+.rv-table-task-badge:hover{background:rgba(79,195,247,.28)}
 .rv-table-action-danger:hover{color:#ef5350!important}
 .rv-table-desc{padding:var(--sp-1,4px) var(--sp-3,12px);font-size:var(--font-xs,.75rem)}
 .rv-table-surface{padding:var(--sp-3,12px)}

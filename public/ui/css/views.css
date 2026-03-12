@@ -1241,6 +1241,320 @@
   border-top: 1px solid var(--border-secondary);
 }
 
+/* ── Task Table Assignment (Issue #225) ────────── */
+
+/* Table row on task cards */
+.task-card-table-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-top: 1px solid var(--border-secondary);
+  font-size: var(--text-xs);
+}
+.task-card-table-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-card-table-badge-assigned {
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent-blue);
+}
+.task-card-table-unassign {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  transition: all var(--duration-fast);
+  opacity: 0;
+}
+.task-card-table-row:hover .task-card-table-unassign {
+  opacity: 1;
+}
+.task-card-table-unassign:hover {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--accent-red);
+}
+.task-card-table-assign-btn {
+  border: 1px dashed var(--border-primary);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.task-card-table-assign-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+/* Table filter dropdown in search row */
+.task-table-filter-select {
+  max-width: 200px;
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+/* Task detail drawer — Table/Team section */
+.task-detail-team-section h4 {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--sp-2);
+  color: var(--text-secondary);
+}
+.task-detail-team-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.task-detail-team-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.task-detail-team-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.task-detail-team-type {
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+.task-detail-team-room {
+  font-size: var(--text-xs);
+}
+.task-detail-team-desc {
+  font-size: var(--text-xs);
+}
+.task-detail-team-agents {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.task-detail-team-agents-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-right: var(--sp-1);
+}
+.task-detail-team-agent-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: var(--font-medium);
+  background: rgba(74, 222, 128, 0.12);
+  color: var(--accent-green);
+  white-space: nowrap;
+}
+.task-detail-team-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+.task-detail-team-empty {
+  font-size: var(--text-sm);
+  padding: var(--sp-2) 0;
+}
+.task-detail-team-assign-row {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+.task-detail-team-select {
+  flex: 1;
+  font-size: var(--text-sm);
+}
+
+/* Table assign modal (task-view) */
+.task-assign-table-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.task-assign-table-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-height: 360px;
+  overflow-y: auto;
+}
+.task-assign-table-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast);
+}
+.task-assign-table-item:hover {
+  border-color: var(--border-accent);
+}
+.task-assign-table-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.task-assign-table-item-name {
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+.task-assign-table-item-desc,
+.task-assign-table-item-agents {
+  font-size: var(--text-xs);
+}
+.task-assign-table-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--sp-2);
+}
+
+/* ── Room View: Table Task List & Task Picker Modals (#225) ── */
+
+/* Table task list modal (from room-view badge click) */
+.room-table-tasklist-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.room-table-tasklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.room-table-tasklist-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+.room-table-tasklist-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+.room-table-tasklist-status-pending {
+  background: var(--accent-yellow);
+}
+.room-table-tasklist-status-in-progress {
+  background: var(--accent-blue);
+}
+.room-table-tasklist-status-done {
+  background: var(--accent-green);
+}
+.room-table-tasklist-status-blocked {
+  background: var(--accent-red);
+}
+.room-table-tasklist-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+.room-table-tasklist-title {
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-table-tasklist-meta {
+  font-size: var(--text-xs);
+}
+.room-table-tasklist-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--sp-2);
+}
+
+/* Task picker modal (room-view assign task to table) */
+.room-table-taskpicker-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.room-table-taskpicker-search {
+  width: 100%;
+  font-size: var(--text-sm);
+}
+.room-table-taskpicker-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-height: 360px;
+  overflow-y: auto;
+}
+.room-table-taskpicker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast);
+}
+.room-table-taskpicker-item:hover {
+  border-color: var(--border-accent);
+}
+.room-table-taskpicker-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+.room-table-taskpicker-item-title {
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-table-taskpicker-item-meta {
+  font-size: var(--text-xs);
+}
+.room-table-taskpicker-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--sp-2);
+}
+
 
 /* ═══════════════════════════════════════════════
    RAID LOG VIEW
