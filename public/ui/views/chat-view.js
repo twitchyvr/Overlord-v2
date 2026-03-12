@@ -343,42 +343,71 @@ export class ChatView extends Component {
 
   // ── Token Handling ───────────────────────────────────────────
 
-  _handleTokenTrigger(type, query) {
+  async _handleTokenTrigger(type, query) {
     const store = OverlordUI.getStore();
     if (!store || !this._tokenInput) return;
 
     let suggestions = [];
+    const q = query.toLowerCase();
 
     if (type === 'command') {
-      // Static command list
-      const commands = [
-        { id: 'help', label: 'help', description: 'Show available commands' },
-        { id: 'status', label: 'status', description: 'Show project status' },
-        { id: 'phase', label: 'phase', description: 'Show current phase info' },
-        { id: 'agents', label: 'agents', description: 'List all agents' },
-        { id: 'raid', label: 'raid', description: 'Show RAID log summary' },
-        { id: 'rooms', label: 'rooms', description: 'List active rooms' },
-        { id: 'deploy', label: 'deploy', description: 'Start deploy phase' },
-        { id: 'review', label: 'review', description: 'Start review phase' }
-      ];
-      suggestions = commands.filter(c => c.label.startsWith(query.toLowerCase()));
+      // Try to use server commands, fall back to static list
+      let commands = store.get('commands.list');
+      if (!commands && window.overlordSocket) {
+        await window.overlordSocket.fetchCommands();
+        commands = store.get('commands.list');
+      }
+
+      if (commands && commands.length > 0) {
+        suggestions = commands
+          .filter(c => c.name.startsWith(q) || (c.aliases || []).some(a => a.startsWith(q)))
+          .map(c => ({
+            id: c.id || c.name,
+            label: c.name,
+            description: c.description,
+            icon: '/'
+          }));
+      } else {
+        // Static fallback
+        const staticCmds = [
+          { id: 'help', label: 'help', description: 'Show available commands', icon: '/' },
+          { id: 'status', label: 'status', description: 'Show project status', icon: '/' },
+          { id: 'phase', label: 'phase', description: 'Show current phase info', icon: '/' },
+          { id: 'agents', label: 'agents', description: 'List all agents', icon: '/' },
+          { id: 'raid', label: 'raid', description: 'Show RAID log summary', icon: '/' },
+          { id: 'rooms', label: 'rooms', description: 'List active rooms', icon: '/' },
+          { id: 'deploy', label: 'deploy', description: 'Start deploy phase', icon: '/' },
+          { id: 'review', label: 'review', description: 'Start review phase', icon: '/' }
+        ];
+        suggestions = staticCmds.filter(c => c.label.startsWith(q));
+      }
 
     } else if (type === 'agent') {
       // Agent list from store
       const agents = store.get('agents.list') || [];
       suggestions = agents
-        .filter(a => (a.name || '').toLowerCase().startsWith(query.toLowerCase()))
+        .filter(a => (a.name || '').toLowerCase().startsWith(q))
         .map(a => ({ id: a.id, label: a.name, description: a.role, icon: '\u{1F916}' }));
 
     } else if (type === 'reference') {
       // Room references from store
       const rooms = store.get('rooms.list') || [];
       suggestions = rooms
-        .filter(r => (r.type || r.name || '').toLowerCase().startsWith(query.toLowerCase()))
+        .filter(r => (r.type || r.name || '').toLowerCase().startsWith(q))
         .map(r => ({ id: r.id, label: r.name || r.type, description: `Room: ${r.type}`, icon: '\u{1F3E0}' }));
 
-      // Add RAID as a reference option
-      suggestions.push({ id: 'raid-log', label: 'raid-log', description: 'RAID Log', icon: '\u26A0' });
+      // Add RAID entries as references
+      const raidEntries = store.get('raid.entries') || [];
+      const raidSuggestions = raidEntries
+        .filter(e => (e.title || e.summary || '').toLowerCase().includes(q) || (e.id || '').includes(q))
+        .slice(0, 5)
+        .map(e => ({ id: e.id, label: e.id, description: `${e.type}: ${e.title || e.summary || ''}`, icon: '\u26A0' }));
+      suggestions = [...suggestions, ...raidSuggestions];
+
+      // Add RAID log as a general reference
+      if ('raid-log'.startsWith(q) || 'raid'.startsWith(q)) {
+        suggestions.push({ id: 'raid-log', label: 'raid-log', description: 'RAID Log', icon: '\u26A0' });
+      }
     }
 
     this._tokenInput.setSuggestions(suggestions);

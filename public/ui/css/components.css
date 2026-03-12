@@ -1427,8 +1427,120 @@
   flex-direction: column;
 }
 .phase-advance-btn {
-  margin-top: var(--sp-3);
+  margin-top: var(--sp-2);
   width: 100%;
+}
+
+/* Phase steps row */
+.phase-steps-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--sp-3);
+  padding: var(--sp-2) 0;
+}
+.phase-step-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.phase-step-indicator .step-dot {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+}
+.phase-step-indicator .step-name {
+  text-transform: capitalize;
+}
+.phase-step-indicator.step-complete .step-dot {
+  color: var(--status-success);
+}
+.phase-step-indicator.step-current .step-dot {
+  color: var(--accent-blue);
+  font-size: var(--text-lg);
+}
+.phase-step-indicator.step-current .step-name {
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+}
+.phase-step-indicator.step-go .step-dot {
+  color: var(--status-success);
+}
+.phase-step-indicator.step-nogo .step-dot {
+  color: var(--status-error);
+}
+
+/* Phase advance section */
+.phase-advance-section {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+}
+.phase-advance-info {
+  margin-bottom: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--status-success);
+}
+
+/* Gate signoff button */
+.gate-signoff-btn {
+  margin-top: var(--sp-1);
+  font-size: var(--text-xs);
+}
+
+/* Gate signoff form */
+.gate-signoff-form {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+}
+.gate-signoff-form h4 {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  margin-bottom: var(--sp-3);
+  color: var(--text-primary);
+}
+.gate-signoff-form .form-row {
+  margin-bottom: var(--sp-2);
+}
+.gate-signoff-form .form-row label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-1);
+}
+.gate-signoff-form .form-input,
+.gate-signoff-form .form-select,
+.gate-signoff-form .form-textarea {
+  width: 100%;
+  padding: var(--sp-2);
+  font-size: var(--text-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  outline: none;
+}
+.gate-signoff-form .form-input:focus,
+.gate-signoff-form .form-select:focus,
+.gate-signoff-form .form-textarea:focus {
+  border-color: var(--accent-blue);
+}
+.gate-signoff-form .form-textarea {
+  min-height: 60px;
+  resize: vertical;
+  font-family: var(--font-sans);
+}
+.gate-signoff-form .form-actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
 }
 
 /* ── Modal sizes (modal.js uses: .modal-dialog.modal-{size}) ── */

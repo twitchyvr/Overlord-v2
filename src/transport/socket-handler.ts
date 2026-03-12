@@ -20,7 +20,7 @@ import { searchRaid, addRaidEntry, updateRaidStatus } from '../rooms/raid-log.js
 import { submitExitDocument } from '../rooms/room-manager.js';
 import { getDb } from '../storage/db.js';
 import { handleBlueprintSubmission } from '../rooms/phase-zero.js';
-import { parseCommandText, dispatchCommand, handleMention, resolveReference } from '../commands/index.js';
+import { parseCommandText, dispatchCommand, handleMention, resolveReference, listCommands } from '../commands/index.js';
 import type { ParsedToken, CommandContext } from '../commands/index.js';
 
 const log = logger.child({ module: 'transport' });
@@ -235,6 +235,24 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       } catch (e) {
         log.error({ event: 'agent:list', err: e, socketId: socket.id }, 'Handler threw');
         if (ack) ack(errorResponse('agent:list', e));
+      }
+    });
+
+    // ─── Command List (for frontend token input suggestions) ───
+    socket.on('command:list', (_data: unknown, ack?: (res: unknown) => void) => {
+      try {
+        const commands = listCommands().map(cmd => ({
+          id: cmd.name,
+          name: cmd.name,
+          description: cmd.description,
+          usage: cmd.usage,
+          aliases: cmd.aliases || [],
+          scope: cmd.scope,
+        }));
+        if (ack) ack({ ok: true, data: commands });
+      } catch (e) {
+        log.error({ event: 'command:list', err: e, socketId: socket.id }, 'Handler threw');
+        if (ack) ack(errorResponse('command:list', e));
       }
     });
 

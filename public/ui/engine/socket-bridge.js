@@ -55,9 +55,11 @@ export function initSocketBridge(socket, store, engine) {
   socket.on('room:agent:entered', (data) => {
     // Update agent positions map
     store.update('building.agentPositions', (positions) => {
-      return { ...(positions || {}), [data.agentId]: { roomId: data.roomId, roomType: data.roomType, tableType: data.tableType } };
+      return { ...(positions || {}), [data.agentId]: { roomId: data.roomId, roomType: data.roomType, tableType: data.tableType, status: 'active', name: data.agentName, agentId: data.agentId } };
     });
+    store.update('activity.items', (items) => [{ event: 'room:agent:entered', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('room:agent:entered', data);
+    engine.dispatch('activity:new', { event: 'room:agent:entered', ...data });
   });
 
   socket.on('room:agent:exited', (data) => {
@@ -66,7 +68,9 @@ export function initSocketBridge(socket, store, engine) {
       delete next[data.agentId];
       return next;
     });
+    store.update('activity.items', (items) => [{ event: 'room:agent:exited', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('room:agent:exited', data);
+    engine.dispatch('activity:new', { event: 'room:agent:exited', ...data });
   });
 
   socket.on('chat:response', (data) => {
@@ -82,25 +86,29 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('tool:executed', (data) => {
-    store.update('activity.items', (items) => [{ type: 'tool', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    store.update('activity.items', (items) => [{ event: 'tool:executed', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('tool:executed', data);
+    engine.dispatch('activity:new', { event: 'tool:executed', ...data });
   });
 
   socket.on('phase:advanced', (data) => {
     store.set('building.activePhase', data.phase || data.nextPhase);
-    store.update('activity.items', (items) => [{ type: 'phase', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    store.update('activity.items', (items) => [{ event: 'phase:advanced', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('phase:advanced', data);
+    engine.dispatch('activity:new', { event: 'phase:advanced', ...data });
   });
 
   socket.on('raid:entry:added', (data) => {
     store.update('raid.entries', (entries) => [data, ...(entries || [])]);
-    store.update('activity.items', (items) => [{ type: 'raid', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    store.update('activity.items', (items) => [{ event: 'raid:entry:added', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('raid:entry:added', data);
+    engine.dispatch('activity:new', { event: 'raid:entry:added', ...data });
   });
 
   socket.on('phase-zero:complete', (data) => {
-    store.update('activity.items', (items) => [{ type: 'phase-zero', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    store.update('activity.items', (items) => [{ event: 'phase-zero:complete', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('phase-zero:complete', data);
+    engine.dispatch('activity:new', { event: 'phase-zero:complete', ...data });
   });
 
   socket.on('phase-zero:failed', (data) => {
@@ -109,17 +117,22 @@ export function initSocketBridge(socket, store, engine) {
 
   socket.on('scope-change:detected', (data) => {
     store.update('raid.entries', (entries) => [{ ...data, type: 'scope-change' }, ...(entries || [])]);
+    store.update('activity.items', (items) => [{ event: 'scope-change', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('scope-change:detected', data);
+    engine.dispatch('activity:new', { event: 'scope-change', ...data });
   });
 
   socket.on('exit-doc:submitted', (data) => {
+    store.update('activity.items', (items) => [{ event: 'exit-doc:submitted', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('exit-doc:submitted', data);
+    engine.dispatch('activity:new', { event: 'exit-doc:submitted', ...data });
   });
 
   socket.on('task:created', (data) => {
     store.update('tasks.list', (tasks) => [data, ...(tasks || [])]);
-    store.update('activity.items', (items) => [{ type: 'task-created', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    store.update('activity.items', (items) => [{ event: 'task:created', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('task:created', data);
+    engine.dispatch('activity:new', { event: 'task:created', ...data });
   });
 
   socket.on('task:updated', (data) => {
@@ -133,13 +146,26 @@ export function initSocketBridge(socket, store, engine) {
       }
       return [data, ...list];
     });
-    store.update('activity.items', (items) => [{ type: 'task-updated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    store.update('activity.items', (items) => [{ event: 'task:updated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('task:updated', data);
+    engine.dispatch('activity:new', { event: 'task:updated', ...data });
   });
 
   socket.on('phase:gate:signed-off', (data) => {
-    store.update('activity.items', (items) => [{ type: 'gate-signoff', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    // Update gates list in store
+    store.update('phase.gates', (gates) => {
+      const list = gates || [];
+      const idx = list.findIndex((g) => g.id === data.id || g.id === data.gateId);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], ...data };
+        return next;
+      }
+      return [...list, data];
+    });
+    store.update('activity.items', (items) => [{ event: 'phase:gate:signed-off', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('phase:gate:signed-off', data);
+    engine.dispatch('activity:new', { event: 'phase:gate:signed-off', ...data });
   });
 
   // ── Client emit wrappers (convenience for components) ──
@@ -435,6 +461,19 @@ export function initSocketBridge(socket, store, engine) {
               }
               return list;
             });
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    // ── Command methods ──
+
+    fetchCommands() {
+      return new Promise((resolve) => {
+        socket.emit('command:list', {}, (res) => {
+          if (res && res.ok) {
+            store.set('commands.list', res.data);
           }
           resolve(res);
         });

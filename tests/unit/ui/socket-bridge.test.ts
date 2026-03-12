@@ -292,7 +292,7 @@ describe('socket "room:agent:entered" event', () => {
     // Grab the updater function and invoke it with existing positions
     const updaterFn = mockStore.update.mock.calls[0][1];
     const result = updaterFn({ 'agent-0': { roomId: 'r0' } });
-    expect(result['agent-1']).toEqual({ roomId: 'room-1', roomType: 'strategy', tableType: 'lead' });
+    expect(result['agent-1']).toMatchObject({ roomId: 'room-1', roomType: 'strategy', tableType: 'lead' });
     expect(result['agent-0']).toEqual({ roomId: 'r0' });
   });
 
@@ -303,7 +303,7 @@ describe('socket "room:agent:entered" event', () => {
 
     const updaterFn = mockStore.update.mock.calls[0][1];
     const result = updaterFn(undefined);
-    expect(result['agent-1']).toEqual({ roomId: 'room-1', roomType: 'strategy', tableType: 'lead' });
+    expect(result['agent-1']).toMatchObject({ roomId: 'room-1', roomType: 'strategy', tableType: 'lead' });
   });
 
   it('dispatches room:agent:entered to engine', () => {
@@ -424,7 +424,7 @@ describe('socket "tool:executed" event', () => {
 
     const updaterFn = mockStore.update.mock.calls[0][1];
     const result = updaterFn([]);
-    expect(result[0]).toEqual({ type: 'tool', toolName: 'read_file', result: 'ok', timestamp: now });
+    expect(result[0]).toEqual({ event: 'tool:executed', toolName: 'read_file', result: 'ok', timestamp: now });
   });
 
   it('caps activity.items at 100 entries', () => {
@@ -465,7 +465,7 @@ describe('socket "phase:advanced" event', () => {
 
     const updaterFn = mockStore.update.mock.calls[0][1];
     const result = updaterFn([]);
-    expect(result[0].type).toBe('phase');
+    expect(result[0].event).toBe('phase:advanced');
     expect(result[0].phase).toBe('deploy');
   });
 
@@ -501,7 +501,7 @@ describe('socket "raid:entry:added" event', () => {
     const activityUpdater = mockStore.update.mock.calls.find((c: any) => c[0] === 'activity.items');
     expect(activityUpdater).toBeDefined();
     const result = activityUpdater![1]([]);
-    expect(result[0]).toEqual({ type: 'raid', id: 'raid-1', timestamp: now });
+    expect(result[0]).toEqual({ event: 'raid:entry:added', id: 'raid-1', timestamp: now });
   });
 
   it('dispatches raid:entry:added to engine', () => {
@@ -522,7 +522,7 @@ describe('socket "phase-zero:complete" event', () => {
 
     const updaterFn = mockStore.update.mock.calls[0][1];
     const result = updaterFn([]);
-    expect(result[0].type).toBe('phase-zero');
+    expect(result[0].event).toBe('phase-zero:complete');
     expect(result[0].buildingId).toBe('b1');
     expect(result[0].timestamp).toBe(now);
   });
@@ -567,12 +567,14 @@ describe('socket "scope-change:detected" event', () => {
 });
 
 describe('socket "exit-doc:submitted" event', () => {
-  it('dispatches exit-doc:submitted to engine without store update', () => {
+  it('dispatches exit-doc:submitted to engine and updates activity', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const data = { roomId: 'r1', agentId: 'a1', document: { summary: 'done' } };
     mockSocket._trigger('exit-doc:submitted', data);
     expect(mockEngine.dispatch).toHaveBeenCalledWith('exit-doc:submitted', data);
-    expect(mockStore.update).not.toHaveBeenCalled();
+    // Now also updates activity.items
+    const activityUpdater = mockStore.update.mock.calls.find((c: any) => c[0] === 'activity.items');
+    expect(activityUpdater).toBeDefined();
   });
 });
 

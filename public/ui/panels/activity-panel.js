@@ -3,6 +3,7 @@
  *
  * Real-time activity feed showing tool executions, phase transitions,
  * agent events, and system notifications.
+ * Populated from socket events via store and engine bus.
  */
 
 import { PanelComponent } from '../components/panel.js';
@@ -15,16 +16,19 @@ import { Tabs } from '../components/tabs.js';
 const MAX_ITEMS = 100;
 
 const ACTIVITY_ICONS = {
-  'tool:executed':       '\u{1F527}',
-  'phase:advanced':      '\u{1F6A7}',
-  'room:agent:entered':  '\u{1F6AA}',
-  'room:agent:exited':   '\u{1F6B6}',
-  'raid:entry:added':    '\u26A0',
-  'exit-doc:submitted':  '\u{1F4C4}',
-  'scope-change':        '\u{1F504}',
-  'phase-zero:complete': '\u{1F3C1}',
-  'error':               '\u274C',
-  'system':              '\u2139'
+  'tool:executed':            '\u{1F527}',
+  'phase:advanced':           '\u{1F6A7}',
+  'phase:gate:signed-off':    '\u{1F3C6}',
+  'room:agent:entered':       '\u{1F6AA}',
+  'room:agent:exited':        '\u{1F6B6}',
+  'raid:entry:added':         '\u26A0',
+  'exit-doc:submitted':       '\u{1F4C4}',
+  'scope-change':             '\u{1F504}',
+  'phase-zero:complete':      '\u{1F3C1}',
+  'task:created':             '\u{1F4CB}',
+  'task:updated':             '\u{1F4DD}',
+  'error':                    '\u274C',
+  'system':                   '\u2139'
 };
 
 export class ActivityPanel extends PanelComponent {
@@ -61,6 +65,13 @@ export class ActivityPanel extends PanelComponent {
   }
 
   _addItem(data) {
+    // Deduplicate: if the store already has this item (same event + timestamp), skip
+    const lastItem = this._items[this._items.length - 1];
+    if (lastItem && lastItem.event === data.event &&
+        data.timestamp && lastItem.timestamp === data.timestamp) {
+      return;
+    }
+
     this._items.push({
       ...data,
       ts: data.ts || new Date().toISOString()
@@ -68,9 +79,6 @@ export class ActivityPanel extends PanelComponent {
     if (this._items.length > MAX_ITEMS) {
       this._items = this._items.slice(-MAX_ITEMS);
     }
-
-    const store = OverlordUI.getStore();
-    if (store) store.set('activity.items', this._items);
 
     this._renderContent();
   }
@@ -84,10 +92,10 @@ export class ActivityPanel extends PanelComponent {
     const tabContainer = h('div', null);
     const tabs = new Tabs(tabContainer, {
       items: [
-        { id: 'all', label: 'All' },
-        { id: 'tools', label: 'Tools' },
-        { id: 'phases', label: 'Phases' },
-        { id: 'agents', label: 'Agents' }
+        { id: 'all', label: 'All', badge: String(this._items.length) },
+        { id: 'tools', label: 'Tools', badge: String(this._countByFilter('tools')) },
+        { id: 'phases', label: 'Phases', badge: String(this._countByFilter('phases')) },
+        { id: 'agents', label: 'Agents', badge: String(this._countByFilter('agents')) }
       ],
       activeId: this._filter,
       style: 'pills',
@@ -124,12 +132,13 @@ export class ActivityPanel extends PanelComponent {
           if (d.tier) return { text: `T${d.tier}`, color: 'var(--text-muted)' };
           return null;
         },
-        meta: (d) => d.ts ? formatTime(d.ts) : '',
+        meta: (d) => d.ts ? formatTime(d.ts) : d.timestamp ? formatTime(d.timestamp) : '',
         detail: [
           { label: 'Event', key: 'event' },
           { label: 'Agent', key: 'agentId' },
           { label: 'Room', key: 'roomId' },
           { label: 'Tool', key: 'toolName' },
+          { label: 'Phase', key: 'phase' },
           { label: 'Duration', key: 'duration', format: 'duration' },
           { label: 'Details', key: 'details' }
         ]
@@ -150,13 +159,24 @@ export class ActivityPanel extends PanelComponent {
         case 'tools':
           return event.startsWith('tool:') || event === 'tool:executed';
         case 'phases':
-          return event.startsWith('phase:') || event.startsWith('phase-zero:') || event === 'exit-doc:submitted';
+          return event.startsWith('phase:') || event.startsWith('phase-zero:') ||
+                 event === 'exit-doc:submitted' || event === 'scope-change' ||
+                 event.includes('gate');
         case 'agents':
-          return event.startsWith('room:agent:') || event.includes('agent');
+          return event.startsWith('room:agent:') || event.includes('agent') ||
+                 event === 'room:agent:entered' || event === 'room:agent:exited';
         default:
           return true;
       }
     });
+  }
+
+  _countByFilter(filter) {
+    const saved = this._filter;
+    this._filter = filter;
+    const count = this._getFilteredItems().length;
+    this._filter = saved;
+    return count;
   }
 
   _formatSummary(item) {
@@ -166,16 +186,19 @@ export class ActivityPanel extends PanelComponent {
       return `${item.toolName || 'Tool'} executed${item.agentId ? ` by ${item.agentId}` : ''}`;
     }
     if (event === 'phase:advanced') {
-      return `Phase advanced to ${item.newPhase || item.phase || 'next'}`;
+      return `Phase advanced: ${item.from || ''} → ${item.to || item.newPhase || item.phase || 'next'}`;
+    }
+    if (event === 'phase:gate:signed-off') {
+      return `Gate signed off: ${item.verdict || item.signoff_verdict || 'unknown'}${item.reviewer || item.signoff_reviewer ? ` by ${item.reviewer || item.signoff_reviewer}` : ''}`;
     }
     if (event === 'room:agent:entered') {
-      return `${item.agentId || 'Agent'} entered room`;
+      return `${item.agentName || item.agentId || 'Agent'} entered ${item.roomType || 'room'}`;
     }
     if (event === 'room:agent:exited') {
-      return `${item.agentId || 'Agent'} exited room`;
+      return `${item.agentName || item.agentId || 'Agent'} exited room`;
     }
     if (event === 'raid:entry:added') {
-      return `RAID: ${item.title || item.description || 'New entry'}`;
+      return `RAID: ${item.title || item.summary || item.description || 'New entry'}`;
     }
     if (event === 'exit-doc:submitted') {
       return `Exit document submitted${item.roomId ? ` from ${item.roomId}` : ''}`;
@@ -186,7 +209,13 @@ export class ActivityPanel extends PanelComponent {
     if (event === 'scope-change') {
       return `Scope change detected: ${item.description || 'unknown'}`;
     }
+    if (event === 'task:created') {
+      return `Task created: ${item.title || 'Untitled'}`;
+    }
+    if (event === 'task:updated') {
+      return `Task updated: ${item.title || 'Untitled'} → ${item.status || ''}`;
+    }
 
-    return item.message || item.description || event || 'Activity';
+    return item.message || item.description || item.summary || event || 'Activity';
   }
 }
