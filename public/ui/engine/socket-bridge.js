@@ -261,6 +261,43 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('todo:deleted', data);
   });
 
+  // ─── Milestone Events ───
+
+  socket.on('milestone:created', (data) => {
+    store.update('milestones.list', (milestones) => {
+      const list = milestones || [];
+      if (data.id && list.some((m) => m.id === data.id)) return list;
+      return [data, ...list];
+    });
+    store.update('activity.items', (items) => [{ event: 'milestone:created', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('milestone:created', data);
+    engine.dispatch('activity:new', { event: 'milestone:created', ...data });
+  });
+
+  socket.on('milestone:updated', (data) => {
+    store.update('milestones.list', (milestones) => {
+      const list = milestones || [];
+      const idx = list.findIndex((m) => m.id === data.id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = data;
+        return next;
+      }
+      return [data, ...list];
+    });
+    store.update('activity.items', (items) => [{ event: 'milestone:updated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('milestone:updated', data);
+    engine.dispatch('activity:new', { event: 'milestone:updated', ...data });
+  });
+
+  socket.on('milestone:deleted', (data) => {
+    store.update('milestones.list', (milestones) => {
+      const list = milestones || [];
+      return list.filter((m) => m.id !== data.id);
+    });
+    engine.dispatch('milestone:deleted', data);
+  });
+
   socket.on('system:log', (data) => {
     engine.dispatch('system:log', data);
   });
@@ -1111,6 +1148,61 @@ export function initSocketBridge(socket, store, engine) {
     getTask(taskId) {
       return new Promise((resolve) => {
         socket.emit('task:get', { id: taskId }, (res) => resolve(res));
+      });
+    },
+
+    // ── Milestone methods ──
+
+    fetchMilestones(buildingId, filters = {}) {
+      return new Promise((resolve) => {
+        socket.emit('milestone:list', { buildingId, ...filters }, (res) => {
+          if (res && res.ok) {
+            store.set('milestones.list', res.data);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    async createMilestone(params) {
+      const res = await _emitWithFeedback('milestone:create', params);
+      if (res && res.ok) {
+        store.update('milestones.list', (milestones) => [res.data, ...(milestones || [])]);
+      }
+      return res;
+    },
+
+    async updateMilestone(params) {
+      const res = await _emitWithFeedback('milestone:update', params);
+      if (res && res.ok) {
+        store.update('milestones.list', (milestones) => {
+          const list = milestones || [];
+          const idx = list.findIndex((m) => m.id === res.data.id);
+          if (idx >= 0) {
+            const next = [...list];
+            next[idx] = res.data;
+            return next;
+          }
+          return list;
+        });
+      }
+      return res;
+    },
+
+    async deleteMilestone(milestoneId) {
+      const res = await _emitWithFeedback('milestone:delete', { id: milestoneId });
+      if (res && res.ok) {
+        store.update('milestones.list', (milestones) => {
+          const list = milestones || [];
+          return list.filter((m) => m.id !== milestoneId);
+        });
+      }
+      return res;
+    },
+
+    getMilestone(milestoneId) {
+      return new Promise((resolve) => {
+        socket.emit('milestone:get', { id: milestoneId }, (res) => resolve(res));
       });
     },
 

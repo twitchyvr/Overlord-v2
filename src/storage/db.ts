@@ -132,6 +132,19 @@ const SCHEMA_SQL = `
     completed_at TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS milestones (
+    id TEXT PRIMARY KEY,
+    building_id TEXT NOT NULL REFERENCES buildings(id),
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT DEFAULT 'active' CHECK(status IN ('active', 'completed', 'cancelled')),
+    due_date TEXT,
+    phase TEXT,
+    ordinal INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS exit_documents (
     id TEXT PRIMARY KEY,
     room_id TEXT NOT NULL REFERENCES rooms(id),
@@ -223,6 +236,8 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_todos_agent ON todos(agent_id);
   CREATE INDEX IF NOT EXISTS idx_tasks_table ON tasks(table_id);
   CREATE INDEX IF NOT EXISTS idx_tasks_room ON tasks(room_id);
+  CREATE INDEX IF NOT EXISTS idx_milestones_building ON milestones(building_id);
+  CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON tasks(milestone_id);
   CREATE INDEX IF NOT EXISTS idx_raid_building ON raid_entries(building_id);
   CREATE INDEX IF NOT EXISTS idx_raid_phase ON raid_entries(phase);
   CREATE INDEX IF NOT EXISTS idx_raid_type ON raid_entries(type);

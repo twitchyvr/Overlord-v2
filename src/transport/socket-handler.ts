@@ -43,6 +43,7 @@ import {
   RaidSearchSchema, RaidListSchema, RaidAddSchema, RaidUpdateSchema, RaidEditSchema,
   TaskCreateSchema, TaskUpdateSchema, TaskListSchema, TaskGetSchema,
   TaskAssignTableSchema, TaskUnassignTableSchema,
+  MilestoneCreateSchema, MilestoneUpdateSchema, MilestoneListSchema, MilestoneGetSchema, MilestoneDeleteSchema,
   TodoCreateSchema, TodoToggleSchema, TodoListSchema, TodoDeleteSchema,
   TodoAssignAgentSchema, TodoUnassignAgentSchema,
   ExitDocSubmitSchema, ExitDocGetSchema, ExitDocListSchema,
@@ -1265,6 +1266,114 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (ack) ack({ ok: true, data: updated });
     });
 
+    // ─── Milestone Events ───
+
+    handle(socket, 'milestone:create', MilestoneCreateSchema, (parsed, ack) => {
+      const db = getDb();
+      const msId = randomUUID();
+      const now = new Date().toISOString();
+
+      db.prepare(`
+        INSERT INTO milestones (id, building_id, title, description, status, due_date, phase, ordinal, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime(?), datetime(?))
+      `).run(
+        msId, parsed.buildingId, parsed.title, parsed.description || null,
+        parsed.status, parsed.dueDate || null, parsed.phase || null,
+        parsed.ordinal, now, now,
+      );
+
+      const milestone = db.prepare('SELECT * FROM milestones WHERE id = ?').get(msId);
+      log.info({ id: msId, buildingId: parsed.buildingId, title: parsed.title }, 'Milestone created');
+      broadcastLog('info', `Milestone created: ${parsed.title}`, 'milestones');
+      bus.emit('milestone:created', milestone as Record<string, unknown>);
+      if (ack) ack({ ok: true, data: milestone });
+    });
+
+    handle(socket, 'milestone:update', MilestoneUpdateSchema, (parsed, ack) => {
+      const db = getDb();
+      const existing = db.prepare('SELECT id FROM milestones WHERE id = ?').get(parsed.id);
+      if (!existing) {
+        if (ack) ack({ ok: false, error: { code: 'MILESTONE_NOT_FOUND', message: `Milestone ${parsed.id} does not exist`, retryable: false } });
+        return;
+      }
+
+      const fields: string[] = [];
+      const values: unknown[] = [];
+      const columnMap: Record<string, string> = {
+        title: 'title', description: 'description', status: 'status',
+        dueDate: 'due_date', phase: 'phase', ordinal: 'ordinal',
+      };
+
+      for (const key of Object.keys(columnMap)) {
+        if (parsed[key as keyof typeof parsed] !== undefined) {
+          fields.push(`${columnMap[key]} = ?`);
+          values.push(parsed[key as keyof typeof parsed]);
+        }
+      }
+
+      if (fields.length === 0) {
+        if (ack) ack({ ok: true, data: { id: parsed.id, message: 'No fields to update' } });
+        return;
+      }
+
+      fields.push("updated_at = datetime(?)");
+      values.push(new Date().toISOString());
+      values.push(parsed.id);
+
+      db.prepare(`UPDATE milestones SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+
+      const milestone = db.prepare('SELECT * FROM milestones WHERE id = ?').get(parsed.id);
+      log.info({ milestoneId: parsed.id, updatedFields: fields.length }, 'Milestone updated');
+      bus.emit('milestone:updated', milestone as Record<string, unknown>);
+      if (ack) ack({ ok: true, data: milestone });
+    });
+
+    handle(socket, 'milestone:delete', MilestoneDeleteSchema, (parsed, ack) => {
+      const db = getDb();
+      const existing = db.prepare('SELECT * FROM milestones WHERE id = ?').get(parsed.id) as Record<string, unknown> | undefined;
+      if (!existing) {
+        if (ack) ack({ ok: false, error: { code: 'MILESTONE_NOT_FOUND', message: `Milestone ${parsed.id} does not exist`, retryable: false } });
+        return;
+      }
+
+      // Unlink any tasks from this milestone
+      db.prepare('UPDATE tasks SET milestone_id = NULL WHERE milestone_id = ?').run(parsed.id);
+      db.prepare('DELETE FROM milestones WHERE id = ?').run(parsed.id);
+
+      log.info({ milestoneId: parsed.id }, 'Milestone deleted');
+      broadcastLog('info', `Milestone deleted: ${existing.title}`, 'milestones');
+      bus.emit('milestone:deleted', { id: parsed.id, buildingId: existing.building_id });
+      if (ack) ack({ ok: true, data: { id: parsed.id } });
+    });
+
+    handle(socket, 'milestone:list', MilestoneListSchema, (parsed, ack) => {
+      const db = getDb();
+      let sql = `SELECT m.*,
+        (SELECT COUNT(*) FROM tasks t WHERE t.milestone_id = m.id) AS task_count,
+        (SELECT COUNT(*) FROM tasks t WHERE t.milestone_id = m.id AND t.status = 'done') AS tasks_done
+        FROM milestones m
+        WHERE m.building_id = ?`;
+      const params: unknown[] = [parsed.buildingId];
+
+      if (parsed.status) { sql += ' AND m.status = ?'; params.push(parsed.status); }
+      sql += ' ORDER BY m.ordinal ASC, m.created_at ASC';
+
+      if (ack) ack({ ok: true, data: db.prepare(sql).all(...params) });
+    });
+
+    handle(socket, 'milestone:get', MilestoneGetSchema, (parsed, ack) => {
+      const db = getDb();
+      const milestone = db.prepare('SELECT * FROM milestones WHERE id = ?').get(parsed.id) as Record<string, unknown> | undefined;
+      if (!milestone) {
+        if (ack) ack({ ok: false, error: { code: 'MILESTONE_NOT_FOUND', message: `Milestone ${parsed.id} does not exist`, retryable: false } });
+        return;
+      }
+
+      // Include task summary
+      const tasks = db.prepare('SELECT id, title, status, priority FROM tasks WHERE milestone_id = ? ORDER BY created_at').all(parsed.id);
+      if (ack) ack({ ok: true, data: { ...milestone, tasks } });
+    });
+
     // ─── TODO Events ───
 
     handle(socket, 'todo:create', TodoCreateSchema, (parsed, ack) => {
@@ -1664,6 +1773,9 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('phase:gate:created');
   forward('phase:gate:signed-off');
   forward('phase:conditions:resolved');
+  forward('milestone:created');
+  forward('milestone:updated');
+  forward('milestone:deleted');
   forward('todo:created');
   forward('todo:updated');
   forward('todo:assigned');
