@@ -130,8 +130,8 @@
   --z-dropdown: 100;
   --z-sticky:   200;
   --z-modal:    500;
-  --z-toast:    600;
-  --z-tooltip:  700;
+  --z-toast:    2000;  /* Must exceed modal.js BASE_Z (1000) so toasts show above stacked modals */
+  --z-tooltip:  2100;
 
   /* ── Transitions ── */
   --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
