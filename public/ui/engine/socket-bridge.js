@@ -385,6 +385,19 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'phase:conditions:resolved', ...data });
   });
 
+  socket.on('escalation:stale-gate', (data) => {
+    log.warn('Escalation: stale gate', data);
+    store.update('escalation.staleGates', (gates) => {
+      const list = gates || [];
+      // Deduplicate by gateId
+      if (list.some((g) => g.gateId === data.gateId)) return list;
+      return [data, ...list].slice(0, 50);
+    });
+    store.update('activity.items', (items) => [{ event: 'escalation:stale-gate', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('escalation:stale-gate', data);
+    engine.dispatch('activity:new', { event: 'escalation:stale-gate', ...data });
+  });
+
   // ── Client emit wrappers (convenience for components) ──
 
   /**
