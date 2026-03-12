@@ -439,6 +439,19 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithFeedback(event, data);
     },
 
+    /**
+     * Emit a socket event and return the raw ack response.
+     * Unlike emit(), this does NOT dispatch operation:error on failure.
+     * Used when callers want to handle errors themselves (e.g., citations).
+     */
+    emitWithAck(event, data) {
+      return new Promise((resolve) => {
+        socket.emit(event, data, (res) => {
+          resolve(res);
+        });
+      });
+    },
+
     fetchBuilding(buildingId) {
       return new Promise((resolve) => {
         socket.emit('building:get', { buildingId }, (res) => {

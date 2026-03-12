@@ -38,12 +38,15 @@
 
 /* ── Right sidebar: Panels ── */
 #right-panel {
+  position: relative;
   width: var(--panel-width);
   border-left: 1px solid var(--border-primary);
   background: var(--bg-secondary);
   overflow-y: auto;
   flex-shrink: 0;
   transition: width var(--duration-normal) var(--ease-default);
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Phase bar ── */

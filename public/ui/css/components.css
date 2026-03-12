@@ -450,9 +450,110 @@
   z-index: 1;
 }
 
+/* ── Panel Dividers (drag-resize between panels) ── */
+.panel-divider {
+  flex-shrink: 0;
+  height: 4px;
+  cursor: ns-resize;
+  background: transparent;
+  position: relative;
+  transition: background var(--duration-fast);
+  user-select: none;
+}
+.panel-divider::after {
+  content: '';
+  position: absolute;
+  left: 25%;
+  right: 25%;
+  top: 50%;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--border-primary);
+  transform: translateY(-50%);
+  transition: background var(--duration-fast);
+}
+.panel-divider:hover,
+.panel-divider.dragging {
+  background: var(--accent-blue, #3b82f6);
+}
+.panel-divider:hover::after,
+.panel-divider.dragging::after {
+  background: var(--accent-blue, #3b82f6);
+}
+
+/* ── Panel Resize Handle (left edge of right panel) ── */
+.panel-resize-handle {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: var(--z-above, 10);
+  background: transparent;
+  transition: background var(--duration-fast);
+}
+.panel-resize-handle:hover,
+.panel-resize-handle.dragging {
+  background: var(--accent-blue, #3b82f6);
+}
+
+/* ── Panel Maximize Button ── */
+.panel-btn-max {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: 0 var(--sp-1);
+  line-height: 1;
+  opacity: 0;
+  transition: opacity var(--duration-fast), color var(--duration-fast);
+}
+.panel-header:hover .panel-btn-max {
+  opacity: 1;
+}
+.panel-btn-max:hover {
+  color: var(--text-primary);
+}
+
 /* Solo / maximize mode (panel.js) */
 .solo-active .panel-divider {
   display: none;
+}
+
+/* ── Toolbar Panel Toggle Buttons ── */
+.toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.toolbar-center::-webkit-scrollbar { display: none; }
+.panel-toggle-btn {
+  font-size: var(--text-xs);
+  padding: var(--sp-1) var(--sp-1);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  white-space: nowrap;
+  line-height: 1;
+  min-width: 24px;
+  text-align: center;
+}
+.panel-toggle-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.panel-toggle-btn.panel-toggle-on {
+  color: var(--accent-blue, #3b82f6);
+  border-color: var(--accent-blue, #3b82f6);
+  background: rgba(59, 130, 246, 0.1);
 }
 
 /* Panel configurator menu (panel.js renderPanelConfigurator) */
