@@ -1437,7 +1437,8 @@
   transition: background var(--duration-fast);
 }
 .dropdown-item:hover,
-.dropdown-item.selected {
+.dropdown-item.selected,
+.dropdown-item.highlighted {
   background: var(--bg-active);
 }
 .dropdown-item-icon {
