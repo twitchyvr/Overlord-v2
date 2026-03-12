@@ -14,6 +14,7 @@
  */
 
 import { logger } from '../core/logger.js';
+import { config } from '../core/config.js';
 import { runConversationLoop } from '../agents/conversation-loop.js';
 import type { Bus, BusEventData } from '../core/bus.js';
 import type {
@@ -178,6 +179,9 @@ async function handleChatMessage(
     // 6. Determine AI provider from room config
     if (room.config && room.config.provider && room.config.provider !== 'configurable') {
       provider = room.config.provider;
+    } else {
+      // 'configurable' means use whatever provider has an API key configured
+      provider = resolveDefaultProvider();
     }
 
     log.info(
@@ -247,4 +251,16 @@ async function handleChatMessage(
   } finally {
     activeConversations.delete(conversationKey);
   }
+}
+
+/**
+ * Resolve which AI provider to use based on configured API keys.
+ * Priority: minimax > anthropic > openai > ollama
+ */
+function resolveDefaultProvider(): string {
+  if (config.get('MINIMAX_API_KEY')) return 'minimax';
+  if (config.get('ANTHROPIC_API_KEY')) return 'anthropic';
+  if (config.get('OPENAI_API_KEY')) return 'openai';
+  // Ollama doesn't need an API key — it's the fallback
+  return 'ollama';
 }
