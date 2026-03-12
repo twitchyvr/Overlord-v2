@@ -598,6 +598,17 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
         document: parsed.document,
         ...(result.ok ? result.data as Record<string, unknown> : {}),
       });
+
+      // Auto-create a pending phase gate when exit doc is submitted
+      if (result.ok && parsed.buildingId && parsed.phase) {
+        const gateResult = createGate({ buildingId: parsed.buildingId, phase: parsed.phase });
+        if (gateResult.ok) {
+          const gateData = gateResult.data as { id: string; phase: string; status: string };
+          broadcastLog('info', `Phase gate created for ${parsed.phase} (exit doc submitted)`, 'phase');
+          bus.emit('phase:gate:created', { buildingId: parsed.buildingId, ...gateData });
+        }
+      }
+
       if (ack) ack(result);
     });
 
@@ -621,6 +632,18 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
     });
 
     // ─── Phase Gate Events ───
+
+    handle(socket, 'phase:gate:create', PhaseGateSchema, (parsed, ack) => {
+      if (!parsed.buildingId || !parsed.phase) {
+        if (ack) ack({ ok: false, error: { code: 'MISSING_PARAMS', message: 'buildingId and phase are required', retryable: false } });
+        return;
+      }
+      const result = createGate({ buildingId: parsed.buildingId, phase: parsed.phase });
+      if (result.ok) {
+        bus.emit('phase:gate:created', { buildingId: parsed.buildingId, ...(result.data as Record<string, unknown>) });
+      }
+      if (ack) ack(result);
+    });
 
     handle(socket, 'phase:gate:signoff', PhaseGateSignoffSchema, (parsed, ack) => {
       // Look up the gate to get buildingId and phase before signoff
@@ -649,20 +672,25 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
 
     handle(socket, 'phase:advance', PhaseAdvanceSchema, (parsed, ack) => {
       const buildingId = parsed.buildingId;
+      const phaseOrder = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
 
-      const advanceCheck = canAdvance(buildingId);
-      if (!advanceCheck.ok) {
-        if (ack) ack(advanceCheck);
+      // Look up the building to get current phase
+      const building = getDb().prepare('SELECT * FROM buildings WHERE id = ?').get(buildingId) as { active_phase: string } | undefined;
+      if (!building) {
+        if (ack) ack({ ok: false, error: { code: 'BUILDING_NOT_FOUND', message: `Building ${buildingId} not found`, retryable: false } });
         return;
       }
 
-      const advanceData = advanceCheck.data as { canAdvance: boolean; currentPhase?: string; nextPhase?: string; reason?: string };
-      if (!advanceData.canAdvance) {
-        if (ack) ack({ ok: false, error: { code: 'CANNOT_ADVANCE', message: advanceData.reason || 'Phase advancement not allowed', retryable: false } });
+      const currentPhase = building.active_phase;
+      const idx = phaseOrder.indexOf(currentPhase);
+      if (idx === -1 || idx >= phaseOrder.length - 1) {
+        if (ack) ack({ ok: false, error: { code: 'CANNOT_ADVANCE', message: idx === -1 ? `Unknown phase: ${currentPhase}` : 'Already at final phase', retryable: false } });
         return;
       }
+      const nextPhase = phaseOrder[idx + 1];
 
-      const gateResult = createGate({ buildingId, phase: advanceData.currentPhase as string });
+      // Create a gate for the current phase and immediately sign off as GO
+      const gateResult = createGate({ buildingId, phase: currentPhase });
       if (!gateResult.ok) {
         if (ack) ack(gateResult);
         return;
@@ -675,11 +703,11 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
       });
 
       if (signoffResult.ok) {
-        broadcastLog('info', `Phase advanced: ${advanceData.currentPhase} → ${advanceData.nextPhase}`, 'phase');
+        broadcastLog('info', `Phase advanced: ${currentPhase} → ${nextPhase}`, 'phase');
         bus.emit('phase:advanced', {
-          buildingId, from: advanceData.currentPhase, to: advanceData.nextPhase, gateId: gateData.id,
+          buildingId, from: currentPhase, to: nextPhase, gateId: gateData.id,
         });
-        bus.emit('building:updated', { id: buildingId, activePhase: advanceData.nextPhase });
+        bus.emit('building:updated', { id: buildingId, activePhase: nextPhase });
       }
 
       if (ack) ack(signoffResult);
@@ -754,6 +782,7 @@ export function initTransport({ io, bus, rooms, agents, tools }: InitTransportPa
   forward('deploy:check');
   forward('task:created');
   forward('task:updated');
+  forward('phase:gate:created');
   forward('phase:gate:signed-off');
   forward('phase:conditions:resolved');
   forward('todo:created');

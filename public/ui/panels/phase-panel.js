@@ -63,6 +63,12 @@ export class PhasePanel extends PanelComponent {
 
     // Listen for gate signoff broadcasts to refresh
     this._listeners.push(
+      OverlordUI.subscribe('phase:gate:created', () => {
+        if (this._buildingId && window.overlordSocket) {
+          window.overlordSocket.fetchGates(this._buildingId);
+          window.overlordSocket.fetchCanAdvance(this._buildingId);
+        }
+      }),
       OverlordUI.subscribe('phase:gate:signed-off', () => {
         if (this._buildingId && window.overlordSocket) {
           window.overlordSocket.fetchGates(this._buildingId);
@@ -198,26 +204,50 @@ export class PhasePanel extends PanelComponent {
       body.appendChild(this._buildSignoffForm());
     }
 
-    // Advance button (if allowed)
-    if (this._canAdvance && !this._showSignoffForm) {
-      const nextIdx = PHASE_ORDER.indexOf(this._activePhase) + 1;
-      const nextPhase = nextIdx < PHASE_ORDER.length ? PHASE_ORDER[nextIdx] : null;
+    // Phase actions section
+    const nextIdx = PHASE_ORDER.indexOf(this._activePhase) + 1;
+    const nextPhase = nextIdx < PHASE_ORDER.length ? PHASE_ORDER[nextIdx] : null;
+    const currentGate = this._gates.find(g => g.phase === this._activePhase);
 
-      if (nextPhase) {
-        const advanceSection = h('div', { class: 'phase-advance-section' },
-          h('div', { class: 'phase-advance-info' },
-            h('span', null, 'All gates passed. Ready to advance.')
-          )
-        );
+    if (!this._showSignoffForm && nextPhase) {
+      const actionsSection = h('div', { class: 'phase-advance-section' });
+
+      if (!currentGate) {
+        // No gate for current phase — show Create Gate + Quick Advance
+        actionsSection.appendChild(h('div', { class: 'phase-advance-info' },
+          h('span', null, `No gate for ${this._activePhase} phase.`)
+        ));
+
+        const createGateBtn = h('button', {
+          class: 'btn btn-ghost btn-sm'
+        }, 'Create Gate');
+        createGateBtn.addEventListener('click', () => this._handleCreateGate());
 
         const advanceBtn = h('button', {
           class: 'btn btn-primary btn-sm phase-advance-btn'
         }, `Advance to ${nextPhase}`);
         advanceBtn.addEventListener('click', () => this._handleAdvance());
-        advanceSection.appendChild(advanceBtn);
 
-        body.appendChild(advanceSection);
+        actionsSection.appendChild(h('div', { class: 'phase-actions-row' }, createGateBtn, advanceBtn));
+      } else if (currentGate.status === 'go' || currentGate.signoff_verdict === 'GO') {
+        // Gate passed — show Advance button
+        actionsSection.appendChild(h('div', { class: 'phase-advance-info' },
+          h('span', null, 'Gate passed. Ready to advance.')
+        ));
+
+        const advanceBtn = h('button', {
+          class: 'btn btn-primary btn-sm phase-advance-btn'
+        }, `Advance to ${nextPhase}`);
+        advanceBtn.addEventListener('click', () => this._handleAdvance());
+        actionsSection.appendChild(advanceBtn);
+      } else {
+        // Gate exists but not signed off as GO
+        actionsSection.appendChild(h('div', { class: 'phase-advance-info' },
+          h('span', null, `Gate is ${currentGate.status || 'pending'}. Sign off to advance.`)
+        ));
       }
+
+      body.appendChild(actionsSection);
     }
   }
 
@@ -327,6 +357,19 @@ export class PhasePanel extends PanelComponent {
       }
     } else {
       Toast.error(result?.error?.message || 'Failed to sign off gate');
+    }
+  }
+
+  async _handleCreateGate() {
+    if (!this._buildingId || !window.overlordSocket) return;
+
+    const result = await window.overlordSocket.createGate(this._buildingId, this._activePhase);
+
+    if (result && result.ok) {
+      Toast.success(`Gate created for ${this._activePhase} phase`);
+      window.overlordSocket.fetchGates(this._buildingId);
+    } else {
+      Toast.error(result?.error?.message || 'Failed to create gate');
     }
   }
 
