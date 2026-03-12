@@ -127,6 +127,51 @@ if (socket) {
     });
   });
 
+  // ── Sidebar toggle (tablet breakpoint) ──
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+  if (sidebarToggle && buildingPanel) {
+    const mql = window.matchMedia('(max-width: 1024px)');
+
+    function toggleSidebar() {
+      const isOpen = buildingPanel.classList.toggle('open');
+      sidebarToggle.setAttribute('aria-expanded', String(isOpen));
+      if (sidebarBackdrop) {
+        sidebarBackdrop.hidden = !isOpen;
+        // Force reflow before adding class for transition
+        if (isOpen) {
+          sidebarBackdrop.offsetHeight;
+          sidebarBackdrop.classList.add('visible');
+        } else {
+          sidebarBackdrop.classList.remove('visible');
+        }
+      }
+    }
+
+    function closeSidebar() {
+      buildingPanel.classList.remove('open');
+      sidebarToggle.setAttribute('aria-expanded', 'false');
+      if (sidebarBackdrop) {
+        sidebarBackdrop.classList.remove('visible');
+        sidebarBackdrop.hidden = true;
+      }
+    }
+
+    sidebarToggle.addEventListener('click', toggleSidebar);
+
+    if (sidebarBackdrop) {
+      sidebarBackdrop.addEventListener('click', closeSidebar);
+    }
+
+    // Show/hide toggle based on viewport
+    function handleViewportChange(e) {
+      sidebarToggle.hidden = !e.matches;
+      if (!e.matches) closeSidebar();
+    }
+    handleViewportChange(mql);
+    mql.addEventListener('change', handleViewportChange);
+  }
+
   // ── Connection indicator ──
   const connectionEl = document.getElementById('toolbar-connection');
   if (connectionEl) {

@@ -59,6 +59,9 @@
     <!-- Navigation toolbar -->
     <nav id="app-toolbar" class="app-toolbar">
       <div class="toolbar-left">
+        <button id="sidebar-toggle" class="toolbar-btn-icon sidebar-toggle" title="Toggle building sidebar" aria-label="Toggle building sidebar" aria-expanded="false" hidden>
+          <span class="sidebar-toggle-icon">&#9776;</span>
+        </button>
         <button class="toolbar-btn active" data-view="dashboard" title="Dashboard" aria-label="Dashboard" aria-current="page">
           <span class="toolbar-icon">&#9632;</span>
           <span class="toolbar-label">Dashboard</span>
@@ -109,6 +112,7 @@
     <!-- Main layout: 3-column -->
     <main id="main-layout">
       <!-- Left: Building visualization -->
+      <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
       <aside id="building-panel"></aside>
 
       <!-- Center: Chat / Dashboard / Views -->
