@@ -88,14 +88,23 @@ export class AgentsPanel extends PanelComponent {
       return;
     }
 
+    // Build room name lookup
+    const store = OverlordUI.getStore();
+    const roomsList = store?.get('rooms.list') || [];
+    const roomNameMap = {};
+    for (const r of roomsList) {
+      roomNameMap[r.id] = r.name || this._formatRoomType(r.type);
+    }
+
     const list = h('div', { class: 'agents-list' });
 
     for (const agent of filtered) {
       const position = this._agentPositions[agent.id];
       const status = position?.status || agent.status || 'idle';
-      const currentRoom = position?.roomId || null;
+      const currentRoomId = agent.current_room_id || position?.roomId || null;
+      const currentRoomName = currentRoomId ? (roomNameMap[currentRoomId] || 'Room') : null;
 
-      const item = DrillItem.create('agent', { ...agent, status, currentRoom }, {
+      const item = DrillItem.create('agent', { ...agent, status, currentRoom: currentRoomId, currentRoomName }, {
         icon: (d) => {
           if (d.status === 'active' || d.status === 'working') return '\u{1F7E2}';
           if (d.status === 'paused') return '\u{1F7E1}';
@@ -106,20 +115,40 @@ export class AgentsPanel extends PanelComponent {
           text: d.role || 'agent',
           color: 'var(--text-muted)'
         }),
-        meta: (d) => d.currentRoom ? `in room` : '',
+        meta: (d) => d.currentRoomName
+          ? `\u{1F3E0} ${d.currentRoomName}`
+          : '\u26A0 Unassigned',
         detail: [
           { label: 'Role', key: 'role' },
           { label: 'Status', key: 'status' },
-          { label: 'Current Room', key: 'currentRoom' },
+          { label: 'Current Room', key: 'currentRoomName' },
           { label: 'Capabilities', key: 'capabilities', format: 'json' },
           { label: 'Room Access', key: 'room_access', format: 'json' }
         ]
       });
 
+      // If agent has no room, show a quick-assign link
+      if (!currentRoomId) {
+        const assignLink = h('div', { class: 'agent-quick-assign' });
+        const assignBtn = h('button', { class: 'btn btn-ghost btn-xs' }, 'Assign to Room');
+        assignBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._openQuickAssignModal(agent);
+        });
+        assignLink.appendChild(assignBtn);
+        item.appendChild(assignLink);
+      }
+
       list.appendChild(item);
     }
 
     body.appendChild(list);
+  }
+
+  /** Format room type slug to title */
+  _formatRoomType(type) {
+    if (!type) return 'Room';
+    return type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   }
 
   _getAgentsByStatus(status) {
@@ -301,5 +330,97 @@ export class AgentsPanel extends PanelComponent {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Create Agent';
     }
+  }
+
+  /** Quick-assign modal: pick a room for an unassigned agent. */
+  _openQuickAssignModal(agent) {
+    const store = OverlordUI.getStore();
+    const roomsList = store?.get('rooms.list') || [];
+
+    if (roomsList.length === 0) {
+      Toast.warning('No rooms available. Create a room in the building first.');
+      return;
+    }
+
+    let selectedRoom = null;
+    const container = h('div', { class: 'assign-agent-modal' });
+
+    container.appendChild(h('div', { class: 'assign-agent-guidance' },
+      h('p', null, 'Select a room for '),
+      h('strong', null, agent.name || agent.id),
+      h('span', null, ` (${agent.role || 'agent'}).`),
+    ));
+
+    container.appendChild(h('label', { class: 'form-label' }, 'Available Rooms'));
+    const roomList = h('div', { class: 'assign-agent-list' });
+
+    for (const room of roomsList) {
+      const roomName = room.name || this._formatRoomType(room.type);
+      const card = h('div', {
+        class: `assign-agent-card${selectedRoom === room.id ? ' selected' : ''}`,
+        'data-room-id': room.id
+      },
+        h('div', { class: 'assign-agent-avatar' }, (roomName || '?')[0].toUpperCase()),
+        h('div', { class: 'assign-agent-info' },
+          h('div', { class: 'assign-agent-name' }, roomName),
+          h('div', { class: 'assign-agent-role text-muted' }, room.type || '')
+        )
+      );
+
+      card.addEventListener('click', () => {
+        selectedRoom = room.id;
+        roomList.querySelectorAll('.assign-agent-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+      });
+
+      roomList.appendChild(card);
+    }
+    container.appendChild(roomList);
+
+    const actions = h('div', { class: 'assign-agent-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('quick-assign'));
+
+    const assignBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Assign');
+    assignBtn.addEventListener('click', async () => {
+      if (!selectedRoom) {
+        Toast.warning('Please select a room');
+        return;
+      }
+      if (!window.overlordSocket) {
+        Toast.error('Not connected');
+        return;
+      }
+
+      assignBtn.disabled = true;
+      assignBtn.textContent = 'Assigning...';
+
+      try {
+        const result = await window.overlordSocket.moveAgent(agent.id, selectedRoom);
+        if (result && result.ok) {
+          Toast.success(`${agent.name} assigned to room`);
+          Modal.close('quick-assign');
+          // Refresh agents to show updated assignment
+          window.overlordSocket.fetchAgents({});
+        } else {
+          throw new Error(result?.error?.message || 'Assignment failed');
+        }
+      } catch (err) {
+        Toast.error(`Assign failed: ${err.message}`);
+        assignBtn.disabled = false;
+        assignBtn.textContent = 'Assign';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(assignBtn);
+    container.appendChild(actions);
+
+    Modal.open('quick-assign', {
+      title: `Assign ${agent.name || 'Agent'} to Room`,
+      content: container,
+      size: 'md',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
   }
 }
