@@ -119,6 +119,7 @@ describe('Socket Handler (Transport Layer)', () => {
   let tools: ToolRegistryAPI;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     io = new MockIOServer();
     bus = new MockBus();
     socket = new MockSocket();
@@ -573,18 +574,240 @@ describe('Socket Handler (Transport Layer)', () => {
   });
 
   describe('error handling', () => {
-    it('building:create acks error result when createBuilding fails', () => {
-      (createBuilding as ReturnType<typeof vi.fn>).mockReturnValueOnce({
-        ok: false,
-        error: { code: 'INVALID_NAME', message: 'Name is required', retryable: false },
-      });
-
+    it('building:create acks VALIDATION_ERROR when name is empty', () => {
       const ack = vi.fn();
       socket.emit('building:create', { name: '' }, ack);
 
       expect(ack).toHaveBeenCalledWith({
         ok: false,
-        error: { code: 'INVALID_NAME', message: 'Name is required', retryable: false },
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+      // createBuilding should NOT be called — validation rejects first
+      expect(createBuilding).not.toHaveBeenCalled();
+    });
+
+    it('building:create acks error result when createBuilding returns failure', () => {
+      (createBuilding as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+        ok: false,
+        error: { code: 'INTERNAL', message: 'DB write failed', retryable: true },
+      });
+
+      const ack = vi.fn();
+      socket.emit('building:create', { name: 'Valid Name' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: { code: 'INTERNAL', message: 'DB write failed', retryable: true },
+      });
+    });
+  });
+
+  // ─── Zod validation rejection ─────────────────────────────────────
+
+  describe('Zod validation rejection', () => {
+    it('building:get rejects missing buildingId', () => {
+      const ack = vi.fn();
+      socket.emit('building:get', {}, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+      expect(getBuilding).not.toHaveBeenCalled();
+    });
+
+    it('building:get rejects empty buildingId', () => {
+      const ack = vi.fn();
+      socket.emit('building:get', { buildingId: '' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('room:create rejects missing type', () => {
+      const ack = vi.fn();
+      socket.emit('room:create', { floorId: 'f1' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+      expect(rooms.createRoom).not.toHaveBeenCalled();
+    });
+
+    it('room:create rejects missing floorId', () => {
+      const ack = vi.fn();
+      socket.emit('room:create', { type: 'code-lab' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('agent:register rejects missing name', () => {
+      const ack = vi.fn();
+      socket.emit('agent:register', {}, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+      expect(agents.registerAgent).not.toHaveBeenCalled();
+    });
+
+    it('agent:register rejects empty name', () => {
+      const ack = vi.fn();
+      socket.emit('agent:register', { name: '' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('phase:gates rejects missing buildingId', () => {
+      const ack = vi.fn();
+      socket.emit('phase:gates', {}, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+      expect(getGates).not.toHaveBeenCalled();
+    });
+
+    it('phase:gate:signoff rejects missing required fields', () => {
+      const ack = vi.fn();
+      socket.emit('phase:gate:signoff', { gateId: 'g1' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+      expect(signoffGate).not.toHaveBeenCalled();
+    });
+
+    it('phase:gate:signoff rejects invalid verdict enum', () => {
+      const ack = vi.fn();
+      socket.emit('phase:gate:signoff', {
+        gateId: 'g1',
+        reviewer: 'alice',
+        verdict: 'MAYBE',
+      }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('raid:add rejects missing summary', () => {
+      const ack = vi.fn();
+      socket.emit('raid:add', { buildingId: 'bld_1', type: 'risk' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+      expect(addRaidEntry).not.toHaveBeenCalled();
+    });
+
+    it('room:enter rejects missing agentId', () => {
+      const ack = vi.fn();
+      socket.emit('room:enter', { roomId: 'r1' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+      expect(rooms.enterRoom).not.toHaveBeenCalled();
+    });
+
+    it('exit-doc:submit rejects missing roomId', () => {
+      const ack = vi.fn();
+      socket.emit('exit-doc:submit', { agentId: 'a1' }, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+      expect(submitExitDocument).not.toHaveBeenCalled();
+    });
+
+    it('validation error message includes field path', () => {
+      const ack = vi.fn();
+      socket.emit('building:get', {}, ack);
+
+      const call = ack.mock.calls[0][0];
+      expect(call.error.message).toContain('buildingId');
+      expect(call.error.message).toContain('building:get');
+    });
+
+    it('handles null/undefined data gracefully', () => {
+      const ack = vi.fn();
+      socket.emit('building:get', null, ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
+      });
+    });
+
+    it('handles non-object data gracefully', () => {
+      const ack = vi.fn();
+      socket.emit('building:get', 'not-an-object', ack);
+
+      expect(ack).toHaveBeenCalledWith({
+        ok: false,
+        error: expect.objectContaining({
+          code: 'VALIDATION_ERROR',
+          retryable: false,
+        }),
       });
     });
   });
