@@ -664,6 +664,42 @@
   gap: var(--sp-2);
 }
 
+/* ── Building project info (working dir + repo) ── */
+.building-project-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-1) 0;
+}
+.building-project-path,
+.building-project-repo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.building-project-repo {
+  color: var(--blue-400, #60a5fa);
+  text-decoration: none;
+}
+.building-project-repo:hover {
+  text-decoration: underline;
+}
+.building-project-icon {
+  flex-shrink: 0;
+}
+
+/* ── Form hint text ── */
+.form-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 /* ── Floor action bar ── */
 .floor-action-bar {
   display: flex;

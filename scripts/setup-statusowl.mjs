@@ -66,6 +66,8 @@ async function setup() {
   const buildingRes = await emit(socket, 'building:create', {
     name: 'StatusOwl',
     description: 'Open-source service health monitor and public status page. Monitors HTTP endpoints, tracks incidents, displays uptime history, and sends webhook alerts.',
+    workingDirectory: '/Users/mattrogers/GitRepos/StatusOwl',
+    repoUrl: 'https://github.com/twitchyvr/StatusOwl',
   });
   const buildingId = buildingRes.data?.id || buildingRes.id;
   log('🏢', `Building created: ${buildingId}`);

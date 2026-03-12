@@ -35,6 +35,8 @@ const DEFAULT_FLOORS: { type: string; name: string; sortOrder: number }[] = [
 interface CreateBuildingParams {
   name: string;
   projectId?: string;
+  workingDirectory?: string;
+  repoUrl?: string;
   config?: Record<string, unknown>;
   provisionFloors?: boolean;
 }
@@ -43,14 +45,14 @@ interface CreateBuildingParams {
  * Create a new building (project container).
  * By default provisions all standard floors.
  */
-export function createBuilding({ name, projectId, config = {}, provisionFloors = true }: CreateBuildingParams): Result {
+export function createBuilding({ name, projectId, workingDirectory, repoUrl, config = {}, provisionFloors = true }: CreateBuildingParams): Result {
   const db = getDb();
   const id = uid('bld');
 
   db.prepare(`
-    INSERT INTO buildings (id, project_id, name, config)
-    VALUES (?, ?, ?, ?)
-  `).run(id, projectId || null, name, JSON.stringify(config));
+    INSERT INTO buildings (id, project_id, name, working_directory, repo_url, config)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, projectId || null, name, workingDirectory || null, repoUrl || null, JSON.stringify(config));
 
   const floorIds: string[] = [];
 
@@ -66,8 +68,8 @@ export function createBuilding({ name, projectId, config = {}, provisionFloors =
     log.info({ buildingId: id, floors: floorIds.length }, 'Default floors provisioned');
   }
 
-  log.info({ id, name, projectId }, 'Building created');
-  return ok({ id, name, floorIds });
+  log.info({ id, name, projectId, workingDirectory, repoUrl }, 'Building created');
+  return ok({ id, name, workingDirectory: workingDirectory || null, repoUrl: repoUrl || null, floorIds });
 }
 
 /**
@@ -106,7 +108,7 @@ export function listBuildings(projectId?: string): Result {
 /**
  * Update a building's config or name (atomic single UPDATE)
  */
-export function updateBuilding(buildingId: string, updates: { name?: string; config?: Record<string, unknown> }): Result {
+export function updateBuilding(buildingId: string, updates: { name?: string; workingDirectory?: string; repoUrl?: string; config?: Record<string, unknown> }): Result {
   const db = getDb();
   const building = db.prepare('SELECT * FROM buildings WHERE id = ?').get(buildingId) as BuildingRow | undefined;
   if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
@@ -114,11 +116,15 @@ export function updateBuilding(buildingId: string, updates: { name?: string; con
   db.prepare(`
     UPDATE buildings SET
       name = COALESCE(?, name),
+      working_directory = COALESCE(?, working_directory),
+      repo_url = COALESCE(?, repo_url),
       config = COALESCE(?, config),
       updated_at = datetime('now')
     WHERE id = ?
   `).run(
     updates.name || null,
+    updates.workingDirectory !== undefined ? (updates.workingDirectory || null) : null,
+    updates.repoUrl !== undefined ? (updates.repoUrl || null) : null,
     updates.config ? JSON.stringify(updates.config) : null,
     buildingId,
   );

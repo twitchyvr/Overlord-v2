@@ -75,6 +75,8 @@ interface ConversationParams {
   tools: ToolRegistryAPI;
   bus: Bus;
   options?: Record<string, unknown>;
+  /** Building's project working directory — scopes file/shell tools */
+  workingDirectory?: string;
 }
 
 /**
@@ -295,6 +297,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
               roomType: room.type,
               agentId,
               fileScope: room.fileScope,
+              workingDirectory: params.workingDirectory,
             },
           }),
           TOOL_TIMEOUT_MS,

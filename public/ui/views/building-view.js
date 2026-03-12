@@ -102,6 +102,30 @@ export class BuildingView extends Component {
     );
     header.appendChild(headerTop);
 
+    // Project directory and repo info
+    if (this._buildingData.working_directory || this._buildingData.repo_url) {
+      const projectInfo = h('div', { class: 'building-project-info' });
+      if (this._buildingData.working_directory) {
+        projectInfo.appendChild(h('div', { class: 'building-project-path mono' },
+          h('span', { class: 'building-project-icon' }, '\u{1F4C1}'),
+          this._buildingData.working_directory
+        ));
+      }
+      if (this._buildingData.repo_url) {
+        const repoLink = h('a', {
+          class: 'building-project-repo mono',
+          href: this._buildingData.repo_url,
+          target: '_blank',
+          rel: 'noopener',
+        },
+          h('span', { class: 'building-project-icon' }, '\u{1F517}'),
+          this._buildingData.repo_url.replace('https://github.com/', '')
+        );
+        projectInfo.appendChild(repoLink);
+      }
+      header.appendChild(projectInfo);
+    }
+
     // Building action bar
     const headerActions = h('div', { class: 'building-header-actions' });
     const addFloorBtn = h('button', { class: 'btn btn-primary btn-sm' }, '+ Add Floor');
@@ -452,6 +476,8 @@ export class BuildingView extends Component {
   _openEditBuildingModal() {
     if (!this._buildingData) return;
     let buildingName = this._buildingData.name || '';
+    let workingDirectory = this._buildingData.working_directory || '';
+    let repoUrl = this._buildingData.repo_url || '';
 
     const container = h('div', { class: 'edit-building-modal' });
 
@@ -462,6 +488,24 @@ export class BuildingView extends Component {
     nameInput.addEventListener('input', () => { buildingName = nameInput.value; });
     nameGroup.appendChild(nameInput);
     container.appendChild(nameGroup);
+
+    // Working Directory input
+    const wdGroup = h('div', { class: 'add-room-field' });
+    wdGroup.appendChild(h('label', { class: 'form-label' }, 'Project Directory'));
+    const wdInput = h('input', { class: 'form-input mono', type: 'text', value: workingDirectory, placeholder: '/path/to/project' });
+    wdInput.addEventListener('input', () => { workingDirectory = wdInput.value; });
+    wdGroup.appendChild(wdInput);
+    wdGroup.appendChild(h('div', { class: 'form-hint' }, 'Local filesystem path where agents will read/write project files'));
+    container.appendChild(wdGroup);
+
+    // Repo URL input
+    const repoGroup = h('div', { class: 'add-room-field' });
+    repoGroup.appendChild(h('label', { class: 'form-label' }, 'GitHub Repository'));
+    const repoInput = h('input', { class: 'form-input mono', type: 'text', value: repoUrl, placeholder: 'https://github.com/owner/repo' });
+    repoInput.addEventListener('input', () => { repoUrl = repoInput.value; });
+    repoGroup.appendChild(repoInput);
+    repoGroup.appendChild(h('div', { class: 'form-hint' }, 'GitHub repository URL for issues, PRs, and CI/CD'));
+    container.appendChild(repoGroup);
 
     // Building ID (read-only)
     const idGroup = h('div', { class: 'add-room-field' });
@@ -508,6 +552,8 @@ export class BuildingView extends Component {
       try {
         const result = await window.overlordSocket.updateBuilding(this._buildingData.id, {
           name: buildingName.trim() || this._buildingData.name,
+          workingDirectory: workingDirectory.trim() || undefined,
+          repoUrl: repoUrl.trim() || undefined,
         });
         if (result && result.ok) {
           Toast.success('Building updated');

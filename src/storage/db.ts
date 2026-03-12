@@ -24,6 +24,8 @@ const SCHEMA_SQL = `
     id TEXT PRIMARY KEY,
     project_id TEXT,
     name TEXT NOT NULL,
+    working_directory TEXT,
+    repo_url TEXT,
     config TEXT DEFAULT '{}',
     active_phase TEXT DEFAULT 'strategy',
     created_at TEXT DEFAULT (datetime('now')),
@@ -251,6 +253,8 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['agents', 'profile_generated', 'INTEGER DEFAULT 0'],
   ['tasks', 'table_id', 'TEXT REFERENCES tables_v2(id)'],
   ['tables_v2', 'config', "TEXT DEFAULT '{}'"],
+  ['buildings', 'working_directory', 'TEXT'],
+  ['buildings', 'repo_url', 'TEXT'],
 ];
 
 /**
