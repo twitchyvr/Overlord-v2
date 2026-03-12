@@ -141,6 +141,12 @@ export const AgentMoveSchema = z.object({
 export const AgentRegisterSchema = z.object({
   name: name(),
   role: optionalName(),
+  firstName: optionalName(),
+  lastName: optionalName(),
+  displayName: optionalName(),
+  bio: optionalDescription(),
+  photoUrl: z.string().url().max(2000).optional(),
+  specialization: optionalDescription(),
 }).passthrough();
 
 export const AgentGetSchema = z.object({
@@ -148,6 +154,17 @@ export const AgentGetSchema = z.object({
 });
 
 export const AgentListSchema = z.object({}).passthrough().optional().default({});
+
+export const AgentUpdateProfileSchema = z.object({
+  agentId: id(),
+  firstName: optionalName(),
+  lastName: optionalName(),
+  displayName: optionalName(),
+  bio: optionalDescription(),
+  photoUrl: z.string().url().max(2000).optional(),
+  specialization: optionalDescription(),
+  profileGenerated: z.boolean().optional(),
+});
 
 // ─── Chat Schemas ───
 

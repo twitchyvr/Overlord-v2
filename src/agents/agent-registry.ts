@@ -10,7 +10,7 @@
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
-import type { Result, AgentRow, ParsedAgent, AgentRegistryAPI, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
+import type { Result, AgentRow, ParsedAgent, AgentRegistryAPI, AgentProfileFields, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Bus } from '../core/bus.js';
 import { parseBadge, serializeBadge, validateBadge } from './security-badge.js';
 import type { SecurityBadge } from './security-badge.js';
@@ -45,6 +45,12 @@ interface RegisterAgentParams {
   badge?: string | SecurityBadge | null;
   config?: Record<string, unknown>;
   buildingId?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null;
+  bio?: string | null;
+  photoUrl?: string | null;
+  specialization?: string | null;
 }
 
 interface AgentUpdates {
@@ -60,14 +66,23 @@ export function initAgents({ bus }: InitAgentsParams): AgentRegistryAPI {
   bus.on('agent:register', (data: Record<string, unknown>) => registerAgent(data as unknown as RegisterAgentParams));
   bus.on('agent:remove', (data: Record<string, unknown>) => removeAgent(data.agentId as string));
 
+  bus.on('agent:update-profile', (data: Record<string, unknown>) => {
+    const agentId = data.agentId as string;
+    const profile = data as unknown as AgentProfileFields;
+    updateAgentProfile(agentId, profile);
+  });
+
   log.info('Agent registry initialized');
-  return { registerAgent, removeAgent, getAgent, listAgents, updateAgent };
+  return { registerAgent, removeAgent, getAgent, listAgents, updateAgent, updateAgentProfile };
 }
 
 /**
  * Register a new agent (10-line identity card)
  */
-export function registerAgent({ name, role, capabilities = [], roomAccess = [], badge = null, config = {}, buildingId = null }: RegisterAgentParams): Result {
+export function registerAgent({
+  name, role, capabilities = [], roomAccess = [], badge = null, config = {}, buildingId = null,
+  firstName = null, lastName = null, displayName = null, bio = null, photoUrl = null, specialization = null,
+}: RegisterAgentParams): Result {
   const db = getDb();
   const id = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -81,9 +96,15 @@ export function registerAgent({ name, role, capabilities = [], roomAccess = [], 
     badgeStr = badge;
   }
 
+  // Compute display_name: explicit value > "First Last" > fallback to name
+  const computedDisplayName = displayName
+    || (firstName && lastName ? `${firstName} ${lastName}` : null)
+    || (firstName || null);
+
   db.prepare(`
-    INSERT INTO agents (id, name, role, building_id, capabilities, room_access, badge, config)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO agents (id, name, role, building_id, capabilities, room_access, badge, config,
+      first_name, last_name, display_name, bio, photo_url, specialization, profile_generated)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name,
@@ -93,6 +114,13 @@ export function registerAgent({ name, role, capabilities = [], roomAccess = [], 
     JSON.stringify(roomAccess),
     badgeStr,
     JSON.stringify(config),
+    firstName || null,
+    lastName || null,
+    computedDisplayName,
+    bio || null,
+    photoUrl || null,
+    specialization || null,
+    0,
   );
 
   log.info({ id, name, role, buildingId, roomAccess, hasBadge: !!badgeStr }, 'Agent registered');
@@ -112,6 +140,7 @@ export function getAgent(agentId: string): ParsedAgent | null {
     capabilities: safeJsonParse<string[]>(agent.capabilities, [], `agent.capabilities[${agentId}]`),
     room_access: safeJsonParse<string[]>(agent.room_access, [], `agent.room_access[${agentId}]`),
     config: safeJsonParse<Record<string, unknown>>(agent.config, {}, `agent.config[${agentId}]`),
+    profile_generated: !!(agent.profile_generated),
   };
 }
 
@@ -134,6 +163,7 @@ export function listAgents({ status, roomId, buildingId }: { status?: string; ro
     capabilities: safeJsonParse<string[]>(a.capabilities, [], `agent.capabilities[${a.id}]`),
     room_access: safeJsonParse<string[]>(a.room_access, [], `agent.room_access[${a.id}]`),
     config: safeJsonParse<Record<string, unknown>>(a.config, {}, `agent.config[${a.id}]`),
+    profile_generated: !!(a.profile_generated),
   }));
 }
 
@@ -171,6 +201,49 @@ export function updateAgent(agentId: string, updates: AgentUpdates): Result {
 
   db.prepare(`UPDATE agents SET ${fields.join(', ')} WHERE id = ?`).run(...params);
   log.info({ agentId, updates: Object.keys(updates) }, 'Agent updated');
+  return ok({ id: agentId });
+}
+
+/**
+ * Update an agent's profile fields (first/last name, bio, photo_url, specialization).
+ * Separate from updateAgent to allow targeted profile updates without affecting
+ * identity card fields (name, role, capabilities, etc.).
+ */
+export function updateAgentProfile(agentId: string, profile: AgentProfileFields): Result {
+  const db = getDb();
+  const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as AgentRow | undefined;
+  if (!agent) return err('AGENT_NOT_FOUND', `Agent ${agentId} does not exist`);
+
+  const fields: string[] = [];
+  const params: (string | number | null)[] = [];
+
+  if (profile.firstName !== undefined) { fields.push('first_name = ?'); params.push(profile.firstName ?? null); }
+  if (profile.lastName !== undefined) { fields.push('last_name = ?'); params.push(profile.lastName ?? null); }
+  if (profile.bio !== undefined) { fields.push('bio = ?'); params.push(profile.bio ?? null); }
+  if (profile.photoUrl !== undefined) { fields.push('photo_url = ?'); params.push(profile.photoUrl ?? null); }
+  if (profile.specialization !== undefined) { fields.push('specialization = ?'); params.push(profile.specialization ?? null); }
+  if (profile.profileGenerated !== undefined) { fields.push('profile_generated = ?'); params.push(profile.profileGenerated ? 1 : 0); }
+
+  // Compute display_name: explicit value > "First Last" > keep existing
+  if (profile.displayName !== undefined) {
+    fields.push('display_name = ?');
+    params.push(profile.displayName ?? null);
+  } else if (profile.firstName !== undefined || profile.lastName !== undefined) {
+    const first = profile.firstName !== undefined ? profile.firstName : agent.first_name;
+    const last = profile.lastName !== undefined ? profile.lastName : agent.last_name;
+    const computed = first && last ? `${first} ${last}` : (first || null);
+    fields.push('display_name = ?');
+    params.push(computed);
+  }
+
+  if (fields.length === 0) return ok({ id: agentId, message: 'No profile updates provided' });
+
+  fields.push('updated_at = datetime(?)');
+  params.push(new Date().toISOString());
+  params.push(agentId);
+
+  db.prepare(`UPDATE agents SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+  log.info({ agentId, profileFields: fields.length - 1 }, 'Agent profile updated');
   return ok({ id: agentId });
 }
 
