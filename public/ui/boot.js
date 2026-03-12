@@ -26,6 +26,60 @@ import { LogsPanel } from './panels/logs-panel.js';
 import { TeamPanel } from './panels/team-panel.js';
 import { TasksPanel } from './panels/tasks-panel.js';
 
+// ═══════════════════════════════════════════════════════════
+//  THEME MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+
+const THEME_KEY = 'overlord-theme';
+
+/**
+ * Initialize theme from saved preference or system preference.
+ * Sets data-theme attribute and wires up the toggle button.
+ */
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  const systemPrefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+
+  // Determine initial theme: saved > system > default (dark)
+  const theme = saved || (systemPrefersDark === false ? 'light' : 'dark');
+  applyTheme(theme);
+
+  // Wire up toggle button
+  const btn = document.getElementById('theme-toggle');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      localStorage.setItem(THEME_KEY, next);
+    });
+  }
+
+  // Listen for system theme changes (if no saved preference)
+  window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (!localStorage.getItem(THEME_KEY)) {
+      applyTheme(e.matches ? 'dark' : 'light');
+    }
+  });
+}
+
+/**
+ * Apply a theme by setting the data-theme attribute and updating
+ * the toggle button's visual state.
+ */
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+
+  const btn = document.getElementById('theme-toggle');
+  if (btn) {
+    btn.classList.toggle('theme-light', theme === 'light');
+    btn.title = theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+  }
+}
+
+// ── Initialize theme ──
+initTheme();
+
 // ── Initialize core ──
 const store = createV2Store();
 const engine = OverlordUI.init(store);
@@ -176,5 +230,10 @@ function _updatePhaseBar(activePhase) {
 
 // ── Initialize phase bar to strategy ──
 _updatePhaseBar('strategy');
+
+// Export for testing
+if (typeof window !== 'undefined') {
+  window._overlordTheme = { initTheme, applyTheme, THEME_KEY };
+}
 
 console.log('[Overlord v2] Boot complete');
