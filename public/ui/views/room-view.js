@@ -1336,6 +1336,30 @@ export class RoomView extends Component {
     const assignedIds = new Set(agentsInRoom.map(a => a.id));
     const available = allAgents.filter(a => !assignedIds.has(a.id));
 
+    // Check room access for each available agent (mirrors server checkRoomAccess logic)
+    const roomType = room.type || '';
+    const hasAccess = (agent) => {
+      // Badge takes priority over room_access (server enforces same rule)
+      if (agent.badge) {
+        try {
+          const badge = typeof agent.badge === 'string' ? JSON.parse(agent.badge) : agent.badge;
+          if (badge && Array.isArray(badge.rooms)) {
+            return badge.rooms.includes('*') || badge.rooms.includes(roomType);
+          }
+        } catch { /* malformed badge — fall through to room_access */ }
+      }
+      // Fallback to room_access array
+      const access = agent.room_access || [];
+      return access.includes('*') || access.includes(roomType);
+    };
+
+    // Sort: agents with access first, then those without
+    const sorted = [...available].sort((a, b) => {
+      const aOk = hasAccess(a) ? 0 : 1;
+      const bOk = hasAccess(b) ? 0 : 1;
+      return aOk - bOk;
+    });
+
     // Get table types from room contract
     const tableTypes = room.tables ? Object.keys(room.tables) : ['focus'];
     let selectedAgent = null;
@@ -1366,27 +1390,46 @@ export class RoomView extends Component {
       return;
     }
 
+    // Inline error banner (hidden by default)
+    const errorBanner = h('div', {
+      class: 'assign-agent-error',
+      style: { display: 'none' }
+    });
+    container.appendChild(errorBanner);
+
     // Agent picker
     container.appendChild(h('label', { class: 'form-label' }, 'Select Agent'));
     const agentList = h('div', { class: 'assign-agent-list' });
 
-    for (const agent of available) {
+    for (const agent of sorted) {
+      const agentHasAccess = hasAccess(agent);
       const card = h('div', {
-        class: `assign-agent-card${selectedAgent === agent.id ? ' selected' : ''}`,
+        class: `assign-agent-card${selectedAgent === agent.id ? ' selected' : ''}${!agentHasAccess ? ' no-access' : ''}`,
         'data-agent-id': agent.id
       },
         h('div', { class: 'assign-agent-avatar' }, (agent.name || '?')[0].toUpperCase()),
         h('div', { class: 'assign-agent-info' },
-          h('div', { class: 'assign-agent-name' }, agent.name || agent.id),
+          h('div', { class: 'assign-agent-name-row' },
+            h('span', { class: 'assign-agent-name' }, agent.name || agent.id),
+            agentHasAccess
+              ? h('span', { class: 'assign-agent-badge access-ok' }, 'Has Access')
+              : h('span', { class: 'assign-agent-badge access-denied' }, 'No Access')
+          ),
           h('div', { class: 'assign-agent-role text-muted' }, agent.role || 'agent'),
           agent.current_room_id
-            ? h('div', { class: 'assign-agent-current text-muted' }, `Currently in another room`)
-            : h('div', { class: 'assign-agent-current text-muted' }, 'Unassigned')
+            ? h('div', { class: 'assign-agent-current text-muted' }, 'Currently in another room')
+            : h('div', { class: 'assign-agent-current text-muted' }, 'Unassigned'),
+          !agentHasAccess
+            ? h('div', { class: 'assign-agent-access-hint text-muted' },
+                `Access: ${(agent.room_access || []).join(', ') || 'none'} (needs "${roomType}")`)
+            : null
         )
       );
 
       card.addEventListener('click', () => {
         selectedAgent = agent.id;
+        // Hide error when selecting a different agent
+        errorBanner.style.display = 'none';
         agentList.querySelectorAll('.assign-agent-card').forEach(c => c.classList.remove('selected'));
         card.classList.add('selected');
       });
@@ -1423,6 +1466,9 @@ export class RoomView extends Component {
         return;
       }
 
+      // Clear previous error
+      errorBanner.style.display = 'none';
+
       assignBtn.disabled = true;
       assignBtn.textContent = 'Assigning...';
 
@@ -1437,7 +1483,9 @@ export class RoomView extends Component {
           throw new Error(result?.error?.message || 'Assignment failed');
         }
       } catch (err) {
-        Toast.error(`Assign failed: ${err.message}`);
+        // Show inline error banner (persistent, not auto-dismissing like toast)
+        errorBanner.textContent = err.message;
+        errorBanner.style.display = 'block';
         assignBtn.disabled = false;
         assignBtn.textContent = 'Assign Agent';
       }
