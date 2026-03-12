@@ -409,20 +409,23 @@ export class ChatView extends Component {
   }
 
   _handleResponse(data) {
-    // Non-streaming response — add as complete message
-    const store = OverlordUI.getStore();
-    if (!store) return;
-    store.update('chat.messages', messages => {
-      return [...(messages || []), {
-        id: data.messageId || Date.now().toString(),
-        role: data.role || 'assistant',
-        content: data.content || data.message,
-        agentName: data.agentName,
-        timestamp: new Date().toISOString(),
-        thinking: data.thinking,
-        toolCalls: data.toolCalls
-      }];
-    });
+    // Socket bridge already adds to chat.messages store — this handler
+    // is for rendering non-streaming responses that bypass the stream flow
+    // (e.g., error responses or responses when streaming wasn't active).
+    // The store subscription in mount() handles re-rendering.
+    if (data.type === 'error' && data.error) {
+      const store = OverlordUI.getStore();
+      if (!store) return;
+      store.update('chat.messages', messages => {
+        return [...(messages || []), {
+          id: Date.now().toString(),
+          role: 'system',
+          content: `Error: ${data.error.message || data.error.code || 'Unknown error'}`,
+          type: 'error',
+          timestamp: new Date().toISOString(),
+        }];
+      });
+    }
   }
 
   // ── Token Handling ───────────────────────────────────────────

@@ -57,6 +57,7 @@ function createMockStore() {
     _data: data,
     set: vi.fn((key: string, value: any) => { data[key] = value; }),
     get: vi.fn((key: string) => data[key]),
+    peek: vi.fn((key: string) => data[key]),
     update: vi.fn((key: string, fn: (current: unknown) => unknown) => {
       const current = data[key];
       const next = fn(current);
@@ -356,23 +357,34 @@ describe('socket "room:agent:exited" event', () => {
 });
 
 describe('socket "chat:response" event', () => {
-  it('appends message to chat.messages with type "response" and timestamp', () => {
+  it('appends message to chat.messages for non-error responses', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const now = Date.now();
     vi.spyOn(Date, 'now').mockReturnValue(now);
 
-    const data = { content: 'Hello from agent', agentId: 'a1' };
+    const data = { content: 'Hello from agent', agentId: 'a1', type: 'message' };
     mockSocket._trigger('chat:response', data);
 
     const updaterFn = mockStore.update.mock.calls[0][1];
     const result = updaterFn([]);
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ ...data, type: 'response', timestamp: now });
+    expect(result[0].content).toBe('Hello from agent');
+    expect(result[0].type).toBe('response');
+    expect(result[0].role).toBe('assistant');
+    expect(result[0].timestamp).toBe(now);
+  });
+
+  it('does not add error responses to chat.messages', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const data = { type: 'error', error: { code: 'FAIL', message: 'oops' } };
+    mockSocket._trigger('chat:response', data);
+    // store.update should NOT be called for error responses
+    expect(mockStore.update).not.toHaveBeenCalled();
   });
 
   it('appends to existing messages', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
-    mockSocket._trigger('chat:response', { content: 'msg2' });
+    mockSocket._trigger('chat:response', { content: 'msg2', type: 'message' });
 
     const updaterFn = mockStore.update.mock.calls[0][1];
     const existing = [{ content: 'msg1', type: 'user', timestamp: 100 }];
@@ -383,7 +395,7 @@ describe('socket "chat:response" event', () => {
 
   it('handles undefined messages array', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
-    mockSocket._trigger('chat:response', { content: 'first' });
+    mockSocket._trigger('chat:response', { content: 'first', type: 'message' });
 
     const updaterFn = mockStore.update.mock.calls[0][1];
     const result = updaterFn(undefined);
@@ -402,6 +414,14 @@ describe('socket "chat:response" event', () => {
     expect(mockStore.set).toHaveBeenCalledWith('ui.streaming', false);
   });
 
+  it('dispatches chat:stream-end when streaming was active', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    mockStore._data['ui.streaming'] = true;
+    const data = { content: 'done', type: 'message' };
+    mockSocket._trigger('chat:response', data);
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('chat:stream-end', data);
+  });
+
   it('dispatches chat:response to engine', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const data = { content: 'reply' };
@@ -411,17 +431,43 @@ describe('socket "chat:response" event', () => {
 });
 
 describe('socket "chat:stream" event', () => {
-  it('sets ui.streaming to true', () => {
+  it('dispatches chat:stream-start on thinking status', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
-    mockSocket._trigger('chat:stream', { chunk: 'partial' });
+    const data = { status: 'thinking', agentId: 'a1', roomId: 'r1', content: [{ type: 'text', text: '' }] };
+    mockSocket._trigger('chat:stream', data);
     expect(mockStore.set).toHaveBeenCalledWith('ui.streaming', true);
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('chat:stream-start', expect.objectContaining({
+      agentId: 'a1',
+      roomId: 'r1',
+    }));
   });
 
-  it('dispatches chat:stream to engine', () => {
+  it('dispatches chat:stream-chunk with extracted text content', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
-    const data = { chunk: 'partial text' };
+    const data = {
+      agentId: 'a1',
+      roomId: 'r1',
+      content: [{ type: 'text', text: 'Hello world' }],
+      iteration: 1,
+    };
     mockSocket._trigger('chat:stream', data);
-    expect(mockEngine.dispatch).toHaveBeenCalledWith('chat:stream', data);
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('chat:stream-chunk', expect.objectContaining({
+      text: 'Hello world',
+      agentId: 'a1',
+      iteration: 1,
+    }));
+  });
+
+  it('skips dispatch when content has no text blocks', () => {
+    initSocketBridge(mockSocket, mockStore, mockEngine);
+    const data = {
+      agentId: 'a1',
+      roomId: 'r1',
+      content: [{ type: 'tool_use', name: 'read_file', id: 't1', input: {} }],
+      iteration: 1,
+    };
+    mockSocket._trigger('chat:stream', data);
+    expect(mockEngine.dispatch).not.toHaveBeenCalledWith('chat:stream-chunk', expect.anything());
   });
 });
 
