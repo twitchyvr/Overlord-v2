@@ -346,6 +346,74 @@ describe('DataExchangeRoom', () => {
       expect(mockBus.emit).not.toHaveBeenCalled();
     });
   });
+
+  describe('onBeforeToolCall — schema validation tracking', () => {
+    it('emits warning when export_data is called without prior schema validation', () => {
+      const room = new DataExchangeRoom('room_de_1');
+      const mockBus = createMockBus();
+      room.setBus(mockBus);
+
+      const result = room.onBeforeToolCall('export_data', 'agent_1', { target: 'api' });
+
+      expect(result.ok).toBe(true);
+      expect(mockBus.emit).toHaveBeenCalledWith('room:warning', expect.objectContaining({
+        roomId: 'room_de_1',
+        roomType: 'data-exchange',
+        agentId: 'agent_1',
+        warning: expect.stringContaining('without prior schema validation'),
+      }));
+    });
+
+    it('does NOT warn on export_data after successful validate_schema', () => {
+      const room = new DataExchangeRoom('room_de_1');
+      const mockBus = createMockBus();
+      room.setBus(mockBus);
+
+      // First: successful schema validation sets the internal flag
+      const okResult = { ok: true as const, data: { valid: true } };
+      room.onAfterToolCall('validate_schema', 'agent_1', okResult);
+
+      // Then: export should not trigger warning
+      const result = room.onBeforeToolCall('export_data', 'agent_1', { target: 'api' });
+
+      expect(result.ok).toBe(true);
+      expect(mockBus.emit).not.toHaveBeenCalledWith('room:warning', expect.anything());
+    });
+
+    it('does NOT warn on non-export_data tools', () => {
+      const room = new DataExchangeRoom('room_de_1');
+      const mockBus = createMockBus();
+      room.setBus(mockBus);
+
+      const result = room.onBeforeToolCall('fetch_url', 'agent_1', { url: 'https://example.com' });
+
+      expect(result.ok).toBe(true);
+      expect(mockBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('returns ok(null) even when warning is emitted', () => {
+      const room = new DataExchangeRoom('room_de_1');
+      const mockBus = createMockBus();
+      room.setBus(mockBus);
+
+      const result = room.onBeforeToolCall('export_data', 'agent_1', {});
+
+      // Warning emitted but call is NOT blocked
+      expect(result.ok).toBe(true);
+      expect(result.data).toBeNull();
+      expect(mockBus.emit).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles missing bus gracefully (no error thrown)', () => {
+      const room = new DataExchangeRoom('room_de_1');
+      // No bus set — should not throw
+
+      const result = room.onBeforeToolCall('export_data', 'agent_1', {});
+
+      expect(result.ok).toBe(true);
+      expect(result.data).toBeNull();
+    });
+  });
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -971,6 +1039,82 @@ describe('PluginBayRoom', () => {
       room.onAfterToolCall('configure_plugin', 'agent_1', failResult);
 
       expect(mockBus.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('onBeforeToolCall — destructive operation warnings', () => {
+    it('emits warning when uninstall_plugin is called with input.name', () => {
+      const room = new PluginBayRoom('room_pb_1');
+      const mockBus = createMockBus();
+      room.setBus(mockBus);
+
+      const result = room.onBeforeToolCall('uninstall_plugin', 'agent_1', { name: 'my-plugin' });
+
+      expect(result.ok).toBe(true);
+      expect(mockBus.emit).toHaveBeenCalledWith('room:warning', expect.objectContaining({
+        roomId: 'room_pb_1',
+        roomType: 'plugin-bay',
+        agentId: 'agent_1',
+        warning: expect.stringContaining('uninstalling plugin "my-plugin"'),
+      }));
+    });
+
+    it('emits warning when uninstall_plugin is called with input.plugin', () => {
+      const room = new PluginBayRoom('room_pb_1');
+      const mockBus = createMockBus();
+      room.setBus(mockBus);
+
+      const result = room.onBeforeToolCall('uninstall_plugin', 'agent_1', { plugin: 'other-plugin' });
+
+      expect(result.ok).toBe(true);
+      expect(mockBus.emit).toHaveBeenCalledWith('room:warning', expect.objectContaining({
+        warning: expect.stringContaining('uninstalling plugin "other-plugin"'),
+      }));
+    });
+
+    it('uses "unknown" when no plugin name is provided', () => {
+      const room = new PluginBayRoom('room_pb_1');
+      const mockBus = createMockBus();
+      room.setBus(mockBus);
+
+      const result = room.onBeforeToolCall('uninstall_plugin', 'agent_1', {});
+
+      expect(result.ok).toBe(true);
+      expect(mockBus.emit).toHaveBeenCalledWith('room:warning', expect.objectContaining({
+        warning: expect.stringContaining('uninstalling plugin "unknown"'),
+      }));
+    });
+
+    it('does NOT warn on non-uninstall tools', () => {
+      const room = new PluginBayRoom('room_pb_1');
+      const mockBus = createMockBus();
+      room.setBus(mockBus);
+
+      const result = room.onBeforeToolCall('install_plugin', 'agent_1', { name: 'safe-plugin' });
+
+      expect(result.ok).toBe(true);
+      expect(mockBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('returns ok(null) even when warning is emitted', () => {
+      const room = new PluginBayRoom('room_pb_1');
+      const mockBus = createMockBus();
+      room.setBus(mockBus);
+
+      const result = room.onBeforeToolCall('uninstall_plugin', 'agent_1', { name: 'x' });
+
+      expect(result.ok).toBe(true);
+      expect(result.data).toBeNull();
+    });
+
+    it('handles missing bus gracefully (no error thrown)', () => {
+      const room = new PluginBayRoom('room_pb_1');
+      // No bus set — should not throw
+
+      const result = room.onBeforeToolCall('uninstall_plugin', 'agent_1', { name: 'x' });
+
+      expect(result.ok).toBe(true);
+      expect(result.data).toBeNull();
     });
   });
 });
