@@ -142,10 +142,26 @@
         <span class="mobile-nav-icon">&#9745;</span>
         <span>Tasks</span>
       </button>
-      <button class="mobile-nav-item" data-view="activity" aria-label="Activity">
-        <span class="mobile-nav-icon">&#9881;</span>
-        <span>Activity</span>
-      </button>
+      <div class="mobile-nav-more-wrapper">
+        <button class="mobile-nav-item" id="mobile-nav-more" aria-label="More" aria-expanded="false">
+          <span class="mobile-nav-icon">&#8943;</span>
+          <span>More</span>
+        </button>
+        <div class="mobile-nav-overflow" id="mobile-nav-overflow" hidden>
+          <button class="mobile-nav-overflow-item" data-view="activity" aria-label="Activity">
+            <span class="mobile-nav-icon">&#9881;</span> Activity
+          </button>
+          <button class="mobile-nav-overflow-item" data-view="raid-log" aria-label="RAID Log">
+            <span class="mobile-nav-icon">&#9888;</span> RAID Log
+          </button>
+          <button class="mobile-nav-overflow-item" data-view="phase" aria-label="Phases">
+            <span class="mobile-nav-icon">&#9733;</span> Phases
+          </button>
+          <button class="mobile-nav-overflow-item" data-view="strategist" aria-label="New Project">
+            <span class="mobile-nav-icon">&#43;</span> New Project
+          </button>
+        </div>
+      </div>
     </nav>
 
     <!-- Modal root -->

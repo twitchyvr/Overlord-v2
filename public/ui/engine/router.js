@@ -59,6 +59,35 @@ export function initRouter({ centerPanel, buildingPanel }) {
     });
   });
 
+  // Mobile "More" overflow menu
+  const moreBtn = document.getElementById('mobile-nav-more');
+  const overflow = document.getElementById('mobile-nav-overflow');
+  if (moreBtn && overflow) {
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = !overflow.hidden;
+      overflow.hidden = isOpen;
+      moreBtn.setAttribute('aria-expanded', String(!isOpen));
+    });
+    // Overflow item clicks
+    overflow.querySelectorAll('.mobile-nav-overflow-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const view = item.dataset.view;
+        if (view) {
+          navigateTo(view);
+          _updateMobileNav(view);
+        }
+        overflow.hidden = true;
+        moreBtn.setAttribute('aria-expanded', 'false');
+      });
+    });
+    // Close overflow on outside click
+    document.addEventListener('click', () => {
+      overflow.hidden = true;
+      moreBtn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
   // Listen for building selection to show chat
   OverlordUI.subscribe('building:selected', () => {
     navigateTo('chat');
@@ -214,10 +243,20 @@ function _updateToolbar(viewName) {
 }
 
 function _updateMobileNav(viewName) {
+  const overflowViews = ['activity', 'raid-log', 'phase', 'strategist'];
+  const isOverflowView = overflowViews.includes(viewName);
+
   document.querySelectorAll('#mobile-nav .mobile-nav-item').forEach(item => {
-    const isActive = item.dataset.view === viewName;
-    item.classList.toggle('active', isActive);
-    item.setAttribute('aria-current', isActive ? 'page' : 'false');
+    const id = item.id;
+    if (id === 'mobile-nav-more') {
+      // Highlight "More" when an overflow view is active
+      item.classList.toggle('active', isOverflowView);
+      item.setAttribute('aria-current', isOverflowView ? 'page' : 'false');
+    } else {
+      const isActive = item.dataset.view === viewName;
+      item.classList.toggle('active', isActive);
+      item.setAttribute('aria-current', isActive ? 'page' : 'false');
+    }
   });
 }
 
