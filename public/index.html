@@ -79,6 +79,9 @@
           <span class="toolbar-label">Strategist</span>
         </button>
       </div>
+      <div class="toolbar-center" id="toolbar-panel-toggles" aria-label="Panel visibility toggles">
+        <!-- Panel toggle buttons are rendered by initPanelSystem() -->
+      </div>
       <div class="toolbar-right">
         <button id="settings-btn" class="toolbar-btn-icon" title="Settings" aria-label="Settings">
           <span>&#9881;</span>
@@ -109,65 +112,93 @@
 
       <!-- Right: Sidebar panels -->
       <aside id="right-panel">
+        <!-- Resize handle (left edge drag to widen/shrink right panel) -->
+        <div id="panel-resize-handle" class="panel-resize-handle" title="Drag to resize"></div>
+
         <div id="panel-phase" class="panel">
           <div class="panel-header" data-panel="phase">
             <span class="panel-title">Phase Gates</span>
+            <button class="panel-btn-max" title="Maximize">&#10530;</button>
             <span class="panel-chevron">&#9662;</span>
           </div>
           <div class="panel-body"></div>
         </div>
+        <div class="panel-divider" aria-hidden="true"></div>
+
         <div id="panel-agents" class="panel">
           <div class="panel-header" data-panel="agents">
             <span class="panel-title">Agents</span>
+            <button class="panel-btn-max" title="Maximize">&#10530;</button>
             <span class="panel-chevron">&#9662;</span>
           </div>
           <div class="panel-body"></div>
         </div>
+        <div class="panel-divider" aria-hidden="true"></div>
+
         <div id="panel-tasks" class="panel">
           <div class="panel-header" data-panel="tasks">
             <span class="panel-title">Tasks</span>
+            <button class="panel-btn-max" title="Maximize">&#10530;</button>
             <span class="panel-chevron">&#9662;</span>
           </div>
           <div class="panel-body"></div>
         </div>
+        <div class="panel-divider" aria-hidden="true"></div>
+
         <div id="panel-raid" class="panel">
           <div class="panel-header" data-panel="raid">
             <span class="panel-title">RAID Log</span>
+            <button class="panel-btn-max" title="Maximize">&#10530;</button>
             <span class="panel-chevron">&#9662;</span>
           </div>
           <div class="panel-body"></div>
         </div>
+        <div class="panel-divider" aria-hidden="true"></div>
+
         <div id="panel-activity" class="panel">
           <div class="panel-header" data-panel="activity">
             <span class="panel-title">Activity</span>
+            <button class="panel-btn-max" title="Maximize">&#10530;</button>
             <span class="panel-chevron">&#9662;</span>
           </div>
           <div class="panel-body"></div>
         </div>
+        <div class="panel-divider" aria-hidden="true"></div>
+
         <div id="panel-projects" class="panel">
           <div class="panel-header" data-panel="projects">
             <span class="panel-title">Projects</span>
+            <button class="panel-btn-max" title="Maximize">&#10530;</button>
             <span class="panel-chevron">&#9662;</span>
           </div>
           <div class="panel-body"></div>
         </div>
+        <div class="panel-divider" aria-hidden="true"></div>
+
         <div id="panel-tools" class="panel">
           <div class="panel-header" data-panel="tools">
             <span class="panel-title">Tools</span>
+            <button class="panel-btn-max" title="Maximize">&#10530;</button>
             <span class="panel-chevron">&#9662;</span>
           </div>
           <div class="panel-body"></div>
         </div>
+        <div class="panel-divider" aria-hidden="true"></div>
+
         <div id="panel-logs" class="panel">
           <div class="panel-header" data-panel="logs">
             <span class="panel-title">Logs</span>
+            <button class="panel-btn-max" title="Maximize">&#10530;</button>
             <span class="panel-chevron">&#9662;</span>
           </div>
           <div class="panel-body"></div>
         </div>
+        <div class="panel-divider" aria-hidden="true"></div>
+
         <div id="panel-team" class="panel">
           <div class="panel-header" data-panel="team">
             <span class="panel-title">Team</span>
+            <button class="panel-btn-max" title="Maximize">&#10530;</button>
             <span class="panel-chevron">&#9662;</span>
           </div>
           <div class="panel-body"></div>
