@@ -214,6 +214,10 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('todo:deleted', data);
   });
 
+  socket.on('system:log', (data) => {
+    engine.dispatch('system:log', data);
+  });
+
   socket.on('agent:mentioned', (data) => {
     store.update('activity.items', (items) => [{ event: 'agent:mentioned', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('agent:mentioned', data);
