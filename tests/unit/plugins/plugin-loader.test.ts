@@ -23,7 +23,7 @@ vi.mock('../../../src/core/logger.js', () => ({
 
 const mockCreateSandbox = vi.fn();
 vi.mock('../../../src/plugins/plugin-sandbox.js', () => ({
-  createSandbox: (...args: unknown[]) => mockCreateSandbox(...args),
+  createSandbox: async (...args: unknown[]) => mockCreateSandbox(...args),
 }));
 
 const mockFs = {
@@ -294,20 +294,20 @@ describe('Plugin Loader', () => {
       permissions: [] as string[],
     };
 
-    it('fails when plugin loader not initialized', () => {
-      const result = loadPlugin(manifest as never, '/plugins/test-plugin');
+    it('fails when plugin loader not initialized', async () => {
+      const result = await loadPlugin(manifest as never, '/plugins/test-plugin');
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.code).toBe('PLUGIN_NOT_INITIALIZED');
       }
     });
 
-    it('loads a plugin successfully', () => {
+    it('loads a plugin successfully', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockReturnValue('// plugin code');
       mockCreateSandbox.mockReturnValue(makeMockSandbox());
 
-      const result = loadPlugin(manifest as never, '/plugins/test-plugin');
+      const result = await loadPlugin(manifest as never, '/plugins/test-plugin');
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.data.manifest.id).toBe('test-plugin');
@@ -315,42 +315,42 @@ describe('Plugin Loader', () => {
       }
     });
 
-    it('stores plugin in registry after loading', () => {
+    it('stores plugin in registry after loading', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockReturnValue('// code');
       mockCreateSandbox.mockReturnValue(makeMockSandbox());
 
-      loadPlugin(manifest as never, '/plugins/test-plugin');
+      await loadPlugin(manifest as never, '/plugins/test-plugin');
       expect(getPlugin('test-plugin')).toBeDefined();
       expect(listPlugins()).toHaveLength(1);
     });
 
-    it('rejects duplicate plugin load', () => {
+    it('rejects duplicate plugin load', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockReturnValue('// code');
       mockCreateSandbox.mockReturnValue(makeMockSandbox());
 
-      loadPlugin(manifest as never, '/plugins/test-plugin');
-      const result = loadPlugin(manifest as never, '/plugins/test-plugin');
+      await loadPlugin(manifest as never, '/plugins/test-plugin');
+      const result = await loadPlugin(manifest as never, '/plugins/test-plugin');
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.code).toBe('PLUGIN_DUPLICATE');
       }
     });
 
-    it('returns error when entrypoint cannot be read', () => {
+    it('returns error when entrypoint cannot be read', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
       mockCreateSandbox.mockReturnValue(makeMockSandbox());
 
-      const result = loadPlugin(manifest as never, '/plugins/test-plugin');
+      const result = await loadPlugin(manifest as never, '/plugins/test-plugin');
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.code).toBe('PLUGIN_LOAD_ERROR');
       }
     });
 
-    it('returns error when sandbox execution fails', () => {
+    it('returns error when sandbox execution fails', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockReturnValue('invalid code;');
       const sandbox = makeMockSandbox();
@@ -360,7 +360,7 @@ describe('Plugin Loader', () => {
       });
       mockCreateSandbox.mockReturnValue(sandbox);
 
-      const result = loadPlugin(manifest as never, '/plugins/test-plugin');
+      const result = await loadPlugin(manifest as never, '/plugins/test-plugin');
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.code).toBe('PLUGIN_LOAD_ERROR');
@@ -369,28 +369,28 @@ describe('Plugin Loader', () => {
       expect(sandbox.destroy).toHaveBeenCalled();
     });
 
-    it('fires onLoad hook after loading', () => {
+    it('fires onLoad hook after loading', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockReturnValue('// code');
       const onLoadHandler = vi.fn();
       const sandbox = makeMockSandbox({ onLoad: onLoadHandler });
       mockCreateSandbox.mockReturnValue(sandbox);
 
-      const result = loadPlugin(manifest as never, '/plugins/test-plugin');
+      const result = await loadPlugin(manifest as never, '/plugins/test-plugin');
       expect(result.ok).toBe(true);
       expect(onLoadHandler).toHaveBeenCalledWith(
         expect.objectContaining({ hook: 'onLoad', pluginId: 'test-plugin' }),
       );
     });
 
-    it('does not fail load when onLoad hook throws', () => {
+    it('does not fail load when onLoad hook throws', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockReturnValue('// code');
       const onLoadHandler = vi.fn(() => { throw new Error('hook error'); });
       const sandbox = makeMockSandbox({ onLoad: onLoadHandler });
       mockCreateSandbox.mockReturnValue(sandbox);
 
-      const result = loadPlugin(manifest as never, '/plugins/test-plugin');
+      const result = await loadPlugin(manifest as never, '/plugins/test-plugin');
       expect(result.ok).toBe(true); // load succeeds despite hook failure
     });
   });
@@ -408,11 +408,11 @@ describe('Plugin Loader', () => {
       permissions: [] as string[],
     };
 
-    it('unloads a loaded plugin', () => {
+    it('unloads a loaded plugin', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockReturnValue('// code');
       mockCreateSandbox.mockReturnValue(makeMockSandbox());
-      loadPlugin(manifest as never, '/plugins/to-unload');
+      await loadPlugin(manifest as never, '/plugins/to-unload');
 
       const result = unloadPlugin('to-unload');
       expect(result.ok).toBe(true);
@@ -428,36 +428,36 @@ describe('Plugin Loader', () => {
       }
     });
 
-    it('calls onUnload hook before cleanup', () => {
+    it('calls onUnload hook before cleanup', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockReturnValue('// code');
       const onUnloadHandler = vi.fn();
       const sandbox = makeMockSandbox({ onUnload: onUnloadHandler });
       mockCreateSandbox.mockReturnValue(sandbox);
-      loadPlugin(manifest as never, '/plugins/to-unload');
+      await loadPlugin(manifest as never, '/plugins/to-unload');
 
       unloadPlugin('to-unload');
       expect(onUnloadHandler).toHaveBeenCalled();
     });
 
-    it('destroys sandbox on unload', () => {
+    it('destroys sandbox on unload', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockReturnValue('// code');
       const sandbox = makeMockSandbox();
       mockCreateSandbox.mockReturnValue(sandbox);
-      loadPlugin(manifest as never, '/plugins/to-unload');
+      await loadPlugin(manifest as never, '/plugins/to-unload');
 
       unloadPlugin('to-unload');
       expect(sandbox.destroy).toHaveBeenCalled();
     });
 
-    it('continues unload even if onUnload hook throws', () => {
+    it('continues unload even if onUnload hook throws', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockReturnValue('// code');
       const onUnloadHandler = vi.fn(() => { throw new Error('cleanup failed'); });
       const sandbox = makeMockSandbox({ onUnload: onUnloadHandler });
       mockCreateSandbox.mockReturnValue(sandbox);
-      loadPlugin(manifest as never, '/plugins/to-unload');
+      await loadPlugin(manifest as never, '/plugins/to-unload');
 
       const result = unloadPlugin('to-unload');
       expect(result.ok).toBe(true);
@@ -476,7 +476,7 @@ describe('Plugin Loader', () => {
       expect(listPlugins()).toEqual([]);
     });
 
-    it('listPlugins returns all loaded plugins', () => {
+    it('listPlugins returns all loaded plugins', async () => {
       initPluginLoader(makeSystemAPIs() as never);
       mockFs.readFileSync.mockReturnValue('// code');
 
@@ -487,7 +487,7 @@ describe('Plugin Loader', () => {
 
       for (const m of manifests) {
         mockCreateSandbox.mockReturnValue(makeMockSandbox());
-        loadPlugin(m as never, '/plugins/' + m.id);
+        await loadPlugin(m as never, '/plugins/' + m.id);
       }
 
       expect(listPlugins()).toHaveLength(2);
@@ -505,13 +505,13 @@ describe('Plugin Loader', () => {
       const sandbox2 = makeMockSandbox({ onRoomEnter: vi.fn() });
 
       mockCreateSandbox.mockReturnValueOnce(sandbox1);
-      loadPlugin(
+      await loadPlugin(
         { id: 'p1', name: 'P1', version: '1.0.0', description: 'P1', engine: 'js', entrypoint: 'a.js', permissions: [] } as never,
         '/plugins/p1',
       );
 
       mockCreateSandbox.mockReturnValueOnce(sandbox2);
-      loadPlugin(
+      await loadPlugin(
         { id: 'p2', name: 'P2', version: '1.0.0', description: 'P2', engine: 'js', entrypoint: 'b.js', permissions: [] } as never,
         '/plugins/p2',
       );
@@ -535,7 +535,7 @@ describe('Plugin Loader', () => {
       // Plugin has onLoad but NOT onRoomEnter
       const sandbox = makeMockSandbox({ onLoad: vi.fn() });
       mockCreateSandbox.mockReturnValue(sandbox);
-      loadPlugin(
+      await loadPlugin(
         { id: 'no-hook', name: 'NH', version: '1.0.0', description: 'NH', engine: 'js', entrypoint: 'a.js', permissions: [] } as never,
         '/plugins/no-hook',
       );
@@ -558,13 +558,13 @@ describe('Plugin Loader', () => {
       successSandbox.callHook.mockResolvedValue({ ok: true, data: {} });
 
       mockCreateSandbox.mockReturnValueOnce(failSandbox);
-      loadPlugin(
+      await loadPlugin(
         { id: 'fail-p', name: 'FP', version: '1.0.0', description: 'FP', engine: 'js', entrypoint: 'a.js', permissions: [] } as never,
         '/plugins/fail-p',
       );
 
       mockCreateSandbox.mockReturnValueOnce(successSandbox);
-      loadPlugin(
+      await loadPlugin(
         { id: 'ok-p', name: 'OP', version: '1.0.0', description: 'OP', engine: 'js', entrypoint: 'b.js', permissions: [] } as never,
         '/plugins/ok-p',
       );

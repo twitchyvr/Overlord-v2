@@ -430,7 +430,7 @@ describe('Plugin Loader', () => {
       const { loadPlugin } = await importPluginLoader();
       const manifest = makeManifest();
 
-      const result = loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      const result = await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -446,7 +446,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest();
       mockFs.readFileSync.mockReturnValue('// simple plugin\nregisterHook("onLoad", function() {});');
 
-      const result = loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      const result = await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -464,8 +464,8 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest();
       mockFs.readFileSync.mockReturnValue('// plugin code');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
-      const result = loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      const result = await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -483,7 +483,7 @@ describe('Plugin Loader', () => {
         throw new Error('ENOENT: file not found');
       });
 
-      const result = loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      const result = await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -501,7 +501,7 @@ describe('Plugin Loader', () => {
       // Code that will throw a syntax error in the VM
       mockFs.readFileSync.mockReturnValue('this is not valid javascript }{}{}{');
 
-      const result = loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      const result = await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -526,7 +526,7 @@ describe('Plugin Loader', () => {
         });
       `);
 
-      const result = loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      const result = await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -546,7 +546,7 @@ describe('Plugin Loader', () => {
         });
       `);
 
-      const result = loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      const result = await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       // Plugin should still be active despite hook error
       expect(result.ok).toBe(true);
@@ -571,7 +571,7 @@ describe('Plugin Loader', () => {
         });
       `);
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
       expect(getPlugin('test-plugin')).toBeDefined();
 
       const result = unloadPlugin('test-plugin');
@@ -603,7 +603,7 @@ describe('Plugin Loader', () => {
         });
       `);
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const result = unloadPlugin('test-plugin');
 
@@ -630,7 +630,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest();
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const instance = getPlugin('test-plugin');
       expect(instance).toBeDefined();
@@ -651,8 +651,8 @@ describe('Plugin Loader', () => {
 
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(makeManifest({ id: 'plugin-a', name: 'A' }), '/tmp/test-plugins/plugin-a');
-      loadPlugin(makeManifest({ id: 'plugin-b', name: 'B' }), '/tmp/test-plugins/plugin-b');
+      await loadPlugin(makeManifest({ id: 'plugin-a', name: 'A' }), '/tmp/test-plugins/plugin-a');
+      await loadPlugin(makeManifest({ id: 'plugin-b', name: 'B' }), '/tmp/test-plugins/plugin-b');
 
       const list = listPlugins();
       expect(list).toHaveLength(2);
@@ -676,8 +676,8 @@ describe('Plugin Loader', () => {
         });
       `);
 
-      loadPlugin(makeManifest({ id: 'plugin-a', name: 'A' }), '/tmp/test-plugins/plugin-a');
-      loadPlugin(makeManifest({ id: 'plugin-b', name: 'B' }), '/tmp/test-plugins/plugin-b');
+      await loadPlugin(makeManifest({ id: 'plugin-a', name: 'A' }), '/tmp/test-plugins/plugin-a');
+      await loadPlugin(makeManifest({ id: 'plugin-b', name: 'B' }), '/tmp/test-plugins/plugin-b');
 
       // Should not throw
       await expect(
@@ -695,7 +695,7 @@ describe('Plugin Loader', () => {
         registerHook('onLoad', function(data) {});
       `);
 
-      loadPlugin(makeManifest(), '/tmp/test-plugins/test-plugin');
+      await loadPlugin(makeManifest(), '/tmp/test-plugins/test-plugin');
 
       // Should complete without error (skips the plugin)
       await expect(
@@ -714,7 +714,7 @@ describe('Plugin Loader', () => {
           throw new Error('Plugin A crashed');
         });
       `);
-      loadPlugin(makeManifest({ id: 'plugin-crash', name: 'Crash' }), '/tmp/test-plugins/plugin-crash');
+      await loadPlugin(makeManifest({ id: 'plugin-crash', name: 'Crash' }), '/tmp/test-plugins/plugin-crash');
 
       // Second plugin is fine
       mockFs.readFileSync.mockReturnValueOnce(`
@@ -722,7 +722,7 @@ describe('Plugin Loader', () => {
           overlord.log.info('Plugin B OK');
         });
       `);
-      loadPlugin(makeManifest({ id: 'plugin-ok', name: 'OK' }), '/tmp/test-plugins/plugin-ok');
+      await loadPlugin(makeManifest({ id: 'plugin-ok', name: 'OK' }), '/tmp/test-plugins/plugin-ok');
 
       // Should not throw even though plugin-crash fails
       await expect(
@@ -741,7 +741,7 @@ describe('Plugin Loader', () => {
         });
       `);
 
-      loadPlugin(makeManifest(), '/tmp/test-plugins/test-plugin');
+      await loadPlugin(makeManifest(), '/tmp/test-plugins/test-plugin');
       unloadPlugin('test-plugin');
 
       // No active plugins, so broadcastHook should be a no-op
@@ -762,7 +762,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest({ permissions: [] }); // no bus:emit
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const instance = getPlugin('test-plugin')!;
       // Calling bus.emit should not forward to systemBus
@@ -778,7 +778,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest({ permissions: ['bus:emit'] });
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const instance = getPlugin('test-plugin')!;
       instance.context.bus.emit('test-event', { foo: 'bar' });
@@ -794,7 +794,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest({ permissions: [] });
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const instance = getPlugin('test-plugin')!;
       const result = instance.context.rooms.listRooms();
@@ -813,7 +813,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest({ permissions: ['room:read'] });
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const instance = getPlugin('test-plugin')!;
       const result = instance.context.rooms.listRooms();
@@ -831,7 +831,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest({ permissions: ['room:read'] }); // has read, not write
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const instance = getPlugin('test-plugin')!;
       const result = instance.context.rooms.registerRoomType('custom-type', {});
@@ -849,7 +849,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest({ permissions: [] });
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const instance = getPlugin('test-plugin')!;
       const result = instance.context.agents.listAgents();
@@ -867,7 +867,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest({ permissions: [] });
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const instance = getPlugin('test-plugin')!;
       const result = instance.context.tools.registerTool({
@@ -891,7 +891,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest({ permissions: [] });
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const instance = getPlugin('test-plugin')!;
       // get without storage:read returns undefined
@@ -912,7 +912,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest({ permissions: ['storage:read', 'storage:write'] });
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const instance = getPlugin('test-plugin')!;
       instance.context.storage.set('my-key', 42);
@@ -930,7 +930,7 @@ describe('Plugin Loader', () => {
       const manifest = makeManifest();
       mockFs.readFileSync.mockReturnValue('// plugin');
 
-      loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
+      await loadPlugin(manifest, '/tmp/test-plugins/test-plugin');
 
       const instance = getPlugin('test-plugin')!;
       expect(Object.isFrozen(instance.context.manifest)).toBe(true);
@@ -991,7 +991,7 @@ describe('Plugin Sandbox', () => {
       const manifest = makeManifest({ engine: 'js' });
       const context = makeContext(manifest);
 
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       expect(sandbox).toBeDefined();
       expect(sandbox.execute).toBeTypeOf('function');
@@ -1005,7 +1005,7 @@ describe('Plugin Sandbox', () => {
       const manifest = makeManifest({ engine: 'lua' });
       const context = makeContext(manifest);
 
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
       const result = sandbox.execute('print("hello")');
 
       expect(result.ok).toBe(false);
@@ -1020,7 +1020,7 @@ describe('Plugin Sandbox', () => {
       const manifest = makeManifest({ engine: 'lua' });
       const context = makeContext(manifest);
 
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
       const result = await sandbox.callHook('onLoad', { hook: 'onLoad' });
 
       expect(result.ok).toBe(false);
@@ -1034,7 +1034,7 @@ describe('Plugin Sandbox', () => {
       const manifest = makeManifest({ engine: 'lua' });
       const context = makeContext(manifest);
 
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       expect(sandbox.getHooks()).toEqual({});
     });
@@ -1044,7 +1044,7 @@ describe('Plugin Sandbox', () => {
       const manifest = makeManifest({ engine: 'lua' });
       const context = makeContext(manifest);
 
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       expect(() => sandbox.destroy()).not.toThrow();
     });
@@ -1055,7 +1055,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute('var x = typeof process;');
 
@@ -1073,7 +1073,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute(`
         if (typeof require !== 'undefined' && require !== undefined) {
@@ -1087,7 +1087,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute(`
         if (typeof globalThis !== 'undefined' && globalThis !== undefined) {
@@ -1104,7 +1104,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute(`
         if (typeof Buffer !== 'undefined' && Buffer !== undefined) {
@@ -1118,7 +1118,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute(`
         var obj = JSON.parse('{"a":1}');
@@ -1135,7 +1135,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute('console.log("hello from plugin");');
 
@@ -1149,7 +1149,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       sandbox.execute(`
         registerHook('onLoad', function(data) {});
@@ -1166,7 +1166,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       sandbox.execute(`
         registerHook('onDoesNotExist', function(data) {});
@@ -1181,7 +1181,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       sandbox.execute(`
         registerHook('onLoad', 'not a function');
@@ -1198,7 +1198,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       sandbox.execute(`
         registerHook('onRoomEnter', function(data) {
@@ -1218,7 +1218,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       sandbox.execute('// no hooks registered');
 
@@ -1234,7 +1234,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       sandbox.execute(`
         registerHook('onToolExecute', function(data) {
@@ -1260,7 +1260,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       sandbox.destroy();
 
@@ -1275,7 +1275,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       sandbox.execute(`registerHook('onLoad', function() {});`);
       sandbox.destroy();
@@ -1291,7 +1291,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       sandbox.destroy();
       expect(() => sandbox.destroy()).not.toThrow();
@@ -1301,7 +1301,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       sandbox.execute(`
         registerHook('onLoad', function() {});
@@ -1325,7 +1325,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute('throw new Error("boom");');
 
@@ -1340,7 +1340,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute('function( { broken }');
 
@@ -1356,7 +1356,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest({ permissions: [] });
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       // The overlord.bus.emit in the sandbox calls requirePermission which returns a Result
       const result = sandbox.execute(`
@@ -1374,7 +1374,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest({ permissions: [] });
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute(`
         var r = overlord.rooms.list();
@@ -1389,7 +1389,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest({ permissions: [] });
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute(`
         var r = overlord.agents.list();
@@ -1404,7 +1404,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest({ permissions: [] });
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute(`
         var r = overlord.storage.get('key');
@@ -1419,7 +1419,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest({ permissions: [] });
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute(`
         var r = overlord.tools.register({ name: 'x', description: 'x' });
@@ -1434,7 +1434,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute(`
         if (overlord.manifest.id !== 'test-plugin') {
@@ -1451,7 +1451,7 @@ describe('Plugin Sandbox', () => {
       const { createSandbox } = await importPluginSandbox();
       const manifest = makeManifest();
       const context = makeContext(manifest);
-      const sandbox = createSandbox(manifest, context);
+      const sandbox = await createSandbox(manifest, context);
 
       const result = sandbox.execute(`
         overlord.log.info('test info');

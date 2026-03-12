@@ -242,7 +242,7 @@ function parseAndValidateManifest(manifestPath: string, pluginDir: string): Resu
  * Creates the sandboxed context, executes the entrypoint, and registers
  * any room types / tools the plugin provides.
  */
-export function loadPlugin(manifest: PluginManifest, pluginDir: string): Result<PluginInstance> {
+export async function loadPlugin(manifest: PluginManifest, pluginDir: string): Promise<Result<PluginInstance>> {
   if (!systemBus || !systemRooms || !systemAgents || !systemTools) {
     return err('PLUGIN_NOT_INITIALIZED', 'Plugin loader not initialized. Call initPluginLoader() first.');
   }
@@ -257,7 +257,7 @@ export function loadPlugin(manifest: PluginManifest, pluginDir: string): Result<
   const context = buildPluginContext(manifest);
 
   // Create the sandbox
-  const sandbox = createSandbox(manifest, context);
+  const sandbox = await createSandbox(manifest, context);
 
   // Read the entrypoint code
   const entrypointPath = path.join(pluginDir, manifest.entrypoint);

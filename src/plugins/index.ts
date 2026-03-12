@@ -67,7 +67,7 @@ export async function initPlugins(params: InitPluginsParams): Promise<void> {
 
   for (const manifest of manifests) {
     const pluginPath = path.join(resolvedDir, manifest.id);
-    const result = loadPlugin(manifest, pluginPath);
+    const result = await loadPlugin(manifest, pluginPath);
     if (result.ok) {
       loaded++;
     } else {
