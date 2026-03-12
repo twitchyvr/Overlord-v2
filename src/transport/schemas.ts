@@ -437,6 +437,41 @@ export const TaskUnassignTableSchema = z.object({
   taskId: id(),
 });
 
+// ─── Milestone Schemas ───
+
+export const MilestoneCreateSchema = z.object({
+  buildingId: id(),
+  title: name(),
+  description: optionalDescription(),
+  status: z.enum(['active', 'completed', 'cancelled']).optional().default('active'),
+  dueDate: z.string().max(64).optional(),
+  phase: optionalName(),
+  ordinal: z.number().int().min(0).optional().default(0),
+});
+
+export const MilestoneUpdateSchema = z.object({
+  id: id(),
+  title: optionalName(),
+  description: optionalDescription(),
+  status: z.enum(['active', 'completed', 'cancelled']).optional(),
+  dueDate: z.string().max(64).optional(),
+  phase: optionalName(),
+  ordinal: z.number().int().min(0).optional(),
+});
+
+export const MilestoneListSchema = z.object({
+  buildingId: id(),
+  status: z.enum(['active', 'completed', 'cancelled']).optional(),
+});
+
+export const MilestoneGetSchema = z.object({
+  id: id(),
+});
+
+export const MilestoneDeleteSchema = z.object({
+  id: id(),
+});
+
 // ─── TODO Schemas ───
 
 export const TodoCreateSchema = z.object({
