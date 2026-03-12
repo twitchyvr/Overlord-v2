@@ -633,6 +633,21 @@ export class AgentsView extends Component {
     }
     content.appendChild(infoSection);
 
+    // ── Assigned Todos ──
+    const todosSection = h('div', { class: 'agents-view-detail-section' });
+    todosSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Assigned Todos'));
+    const todosContainer = h('div', {
+      class: 'agent-todos-list',
+      id: `agent-todos-${agent.id}`
+    },
+      h('div', { class: 'empty-state-inline' }, 'Loading...')
+    );
+    todosSection.appendChild(todosContainer);
+    content.appendChild(todosSection);
+
+    // Fetch todos for this agent asynchronously
+    this._fetchAgentTodos(agent.id);
+
     // ── Profile Generation Actions ──
     const profileActionsSection = h('div', { class: 'agents-view-detail-section' });
     profileActionsSection.appendChild(
@@ -876,6 +891,85 @@ export class AgentsView extends Component {
   /** Find an agent by ID from the current agent list. */
   _findAgentById(agentId) {
     return this._agents.find(a => a.id === agentId) || null;
+  }
+
+  // ── Agent Todos ────────────────────────────────────────────────
+
+  /**
+   * Fetch and render todos assigned to a specific agent.
+   * Renders into #agent-todos-{agentId} container within the drawer.
+   */
+  async _fetchAgentTodos(agentId) {
+    const container = document.getElementById(`agent-todos-${agentId}`);
+    if (!container) return;
+
+    if (!window.overlordSocket) {
+      container.textContent = '';
+      container.appendChild(h('div', { class: 'empty-state-inline' }, 'Not connected'));
+      return;
+    }
+
+    try {
+      const res = await window.overlordSocket.listTodosByAgent(agentId);
+      if (!res || !res.ok) {
+        container.textContent = '';
+        container.appendChild(h('div', { class: 'empty-state-inline' }, 'Failed to load todos'));
+        return;
+      }
+
+      const todos = res.data || [];
+      container.textContent = '';
+
+      if (todos.length === 0) {
+        container.appendChild(h('div', { class: 'empty-state-inline' }, 'No todos assigned to this agent'));
+        return;
+      }
+
+      // Resolve task titles from the store
+      const store = OverlordUI.getStore();
+      const tasks = store?.get('tasks.list') || [];
+
+      for (const todo of todos) {
+        const isDone = todo.status === 'done' || todo.status === 'completed';
+        const parentTask = tasks.find(t => t.id === todo.task_id);
+        const taskTitle = parentTask ? parentTask.title : 'Unknown task';
+
+        const todoRow = h('div', { class: `agent-todo-row ${isDone ? 'agent-todo-done' : ''}` });
+
+        // Status indicator
+        const statusDot = h('div', { class: `agent-todo-status ${isDone ? 'agent-todo-status-done' : 'agent-todo-status-pending'}` });
+        todoRow.appendChild(statusDot);
+
+        // Content: description + parent task
+        const todoContent = h('div', { class: 'agent-todo-content' });
+        todoContent.appendChild(
+          h('div', { class: 'agent-todo-description' }, todo.description || 'Untitled todo')
+        );
+
+        // Parent task link
+        const taskLink = h('div', { class: 'agent-todo-task-link' });
+        const taskBtn = h('button', { class: 'agent-todo-task-btn' }, taskTitle);
+        taskBtn.addEventListener('click', () => {
+          Drawer.close();
+          OverlordUI.dispatch('navigate:entity', { type: 'task', id: todo.task_id });
+        });
+        taskLink.appendChild(taskBtn);
+        todoContent.appendChild(taskLink);
+
+        todoRow.appendChild(todoContent);
+
+        // Status badge
+        const statusBadge = h('span', {
+          class: `agent-todo-badge ${isDone ? 'agent-todo-badge-done' : 'agent-todo-badge-pending'}`
+        }, isDone ? 'Done' : 'Pending');
+        todoRow.appendChild(statusBadge);
+
+        container.appendChild(todoRow);
+      }
+    } catch (err) {
+      container.textContent = '';
+      container.appendChild(h('div', { class: 'empty-state-inline' }, 'Error loading todos'));
+    }
   }
 
   // ── Create Agent Modal ───────────────────────────────────────

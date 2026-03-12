@@ -346,8 +346,21 @@ export class TaskView extends Component {
     }
 
     // Todos section
-    const todoSection = h('div', { class: 'task-detail-section' },
+    const todoHeader = h('div', { class: 'todo-section-header' },
       h('h4', null, 'Checklist'),
+      Button.create('Add Item', {
+        variant: 'ghost',
+        size: 'sm',
+        icon: '+',
+        onClick: () => this._toggleAddTodoForm(task.id)
+      })
+    );
+    const todoAddForm = h('div', { class: 'todo-add-form todo-add-form-hidden', id: 'todo-add-form' });
+    this._buildAddTodoForm(todoAddForm, task.id);
+
+    const todoSection = h('div', { class: 'task-detail-section' },
+      todoHeader,
+      todoAddForm,
       h('div', { class: 'task-todo-list', id: 'task-detail-todos' },
         h('div', { class: 'empty-state-inline' }, 'Loading...')
       )
@@ -378,28 +391,217 @@ export class TaskView extends Component {
     todoContainer.textContent = '';
 
     if (!this._todos || this._todos.length === 0) {
-      todoContainer.appendChild(h('div', { class: 'empty-state-inline' }, 'No checklist items'));
+      todoContainer.appendChild(h('div', { class: 'empty-state-inline' }, 'No checklist items yet'));
       return;
     }
 
+    // Summary bar: X of Y complete
+    const doneCount = this._todos.filter(t => t.status === 'done' || t.status === 'completed').length;
+    const totalCount = this._todos.length;
+    const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+
+    const summaryBar = h('div', { class: 'todo-summary-bar' },
+      h('span', { class: 'todo-summary-text' }, `${doneCount} of ${totalCount} complete`),
+      h('div', { class: 'todo-progress-track' },
+        h('div', { class: 'todo-progress-fill', style: { width: `${pct}%` } })
+      )
+    );
+    todoContainer.appendChild(summaryBar);
+
     for (const todo of this._todos) {
       const isDone = todo.status === 'done' || todo.status === 'completed';
-      const row = h('div', { class: `todo-row ${isDone ? 'todo-done' : ''}` },
-        h('div', { class: `todo-checkbox ${isDone ? 'checked' : ''}`, 'data-todo-id': todo.id }),
+      const agentName = this._getAgentName(todo.agent_id);
+
+      // Build row contents
+      const rowChildren = [];
+
+      // Checkbox
+      const checkbox = h('div', {
+        class: `todo-checkbox ${isDone ? 'checked' : ''}`,
+        'data-todo-id': todo.id
+      });
+      checkbox.addEventListener('click', async () => {
+        try {
+          if (window.overlordSocket) {
+            await window.overlordSocket.toggleTodo(todo.id);
+          }
+        } catch (err) {
+          Toast.error('Failed to toggle todo');
+        }
+      });
+      rowChildren.push(checkbox);
+
+      // Description text
+      rowChildren.push(
         h('span', { class: 'todo-text' }, todo.description || 'Untitled todo')
       );
-      // Wire toggle click
-      const checkbox = row.querySelector('.todo-checkbox');
-      if (checkbox) {
-        checkbox.style.cursor = 'pointer';
-        checkbox.addEventListener('click', () => {
-          if (window.overlordSocket) {
-            window.overlordSocket.toggleTodo(todo.id);
+
+      // Agent assignment badge/dropdown
+      const agentControl = h('div', { class: 'todo-agent-control' });
+      const agentSelect = h('select', { class: 'todo-agent-select' });
+      agentSelect.appendChild(h('option', { value: '' }, 'Unassigned'));
+      for (const agent of this._agents) {
+        const opt = h('option', { value: agent.id }, agent.name || agent.id);
+        if (agent.id === todo.agent_id) opt.selected = true;
+        agentSelect.appendChild(opt);
+      }
+      agentSelect.addEventListener('change', async (e) => {
+        const newAgentId = e.target.value;
+        try {
+          if (!window.overlordSocket) return;
+          if (newAgentId) {
+            await window.overlordSocket.assignTodoToAgent(todo.id, newAgentId);
+            Toast.success('Agent assigned');
+          } else {
+            await window.overlordSocket.unassignTodoFromAgent(todo.id);
+            Toast.success('Agent unassigned');
+          }
+        } catch (err) {
+          Toast.error('Failed to update agent assignment');
+        }
+      });
+
+      // Show badge if assigned, click to reveal dropdown
+      if (agentName) {
+        const badge = h('span', { class: 'todo-agent-badge' }, agentName);
+        badge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          badge.style.display = 'none';
+          agentSelect.style.display = '';
+          agentSelect.focus();
+        });
+        agentSelect.style.display = 'none';
+        agentSelect.addEventListener('blur', () => {
+          agentSelect.style.display = 'none';
+          badge.style.display = '';
+          // Update badge text in case agent changed
+          const newId = agentSelect.value;
+          badge.textContent = this._getAgentName(newId) || 'Unassigned';
+          if (!newId) {
+            badge.textContent = '';
+            badge.style.display = 'none';
+            agentSelect.style.display = '';
           }
         });
+        agentControl.appendChild(badge);
+        agentControl.appendChild(agentSelect);
+      } else {
+        agentControl.appendChild(agentSelect);
       }
+      rowChildren.push(agentControl);
+
+      // Delete button
+      const deleteBtn = h('button', {
+        class: 'todo-delete-btn',
+        title: 'Delete todo'
+      }, '\u00D7');
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          if (window.overlordSocket) {
+            await window.overlordSocket.deleteTodo(todo.id);
+            Toast.success('Todo deleted');
+          }
+        } catch (err) {
+          Toast.error('Failed to delete todo');
+        }
+      });
+      rowChildren.push(deleteBtn);
+
+      const row = h('div', { class: `todo-row ${isDone ? 'todo-done' : ''}` }, ...rowChildren);
       todoContainer.appendChild(row);
     }
+  }
+
+  // ── Add Todo Form ─────────────────────────────────────────
+
+  _toggleAddTodoForm(taskId) {
+    const form = document.getElementById('todo-add-form');
+    if (!form) return;
+    form.classList.toggle('todo-add-form-hidden');
+    if (!form.classList.contains('todo-add-form-hidden')) {
+      const input = form.querySelector('.todo-add-input');
+      if (input) input.focus();
+    }
+  }
+
+  _buildAddTodoForm(container, taskId) {
+    container.textContent = '';
+
+    const inputRow = h('div', { class: 'todo-add-input-row' });
+
+    const descInput = h('input', {
+      class: 'form-input todo-add-input',
+      type: 'text',
+      placeholder: 'New checklist item...'
+    });
+    inputRow.appendChild(descInput);
+
+    // Agent dropdown for new todo
+    const agentSelect = h('select', { class: 'form-input todo-add-agent-select' });
+    agentSelect.appendChild(h('option', { value: '' }, 'No agent'));
+    for (const agent of this._agents) {
+      agentSelect.appendChild(h('option', { value: agent.id }, agent.name || agent.id));
+    }
+    inputRow.appendChild(agentSelect);
+
+    const submitBtn = Button.create('Add', {
+      variant: 'primary',
+      size: 'sm',
+      onClick: async () => {
+        const description = descInput.value.trim();
+        if (!description) {
+          descInput.classList.add('input-error');
+          return;
+        }
+        descInput.classList.remove('input-error');
+
+        const agentId = agentSelect.value || null;
+
+        try {
+          if (!window.overlordSocket) return;
+          const res = await window.overlordSocket.createTodo({
+            taskId,
+            description,
+            agentId,
+            status: 'pending'
+          });
+          if (res && res.ok) {
+            Toast.success('Todo added');
+            descInput.value = '';
+            agentSelect.value = '';
+            // Re-fetch todos for this task
+            this._refreshTodos(taskId);
+          } else {
+            Toast.error(res?.error?.message || 'Failed to create todo');
+          }
+        } catch (err) {
+          Toast.error('Failed to create todo');
+        }
+      }
+    });
+    inputRow.appendChild(submitBtn);
+
+    container.appendChild(inputRow);
+
+    // Allow Enter key to submit
+    descInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitBtn.click();
+      }
+    });
+  }
+
+  async _refreshTodos(taskId) {
+    if (!window.overlordSocket) return;
+    try {
+      const res = await window.overlordSocket.fetchTodos(taskId);
+      if (res && res.ok) {
+        this._todos = res.data || [];
+        this._renderDetailTodos();
+      }
+    } catch { /* swallow */ }
   }
 
   // ── Create Task Form ───────────────────────────────────────
