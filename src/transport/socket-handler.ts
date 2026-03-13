@@ -692,6 +692,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         firstName: parsed.firstName,
         lastName: parsed.lastName,
         displayName: parsed.displayName,
+        nickname: parsed.nickname,
         bio: parsed.bio,
         photoUrl: parsed.photoUrl,
         specialization: parsed.specialization,

@@ -343,9 +343,12 @@ export class AgentsView extends Component {
     });
     cardHeader.appendChild(statusDot);
 
-    // Name, specialization, and role
+    // Name, nickname, specialization, and role
     const nameGroup = h('div', { class: 'agents-view-card-name-group' },
       h('div', { class: 'agents-view-card-name' }, displayName),
+      agent.nickname
+        ? h('div', { class: 'agents-view-card-nickname' }, `"${agent.nickname}"`)
+        : null,
       agent.specialization
         ? h('div', { class: 'agents-view-card-specialization' }, agent.specialization)
         : null,
@@ -528,6 +531,9 @@ export class AgentsView extends Component {
     if (agent.first_name || agent.last_name) {
       const fullName = [agent.first_name, agent.last_name].filter(Boolean).join(' ');
       profileRows.push(['Full Name', fullName]);
+    }
+    if (agent.nickname) {
+      profileRows.push(['Nickname', `"${agent.nickname}"`]);
     }
     if (agent.first_name && agent.last_name) {
       const emailStyle = `${agent.first_name.toLowerCase()}.${agent.last_name.toLowerCase()}@overlord.ai`;
@@ -783,6 +789,18 @@ export class AgentsView extends Component {
     lastNameGroup.appendChild(lastNameInput);
     editForm.appendChild(lastNameGroup);
 
+    // Nickname
+    const nicknameGroup = h('div', { class: 'agents-view-detail-edit-field' });
+    nicknameGroup.appendChild(h('label', { class: 'agents-view-detail-edit-label' }, 'Nickname'));
+    const nicknameInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      value: agent.nickname || '',
+      placeholder: 'e.g., Ace, The Architect, Pixel'
+    });
+    nicknameGroup.appendChild(nicknameInput);
+    editForm.appendChild(nicknameGroup);
+
     // Specialization
     const specGroup = h('div', { class: 'agents-view-detail-edit-field' });
     specGroup.appendChild(h('label', { class: 'agents-view-detail-edit-label' }, 'Specialization'));
@@ -818,6 +836,7 @@ export class AgentsView extends Component {
         const profileUpdate = {
           firstName: firstNameInput.value.trim() || undefined,
           lastName: lastNameInput.value.trim() || undefined,
+          nickname: nicknameInput.value.trim() || undefined,
           specialization: specInput.value.trim() || undefined,
           bio: bioInput.value.trim() || undefined,
         };
@@ -981,6 +1000,7 @@ export class AgentsView extends Component {
       // Manual profile fields (used when auto-generate is off)
       first_name: '',
       last_name: '',
+      nickname: '',
       bio: '',
       specialization: '',
     };
@@ -1079,6 +1099,18 @@ export class AgentsView extends Component {
     lnInput.addEventListener('input', () => { formData.last_name = lnInput.value; });
     lnGroup.appendChild(lnInput);
     manualFields.appendChild(lnGroup);
+
+    // Nickname
+    const nnGroup = h('div', { class: 'agent-create-field' });
+    nnGroup.appendChild(h('label', { class: 'agent-create-label agent-create-label-sub' }, 'Nickname'));
+    const nnInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      placeholder: 'e.g., Ace, The Architect, Pixel'
+    });
+    nnInput.addEventListener('input', () => { formData.nickname = nnInput.value; });
+    nnGroup.appendChild(nnInput);
+    manualFields.appendChild(nnGroup);
 
     // Specialization
     const specManualGroup = h('div', { class: 'agent-create-field' });
@@ -1220,6 +1252,7 @@ export class AgentsView extends Component {
       if (!formData.autoGenerateProfile) {
         if (formData.first_name.trim()) payload.firstName = formData.first_name.trim();
         if (formData.last_name.trim()) payload.lastName = formData.last_name.trim();
+        if (formData.nickname.trim()) payload.nickname = formData.nickname.trim();
         if (formData.specialization.trim()) payload.specialization = formData.specialization.trim();
         if (formData.bio.trim()) payload.bio = formData.bio.trim();
         // Build displayName from first + last name

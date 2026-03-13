@@ -236,6 +236,7 @@ export function updateAgentProfile(agentId: string, profile: AgentProfileFields)
   if (profile.lastName !== undefined) { fields.push('last_name = ?'); params.push(profile.lastName ?? null); }
   if (profile.bio !== undefined) { fields.push('bio = ?'); params.push(profile.bio ?? null); }
   if (profile.photoUrl !== undefined) { fields.push('photo_url = ?'); params.push(profile.photoUrl ?? null); }
+  if (profile.nickname !== undefined) { fields.push('nickname = ?'); params.push(profile.nickname ?? null); }
   if (profile.specialization !== undefined) { fields.push('specialization = ?'); params.push(profile.specialization ?? null); }
   if (profile.profileGenerated !== undefined) { fields.push('profile_generated = ?'); params.push(profile.profileGenerated ? 1 : 0); }
 

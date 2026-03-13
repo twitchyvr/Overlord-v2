@@ -141,6 +141,7 @@ export interface AgentRow {
   first_name: string | null;
   last_name: string | null;
   display_name: string | null;
+  nickname: string | null;
   bio: string | null;
   photo_url: string | null;
   specialization: string | null;
@@ -311,6 +312,7 @@ export interface AgentProfileFields {
   firstName?: string | null;
   lastName?: string | null;
   displayName?: string | null;
+  nickname?: string | null;
   bio?: string | null;
   photoUrl?: string | null;
   specialization?: string | null;
@@ -366,6 +368,7 @@ export interface ParsedAgent {
   first_name: string | null;
   last_name: string | null;
   display_name: string | null;
+  nickname: string | null;
   bio: string | null;
   photo_url: string | null;
   specialization: string | null;
