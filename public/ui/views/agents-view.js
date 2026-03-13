@@ -836,7 +836,7 @@ export class AgentsView extends Component {
         const profileUpdate = {
           firstName: firstNameInput.value.trim() || undefined,
           lastName: lastNameInput.value.trim() || undefined,
-          nickname: nicknameInput.value.trim() || undefined,
+          nickname: nicknameInput.value.trim() || null,
           specialization: specInput.value.trim() || undefined,
           bio: bioInput.value.trim() || undefined,
         };

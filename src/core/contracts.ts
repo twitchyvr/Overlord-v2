@@ -325,7 +325,8 @@ export interface AgentRegistryAPI {
     roomAccess?: string[]; badge?: string | null; config?: Record<string, unknown>;
     buildingId?: string | null;
     firstName?: string | null; lastName?: string | null; displayName?: string | null;
-    bio?: string | null; photoUrl?: string | null; specialization?: string | null;
+    nickname?: string | null; bio?: string | null; photoUrl?: string | null; specialization?: string | null;
+    gender?: string;
   }) => Result;
   removeAgent: (agentId: string) => Result;
   getAgent: (agentId: string) => ParsedAgent | null;

@@ -737,6 +737,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
           firstName: agent.first_name,
           lastName: agent.last_name,
           displayName: agent.display_name,
+          nickname: agent.nickname,
           bio: agent.bio,
           photoUrl: agent.photo_url,
           specialization: agent.specialization,
