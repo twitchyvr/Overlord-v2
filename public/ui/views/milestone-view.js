@@ -447,7 +447,8 @@ export class MilestoneView extends Component {
     Drawer.open('milestone-detail', {
       title: `Milestone: ${milestone.title}`,
       width: '520px',
-      content
+      content,
+      onClose: () => { this._openDrawerMilestoneId = null; }
     });
   }
 
