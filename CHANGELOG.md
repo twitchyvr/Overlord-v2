@@ -25,6 +25,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Agent status changes in Activity feed** — Agents tab in activity view shows real-time status updates (#287)
 
 ### Fixed
+- **Agent Mail loading spinner stuck forever** — `_fetchData` now handles fetch failure and late agent hydration (#331, PR #332)
 - **90 test failures across 10 test files** — DB schema counts, missing agent profile columns, config default, transport schema evolution, socket handler disconnect behavior, UI view CSS selectors and store subscriptions (#329, PR #330)
 - **11 UI modal/form/toast bugs** — invalid modal sizes, misused Toast API, missing try/catch on async socket calls, shared modal IDs causing conflicts, missing null guards, silent error swallowing (#327, PR #328)
 - **7 transport-layer data integrity bugs** — RAID duplicate entries, scope-change store corruption, duplicate forward, exit-doc JSON parsing, gate signoff data shape, RAID edit broadcast, drawer onClose (#323, PR #324)
