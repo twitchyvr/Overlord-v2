@@ -66,6 +66,7 @@ export class AgentsView extends Component {
     this._agentPositions = {};
     this._rooms = [];
     this._filter = 'all';
+    this._sort = 'name';     // 'name' | 'status' | 'last-active'
     this._tabs = null;
   }
 
@@ -165,8 +166,11 @@ export class AgentsView extends Component {
 
   /** Get the filtered agent list based on current filter. */
   _getFilteredAgents() {
-    if (this._filter === 'all') return this._agents;
-    return this._getAgentsByStatus(this._filter);
+    let list;
+    if (this._filter === 'all') list = this._agents;
+    else if (this._filter === 'in-room') list = this._getAgentsInRooms();
+    else list = this._getAgentsByStatus(this._filter);
+    return this._sortAgents(list);
   }
 
   // ── Main Render ──────────────────────────────────────────────
@@ -207,7 +211,8 @@ export class AgentsView extends Component {
       items: [
         { id: 'all',    label: 'All',    badge: String(this._agents.length) },
         { id: 'active', label: 'Active', badge: String(this._getAgentsByStatus('active').length) },
-        { id: 'idle',   label: 'Idle',   badge: String(this._getAgentsByStatus('idle').length) }
+        { id: 'idle',   label: 'Idle',   badge: String(this._getAgentsByStatus('idle').length) },
+        { id: 'in-room', label: 'In Room', badge: String(this._getAgentsInRooms().length) }
       ],
       activeId: this._filter,
       style: 'pills',
@@ -219,6 +224,27 @@ export class AgentsView extends Component {
     this._tabs.mount();
     this.el.appendChild(tabContainer);
 
+    const roomNameMap = this._buildRoomNameMap();
+
+    // ── Sort dropdown ──
+    const sortRow = h('div', { class: 'agents-view-sort-row', style: 'display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-3)' });
+    sortRow.appendChild(h('span', { style: 'font-size:var(--text-sm);color:var(--text-secondary)' }, 'Sort by:'));
+    const sortSelect = h('select', { class: 'agents-sort-dropdown' });
+    sortSelect.appendChild(h('option', { value: 'name' }, 'Name'));
+    sortSelect.appendChild(h('option', { value: 'status' }, 'Status'));
+    sortSelect.appendChild(h('option', { value: 'last-active' }, 'Last Active'));
+    sortSelect.value = this._sort;
+    sortSelect.addEventListener('change', () => {
+      this._sort = sortSelect.value;
+      this._render();
+    });
+    sortRow.appendChild(sortSelect);
+    this.el.appendChild(sortRow);
+
+    // ── Currently working section ──
+    const workingSection = this._renderWorkingSection(roomNameMap);
+    if (workingSection) this.el.appendChild(workingSection);
+
     // ── Agent grid ──
     const filtered = this._getFilteredAgents();
 
@@ -227,7 +253,6 @@ export class AgentsView extends Component {
       return;
     }
 
-    const roomNameMap = this._buildRoomNameMap();
     const grid = h('div', { class: 'agents-view-grid' });
 
     for (const agent of filtered) {
@@ -259,6 +284,48 @@ export class AgentsView extends Component {
     }
 
     return emptyContainer;
+  }
+
+  /** Get agents currently assigned to rooms. */
+  _getAgentsInRooms() {
+    return this._agents.filter(a => this._resolveRoomId(a));
+  }
+
+  /** Sort agents by the selected criterion. */
+  _sortAgents(agents) {
+    const sorted = [...agents];
+    if (this._sort === 'name') {
+      sorted.sort((a, b) => (this._resolveDisplayName(a) || '').localeCompare(this._resolveDisplayName(b) || ''));
+    } else if (this._sort === 'status') {
+      const order = { active: 0, working: 0, paused: 1, idle: 2, error: 3 };
+      sorted.sort((a, b) => (order[this._resolveStatus(a)] ?? 9) - (order[this._resolveStatus(b)] ?? 9));
+    } else if (this._sort === 'last-active') {
+      sorted.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+    }
+    return sorted;
+  }
+
+  /** Render a highlighted section showing agents currently in rooms. */
+  _renderWorkingSection(roomNameMap) {
+    const working = this._getAgentsInRooms();
+    if (working.length === 0) return null;
+
+    const section = h('div', { class: 'agents-working-section' });
+    section.appendChild(h('div', { class: 'agents-working-title' },
+      `Currently Working (${working.length})`));
+
+    for (const agent of working) {
+      const roomId = this._resolveRoomId(agent);
+      const roomName = roomId ? (roomNameMap[roomId] || 'Room') : '';
+      const statusCfg = STATUS_CONFIG[this._resolveStatus(agent)] || STATUS_CONFIG.idle;
+      const row = h('div', { style: 'display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) 0;font-size:var(--text-sm)' },
+        h('div', { class: `agents-view-status-dot ${statusCfg.dot}`, style: 'position:static;width:8px;height:8px' }),
+        h('span', { style: 'font-weight:var(--font-medium)' }, this._resolveDisplayName(agent)),
+        h('span', { style: 'color:var(--text-muted)' }, `in ${roomName}`)
+      );
+      section.appendChild(row);
+    }
+    return section;
   }
 
   // ── Agent Card ───────────────────────────────────────────────

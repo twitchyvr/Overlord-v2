@@ -854,3 +854,13 @@ export const PluginImportSchema = z.object({
 export const PluginLogSubscribeSchema = z.object({
   pluginId: id(),
 });
+
+// --- Quality Config Schemas ---
+
+export const QualityConfigGetSchema = z.object({});
+
+export const QualityConfigSetSchema = z.object({
+  key: z.enum(['autoLint', 'autoTypecheck', 'autoTest', 'autoSecurityScan', 'minCoverage']),
+  value: z.union([z.boolean(), z.number()]),
+});
+

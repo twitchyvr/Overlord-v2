@@ -17,6 +17,8 @@ import { webSearch, fetchWebpage } from './providers/web.js';
 import { fetchUrl, transformData, exportData, validateSchema } from './providers/data-exchange.js';
 import { switchProvider, compareModels, configureFallback, testProvider } from './providers/provider-hub.js';
 import { installPlugin, uninstallPlugin, configurePlugin, testPlugin, listPlugins } from './providers/plugin-bay.js';
+import { executeStaticAnalysis } from './providers/static-analysis.js';
+import { executeDeepAnalysis } from './providers/deep-analysis.js';
 import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
 
 const log = logger.child({ module: 'tool-registry' });
@@ -278,6 +280,64 @@ function registerBuiltinTools(): void {
       },
     });
   }
+
+  // --- QA Static Analysis ---
+  registerTool({
+    name: 'qa_static_analysis',
+    description: 'QA: auto-detect project type and run lint/type-check',
+    category: 'qa',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectDir: { type: 'string', description: 'Project directory to analyze' },
+        checks: { type: 'array', items: { type: 'string' }, description: 'Checks to run: lint, typecheck (default: both)' },
+      },
+      required: ['projectDir'],
+    },
+    execute: async (p) => {
+      const result = await executeStaticAnalysis({
+        projectDir: p.projectDir as string,
+        checks: p.checks as string[] | undefined,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const d = result.data;
+      return {
+        output: '[' + d.projectType + '] ' + d.summary,
+        ...d,
+      };
+    },
+  });
+
+  // --- QA Deep Analysis ---
+  registerTool({
+    name: 'qa_deep_analysis',
+    description: 'QA: run security audit, dependency check, and complexity analysis',
+    category: 'qa',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectDir: { type: 'string', description: 'Project directory to analyze' },
+        analysisType: { type: 'string', description: 'Type: security, dependencies, complexity, all (default: all)' },
+      },
+      required: ['projectDir'],
+    },
+    execute: async (p) => {
+      const result = await executeDeepAnalysis({
+        projectDir: p.projectDir as string,
+        analysisType: p.analysisType as 'security' | 'dependencies' | 'complexity' | 'all' | undefined,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const d = result.data;
+      return {
+        output: d.summary,
+        ...d,
+      };
+    },
+  });
 
   // ─── GitHub ───
   registerTool({

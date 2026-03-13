@@ -1,0 +1,19 @@
+{
+  "name": "Overlord v2",
+  "short_name": "Overlord",
+  "description": "AI-powered project orchestration platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#3b82f6",
+  "orientation": "any",
+  "categories": ["productivity", "developer tools"],
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
