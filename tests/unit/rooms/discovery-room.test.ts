@@ -95,6 +95,19 @@ describe('DiscoveryRoom', () => {
       expect(rules.some((r) => r.includes('NO code changes'))).toBe(true);
     });
 
+    it('getRules includes plain-language guidance for non-technical users', () => {
+      const room = new DiscoveryRoom('room_1');
+      const rules = room.getRules();
+      expect(rules.some((r) => r.includes('PLAIN LANGUAGE'))).toBe(true);
+      expect(rules.some((r) => r.includes('business language'))).toBe(true);
+    });
+
+    it('getRules includes effort-level-aware behavior for easy mode', () => {
+      const room = new DiscoveryRoom('room_1');
+      const rules = room.getRules();
+      expect(rules.some((r) => r.includes('effortLevel') && r.includes('easy'))).toBe(true);
+    });
+
     it('getOutputFormat returns structured requirements shape', () => {
       const room = new DiscoveryRoom('room_1');
       const format = room.getOutputFormat() as Record<string, unknown>;

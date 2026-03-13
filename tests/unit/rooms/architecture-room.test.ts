@@ -88,6 +88,18 @@ describe('ArchitectureRoom', () => {
       expect(rules.some((r) => r.includes('dependency graph'))).toBe(true);
     });
 
+    it('getRules includes plain-language guidance', () => {
+      const room = new ArchitectureRoom('room_1');
+      const rules = room.getRules();
+      expect(rules.some((r) => r.includes('PLAIN LANGUAGE'))).toBe(true);
+    });
+
+    it('getRules includes effort-level-aware behavior for easy mode', () => {
+      const room = new ArchitectureRoom('room_1');
+      const rules = room.getRules();
+      expect(rules.some((r) => r.includes('effortLevel') && r.includes('easy'))).toBe(true);
+    });
+
     it('getOutputFormat returns structured architecture shape', () => {
       const room = new ArchitectureRoom('room_1');
       const format = room.getOutputFormat() as Record<string, unknown>;

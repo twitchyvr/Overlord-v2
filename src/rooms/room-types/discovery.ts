@@ -55,6 +55,8 @@ export class DiscoveryRoom extends BaseRoom {
       'Identify business outcomes, constraints, and unknowns.',
       'Produce a gap analysis between current and target state.',
       'All risks must include independent analysis and citations.',
+      'PLAIN LANGUAGE: Translate all findings into business language the user understands. Present requirements as what the user will experience, not the technology. Example: "Customers can place orders online" not "REST API with cart endpoints".',
+      'When effortLevel is "easy", make all technical decisions autonomously. Only ask the user about business-logic questions: "Will customers need accounts?" not "Which auth provider?".',
     ];
   }
 

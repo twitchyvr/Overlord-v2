@@ -15,6 +15,100 @@ import { Button } from '../components/button.js';
 import { Toast } from '../components/toast.js';
 
 
+// ─── Template Inference ───
+// Maps plain-language keywords to template IDs for one-shot prompting.
+// Each template has a set of trigger words. The template with the most
+// keyword hits wins. Ties go to 'web-app' (the most common project type).
+
+const TEMPLATE_KEYWORDS = {
+  'web-app': [
+    'website', 'web app', 'webapp', 'web application', 'frontend', 'landing page',
+    'dashboard', 'portal', 'shop', 'store', 'e-commerce', 'ecommerce', 'blog',
+    'cms', 'saas', 'online', 'booking', 'marketplace', 'platform', 'bakery',
+    'restaurant', 'portfolio', 'social', 'forum', 'wiki',
+  ],
+  'microservices': [
+    'microservice', 'distributed', 'multiple services', 'event-driven', 'kafka',
+    'message queue', 'service mesh', 'api gateway', 'container', 'kubernetes',
+    'scalable', 'multi-service',
+  ],
+  'data-pipeline': [
+    'data', 'pipeline', 'etl', 'analytics', 'dashboard', 'report', 'chart',
+    'visualization', 'machine learning', 'ml', 'ai model', 'prediction',
+    'warehouse', 'database', 'sales data', 'metrics', 'tracking',
+  ],
+  'cli-tool': [
+    'cli', 'command line', 'command-line', 'terminal', 'script', 'automation',
+    'batch', 'cron', 'utility', 'tool',
+  ],
+  'api-service': [
+    'api', 'rest', 'graphql', 'endpoint', 'webhook', 'integration',
+    'authentication', 'auth', 'backend service', 'server',
+  ],
+};
+
+/**
+ * Infer the best-matching template from a plain-language project description.
+ * Returns the template object, or the default 'web-app' if no strong match.
+ */
+export function inferTemplate(prompt, templates) {
+  if (!prompt || typeof prompt !== 'string') return templates[0]; // web-app default
+
+  const lower = prompt.toLowerCase();
+  const scores = {};
+
+  for (const [templateId, keywords] of Object.entries(TEMPLATE_KEYWORDS)) {
+    scores[templateId] = 0;
+    for (const keyword of keywords) {
+      if (lower.includes(keyword)) {
+        scores[templateId]++;
+      }
+    }
+  }
+
+  // Find the template with the highest score
+  let bestId = 'web-app';
+  let bestScore = 0;
+  for (const [id, score] of Object.entries(scores)) {
+    if (score > bestScore) {
+      bestScore = score;
+      bestId = id;
+    }
+  }
+
+  return templates.find(t => t.id === bestId) || templates[0];
+}
+
+/**
+ * Extract a project name from a plain-language prompt.
+ * Looks for patterns like "build me a X", "create a X", "make a X", "I need a X".
+ */
+export function extractProjectName(prompt) {
+  if (!prompt || typeof prompt !== 'string') return '';
+
+  // Try to extract a noun phrase after common trigger patterns
+  const patterns = [
+    /(?:build|create|make|develop|design)\s+(?:me\s+)?(?:a|an)\s+(.+?)(?:\s+(?:with|that|for|using|which|like|where|and)\b|$)/i,
+    /(?:i\s+(?:need|want))\s+(?:a|an)\s+(.+?)(?:\s+(?:with|that|for|using|which|like|where|and)\b|$)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = prompt.match(pattern);
+    if (match && match[1]) {
+      // Capitalize first letter, trim, limit length
+      const name = match[1].trim();
+      if (name.length > 2 && name.length < 100) {
+        return name.charAt(0).toUpperCase() + name.slice(1);
+      }
+    }
+  }
+
+  // Fallback: use first 50 chars of the prompt as the name
+  const trimmed = prompt.trim();
+  if (trimmed.length > 50) return trimmed.slice(0, 50) + '...';
+  return trimmed;
+}
+
 // Quick Start project templates
 const TEMPLATES = [
   {
@@ -129,6 +223,7 @@ export class StrategistView extends Component {
     this._selectedTemplate = null;
     this._step = 'select'; // 'select' | 'effort' | 'configure' | 'creating'
     this._effortLevel = 'medium'; // 'easy' | 'medium' | 'advanced'
+    this._oneShotPrompt = '';
     this._projectName = '';
     this._projectGoals = '';
     this._successCriteria = '';
@@ -172,9 +267,54 @@ export class StrategistView extends Component {
     // Header
     const header = h('div', { class: 'strategist-header' },
       h('h2', null, 'New Project'),
-      h('p', { class: 'strategist-subtitle' }, 'Choose a project template to get started. Each template pre-configures floors, rooms, and agents for your project type.')
+      h('p', { class: 'strategist-subtitle' }, 'Describe what you want to build, or choose a template below.')
     );
     this.el.appendChild(header);
+
+    // ── One-shot prompt input ──
+    const promptSection = h('div', { class: 'one-shot-section' });
+    const promptInput = h('textarea', {
+      class: 'one-shot-input',
+      placeholder: 'Just tell me what you want to build...\ne.g. "Build me a website for my bakery with online ordering"',
+      rows: '3',
+      'aria-label': 'Describe your project in plain language',
+    }, this._oneShotPrompt);
+
+    promptInput.addEventListener('input', (e) => {
+      this._oneShotPrompt = e.target.value;
+    });
+
+    // Submit via Enter (but allow Shift+Enter for newlines)
+    promptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (this._oneShotPrompt.trim().length > 0) {
+          this._handleOneShotSubmit();
+        }
+      }
+    });
+
+    const promptActions = h('div', { class: 'one-shot-actions' });
+    const goBtn = Button.create('Just Build It', {
+      variant: 'primary',
+      size: 'md',
+      icon: '\u{1F680}',
+      onClick: () => {
+        if (this._oneShotPrompt.trim().length > 0) {
+          this._handleOneShotSubmit();
+        }
+      }
+    });
+    promptActions.appendChild(goBtn);
+    promptSection.appendChild(promptInput);
+    promptSection.appendChild(promptActions);
+    this.el.appendChild(promptSection);
+
+    // ── Divider ──
+    const divider = h('div', { class: 'one-shot-divider' },
+      h('span', null, 'or choose a template')
+    );
+    this.el.appendChild(divider);
 
     // Template grid
     const grid = h('div', { class: 'template-grid' });
@@ -346,6 +486,25 @@ export class StrategistView extends Component {
       });
       grid.appendChild(card);
     }
+  }
+
+  /**
+   * Handle one-shot prompt submission.
+   * Infers the template, sets effort to easy, auto-fills goals, and creates the project.
+   */
+  _handleOneShotSubmit() {
+    const prompt = this._oneShotPrompt.trim();
+    if (!prompt) return;
+
+    // Infer the best template from the description
+    this._selectedTemplate = inferTemplate(prompt, TEMPLATES);
+    this._effortLevel = 'easy';
+    this._projectName = extractProjectName(prompt);
+    this._projectGoals = prompt;
+    this._successCriteria = `Project works as described: "${prompt.length > 100 ? prompt.slice(0, 100) + '...' : prompt}"`;
+
+    // Skip straight to creating — "Just Build It" means zero extra steps
+    this._createProject();
   }
 
   _renderConfiguration() {

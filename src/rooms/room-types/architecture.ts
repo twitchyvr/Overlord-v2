@@ -54,6 +54,8 @@ export class ArchitectureRoom extends BaseRoom {
       'Define dependency graph between tasks.',
       'Make and document tech decisions with rationale.',
       'Assign files to tasks for scoped execution.',
+      'PLAIN LANGUAGE: Document tech decisions in simple terms for user review. "We will build the website using modern tools" not "React 18 with Next.js App Router on Vercel".',
+      'When effortLevel is "easy", make all tech decisions autonomously. Only escalate to the user for business-logic decisions, not technical ones.',
     ];
   }
 
