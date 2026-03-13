@@ -117,6 +117,62 @@ export const QUICK_START_TEMPLATES: ReadonlyArray<BuildingTemplate> = [
     ],
     estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
   },
+  {
+    id: 'unity-game',
+    name: 'Unity Game',
+    description: 'Unity game project with C# scripting, scene management, and asset pipeline',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'integration', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'Game Designer', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Gameplay Developer', role: 'developer', rooms: ['code-lab', 'testing-lab'] },
+      { name: 'Systems Developer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Tester', role: 'tester', rooms: ['testing-lab'] },
+      { name: 'Build Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+  {
+    id: 'js-game',
+    name: 'JavaScript Game',
+    description: 'Browser-based game using Phaser, Three.js, PixiJS, or Babylon.js with web deployment',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'integration', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'Game Designer', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Game Developer', role: 'developer', rooms: ['code-lab', 'testing-lab'] },
+      { name: 'QA Tester', role: 'tester', rooms: ['testing-lab'] },
+      { name: 'Deploy Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+  {
+    id: 'unreal-game',
+    name: 'Unreal Engine Game',
+    description: 'Unreal Engine project with C++ and Blueprints for high-fidelity 3D games',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'integration', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'Game Designer', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Gameplay Programmer', role: 'developer', rooms: ['code-lab', 'testing-lab'] },
+      { name: 'Engine Programmer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Tester', role: 'tester', rooms: ['testing-lab'] },
+      { name: 'Build Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
 ];
 
 // ─── Room Definition ───
@@ -222,7 +278,7 @@ export class StrategistOffice extends BaseRoom {
       'ADVANCED mode: Full consultative experience. Ask detailed questions about goals, constraints, architecture. Technical terminology is acceptable.',
       'ALL MODES: Always present information in the user\'s language. A bakery owner doesn\'t care about "React" — they care about "your customers can order online".',
       'Offer Quick Start (template) or Advanced (custom) mode.',
-      'Quick Start templates: web-app, microservices, data-pipeline, cli-tool, api-service.',
+      'Quick Start templates: web-app, microservices, data-pipeline, cli-tool, api-service, unity-game, js-game, unreal-game.',
       'For Advanced mode, recommend routing to the Building Architect room.',
       'Your exit document configures the entire building. Include the effortLevel field.',
       'On completion, the system transitions to the Discovery phase.',

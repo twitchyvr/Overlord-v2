@@ -124,6 +124,35 @@ describe('StrategistOffice', () => {
         expect(template.floorsNeeded).toContain('strategy');
       }
     });
+
+    it('includes game engine templates (unity, js, unreal)', () => {
+      const ids = QUICK_START_TEMPLATES.map(t => t.id);
+      expect(ids).toContain('unity-game');
+      expect(ids).toContain('js-game');
+      expect(ids).toContain('unreal-game');
+    });
+
+    it('game engine templates have integration floor', () => {
+      const gameTemplates = QUICK_START_TEMPLATES.filter(t =>
+        ['unity-game', 'js-game', 'unreal-game'].includes(t.id)
+      );
+      expect(gameTemplates).toHaveLength(3);
+      for (const t of gameTemplates) {
+        expect(t.floorsNeeded).toContain('integration');
+      }
+    });
+
+    it('buildBlueprintFromTemplate works with game engine templates', () => {
+      const blueprint = StrategistOffice.buildBlueprintFromTemplate('unity-game', {
+        projectGoals: ['Build a 3D platformer'],
+        successCriteria: ['Player can jump and collect items'],
+        effortLevel: 'easy',
+      });
+      expect(blueprint).not.toBeNull();
+      expect(blueprint!.templateId).toBe('unity-game');
+      expect(blueprint!.effortLevel).toBe('easy');
+      expect(blueprint!.floorsNeeded).toContain('integration');
+    });
   });
 
   describe('instance behavior', () => {

@@ -983,7 +983,7 @@ describe('StrategistView', () => {
     view.mount();
 
     const cards = el.querySelectorAll('.template-card');
-    expect(cards.length).toBe(5);
+    expect(cards.length).toBe(8);
   });
 
   it('template cards have correct names', async () => {
@@ -1229,6 +1229,51 @@ describe('One-Shot Prompting — inferTemplate', () => {
     const result = inferTemplate(null as any, templates as any);
     expect(result.id).toBe('web-app');
   });
+
+  it('infers unity-game for "Unity 3d mobile game"', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [
+      { id: 'web-app' }, { id: 'unity-game' }, { id: 'js-game' }, { id: 'unreal-game' },
+    ];
+    const result = inferTemplate('create a unity 3d game for mobile phones', templates as any);
+    expect(result.id).toBe('unity-game');
+  });
+
+  it('infers js-game for "browser game with Phaser"', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [
+      { id: 'web-app' }, { id: 'unity-game' }, { id: 'js-game' }, { id: 'unreal-game' },
+    ];
+    const result = inferTemplate('build a browser game using Phaser with pixel art', templates as any);
+    expect(result.id).toBe('js-game');
+  });
+
+  it('infers unreal-game for "Unreal Engine FPS"', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [
+      { id: 'web-app' }, { id: 'unity-game' }, { id: 'js-game' }, { id: 'unreal-game' },
+    ];
+    const result = inferTemplate('create an Unreal Engine FPS game with photorealistic graphics', templates as any);
+    expect(result.id).toBe('unreal-game');
+  });
+
+  it('infers unity-game for "3d mobile game"', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [
+      { id: 'web-app' }, { id: 'unity-game' }, { id: 'js-game' }, { id: 'unreal-game' },
+    ];
+    const result = inferTemplate('build a 3d game for mobile phones', templates as any);
+    expect(result.id).toBe('unity-game');
+  });
+
+  it('infers js-game for "2d html5 game"', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [
+      { id: 'web-app' }, { id: 'unity-game' }, { id: 'js-game' }, { id: 'unreal-game' },
+    ];
+    const result = inferTemplate('make a 2d game playable in the browser as an html5 game', templates as any);
+    expect(result.id).toBe('js-game');
+  });
 });
 
 describe('One-Shot Prompting — extractProjectName', () => {
@@ -1324,7 +1369,7 @@ describe('One-Shot Prompting — UI', () => {
     // Both should be present
     expect(el.querySelector('.one-shot-section')).not.toBeNull();
     expect(el.querySelector('.template-grid')).not.toBeNull();
-    expect(el.querySelectorAll('.template-card').length).toBe(5);
+    expect(el.querySelectorAll('.template-card').length).toBe(8);
   });
 });
 
