@@ -764,3 +764,12 @@ export const SessionNoteDeleteSchema = z.object({
 export const SessionNoteClearSchema = z.object({
   agentId: id(),
 });
+
+// ─── Global Search Schema ───
+
+export const SearchGlobalSchema = z.object({
+  buildingId: id(),
+  query: z.string().min(1).max(MAX_NAME),
+  filters: z.array(z.string().max(50)).max(10).optional().default([]),
+  limit: z.number().int().min(1).max(50).optional().default(10),
+});

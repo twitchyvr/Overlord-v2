@@ -61,9 +61,11 @@ import {
   EmailMarkReadSchema, EmailUnreadCountSchema, EmailSentSchema,
   SessionNoteWriteSchema, SessionNoteReadSchema, SessionNoteListSchema,
   SessionNoteDeleteSchema, SessionNoteClearSchema,
+  SearchGlobalSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
+import { globalSearch } from '../storage/global-search.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
@@ -1106,6 +1108,18 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     handle(socket, 'session-note:clear', SessionNoteClearSchema, (parsed, ack) => {
       const result = clearNotes(parsed.agentId);
       if (ack) ack({ ok: true, data: { count: result.count } });
+    });
+
+    // ─── Global Search ───
+
+    handle(socket, 'search:global', SearchGlobalSchema, (parsed, ack) => {
+      const result = globalSearch({
+        buildingId: parsed.buildingId,
+        query: parsed.query,
+        filters: parsed.filters,
+        limit: parsed.limit,
+      });
+      if (ack) ack(result);
     });
 
     // ─── Command List ───

@@ -1456,6 +1456,17 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithTimeout('agent:leaderboard', { metric, ...opts });
     },
 
+    // ── Global Search ──
+
+    globalSearch(buildingId, query, filters = [], limit = 10) {
+      return _emitWithTimeout('search:global', { buildingId, query, filters, limit }).then((res) => {
+        if (res && res.ok) {
+          store.set('search.results', res.data);
+        }
+        return res;
+      });
+    },
+
     // ── Email methods ──
 
     async sendAgentEmail(params) {
