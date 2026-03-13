@@ -40,8 +40,8 @@ beforeEach(async () => {
 // ─── getInitialRoute() ──────────────────────────────────────
 
 describe('getInitialRoute()', () => {
-  it('returns "strategist" for new users', () => {
-    expect(getInitialRoute(true)).toBe('strategist');
+  it('returns "onboarding" for new users', () => {
+    expect(getInitialRoute(true)).toBe('onboarding');
   });
 
   it('returns "dashboard" for returning users', () => {
