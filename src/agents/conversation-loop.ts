@@ -17,6 +17,7 @@ import { AgentSession } from './agent-session.js';
 import { estimateTokens, allocateBudget, pruneMessages, getContextMetrics } from './context-manager.js';
 import { buildScratchpadInjection } from '../tools/providers/session-notes.js';
 import { acquireSlot, releaseSlot } from '../ai/rate-limiter.js';
+import { buildPerception, extractToolResults } from './perception-builder.js';
 import type { Bus } from '../core/bus.js';
 import type {
   Result,
@@ -183,6 +184,31 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       'Conversation loop iteration',
     );
 
+    // PTA: Inject perception context after the first iteration (#362)
+    // On iteration 2+, the AI gets a structured snapshot of what just happened
+    if (iteration > 1 && toolCallLog.length > 0) {
+      // Extract results from the most recent batch of tool calls
+      const recentResults = extractToolResults(toolCallLog.slice(-10));
+      const perception = buildPerception(
+        {
+          roomId: room.id,
+          roomType: room.type,
+          allowedTools: allowedToolNames,
+          fileScope: String(room.fileScope),
+          rules: room.getRules(),
+        },
+        recentResults,
+        iteration,
+        MAX_TOOL_ITERATIONS,
+      );
+
+      // Inject perception as a system-level user message so the AI sees it
+      messages.push({
+        role: 'user',
+        content: `[Perception Update]\n${perception}`,
+      });
+    }
+
     // Send to AI with retry for transient failures
     let aiResult: Result;
     let retries = 0;
@@ -244,10 +270,16 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       room.onMessage(agentId, assistantText, 'assistant');
     }
 
+    // Forward thinking blocks explicitly for the UI to display AI reasoning
+    const streamThinking = thinkingBlocks
+      .filter((b) => b.thinking)
+      .map((b) => b.thinking as string);
+
     bus.emit('chat:stream', {
       agentId,
       roomId: room.id,
       content: response.content,
+      thinking: streamThinking.length > 0 ? streamThinking : undefined,
       iteration,
     });
 

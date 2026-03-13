@@ -981,4 +981,123 @@ function registerBuiltinTools(): void {
       };
     },
   });
+
+  // ─── Game Engine ───
+  registerTool({
+    name: 'game_engine',
+    description: 'Auto-detect game engine and run build/test/run commands (Unity, Unreal, Godot, GameMaker, Phaser)',
+    category: 'engine',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', description: 'Action: detect, build, test, run' },
+        projectDir: { type: 'string', description: 'Project directory' },
+        engine: { type: 'string', description: 'Engine override: unity, unreal, godot, gamemaker, phaser' },
+      },
+      required: ['action', 'projectDir'],
+    },
+    execute: async (p) => {
+      const result = await executeGameEngine({
+        action: p.action as 'detect' | 'build' | 'test' | 'run',
+        projectDir: p.projectDir as string,
+        engine: p.engine as string | undefined,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const { output, ...rest } = result.data;
+      return { output, ...rest };
+    },
+  });
+
+  // ─── Dev Server ───
+  registerTool({
+    name: 'dev_server',
+    description: 'Manage background dev servers: start, stop, status, logs',
+    category: 'server',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', description: 'Action: start, stop, status, logs' },
+        projectDir: { type: 'string', description: 'Project directory' },
+        command: { type: 'string', description: 'Server command (default: npm run dev)' },
+        port: { type: 'number', description: 'Port number (default: 3000)' },
+      },
+      required: ['action', 'projectDir'],
+    },
+    execute: async (p) => {
+      const result = await executeDevServer({
+        action: p.action as 'start' | 'stop' | 'status' | 'logs',
+        projectDir: p.projectDir as string,
+        command: p.command as string | undefined,
+        port: p.port as number | undefined,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const d = result.data;
+      const parts = [`[${d.action}] ${d.projectDir}`];
+      if (d.pid) parts.push(`PID: ${d.pid}`);
+      if (d.url) parts.push(`URL: ${d.url}`);
+      if (d.running !== undefined) parts.push(d.running ? 'RUNNING' : 'STOPPED');
+      const { output: dOutput, ...dRest } = d;
+      return { output: dOutput || parts.join(' | '), ...dRest };
+    },
+  });
+
+  // ─── Browser Tools ───
+  registerTool({
+    name: 'browser_tools',
+    description: 'Browser automation: screenshot, navigate, inspect (placeholder — Playwright integration later)',
+    category: 'browser',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', description: 'Action: screenshot, navigate, inspect' },
+        url: { type: 'string', description: 'URL to interact with' },
+        selector: { type: 'string', description: 'CSS selector (for inspect)' },
+      },
+      required: ['action', 'url'],
+    },
+    execute: async (p) => {
+      const result = await executeBrowserTools({
+        action: p.action as 'screenshot' | 'navigate' | 'inspect',
+        url: p.url as string,
+        selector: p.selector as string | undefined,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const { output: btOutput, ...btRest } = result.data;
+      return { output: btOutput, ...btRest };
+    },
+  });
+
+  // ─── Workspace Sandbox ───
+  registerTool({
+    name: 'workspace_sandbox',
+    description: 'Manage isolated git worktree sandboxes: create, destroy, list, status',
+    category: 'workspace',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', description: 'Action: create, destroy, list, status' },
+        projectDir: { type: 'string', description: 'Git repository directory' },
+        branch: { type: 'string', description: 'Branch name (default: main)' },
+      },
+      required: ['action', 'projectDir'],
+    },
+    execute: async (p) => {
+      const result = await executeWorkspaceSandbox({
+        action: p.action as 'create' | 'destroy' | 'list' | 'status',
+        projectDir: p.projectDir as string,
+        branch: p.branch as string | undefined,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const { output: wsOutput, ...wsRest } = result.data;
+      return { output: wsOutput, ...wsRest };
+    },
+  });
 }

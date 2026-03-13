@@ -142,9 +142,14 @@ export async function generateFullProfile(
     const photoName = profile.displayName || role;
     const photoSpecialization = profile.specialization || undefined;
 
-    log.info({ role, photoName }, 'Generating profile photo via MiniMax');
+    // Pass existing subject reference for visual consistency (#384)
+    const existingSubjectRef = options.existing?.subjectReference ?? undefined;
 
-    const photoResult = await generateAgentProfilePhoto(photoName, role, photoSpecialization, options.gender);
+    log.info({ role, photoName, hasSubjectRef: !!existingSubjectRef }, 'Generating profile photo via MiniMax');
+
+    const photoResult = await generateAgentProfilePhoto(
+      photoName, role, photoSpecialization, options.gender, existingSubjectRef ?? undefined,
+    );
 
     if (photoResult.ok) {
       // Write to disk and get serving URL.
@@ -152,6 +157,8 @@ export async function generateFullProfile(
       // The caller (socket handler) will update the agent profile with the real URL.
       // We store the data URI directly so it works even without a disk write.
       profile.photoUrl = photoResult.data.dataUri;
+      // Store subject reference for future regeneration consistency (#384)
+      profile.subjectReference = photoResult.data.subjectReference;
       generation.photo = 'generated';
       log.info({ role }, 'Profile photo generated successfully');
     } else {
@@ -160,13 +167,17 @@ export async function generateFullProfile(
       warnings.push(errorMsg);
       log.warn({ error: photoResult.error, role }, errorMsg);
       profile.photoUrl = options.existing?.photoUrl ?? null;
+      // Preserve existing subject reference even on photo failure
+      profile.subjectReference = options.existing?.subjectReference ?? null;
     }
   } else if (!options.skipPhoto) {
     // MiniMax not configured — preserve existing photo
     generation.photo = 'not-configured';
     profile.photoUrl = options.existing?.photoUrl ?? null;
+    profile.subjectReference = options.existing?.subjectReference ?? null;
   } else {
     profile.photoUrl = options.existing?.photoUrl ?? null;
+    profile.subjectReference = options.existing?.subjectReference ?? null;
   }
 
   // ─── Mark as profile-generated if identity succeeded ───

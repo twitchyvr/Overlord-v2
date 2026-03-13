@@ -32,6 +32,9 @@ export class CodeLab extends BaseRoom {
       'web_search',
       'fetch_webpage',
       'session_note',
+      'game_engine',
+      'dev_server',
+      'workspace_sandbox',
     ],
     fileScope: 'assigned',
     exitRequired: {
