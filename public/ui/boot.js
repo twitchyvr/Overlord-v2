@@ -25,6 +25,7 @@ import { GlobalSearch } from './components/global-search.js';
 import { QuickActions } from './components/quick-actions.js';
 import { NotificationCenter } from './components/notification-center.js';
 import { AgentActivityTracker } from './components/agent-activity-tracker.js';
+import { BreadcrumbNav } from './components/breadcrumb-nav.js';
 
 // ═══════════════════════════════════════════════════════════
 //  THEME MANAGEMENT
@@ -141,6 +142,13 @@ if (socket) {
   // ── Mount agent activity tracker (visual animation states) ──
   const activityTracker = new AgentActivityTracker(document.createElement('div'));
   activityTracker.mount();
+
+  // ── Mount breadcrumb navigation (spatial context bar) ──
+  const breadcrumbEl = document.getElementById('breadcrumb-bar');
+  if (breadcrumbEl) {
+    const breadcrumbNav = new BreadcrumbNav(breadcrumbEl);
+    breadcrumbNav.mount();
+  }
 
   // Wire settings button
   const settingsBtn = document.getElementById('settings-btn');
