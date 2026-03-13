@@ -66,6 +66,8 @@ import {
   ExitDocGetSchema,
   ExitDocListSchema,
   SearchGlobalSchema,
+  QualityConfigGetSchema,
+  QualityConfigSetSchema,
 } from '../../../src/transport/schemas.js';
 
 // ═══════════════════════════════════════════════════════════
@@ -1087,5 +1089,57 @@ describe('SearchGlobalSchema', () => {
       limit: 100,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// Quality Config Schemas
+
+describe('QualityConfigGetSchema', () => {
+  it('accepts empty object', () => {
+    const result = QualityConfigGetSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('QualityConfigSetSchema', () => {
+  it('accepts valid boolean config update', () => {
+    const result = QualityConfigSetSchema.safeParse({ key: 'autoLint', value: false });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.key).toBe('autoLint');
+      expect(result.data.value).toBe(false);
+    }
+  });
+
+  it('accepts valid numeric config update', () => {
+    const result = QualityConfigSetSchema.safeParse({ key: 'minCoverage', value: 80 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.value).toBe(80);
+    }
+  });
+
+  it('rejects invalid key', () => {
+    const result = QualityConfigSetSchema.safeParse({ key: 'invalidKey', value: true });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects missing value', () => {
+    const result = QualityConfigSetSchema.safeParse({ key: 'autoLint' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects string value', () => {
+    const result = QualityConfigSetSchema.safeParse({ key: 'autoLint', value: 'yes' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts all valid keys', () => {
+    const validKeys = ['autoLint', 'autoTypecheck', 'autoTest', 'autoSecurityScan', 'minCoverage'];
+    for (const key of validKeys) {
+      const value = key === 'minCoverage' ? 50 : true;
+      const result = QualityConfigSetSchema.safeParse({ key, value });
+      expect(result.success).toBe(true);
+    }
   });
 });

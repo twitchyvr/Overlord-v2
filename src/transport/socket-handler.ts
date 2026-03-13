@@ -70,9 +70,11 @@ import {
   PluginSourceGetSchema, PluginSourceSaveSchema, PluginCreateSchema,
   PluginDeleteSchema, PluginValidateSchema, PluginExportSchema,
   PluginImportSchema, PluginLogSubscribeSchema,
+  QualityConfigGetSchema, QualityConfigSetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
+import { getQualityConfig } from '../tools/quality-defaults.js';
 import { globalSearch } from '../storage/global-search.js';
 import { listPlugins, getPlugin, loadPlugin, unloadPlugin, reloadPlugin, getPluginDir, getPluginLogs } from '../plugins/plugin-loader.js';
 import { validateLuaSyntax } from '../plugins/lua-validator.js';
@@ -1508,6 +1510,30 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     handle(socket, 'plugin:log:unsubscribe', PluginLogSubscribeSchema, (parsed, ack) => {
       socket.leave(`plugin-logs:${parsed.pluginId}`);
       if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId } });
+    });
+
+    // --- Quality Config ---
+
+    handle(socket, 'quality:config:get', QualityConfigGetSchema, (_data, ack) => {
+      const cfg = getQualityConfig();
+      if (ack) ack({ ok: true, data: cfg });
+    });
+
+    handle(socket, 'quality:config:set', QualityConfigSetSchema, (parsed, ack) => {
+      const envKeyMap: Record<string, string> = {
+        autoLint: 'QUALITY_AUTO_LINT',
+        autoTypecheck: 'QUALITY_AUTO_TYPECHECK',
+        autoTest: 'QUALITY_AUTO_TEST',
+        autoSecurityScan: 'QUALITY_AUTO_SECURITY_SCAN',
+        minCoverage: 'QUALITY_MIN_COVERAGE',
+      };
+      const envKey = envKeyMap[parsed.key];
+      if (envKey) {
+        process.env[envKey] = String(parsed.value);
+      }
+      const cfg = getQualityConfig();
+      io.emit('quality:config-changed', cfg);
+      if (ack) ack({ ok: true, data: cfg });
     });
 
     // ─── Command List ───
