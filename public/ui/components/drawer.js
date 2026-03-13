@@ -203,12 +203,15 @@ function _updateContent(opts) {
 }
 
 function _destroyImmediate() {
+  const onClose = _drawerEl?._onClose;
   if (_backdropEl) _backdropEl.remove();
   if (_drawerEl) _drawerEl.remove();
   _activeDrawer = null;
   _drawerEl = null;
   _backdropEl = null;
   document.removeEventListener('keydown', _handleKeydown);
+  // Call onClose so callers can clean up tracking state (e.g., milestone drawer ID)
+  if (typeof onClose === 'function') onClose();
 }
 
 function _handleKeydown(e) {
