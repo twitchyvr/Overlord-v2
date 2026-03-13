@@ -131,6 +131,12 @@ export class ChatView extends Component {
       }),
       OverlordUI.subscribe('chat:response', (data) => {
         this._handleResponse(data);
+      }),
+      OverlordUI.subscribe('plan:submitted', (data) => {
+        this._handlePlanSubmitted(data);
+      }),
+      OverlordUI.subscribe('plan:reviewed', (data) => {
+        this._handlePlanReviewed(data);
       })
     );
 
@@ -193,15 +199,58 @@ export class ChatView extends Component {
     }, '\u25BC');
     this.el.appendChild(this._scrollBtn);
 
-    // Token input
+    // Token input with attachment support
     const inputContainer = h('div', { class: 'chat-input-container' });
-    this._tokenInput = new TokenInput(inputContainer, {
+
+    // Attachment preview area (above input)
+    this._attachPreviewEl = h('div', { class: 'chat-attach-preview', hidden: true });
+    inputContainer.appendChild(this._attachPreviewEl);
+    this._pendingAttachments = [];
+
+    // Input row: attach button + token input
+    const inputRow = h('div', { class: 'chat-input-row' });
+
+    // Attach button
+    const attachBtn = h('button', {
+      class: 'chat-attach-btn',
+      title: 'Attach file',
+      onClick: () => this._openFilePicker(),
+    }, '\u{1F4CE}');
+    inputRow.appendChild(attachBtn);
+
+    // Hidden file input
+    this._fileInput = h('input', {
+      type: 'file',
+      multiple: true,
+      style: { display: 'none' },
+      onChange: (e) => this._handleFileSelect(e),
+    });
+    inputRow.appendChild(this._fileInput);
+
+    this._tokenInput = new TokenInput(inputRow, {
       placeholder: 'Message Overlord... (/ for commands, @ to mention)',
       onSubmit: (text, tokens) => this._sendMessage(text, tokens),
       onTokenTrigger: (type, query) => this._handleTokenTrigger(type, query)
     });
     this._tokenInput.mount();
+    inputContainer.appendChild(inputRow);
     this.el.appendChild(inputContainer);
+
+    // Drag-and-drop on the messages area
+    this._messagesEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      this._messagesEl.classList.add('chat-drag-over');
+    });
+    this._messagesEl.addEventListener('dragleave', () => {
+      this._messagesEl.classList.remove('chat-drag-over');
+    });
+    this._messagesEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      this._messagesEl.classList.remove('chat-drag-over');
+      if (e.dataTransfer?.files?.length) {
+        this._addFiles(Array.from(e.dataTransfer.files));
+      }
+    });
   }
 
   /**
@@ -328,12 +377,147 @@ export class ChatView extends Component {
       contentWrap.appendChild(toolsEl);
     }
 
+    // Attachments (if present)
+    if (msg.attachments && msg.attachments.length > 0) {
+      const attachEl = h('div', { class: 'chat-attachments' });
+      for (const att of msg.attachments) {
+        attachEl.appendChild(this._buildAttachmentPreview(att));
+      }
+      contentWrap.appendChild(attachEl);
+    }
+
+    // Plan card (if present)
+    if (msg.plan) {
+      contentWrap.appendChild(this._buildPlanCard(msg.plan));
+    }
+
     // Message actions
     const actions = this._buildMessageActions(msg);
     contentWrap.appendChild(actions);
 
     el.appendChild(contentWrap);
     return el;
+  }
+
+  /** Build an attachment preview chip. */
+  _buildAttachmentPreview(att) {
+    const isImage = att.mimeType && att.mimeType.startsWith('image/');
+    const el = h('div', { class: `chat-attachment ${isImage ? 'chat-attachment-image' : ''}` });
+
+    if (isImage && att.url) {
+      const img = h('img', {
+        src: att.url,
+        alt: att.fileName,
+        class: 'chat-attachment-thumb',
+        loading: 'lazy',
+      });
+      el.appendChild(img);
+    } else {
+      const icon = this._fileIcon(att.mimeType);
+      el.appendChild(h('span', { class: 'chat-attachment-icon' }, icon));
+    }
+
+    const info = h('div', { class: 'chat-attachment-info' });
+    info.appendChild(h('span', { class: 'chat-attachment-name' }, att.fileName || 'Unnamed'));
+    info.appendChild(h('span', { class: 'chat-attachment-size' }, this._formatFileSize(att.size || 0)));
+    el.appendChild(info);
+
+    return el;
+  }
+
+  /** Map MIME type to a file icon character. */
+  _fileIcon(mimeType) {
+    if (!mimeType) return '\u{1F4C4}';
+    if (mimeType.startsWith('image/')) return '\u{1F5BC}';
+    if (mimeType.startsWith('video/')) return '\u{1F3AC}';
+    if (mimeType.startsWith('audio/')) return '\u{1F3B5}';
+    if (mimeType.includes('pdf')) return '\u{1F4D1}';
+    if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('rar')) return '\u{1F4E6}';
+    if (mimeType.includes('json') || mimeType.includes('javascript') || mimeType.includes('typescript')) return '\u{1F4BB}';
+    return '\u{1F4C4}';
+  }
+
+  /** Format bytes to human-readable size. */
+  _formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
+  }
+
+  /** Build a plan approval card. */
+  _buildPlanCard(plan) {
+    const card = h('div', { class: `chat-plan-card chat-plan-${plan.status || 'pending'}` });
+
+    // Header
+    const header = h('div', { class: 'chat-plan-header' });
+    const statusBadge = h('span', { class: `chat-plan-badge chat-plan-badge-${plan.status || 'pending'}` },
+      (plan.status || 'pending').toUpperCase()
+    );
+    header.appendChild(h('span', { class: 'chat-plan-label' }, 'Plan'));
+    header.appendChild(statusBadge);
+    card.appendChild(header);
+
+    // Title
+    card.appendChild(h('h4', { class: 'chat-plan-title' }, plan.title || 'Untitled Plan'));
+
+    // Rationale
+    if (plan.rationale) {
+      card.appendChild(h('p', { class: 'chat-plan-rationale' }, plan.rationale));
+    }
+
+    // Steps
+    if (plan.steps && plan.steps.length > 0) {
+      const stepsEl = h('ol', { class: 'chat-plan-steps' });
+      for (const step of plan.steps) {
+        const stepEl = h('li', { class: `chat-plan-step chat-plan-step-${step.status || 'pending'}` },
+          step.description
+        );
+        stepsEl.appendChild(stepEl);
+      }
+      card.appendChild(stepsEl);
+    }
+
+    // Actions (only for pending plans)
+    if (plan.status === 'pending' && plan.id) {
+      const actions = h('div', { class: 'chat-plan-actions' });
+      const approveBtn = h('button', {
+        class: 'chat-plan-btn chat-plan-btn-approve',
+        onClick: () => this._reviewPlan(plan.id, 'approved'),
+      }, 'Approve');
+      const rejectBtn = h('button', {
+        class: 'chat-plan-btn chat-plan-btn-reject',
+        onClick: () => this._reviewPlan(plan.id, 'rejected'),
+      }, 'Reject');
+      const changesBtn = h('button', {
+        class: 'chat-plan-btn chat-plan-btn-changes',
+        onClick: () => this._reviewPlan(plan.id, 'changes-requested'),
+      }, 'Request Changes');
+      actions.appendChild(approveBtn);
+      actions.appendChild(rejectBtn);
+      actions.appendChild(changesBtn);
+      card.appendChild(actions);
+    }
+
+    // Review comment
+    if (plan.review_comment) {
+      card.appendChild(h('div', { class: 'chat-plan-review' },
+        h('span', { class: 'chat-plan-reviewer' }, `${plan.reviewed_by || 'Reviewer'}: `),
+        plan.review_comment
+      ));
+    }
+
+    return card;
+  }
+
+  /** Send plan review verdict via socket. */
+  _reviewPlan(planId, verdict) {
+    if (!window.overlordSocket) return;
+    window.overlordSocket.reviewPlan(planId, verdict).then((res) => {
+      if (res && res.ok) {
+        // Plan will be updated via plan:reviewed socket event
+      }
+    }).catch(() => {});
   }
 
   /** Build a thinking bubble. */
@@ -498,6 +682,39 @@ export class ChatView extends Component {
     }
   }
 
+  // ── Plan Event Handling ──────────────────────────────────────
+
+  _handlePlanSubmitted(plan) {
+    const store = OverlordUI.getStore();
+    if (!store) return;
+    // Add plan as a special message in the chat
+    store.update('chat.messages', (messages) => {
+      return [...(messages || []), {
+        id: `plan_msg_${plan.id}`,
+        role: 'agent',
+        content: `Submitted a plan: **${plan.title}**`,
+        agentName: 'Agent',
+        plan: plan,
+        type: 'plan',
+        timestamp: Date.now(),
+      }];
+    });
+  }
+
+  _handlePlanReviewed(plan) {
+    const store = OverlordUI.getStore();
+    if (!store) return;
+    // Update the plan in existing messages
+    store.update('chat.messages', (messages) => {
+      return (messages || []).map((msg) => {
+        if (msg.plan && msg.plan.id === plan.id) {
+          return { ...msg, plan: plan };
+        }
+        return msg;
+      });
+    });
+  }
+
   // ── Token Handling ───────────────────────────────────────────
 
   /**
@@ -649,23 +866,92 @@ export class ChatView extends Component {
   // ── Send ─────────────────────────────────────────────────────
 
   _sendMessage(text, tokens) {
-    if (!text.trim() && tokens.length === 0) return;
+    if (!text.trim() && tokens.length === 0 && this._pendingAttachments.length === 0) return;
 
-    // Send via socket — the socket bridge handles adding the user message
-    // to the store, so we don't duplicate it here
     if (window.overlordSocket) {
       const store = OverlordUI.getStore();
       window.overlordSocket.sendMessage({
         text,
         tokens,
+        attachments: this._pendingAttachments,
         buildingId: store?.get('building.active'),
       });
     }
+    // Clear pending attachments
+    this._pendingAttachments = [];
+    this._updateAttachPreview();
   }
 
   _clearChat() {
     const store = OverlordUI.getStore();
     if (store) store.set('chat.messages', []);
+  }
+
+  // ── File Attachment ─────────────────────────────────────────
+
+  _openFilePicker() {
+    if (this._fileInput) this._fileInput.click();
+  }
+
+  _handleFileSelect(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) this._addFiles(files);
+    e.target.value = '';
+  }
+
+  _addFiles(files) {
+    for (const file of files) {
+      if (file.size > 10 * 1024 * 1024) {
+        // Skip files over 10MB — inform user
+        import('../engine/engine.js').then(({ OverlordUI }) => {
+          OverlordUI.dispatch('toast:show', { message: `File "${file.name}" exceeds 10MB limit`, type: 'warning' });
+        });
+        continue;
+      }
+      const id = `att_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result.split(',')[1];
+        this._pendingAttachments.push({
+          id,
+          fileName: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          size: file.size,
+          data: base64,
+        });
+        this._updateAttachPreview();
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  _removeAttachment(id) {
+    this._pendingAttachments = this._pendingAttachments.filter((a) => a.id !== id);
+    this._updateAttachPreview();
+  }
+
+  _updateAttachPreview() {
+    if (!this._attachPreviewEl) return;
+    this._attachPreviewEl.textContent = '';
+
+    if (this._pendingAttachments.length === 0) {
+      this._attachPreviewEl.hidden = true;
+      return;
+    }
+
+    this._attachPreviewEl.hidden = false;
+    for (const att of this._pendingAttachments) {
+      const chip = h('div', { class: 'chat-attach-chip' },
+        h('span', { class: 'chat-attach-chip-icon' }, this._fileIcon(att.mimeType)),
+        h('span', { class: 'chat-attach-chip-name' }, att.fileName),
+        h('span', { class: 'chat-attach-chip-size' }, this._formatFileSize(att.size)),
+        h('button', {
+          class: 'chat-attach-chip-remove',
+          onClick: () => this._removeAttachment(att.id),
+        }, '\u00D7')
+      );
+      this._attachPreviewEl.appendChild(chip);
+    }
   }
 
   // ── Scroll ───────────────────────────────────────────────────

@@ -99,9 +99,27 @@ const SCHEMA_SQL = `
     role TEXT NOT NULL,
     content TEXT,
     tool_calls TEXT,
+    attachments TEXT DEFAULT '[]',
     thread_id TEXT,
     parent_id TEXT REFERENCES messages(id),
     created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS plans (
+    id TEXT PRIMARY KEY,
+    building_id TEXT REFERENCES buildings(id),
+    room_id TEXT REFERENCES rooms(id),
+    agent_id TEXT NOT NULL REFERENCES agents(id),
+    thread_id TEXT,
+    title TEXT NOT NULL,
+    rationale TEXT,
+    steps TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'pending',
+    reviewed_by TEXT,
+    review_comment TEXT,
+    reviewed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS tasks (
@@ -276,6 +294,10 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_stats_agent ON agent_stats(agent_id);
   CREATE INDEX IF NOT EXISTS idx_stats_metric ON agent_stats(metric);
   CREATE INDEX IF NOT EXISTS idx_stats_compound ON agent_stats(agent_id, metric, period);
+  CREATE INDEX IF NOT EXISTS idx_plans_building ON plans(building_id);
+  CREATE INDEX IF NOT EXISTS idx_plans_agent ON plans(agent_id);
+  CREATE INDEX IF NOT EXISTS idx_plans_thread ON plans(thread_id);
+  CREATE INDEX IF NOT EXISTS idx_plans_status ON plans(status);
 `;
 
 /**
@@ -298,6 +320,7 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['tables_v2', 'config', "TEXT DEFAULT '{}'"],
   ['buildings', 'working_directory', 'TEXT'],
   ['buildings', 'repo_url', 'TEXT'],
+  ['messages', 'attachments', "TEXT DEFAULT '[]'"],
 ];
 
 /**
