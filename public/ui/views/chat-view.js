@@ -890,6 +890,7 @@ export class ChatView extends Component {
         tokens,
         attachments: this._pendingAttachments,
         buildingId: store?.get('building.active'),
+        roomId: store?.get('rooms.active'),
       });
     }
     // Clear pending attachments

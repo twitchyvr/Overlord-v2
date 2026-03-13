@@ -151,19 +151,33 @@ async function handleChatMessage(
 
     // 2. If no room specified or not found, find default room for the building
     if (!room && buildingId) {
-      const allRooms = rooms.listRooms();
-      // Find any room associated with this building's floors
-      // Look for a strategist room first, then any active room
-      for (const r of allRooms) {
-        const candidate = rooms.getRoom(r.id);
-        if (candidate) {
-          room = candidate;
-          break;
+      // Get floors belonging to this building, then find rooms on those floors
+      try {
+        const db = getDb();
+        const buildingFloors = db.prepare('SELECT id FROM floors WHERE building_id = ?').all(buildingId) as { id: string }[];
+        const floorIds = new Set(buildingFloors.map(f => f.id));
+
+        const allRooms = rooms.listRooms();
+        // Prefer strategist room, then any room on this building's floors
+        let firstBuildingRoom: BaseRoomLike | null = null;
+        for (const r of allRooms) {
+          if (!floorIds.has(r.floor_id)) continue; // Skip rooms not in this building
+          const candidate = rooms.getRoom(r.id);
+          if (!candidate) continue;
+
+          if (r.type === 'strategist') {
+            room = candidate; // Strategist is the preferred default
+            break;
+          }
+          if (!firstBuildingRoom) firstBuildingRoom = candidate;
         }
+        if (!room) room = firstBuildingRoom;
+      } catch {
+        // DB not ready — fall through to global fallback
       }
     }
 
-    // 3. If still no room, try to find ANY active room
+    // 3. If still no room (no building or building has no rooms), try ANY active room
     if (!room) {
       const allRooms = rooms.listRooms();
       for (const r of allRooms) {
