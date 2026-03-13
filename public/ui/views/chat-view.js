@@ -85,6 +85,22 @@ function fuzzyFilter(items, query, labelKey = 'label') {
 }
 
 
+/* ── Contextual suggestion definitions per room type ──────── */
+
+const ROOM_SUGGESTIONS = {
+  'strategist':           ['Start quick setup', 'Describe your project', 'Define phases'],
+  'building-architect':   ['Describe architecture', 'List components', 'Show blueprint'],
+  'discovery':            ['Gather requirements', 'Identify risks', 'List stakeholders'],
+  'architecture':         ['Design system', 'Break down tasks', 'Review structure'],
+  'code-lab':             ['Run tests', 'List files', 'Check build'],
+  'testing-lab':          ['Run test suite', 'Check coverage', 'Report bugs'],
+  'review':               ['View exit document', 'Check test results', 'Review changes'],
+  'deploy':               ['Deploy status', 'Run checks', 'View changelog'],
+  'war-room':             ['Escalation status', 'Critical issues', 'Action items'],
+  '_default':             ['Create task', 'Search RAID log'],
+};
+
+
 export class ChatView extends Component {
 
   constructor(el, opts = {}) {
@@ -96,6 +112,7 @@ export class ChatView extends Component {
     this._streamBuffer = '';      // accumulated stream text
     this._renderedCount = 0;     // tracks how many messages are in DOM
     this._lastRenderedId = null;  // last message id for incremental detection
+    this._suggestionsBarEl = null; // contextual suggestions bar
 
     // Token suggestion caches (populated on first fetch, cleared on reconnect)
     this._cmdCache = null;
@@ -148,13 +165,17 @@ export class ChatView extends Component {
     this.subscribe(store, 'rooms.list', () => { this._refCache = null; });
     this.subscribe(store, 'raid.entries', () => { this._refCache = null; });
 
-    // Update chat header when active room changes
-    this.subscribe(store, 'rooms.active', () => { this._updateRoomIndicator(); });
+    // Update chat header and suggestions when active room changes
+    this.subscribe(store, 'rooms.active', () => {
+      this._updateRoomIndicator();
+      this._updateSuggestionsBar();
+    });
 
     // Listen for room selection from building sidebar
     this._listeners.push(
-      OverlordUI.subscribe('building:room-selected', (data) => {
+      OverlordUI.subscribe('building:room-selected', () => {
         this._updateRoomIndicator();
+        this._updateSuggestionsBar();
       })
     );
 
@@ -213,6 +234,10 @@ export class ChatView extends Component {
       onClick: () => this._scrollToBottom()
     }, '\u25BC');
     this.el.appendChild(this._scrollBtn);
+
+    // Contextual suggestions bar (above input)
+    this._suggestionsBarEl = this._buildSuggestionsBar();
+    this.el.appendChild(this._suggestionsBarEl);
 
     // Token input with attachment support
     const inputContainer = h('div', { class: 'chat-input-container' });
@@ -1004,6 +1029,43 @@ export class ChatView extends Component {
       );
       this._attachPreviewEl.appendChild(chip);
     }
+  }
+
+  // ── Contextual Suggestions ──────────────────────────────────
+
+  /** Build the suggestions bar with context-aware pill buttons. */
+  _buildSuggestionsBar() {
+    const bar = h('div', { class: 'chat-suggestions-bar' });
+    const pills = this._getSuggestionPills();
+    for (const text of pills) {
+      const pill = h('button', { class: 'chat-suggestion-pill' }, text);
+      pill.addEventListener('click', () => {
+        if (this._tokenInput) {
+          this._tokenInput.setValue(text);
+          this._tokenInput.focus();
+        }
+      });
+      bar.appendChild(pill);
+    }
+    return bar;
+  }
+
+  /** Get the current room type and return matching suggestions. */
+  _getSuggestionPills() {
+    const store = OverlordUI.getStore();
+    const activeRoomId = store?.get('rooms.active');
+    const rooms = store?.get('rooms.list') || [];
+    const room = rooms.find(r => r.id === activeRoomId);
+    const roomType = room?.type || '';
+    return ROOM_SUGGESTIONS[roomType] || ROOM_SUGGESTIONS['_default'];
+  }
+
+  /** Rebuild the suggestions bar when room context changes. */
+  _updateSuggestionsBar() {
+    if (!this._suggestionsBarEl) return;
+    const newBar = this._buildSuggestionsBar();
+    this._suggestionsBarEl.replaceWith(newBar);
+    this._suggestionsBarEl = newBar;
   }
 
   // ── Scroll ───────────────────────────────────────────────────
