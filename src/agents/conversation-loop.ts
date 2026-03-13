@@ -146,7 +146,8 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   // Build system prompt from room context + agent scratchpad
   const roomContext = room.buildContextInjection();
   const baseSystemPrompt = buildSystemPrompt(roomContext, room);
-  const scratchpad = buildScratchpadInjection(agentId);
+  let scratchpad = '';
+  try { scratchpad = buildScratchpadInjection(agentId); } catch { /* DB not ready yet — scratchpad is optional */ }
   const systemPrompt = scratchpad
     ? `${baseSystemPrompt}\n\n${scratchpad}`
     : baseSystemPrompt;

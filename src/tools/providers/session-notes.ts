@@ -26,24 +26,20 @@ let initialized = false;
 
 function ensureTable(): void {
   if (initialized) return;
-  try {
-    const db = getDb();
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS session_notes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        agent_id TEXT NOT NULL,
-        building_id TEXT,
-        key TEXT NOT NULL,
-        value TEXT NOT NULL,
-        created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now')),
-        UNIQUE(agent_id, key)
-      )
-    `).run();
-    initialized = true;
-  } catch (e) {
-    log.error({ err: e }, 'Failed to create session_notes table');
-  }
+  const db = getDb();
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS session_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id TEXT NOT NULL,
+      building_id TEXT,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(agent_id, key)
+    )
+  `).run();
+  initialized = true;
 }
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -67,27 +63,30 @@ export function writeNote(agentId: string, key: string, value: string, buildingI
   try {
     const db = getDb();
 
-    // Check note count limit
-    const count = db.prepare('SELECT COUNT(*) as cnt FROM session_notes WHERE agent_id = ?').get(agentId) as { cnt: number };
-    if (count.cnt >= MAX_NOTES_PER_AGENT) {
-      // Check if this is an update (key exists)
-      const existing = db.prepare('SELECT id FROM session_notes WHERE agent_id = ? AND key = ?').get(agentId, key);
-      if (!existing) {
-        return { ok: false, message: `Agent has reached the maximum of ${MAX_NOTES_PER_AGENT} notes. Delete some notes first.` };
+    // Atomic count-check + insert via transaction to prevent race condition
+    const result = db.transaction(() => {
+      const count = db.prepare('SELECT COUNT(*) as cnt FROM session_notes WHERE agent_id = ?').get(agentId) as { cnt: number };
+      if (count.cnt >= MAX_NOTES_PER_AGENT) {
+        const existing = db.prepare('SELECT id FROM session_notes WHERE agent_id = ? AND key = ?').get(agentId, key);
+        if (!existing) {
+          return { ok: false as const, message: `Agent has reached the maximum of ${MAX_NOTES_PER_AGENT} notes. Delete some notes first.` };
+        }
       }
-    }
 
-    db.prepare(`
-      INSERT INTO session_notes (agent_id, building_id, key, value)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(agent_id, key) DO UPDATE SET
-        value = excluded.value,
-        building_id = COALESCE(excluded.building_id, building_id),
-        updated_at = datetime('now')
-    `).run(agentId, buildingId || null, key, truncated);
+      db.prepare(`
+        INSERT INTO session_notes (agent_id, building_id, key, value)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(agent_id, key) DO UPDATE SET
+          value = excluded.value,
+          building_id = COALESCE(excluded.building_id, building_id),
+          updated_at = datetime('now')
+      `).run(agentId, buildingId || null, key, truncated);
 
-    log.debug({ agentId, key, size: truncated.length }, 'Session note written');
-    return { ok: true, message: `Note "${key}" saved (${truncated.length} chars)` };
+      return { ok: true as const, message: `Note "${key}" saved (${truncated.length} chars)` };
+    })();
+
+    if (result.ok) log.debug({ agentId, key, size: truncated.length }, 'Session note written');
+    return result;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     log.error({ err: e, agentId, key }, 'Failed to write session note');

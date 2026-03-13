@@ -370,6 +370,7 @@ function registerBuiltinTools(): void {
       const action = p.action as string;
       const agentId = (p.targetAgentId as string) || ctx?.agentId || 'unknown';
       const key = p.key as string;
+      // ToolContext doesn't declare buildingId; extract from ctx if the room injected it
       const buildingId = (ctx as unknown as Record<string, unknown>)?.buildingId as string | undefined;
 
       switch (action) {
