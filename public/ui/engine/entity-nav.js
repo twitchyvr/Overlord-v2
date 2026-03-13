@@ -122,18 +122,35 @@ async function _openAgentDetail(agentId) {
   const container = h('div', { class: 'entity-detail agent-detail-view' });
 
   // ── Header ──
-  const header = h('div', { class: 'agent-detail-header' },
-    h('div', { class: 'agent-detail-avatar' }, (agent.name || '?')[0].toUpperCase()),
-    h('div', { class: 'agent-detail-title' },
-      h('h3', null, agent.name || agent.id),
-      h('div', { class: 'agent-detail-meta' },
-        h('span', { class: 'badge agent-role-badge' }, agent.role || 'agent'),
-        h('span', {
-          class: `agent-status-indicator agent-status-${agent.status || 'idle'}`
-        }, agent.status || 'idle')
-      )
-    )
-  );
+  const displayName = agent.display_name || agent.name || agent.id;
+  const avatarEl = h('div', { class: 'agent-detail-avatar' });
+  if (agent.photo_url) {
+    const img = h('img', {
+      src: agent.photo_url,
+      alt: displayName,
+      class: 'agent-detail-avatar-img'
+    });
+    img.onerror = () => { img.style.display = 'none'; avatarEl.textContent = (displayName)[0].toUpperCase(); };
+    avatarEl.appendChild(img);
+  } else {
+    avatarEl.textContent = (displayName)[0].toUpperCase();
+  }
+
+  const titleGroup = h('div', { class: 'agent-detail-title' });
+  titleGroup.appendChild(h('h3', null, displayName));
+
+  if (agent.specialization) {
+    titleGroup.appendChild(h('div', { class: 'agent-detail-specialization' }, agent.specialization));
+  }
+
+  titleGroup.appendChild(h('div', { class: 'agent-detail-meta' },
+    h('span', { class: 'badge agent-role-badge' }, agent.role || 'agent'),
+    h('span', {
+      class: `agent-status-indicator agent-status-${agent.status || 'idle'}`
+    }, agent.status || 'idle')
+  ));
+
+  const header = h('div', { class: 'agent-detail-header' }, avatarEl, titleGroup);
   container.appendChild(header);
 
   // ── Current Assignment ──
@@ -246,11 +263,70 @@ async function _openAgentDetail(agentId) {
   }
   container.appendChild(activitySection);
 
+  // ── Quick Actions Bar ──
+  const actionsBar = h('div', { class: 'agent-detail-quick-actions' });
+
+  const quickActions = [
+    { icon: '\uD83D\uDCAC', label: 'Chat', action: () => {
+      Drawer.close();
+      OverlordUI.dispatch('navigate:chat', { agentId: agent.id, agentName: agent.name });
+    }},
+    { icon: '\uD83D\uDCE7', label: 'Email', action: () => {
+      Drawer.close();
+      OverlordUI.dispatch('navigate:email', { compose: true, to: agent.id });
+    }},
+  ];
+
+  if (agent.current_room_id) {
+    quickActions.push({ icon: '\uD83D\uDCCD', label: 'Go to Room', action: () => {
+      Drawer.close();
+      OverlordUI.dispatch('navigate:entity', { type: 'room', id: agent.current_room_id });
+    }});
+  }
+
+  quickActions.push({ icon: '\uD83D\uDCCB', label: 'Tasks', action: () => {
+    Drawer.close();
+    OverlordUI.dispatch('navigate:tasks', { assignee: agent.id });
+  }});
+
+  const isPaused = agent.status === 'paused';
+  quickActions.push({
+    icon: isPaused ? '\u25B6' : '\u23F8',
+    label: isPaused ? 'Resume' : 'Pause',
+    action: () => {
+      if (window.overlordSocket) {
+        const newStatus = isPaused ? 'active' : 'paused';
+        window.overlordSocket.updateAgentStatus(agent.id, newStatus).then((res) => {
+          if (res && res.ok) {
+            Toast.success(`Agent ${isPaused ? 'resumed' : 'paused'}`);
+            _openAgentDetail(agentId); // refresh drawer
+          } else {
+            Toast.error('Failed to update status');
+          }
+        });
+      }
+    }
+  });
+
+  for (const qa of quickActions) {
+    const btn = h('button', {
+      class: 'agent-quick-action-btn',
+      title: qa.label,
+      'aria-label': qa.label
+    },
+      h('span', { class: 'agent-quick-action-icon' }, qa.icon),
+      h('span', { class: 'agent-quick-action-label' }, qa.label)
+    );
+    btn.addEventListener('click', qa.action);
+    actionsBar.appendChild(btn);
+  }
+  container.appendChild(actionsBar);
+
   // ── Info ──
   const infoSection = h('div', { class: 'agent-detail-section' });
   infoSection.appendChild(h('h4', { class: 'agent-detail-section-title' }, 'Details'));
   const infoRows = [
-    ['Created', agent.created_at ? new Date(agent.created_at).toLocaleString() : '—'],
+    ['Created', agent.created_at ? new Date(agent.created_at).toLocaleString() : '\u2014'],
   ];
   for (const [label, value] of infoRows) {
     infoSection.appendChild(h('div', { class: 'agent-detail-row' },

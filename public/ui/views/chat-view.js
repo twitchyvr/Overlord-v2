@@ -14,6 +14,7 @@ import { h, setTrustedContent, escapeHtml, formatTime, debounce } from '../engin
 import { TokenInput } from '../components/token-input.js';
 import { Table } from '../components/table.js';
 import { Toast } from '../components/toast.js';
+import { EntityLink } from '../engine/entity-nav.js';
 
 
 /**
@@ -352,11 +353,17 @@ export class ChatView extends Component {
     // Message content wrapper
     const contentWrap = h('div', { class: 'chat-message-content-wrap' });
 
-    // Sender name + timestamp
+    // Sender name + timestamp (agent names are clickable entity links)
+    const senderEl = (role === 'agent' || role === 'assistant') && msg.agentId
+      ? EntityLink.agent(msg.agentId, msg.agentName || 'Agent')
+      : h('span', { class: 'chat-message-sender' },
+          msg.agentName || (role === 'user' ? 'You' : role === 'assistant' ? 'Overlord' : 'System')
+        );
+    if (senderEl.classList && !senderEl.classList.contains('chat-message-sender')) {
+      senderEl.classList.add('chat-message-sender');
+    }
     const meta = h('div', { class: 'chat-message-meta' },
-      h('span', { class: 'chat-message-sender' },
-        msg.agentName || (role === 'user' ? 'You' : role === 'assistant' ? 'Overlord' : 'System')
-      ),
+      senderEl,
       msg.timestamp ? h('span', { class: 'chat-message-time' }, formatTime(msg.timestamp)) : null
     );
     contentWrap.appendChild(meta);
@@ -613,8 +620,14 @@ export class ChatView extends Component {
 
     const avatar = h('div', { class: 'chat-message-avatar' }, 'A');
     const contentWrap = h('div', { class: 'chat-message-content-wrap' });
+    const streamSender = data.agentId
+      ? EntityLink.agent(data.agentId, data.agentName || 'Overlord')
+      : h('span', { class: 'chat-message-sender' }, data.agentName || 'Overlord');
+    if (streamSender.classList && !streamSender.classList.contains('chat-message-sender')) {
+      streamSender.classList.add('chat-message-sender');
+    }
     const meta = h('div', { class: 'chat-message-meta' },
-      h('span', { class: 'chat-message-sender' }, data.agentName || 'Overlord'),
+      streamSender,
       h('span', { class: 'chat-message-time' }, formatTime(new Date()))
     );
     const content = h('div', { class: 'chat-message-content' },

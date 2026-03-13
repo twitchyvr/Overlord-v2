@@ -1119,9 +1119,11 @@ describe('RoomView', () => {
     expect(rosterRows[0].querySelector('.room-roster-dot-working')).not.toBeNull();
     expect(rosterRows[1].querySelector('.room-roster-dot-idle')).not.toBeNull();
 
-    // Check names
-    expect(rosterRows[0].querySelector('.room-roster-name')!.textContent).toBe('Coder');
-    expect(rosterRows[1].querySelector('.room-roster-name')!.textContent).toBe('Reviewer');
+    // Check names (agent names render as EntityLink.agent() which produces .entity-link-agent)
+    const name0 = rosterRows[0].querySelector('.entity-link-agent') || rosterRows[0].querySelector('.room-roster-name');
+    const name1 = rosterRows[1].querySelector('.entity-link-agent') || rosterRows[1].querySelector('.room-roster-name');
+    expect(name0!.textContent).toBe('Coder');
+    expect(name1!.textContent).toBe('Reviewer');
 
     // Stats bar should show 2 agents
     const agentStat = content.querySelectorAll('.room-stat-value')[0];
