@@ -783,3 +783,33 @@ export const SearchGlobalSchema = z.object({
   filters: z.array(z.string().max(50)).max(10).optional().default([]),
   limit: z.number().int().min(1).max(50).optional().default(10),
 });
+
+// ─── Plugin Management Schemas ───
+
+export const PluginListSchema = z.object({
+  filter: z.enum(['all', 'active', 'error', 'unloaded']).optional(),
+});
+
+export const PluginGetSchema = z.object({
+  pluginId: id(),
+});
+
+export const PluginToggleSchema = z.object({
+  pluginId: id(),
+  enabled: z.boolean(),
+});
+
+export const PluginConfigGetSchema = z.object({
+  pluginId: id(),
+});
+
+export const PluginConfigSetSchema = z.object({
+  pluginId: id(),
+  key: z.string().min(1).max(MAX_NAME),
+  value: z.unknown(),
+});
+
+export const PluginActivitySchema = z.object({
+  pluginId: optionalId(),
+  limit: z.number().int().min(1).max(100).optional(),
+});
