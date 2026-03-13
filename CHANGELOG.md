@@ -27,6 +27,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Agent status changes in Activity feed** — Agents tab in activity view shows real-time status updates (#287)
 
 ### Fixed
+- **Dashboard KPI agent count always 0** — agents now fetched eagerly on mount with building-level aggregation fallback (#418, PR #430)
+- **Chat defaults to Strategist Office** — auto-connects to a room on the floor matching the current phase instead of first-created room (#419, PR #431)
 - **Chat room routing on room switch** — chat messages now route to the correct room when switching between rooms (PR #414)
 - **Token-input history test timeout** — resolved jsdom getComputedStyle bottleneck in 50-entry history test (PR #416)
 - **Systemic socket timeout protection** — all 40+ socket.emit methods now use `_emitWithTimeout` with 15s default; prevents stuck spinners and hanging promises on server disconnect (#341)
