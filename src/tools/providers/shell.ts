@@ -7,11 +7,12 @@
 
 import { spawn } from 'node:child_process';
 import { logger } from '../../core/logger.js';
+import { config } from '../../core/config.js';
 
 const log = logger.child({ module: 'tool:shell' });
 
-const DEFAULT_TIMEOUT = 30_000; // 30 seconds
-const MAX_OUTPUT = 100_000; // 100KB
+const DEFAULT_TIMEOUT = config.get('SHELL_TIMEOUT_MS');
+const MAX_OUTPUT = config.get('SHELL_MAX_OUTPUT');
 
 interface ShellResult {
   stdout: string;

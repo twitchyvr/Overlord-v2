@@ -21,6 +21,7 @@
 
 import { LuaFactory, LuaEngine } from 'wasmoon';
 import { logger } from '../core/logger.js';
+import { config } from '../core/config.js';
 import { ok, err } from '../core/contracts.js';
 import type { Result } from '../core/contracts.js';
 import type {
@@ -34,8 +35,8 @@ import type {
 
 const log = logger.child({ module: 'lua-sandbox' });
 
-/** Default timeout for Lua script execution in milliseconds */
-const DEFAULT_TIMEOUT_MS = 5_000;
+/** Default timeout for Lua script execution — configurable */
+const DEFAULT_TIMEOUT_MS = config.get('LUA_TIMEOUT_MS');
 
 /** Valid hook names for Lua plugins */
 const VALID_HOOKS: PluginHook[] = [

@@ -21,9 +21,9 @@ export const logger = pino({
   base: { service: 'overlord-v2' },
 });
 
-// ── Rate limiter for log broadcasting ──
-const LOG_WINDOW_MS = 1000;
-const MAX_LOGS_PER_WINDOW = 20;
+// ── Rate limiter for log broadcasting — configurable via environment ──
+const LOG_WINDOW_MS = Number(process.env.LOG_WINDOW_MS) || 1_000;
+const MAX_LOGS_PER_WINDOW = Number(process.env.MAX_LOGS_PER_WINDOW) || 50;
 let _windowStart = Date.now();
 let _windowCount = 0;
 

@@ -369,9 +369,9 @@ describe('Web Tool Provider', () => {
 
   describe('input validation — bounds checking', () => {
     it('caps maxResults at MAX_RESULTS_CAP', async () => {
-      // Create 30 results
+      // Create more results than the cap allows
       let html = '';
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < MAX_RESULTS_CAP + 20; i++) {
         html += `<a class="result__a" href="https://example.com/${i}">Result ${i}</a>\n`;
         html += `<a class="result__snippet" href="#">Snippet ${i}</a>\n`;
       }
@@ -382,7 +382,7 @@ describe('Web Tool Provider', () => {
     });
 
     it('caps maxLength at MAX_LENGTH_CAP', async () => {
-      const longContent = 'A'.repeat(200_000);
+      const longContent = 'A'.repeat(MAX_LENGTH_CAP + 100_000);
       mockFetch.mockResolvedValue({
         ok: true,
         headers: new Map([['content-type', 'text/plain']]),

@@ -10,16 +10,17 @@
  */
 
 import { logger, broadcastLog } from '../core/logger.js';
+import { config } from '../core/config.js';
 import { getStalePendingGates } from './phase-gate.js';
 import type { Bus } from '../core/bus.js';
 
 const log = logger.child({ module: 'escalation' });
 
-/** Default check interval: 5 minutes */
-const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
+/** Default check interval — configurable via ESCALATION_INTERVAL_MS */
+const DEFAULT_INTERVAL_MS = config.get('ESCALATION_INTERVAL_MS');
 
-/** Default stale threshold: 30 minutes */
-const DEFAULT_THRESHOLD_MS = 30 * 60 * 1000;
+/** Default stale threshold — configurable via ESCALATION_THRESHOLD_MS */
+const DEFAULT_THRESHOLD_MS = config.get('ESCALATION_THRESHOLD_MS');
 
 interface EscalationConfig {
   bus: Bus;

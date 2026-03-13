@@ -10,15 +10,16 @@
  */
 
 import { logger } from '../../core/logger.js';
+import { config } from '../../core/config.js';
 
 const log = logger.child({ module: 'tool:web' });
 
-/** Hard caps for input parameters — exported for tests */
-export const MAX_RESULTS_CAP = 20;
-export const MAX_LENGTH_CAP = 100_000;
+/** Hard caps for input parameters — configurable via environment */
+export const MAX_RESULTS_CAP = config.get('WEB_MAX_RESULTS');
+export const MAX_LENGTH_CAP = config.get('WEB_MAX_LENGTH');
 export const MAX_QUERY_LENGTH = 500;
-/** Max response body size we'll read (1 MB) */
-const MAX_RESPONSE_BODY = 1_048_576;
+/** Max response body size we'll read — configurable via environment */
+const MAX_RESPONSE_BODY = config.get('WEB_MAX_RESPONSE_BODY');
 
 /**
  * Validate that a URL uses http: or https: scheme only.
