@@ -118,6 +118,97 @@ const PROJECT_TYPES = [
     ]
   },
   {
+    id: 'desktop-app',
+    label: 'Desktop Application',
+    icon: '\u{1F5A5}\uFE0F',
+    tagline: 'Native desktop app for macOS, Windows, or Linux',
+    examples: 'Electron app, native utility, productivity tool, media player',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'App Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'UI Developer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Systems Developer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Build Engineer', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
+    id: 'tauri-app',
+    label: 'Tauri Desktop App',
+    icon: '\u26A1',
+    tagline: 'Lightweight native app with Rust backend and web frontend',
+    examples: 'Tauri + Svelte, Tauri + React, lightweight desktop tool',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'App Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Frontend Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Rust Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Build Engineer', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
+    id: 'mobile-app-native',
+    label: 'Mobile Application',
+    icon: '\u{1F4F1}',
+    tagline: 'iOS/Android app using React Native, Flutter, or native frameworks',
+    examples: 'React Native app, Flutter app, SwiftUI, Kotlin Multiplatform',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Mobile Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Mobile Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'UI Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Release Manager', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
+    id: 'macos-widget',
+    label: 'macOS Widget',
+    icon: '\u{1F5A5}\uFE0F',
+    tagline: 'macOS widget or menu bar utility with system integration',
+    examples: 'Menu bar app, system monitor widget, notification center widget',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Desktop Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Desktop Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Build Engineer', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
     id: 'other',
     label: 'Something Else',
     icon: '\u{1F4A1}',
@@ -285,9 +376,14 @@ export class OnboardingWizard extends Component {
     const text = (description || '').trim();
     if (!text) return 'My Project';
 
-    // 1. "called X" or "named X" — capture until punctuation or end
-    const calledMatch = text.match(/(?:called|named)\s+["']?([A-Z][A-Za-z0-9]+(?: [A-Za-z0-9]+){0,4})/);
+    // 1. "called X" or "named X" — capture consecutive Capitalized Words only
+    // Stops at clause boundary words (that, which, with, for, to, it, and, or, the)
+    const calledMatch = text.match(/(?:called|named)\s+["']?([A-Z][A-Za-z0-9]*(?:\s+[A-Z][A-Za-z0-9]*)*)/);
     if (calledMatch) return calledMatch[1].trim();
+
+    // 1b. Quoted name fallback: "My App" or 'My App'
+    const quotedMatch = text.match(/["']([A-Z][A-Za-z0-9]*(?:\s+[A-Za-z0-9]+){0,4})["']/);
+    if (quotedMatch) return quotedMatch[1].trim();
 
     // 2. "X app/tool/platform/site/dashboard/service/system" pattern
     const productMatch = text.match(/([A-Z][A-Za-z0-9]+(?: [A-Za-z0-9]+){0,3})\s+(?:app|tool|platform|site|website|dashboard|service|system|portal|manager)/i);
