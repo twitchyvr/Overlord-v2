@@ -127,14 +127,16 @@ export class ScriptsView extends Component {
     this._fetchPlugins();
 
     // Live status updates
-    this._listen('plugin:status-changed', (data) => {
-      const idx = this._plugins.findIndex(p => p.id === data.pluginId);
-      if (idx >= 0) {
-        this._plugins[idx].status = data.status;
-        this._renderGrid();
-        if (this._selectedId === data.pluginId) this._renderDetail(this._plugins[idx]);
-      }
-    });
+    this._listeners.push(
+      OverlordUI.subscribe('plugin:status-changed', (data) => {
+        const idx = this._plugins.findIndex(p => p.id === data.pluginId);
+        if (idx >= 0) {
+          this._plugins[idx].status = data.status;
+          this._renderGrid();
+          if (this._selectedId === data.pluginId) this._renderDetail(this._plugins[idx]);
+        }
+      })
+    );
   }
 
   unmount() {
@@ -144,7 +146,7 @@ export class ScriptsView extends Component {
   }
 
   destroy() {
-    this.unmount();
+    super.destroy();
   }
 
   /* ── Layout ──────────────────────────── */
