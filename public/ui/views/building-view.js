@@ -708,11 +708,11 @@ export class BuildingView extends Component {
       // Disable delete button when floor has rooms
       const actions = h('div', { class: 'add-room-actions' });
       const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'OK');
-      cancelBtn.addEventListener('click', () => Modal.close('confirm-delete'));
+      cancelBtn.addEventListener('click', () => Modal.close('confirm-delete-floor'));
       actions.appendChild(cancelBtn);
       container.appendChild(actions);
 
-      Modal.open('confirm-delete', {
+      Modal.open('confirm-delete-floor', {
         title: 'Cannot Delete Floor',
         content: container,
         size: 'sm',
@@ -723,7 +723,7 @@ export class BuildingView extends Component {
 
     const actions = h('div', { class: 'add-room-actions' });
     const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
-    cancelBtn.addEventListener('click', () => Modal.close('confirm-delete'));
+    cancelBtn.addEventListener('click', () => Modal.close('confirm-delete-floor'));
 
     const deleteBtn = h('button', { class: 'btn btn-danger btn-md' }, 'Delete Floor');
     deleteBtn.addEventListener('click', async () => {
@@ -734,7 +734,7 @@ export class BuildingView extends Component {
         const result = await window.overlordSocket.deleteFloor(floor.id);
         if (result && result.ok) {
           Toast.success('Floor deleted');
-          Modal.close('confirm-delete');
+          Modal.close('confirm-delete-floor');
           this._expandedFloor = null;
         } else {
           throw new Error(result?.error?.message || 'Delete failed');
@@ -750,7 +750,7 @@ export class BuildingView extends Component {
     actions.appendChild(deleteBtn);
     container.appendChild(actions);
 
-    Modal.open('confirm-delete', {
+    Modal.open('confirm-delete-floor', {
       title: 'Delete Floor',
       content: container,
       size: 'sm',
@@ -893,7 +893,7 @@ export class BuildingView extends Component {
 
     const actions = h('div', { class: 'add-room-actions' });
     const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
-    cancelBtn.addEventListener('click', () => Modal.close('confirm-delete'));
+    cancelBtn.addEventListener('click', () => Modal.close('confirm-delete-room'));
 
     const deleteBtn = h('button', { class: 'btn btn-danger btn-md' }, 'Delete Room');
     deleteBtn.addEventListener('click', async () => {
@@ -904,7 +904,7 @@ export class BuildingView extends Component {
         const result = await window.overlordSocket.deleteRoom(room.id);
         if (result && result.ok) {
           Toast.success(`Room "${typeName}" deleted`);
-          Modal.close('confirm-delete');
+          Modal.close('confirm-delete-room');
         } else {
           throw new Error(result?.error?.message || 'Delete failed');
         }
@@ -919,7 +919,7 @@ export class BuildingView extends Component {
     actions.appendChild(deleteBtn);
     container.appendChild(actions);
 
-    Modal.open('confirm-delete', {
+    Modal.open('confirm-delete-room', {
       title: 'Delete Room',
       content: container,
       size: 'sm',

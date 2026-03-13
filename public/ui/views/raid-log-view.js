@@ -535,22 +535,26 @@ export class RaidLogView extends Component {
 
     if (!window.overlordSocket || !this._buildingId) return;
 
-    const result = await window.overlordSocket.addRaidEntry({
-      buildingId: this._buildingId,
-      type,
-      summary,
-      rationale,
-      phase,
-      decidedBy,
-      affectedAreas
-    });
+    try {
+      const result = await window.overlordSocket.addRaidEntry({
+        buildingId: this._buildingId,
+        type,
+        summary,
+        rationale,
+        phase,
+        decidedBy,
+        affectedAreas
+      });
 
-    if (result && result.ok) {
-      Toast.success('RAID entry added');
-      Modal.close('raid-create');
-    } else {
-      Toast.error(result?.error?.message || 'Failed to add RAID entry');
-      // Keep modal open so user can fix and retry
+      if (result && result.ok) {
+        Toast.success('RAID entry added');
+        Modal.close('raid-create');
+      } else {
+        Toast.error(result?.error?.message || 'Failed to add RAID entry');
+        // Keep modal open so user can fix and retry
+      }
+    } catch (err) {
+      Toast.error('Error adding RAID entry');
     }
   }
 
@@ -652,19 +656,23 @@ export class RaidLogView extends Component {
 
     if (!window.overlordSocket) return;
 
-    const result = await window.overlordSocket.editRaidEntry({
-      id: entryId,
-      summary,
-      rationale,
-      decidedBy,
-      affectedAreas
-    });
+    try {
+      const result = await window.overlordSocket.editRaidEntry({
+        id: entryId,
+        summary,
+        rationale,
+        decidedBy,
+        affectedAreas
+      });
 
-    if (result && result.ok) {
-      Toast.success('RAID entry updated');
-      Modal.close('raid-edit');
-    } else {
-      Toast.error(result?.error?.message || 'Failed to update RAID entry');
+      if (result && result.ok) {
+        Toast.success('RAID entry updated');
+        Modal.close('raid-edit');
+      } else {
+        Toast.error(result?.error?.message || 'Failed to update RAID entry');
+      }
+    } catch (err) {
+      Toast.error('Error updating RAID entry');
     }
   }
 
@@ -673,14 +681,18 @@ export class RaidLogView extends Component {
   async _updateEntryStatus(entryId, status) {
     if (!window.overlordSocket) return;
 
-    const result = await window.overlordSocket.updateRaidStatus({ id: entryId, status });
+    try {
+      const result = await window.overlordSocket.updateRaidStatus({ id: entryId, status });
 
-    if (result && result.ok) {
-      Toast.success(`Entry marked as ${status}`);
-      Drawer.close();
-      this._fetchEntries();
-    } else {
-      Toast.error(result?.error?.message || 'Failed to update status');
+      if (result && result.ok) {
+        Toast.success(`Entry marked as ${status}`);
+        Drawer.close();
+        this._fetchEntries();
+      } else {
+        Toast.error(result?.error?.message || 'Failed to update status');
+      }
+    } catch (err) {
+      Toast.error('Error updating entry status');
     }
   }
 }
