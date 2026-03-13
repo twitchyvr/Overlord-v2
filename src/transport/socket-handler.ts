@@ -38,7 +38,7 @@ import {
   AgentGeneratePhotoSchema,
   ChatMessageSchema,
   ConversationListSchema, ConversationLoadSchema, ConversationCreateSchema, ConversationDeleteSchema,
-  EmptyPayloadSchema, PhaseStatusSchema, PhaseGateSchema,
+  EmptyPayloadSchema, PhaseStatusSchema, PhaseGateSchema, PhaseGateCreateSchema,
   PhaseGatesSchema, PhaseCanAdvanceSchema, PhasePendingGatesSchema,
   PhaseResolveConditionsSchema, PhaseStaleGatesSchema, PhaseGateSignoffSchema, PhaseAdvanceSchema,
   RaidSearchSchema, RaidListSchema, RaidAddSchema, RaidUpdateSchema, RaidEditSchema,
@@ -1365,7 +1365,17 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         const resultData = result.data as Record<string, unknown>;
         if (resultData.verdict === 'GO') {
           bus.emit('phase:gate:signed-off', resultData);
-          bus.emit('phase:advanced', resultData);
+          // Look up building context for phase:advanced event
+          const gateRow = getDb().prepare('SELECT building_id, phase FROM phase_gates WHERE id = ?').get(parsed.gateId) as { building_id: string; phase: string } | undefined;
+          if (gateRow) {
+            bus.emit('phase:advanced', {
+              buildingId: gateRow.building_id,
+              from: gateRow.phase,
+              to: resultData.nextPhase,
+              gateId: parsed.gateId,
+            });
+            bus.emit('building:updated', { id: gateRow.building_id, activePhase: resultData.nextPhase });
+          }
         } else {
           bus.emit('phase:conditions:resolved', { gateId: parsed.gateId, ...resultData });
         }
@@ -1822,20 +1832,29 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         roomId: parsed.roomId, agentId: parsed.agentId,
         document: parsed.document ?? {}, buildingId: parsed.buildingId, phase: parsed.phase,
       });
-      bus.emit('exit-doc:submitted', {
-        roomId: parsed.roomId, roomType: parsed.roomType,
-        buildingId: parsed.buildingId, agentId: parsed.agentId,
-        document: parsed.document,
-        ...(result.ok ? result.data as Record<string, unknown> : {}),
-      });
 
-      // Auto-create a pending phase gate when exit doc is submitted
-      if (result.ok && parsed.buildingId && parsed.phase) {
-        const gateResult = createGate({ buildingId: parsed.buildingId, phase: parsed.phase });
-        if (gateResult.ok) {
-          const gateData = gateResult.data as { id: string; phase: string; status: string };
-          broadcastLog('info', `Phase gate created for ${parsed.phase} (exit doc submitted)`, 'phase');
-          bus.emit('phase:gate:created', { buildingId: parsed.buildingId, ...gateData });
+      if (result.ok) {
+        const exitDocData = result.data as Record<string, unknown>;
+        bus.emit('exit-doc:submitted', {
+          roomId: parsed.roomId, roomType: parsed.roomType,
+          buildingId: parsed.buildingId, agentId: parsed.agentId,
+          document: parsed.document,
+          ...exitDocData,
+        });
+
+        // Auto-create a pending phase gate when exit doc is submitted
+        if (parsed.buildingId && parsed.phase) {
+          const gateResult = createGate({ buildingId: parsed.buildingId, phase: parsed.phase });
+          if (gateResult.ok) {
+            const gateData = gateResult.data as { id: string; phase: string; status: string };
+            // Link exit doc to the gate
+            const exitDocId = exitDocData.id as string | undefined;
+            if (exitDocId) {
+              getDb().prepare('UPDATE phase_gates SET exit_doc_id = ? WHERE id = ?').run(exitDocId, gateData.id);
+            }
+            broadcastLog('info', `Phase gate created for ${parsed.phase} (exit doc submitted)`, 'phase');
+            bus.emit('phase:gate:created', { buildingId: parsed.buildingId, ...gateData });
+          }
         }
       }
 
@@ -1873,11 +1892,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
     // ─── Phase Gate Events ───
 
-    handle(socket, 'phase:gate:create', PhaseGateSchema, (parsed, ack) => {
-      if (!parsed.buildingId || !parsed.phase) {
-        if (ack) ack({ ok: false, error: { code: 'MISSING_PARAMS', message: 'buildingId and phase are required', retryable: false } });
-        return;
-      }
+    handle(socket, 'phase:gate:create', PhaseGateCreateSchema, (parsed, ack) => {
       const result = createGate({ buildingId: parsed.buildingId, phase: parsed.phase });
       if (result.ok) {
         bus.emit('phase:gate:created', { buildingId: parsed.buildingId, ...(result.data as Record<string, unknown>) });
@@ -1912,7 +1927,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
     handle(socket, 'phase:advance', PhaseAdvanceSchema, (parsed, ack) => {
       const buildingId = parsed.buildingId;
-      const phaseOrder = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
+      const phaseOrder = getPhaseOrder();
 
       // Look up the building to get current phase
       const building = getDb().prepare('SELECT * FROM buildings WHERE id = ?').get(buildingId) as { active_phase: string } | undefined;

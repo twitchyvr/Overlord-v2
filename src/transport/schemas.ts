@@ -329,6 +329,12 @@ export const PhaseGateSchema = z.object({
   phase: optionalName(),
 });
 
+/** phase:gate:create — requires both buildingId and phase */
+export const PhaseGateCreateSchema = z.object({
+  buildingId: id(),
+  phase: name(),
+});
+
 // ─── Phase Schemas ───
 
 export const PhaseGatesSchema = z.object({
@@ -371,7 +377,7 @@ export const PhaseAdvanceSchema = z.object({
 // ─── RAID Schemas ───
 
 export const RaidSearchSchema = z.object({
-  buildingId: optionalId(),
+  buildingId: id(),
   type: optionalName(),
   status: optionalName(),
 }).passthrough();
@@ -382,14 +388,14 @@ export const RaidListSchema = z.object({
 
 export const RaidAddSchema = z.object({
   buildingId: id(),
-  type: name(),
+  type: z.enum(['risk', 'assumption', 'issue', 'decision']),
   phase: name(),
   summary: z.string().min(1).max(MAX_DESCRIPTION),
 }).passthrough();
 
 export const RaidUpdateSchema = z.object({
   id: id(),
-  status: name(),
+  status: z.enum(['active', 'superseded', 'closed']),
 });
 
 export const RaidEditSchema = z.object({

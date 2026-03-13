@@ -160,7 +160,21 @@ function isStructuredField(field) {
     // Strategist
     'projectGoals', 'successCriteria', 'estimatedPhases',
   ];
-  return structuredPatterns.some(p => field === p || field.toLowerCase().includes(p.toLowerCase()));
+  // Use exact match only — substring matching causes false positives
+  // (e.g. field 'changesDescription' matching pattern 'definitions')
+  return structuredPatterns.some(p => field === p);
+}
+
+/**
+ * Determine whether a field expects a numeric value.
+ * Backend validates typeof === 'number' for these fields.
+ */
+function isNumericField(field) {
+  const numericFields = [
+    'testsRun', 'testsPassed', 'testsFailed', 'lintErrors',
+    'coverage', 'errorCount', 'warningCount',
+  ];
+  return numericFields.includes(field);
 }
 
 
@@ -379,11 +393,15 @@ export class ExitDocForm extends Component {
       submitBtn.textContent = 'Submitting...';
     }
 
-    // Build the exit doc payload — parse structured fields as JSON if possible
+    // Build the exit doc payload — parse structured/numeric fields appropriately
     const exitDoc = {};
     for (const field of exitReq.fields) {
       const raw = (this._fieldValues[field] || '').trim();
-      if (isStructuredField(field)) {
+      if (isNumericField(field)) {
+        // Parse as number — backend validates typeof === 'number'
+        const num = Number(raw);
+        exitDoc[field] = isNaN(num) ? 0 : num;
+      } else if (isStructuredField(field)) {
         try {
           exitDoc[field] = JSON.parse(raw);
         } catch {
