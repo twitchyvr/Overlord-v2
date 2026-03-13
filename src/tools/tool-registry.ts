@@ -19,6 +19,14 @@ import { switchProvider, compareModels, configureFallback, testProvider } from '
 import { installPlugin, uninstallPlugin, configurePlugin, testPlugin, listPlugins } from './providers/plugin-bay.js';
 import { executeStaticAnalysis } from './providers/static-analysis.js';
 import { executeDeepAnalysis } from './providers/deep-analysis.js';
+import { executeCodeReview } from './providers/code-review.js';
+import { executeGitHubIssues } from './providers/github-issues.js';
+import { executeGitWorkflow } from './providers/git-workflow.js';
+import { executeE2ETest } from './providers/e2e-testing.js';
+import { executeGameEngine } from './providers/game-engine.js';
+import { executeDevServer } from './providers/dev-server.js';
+import { executeBrowserTools } from './providers/browser-tools.js';
+import { executeWorkspaceSandbox } from './providers/workspace-sandbox.js';
 import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
 
 const log = logger.child({ module: 'tool-registry' });
@@ -335,6 +343,136 @@ function registerBuiltinTools(): void {
       return {
         output: d.summary,
         ...d,
+      };
+    },
+  });
+
+  // ─── Code Review ───
+  registerTool({
+    name: 'code_review',
+    description: 'Review code changes by analyzing git diff for issues (security, performance, style)',
+    category: 'qa',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        files: { type: 'array', items: { type: 'string' }, description: 'Files to review' },
+        projectDir: { type: 'string', description: 'Project directory' },
+        reviewType: { type: 'string', description: 'Review type: full, security, performance (default: full)' },
+      },
+      required: ['files', 'projectDir'],
+    },
+    execute: async (p) => {
+      const result = await executeCodeReview({
+        files: p.files as string[],
+        projectDir: p.projectDir as string,
+        reviewType: (p.reviewType as 'full' | 'security' | 'performance') || 'full',
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const d = result.data;
+      return {
+        output: d.summary,
+        ...d,
+      };
+    },
+  });
+
+  // ─── GitHub Issues ───
+  registerTool({
+    name: 'github_issues',
+    description: 'Manage GitHub Issues: create, list, get, close, comment',
+    category: 'github',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', description: 'Action: create, list, get, close, comment' },
+        repo: { type: 'string', description: 'Repository (owner/repo) — defaults to current repo' },
+        title: { type: 'string', description: 'Issue title (for create)' },
+        body: { type: 'string', description: 'Issue body or comment text' },
+        issueNumber: { type: 'number', description: 'Issue number (for get, close, comment)' },
+        labels: { type: 'array', items: { type: 'string' }, description: 'Labels (for create)' },
+      },
+      required: ['action'],
+    },
+    execute: async (p, ctx) => {
+      const result = await executeGitHubIssues({
+        action: p.action as 'create' | 'list' | 'get' | 'close' | 'comment',
+        repo: p.repo as string | undefined,
+        title: p.title as string | undefined,
+        body: p.body as string | undefined,
+        issueNumber: p.issueNumber as number | undefined,
+        labels: p.labels as string[] | undefined,
+        cwd: ctx?.workingDirectory,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const { output: ghOutput, ...ghRest } = result.data;
+      return { output: ghOutput, ...ghRest };
+    },
+  });
+
+  // ─── Git Workflow ───
+  registerTool({
+    name: 'git_workflow',
+    description: 'Structured git operations: branch, commit, push, pr, status, diff',
+    category: 'github',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', description: 'Action: branch, commit, push, pr, status, diff' },
+        projectDir: { type: 'string', description: 'Project directory' },
+        branch: { type: 'string', description: 'Branch name (for branch, push)' },
+        message: { type: 'string', description: 'Commit message or PR title' },
+        files: { type: 'array', items: { type: 'string' }, description: 'Files to stage or diff' },
+      },
+      required: ['action', 'projectDir'],
+    },
+    execute: async (p) => {
+      const result = await executeGitWorkflow({
+        action: p.action as 'branch' | 'commit' | 'push' | 'pr' | 'status' | 'diff',
+        projectDir: p.projectDir as string,
+        branch: p.branch as string | undefined,
+        message: p.message as string | undefined,
+        files: p.files as string[] | undefined,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const { output: gitOutput, ...gitRest } = result.data;
+      return { output: gitOutput, ...gitRest };
+    },
+  });
+
+  // ─── E2E Testing ───
+  registerTool({
+    name: 'e2e_test',
+    description: 'Auto-detect test framework and run E2E tests with structured results',
+    category: 'qa',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectDir: { type: 'string', description: 'Project directory' },
+        testCommand: { type: 'string', description: 'Custom test command (overrides auto-detection)' },
+        framework: { type: 'string', description: 'Framework hint (playwright, cypress, jest, vitest, mocha)' },
+      },
+      required: ['projectDir'],
+    },
+    execute: async (p) => {
+      const result = await executeE2ETest({
+        projectDir: p.projectDir as string,
+        testCommand: p.testCommand as string | undefined,
+        framework: p.framework as string | undefined,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const { output: _rawOutput, ...e2eRest } = result.data;
+      return {
+        output: `[${result.data.framework}] ${result.data.testsRun} tests — ${result.data.passed} passed, ${result.data.failed} failed (${result.data.duration}ms)`,
+        rawOutput: _rawOutput,
+        ...e2eRest,
       };
     },
   });
