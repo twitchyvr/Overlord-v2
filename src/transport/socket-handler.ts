@@ -1652,9 +1652,12 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         return;
       }
 
-      // Unlink any tasks from this milestone
-      db.prepare('UPDATE tasks SET milestone_id = NULL WHERE milestone_id = ?').run(parsed.id);
-      db.prepare('DELETE FROM milestones WHERE id = ?').run(parsed.id);
+      // Atomically unlink tasks and delete milestone
+      const deleteMilestone = db.transaction(() => {
+        db.prepare('UPDATE tasks SET milestone_id = NULL WHERE milestone_id = ?').run(parsed.id);
+        db.prepare('DELETE FROM milestones WHERE id = ?').run(parsed.id);
+      });
+      deleteMilestone();
 
       log.info({ milestoneId: parsed.id }, 'Milestone deleted');
       broadcastLog('info', `Milestone deleted: ${existing.title}`, 'milestones');

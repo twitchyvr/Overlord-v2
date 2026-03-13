@@ -41,6 +41,7 @@ export class MilestoneView extends Component {
     this._buildingId = null;
     this._activeFilter = 'all';
     this._loading = true;
+    this._openDrawerMilestoneId = null; // track which milestone drawer is open
   }
 
   mount() {
@@ -66,8 +67,22 @@ export class MilestoneView extends Component {
 
     this._listeners.push(
       OverlordUI.subscribe('milestone:created', () => this._fetchMilestones()),
-      OverlordUI.subscribe('milestone:updated', () => this._fetchMilestones()),
-      OverlordUI.subscribe('milestone:deleted', () => this._fetchMilestones())
+      OverlordUI.subscribe('milestone:updated', () => {
+        this._fetchMilestones();
+        // Refresh the open drawer if it shows a milestone that was just updated
+        this._refreshOpenDrawer();
+      }),
+      OverlordUI.subscribe('milestone:deleted', () => {
+        this._fetchMilestones();
+        // Close drawer if the deleted milestone was being viewed
+        if (this._openDrawerMilestoneId) {
+          const stillExists = this._milestones.some(m => m.id === this._openDrawerMilestoneId);
+          if (!stillExists) {
+            Drawer.close();
+            this._openDrawerMilestoneId = null;
+          }
+        }
+      })
     );
 
     // Initial data
@@ -299,7 +314,16 @@ export class MilestoneView extends Component {
 
   // ── Detail Drawer ──
 
+  _refreshOpenDrawer() {
+    if (!this._openDrawerMilestoneId) return;
+    const updated = this._milestones.find(m => m.id === this._openDrawerMilestoneId);
+    if (updated && Drawer.getActiveId() === 'milestone-detail') {
+      this._openMilestoneDetail(updated);
+    }
+  }
+
   _openMilestoneDetail(milestone) {
+    this._openDrawerMilestoneId = milestone.id;
     const statusCfg = STATUS_CONFIG[milestone.status] || STATUS_CONFIG.active;
     const milestoneTasks = this._tasks.filter(t => t.milestone_id === milestone.id);
     const tasksDone = milestoneTasks.filter(t => t.status === 'done').length;
@@ -405,13 +429,14 @@ export class MilestoneView extends Component {
     const actionsBar = h('div', { class: 'milestone-detail-actions' });
 
     const editBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Edit');
-    editBtn.addEventListener('click', () => { Drawer.close(); this._openEditModal(milestone); });
+    editBtn.addEventListener('click', () => { this._openDrawerMilestoneId = null; Drawer.close(); this._openEditModal(milestone); });
     actionsBar.appendChild(editBtn);
 
     if (milestone.status === 'active') {
       const completeBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Mark Complete');
       completeBtn.addEventListener('click', () => {
         this._updateMilestoneStatus(milestone.id, 'completed');
+        this._openDrawerMilestoneId = null;
         Drawer.close();
       });
       actionsBar.appendChild(completeBtn);
@@ -422,7 +447,8 @@ export class MilestoneView extends Component {
     Drawer.open('milestone-detail', {
       title: `Milestone: ${milestone.title}`,
       width: '520px',
-      content
+      content,
+      onClose: () => { this._openDrawerMilestoneId = null; }
     });
   }
 
@@ -663,6 +689,7 @@ export class MilestoneView extends Component {
         if (res && res.ok) {
           Toast.show('Milestone deleted', 'success');
           Modal.close('milestone-delete');
+          this._openDrawerMilestoneId = null;
           Drawer.close();
           this._fetchMilestones();
         } else {
