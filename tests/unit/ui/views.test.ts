@@ -1153,6 +1153,181 @@ describe('StrategistView', () => {
   });
 });
 
+// ─── inferTemplate / extractProjectName ─────────────────────
+
+describe('One-Shot Prompting — inferTemplate', () => {
+  it('infers web-app for "build me a website for my bakery"', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [
+      { id: 'web-app' }, { id: 'microservices' }, { id: 'data-pipeline' },
+      { id: 'cli-tool' }, { id: 'api-service' },
+    ];
+    const result = inferTemplate('build me a website for my bakery with online ordering', templates as any);
+    expect(result.id).toBe('web-app');
+  });
+
+  it('infers data-pipeline for "dashboard that shows sales data"', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [
+      { id: 'web-app' }, { id: 'microservices' }, { id: 'data-pipeline' },
+      { id: 'cli-tool' }, { id: 'api-service' },
+    ];
+    const result = inferTemplate('I need a dashboard that shows my sales data and analytics', templates as any);
+    expect(result.id).toBe('data-pipeline');
+  });
+
+  it('infers cli-tool for "command line tool for batch processing"', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [
+      { id: 'web-app' }, { id: 'microservices' }, { id: 'data-pipeline' },
+      { id: 'cli-tool' }, { id: 'api-service' },
+    ];
+    const result = inferTemplate('create a command line tool for batch automation', templates as any);
+    expect(result.id).toBe('cli-tool');
+  });
+
+  it('infers api-service for "REST API with authentication"', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [
+      { id: 'web-app' }, { id: 'microservices' }, { id: 'data-pipeline' },
+      { id: 'cli-tool' }, { id: 'api-service' },
+    ];
+    const result = inferTemplate('build a REST API with authentication and webhooks', templates as any);
+    expect(result.id).toBe('api-service');
+  });
+
+  it('infers microservices for "distributed system with event-driven services"', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [
+      { id: 'web-app' }, { id: 'microservices' }, { id: 'data-pipeline' },
+      { id: 'cli-tool' }, { id: 'api-service' },
+    ];
+    const result = inferTemplate('distributed system with multiple services and event-driven communication', templates as any);
+    expect(result.id).toBe('microservices');
+  });
+
+  it('defaults to web-app for ambiguous prompts', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [
+      { id: 'web-app' }, { id: 'microservices' }, { id: 'data-pipeline' },
+      { id: 'cli-tool' }, { id: 'api-service' },
+    ];
+    const result = inferTemplate('build me something cool', templates as any);
+    expect(result.id).toBe('web-app');
+  });
+
+  it('defaults to web-app for empty prompt', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [{ id: 'web-app' }];
+    const result = inferTemplate('', templates as any);
+    expect(result.id).toBe('web-app');
+  });
+
+  it('defaults to web-app for null prompt', async () => {
+    const { inferTemplate } = await import('../../../public/ui/views/strategist-view.js');
+    const templates = [{ id: 'web-app' }];
+    const result = inferTemplate(null as any, templates as any);
+    expect(result.id).toBe('web-app');
+  });
+});
+
+describe('One-Shot Prompting — extractProjectName', () => {
+  it('extracts name from "build me a website for my bakery"', async () => {
+    const { extractProjectName } = await import('../../../public/ui/views/strategist-view.js');
+    const name = extractProjectName('build me a website for my bakery');
+    expect(name).toBe('Website');
+  });
+
+  it('extracts name from "create a video game like Doom"', async () => {
+    const { extractProjectName } = await import('../../../public/ui/views/strategist-view.js');
+    const name = extractProjectName('create a video game like Doom');
+    expect(name).toBe('Video game');
+  });
+
+  it('extracts name from "I need a dashboard that shows my sales"', async () => {
+    const { extractProjectName } = await import('../../../public/ui/views/strategist-view.js');
+    const name = extractProjectName('I need a dashboard that shows my sales');
+    expect(name).toBe('Dashboard');
+  });
+
+  it('returns trimmed prompt as fallback for unrecognized patterns', async () => {
+    const { extractProjectName } = await import('../../../public/ui/views/strategist-view.js');
+    const name = extractProjectName('my awesome project');
+    expect(name).toBe('my awesome project');
+  });
+
+  it('returns empty string for empty input', async () => {
+    const { extractProjectName } = await import('../../../public/ui/views/strategist-view.js');
+    expect(extractProjectName('')).toBe('');
+  });
+
+  it('truncates very long prompts', async () => {
+    const { extractProjectName } = await import('../../../public/ui/views/strategist-view.js');
+    const long = 'x'.repeat(100);
+    const name = extractProjectName(long);
+    expect(name.length).toBeLessThanOrEqual(54); // 50 + "..."
+  });
+});
+
+describe('One-Shot Prompting — UI', () => {
+  it('renders one-shot input on template selection step', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    expect(el.querySelector('.one-shot-input')).not.toBeNull();
+    expect(el.querySelector('.one-shot-section')).not.toBeNull();
+    expect(el.querySelector('.one-shot-divider')).not.toBeNull();
+  });
+
+  it('one-shot divider says "or choose a template"', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    const divider = el.querySelector('.one-shot-divider');
+    expect(divider!.textContent).toContain('or choose a template');
+  });
+
+  it('has a "Just Build It" button in the one-shot section', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    const btn = el.querySelector('.one-shot-actions .btn');
+    expect(btn).not.toBeNull();
+    expect(btn!.textContent).toContain('Just Build It');
+  });
+
+  it('typing in the one-shot input updates _oneShotPrompt state', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    const input = el.querySelector('.one-shot-input') as HTMLTextAreaElement;
+    input.value = 'Build me a bakery website';
+    input.dispatchEvent(new Event('input'));
+
+    expect((view as any)._oneShotPrompt).toBe('Build me a bakery website');
+  });
+
+  it('template grid still appears below the one-shot input', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    // Both should be present
+    expect(el.querySelector('.one-shot-section')).not.toBeNull();
+    expect(el.querySelector('.template-grid')).not.toBeNull();
+    expect(el.querySelectorAll('.template-card').length).toBe(5);
+  });
+});
+
 // ─── RoomView ───────────────────────────────────────────────
 
 describe('RoomView', () => {
