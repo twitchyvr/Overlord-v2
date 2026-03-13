@@ -30,6 +30,7 @@ export class BuildingArchitect extends BaseRoom {
       'web_search',
       'record_note',
       'recall_notes',
+      'session_note',
       'list_dir',
       'read_file',
     ],

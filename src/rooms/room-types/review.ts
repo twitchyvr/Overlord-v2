@@ -30,6 +30,7 @@ export class ReviewRoom extends BaseRoom {
       'recall_notes',
       'qa_run_tests',
       'qa_check_lint',
+      'session_note',
     ],
     fileScope: 'read-only',
     exitRequired: {

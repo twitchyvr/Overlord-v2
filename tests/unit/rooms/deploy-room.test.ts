@@ -33,6 +33,7 @@ describe('DeployRoom', () => {
       expect(contract.tools).toContain('bash');
       expect(contract.tools).toContain('github');
       expect(contract.tools).toContain('qa_run_tests');
+      expect(contract.tools).toContain('session_note');
       expect(contract.tools).not.toContain('write_file');
       expect(contract.tools).not.toContain('patch_file');
     });
@@ -63,9 +64,9 @@ describe('DeployRoom', () => {
       expect(room.type).toBe('deploy');
     });
 
-    it('getAllowedTools returns 5 deployment tools', () => {
+    it('getAllowedTools returns 6 deployment tools', () => {
       const room = new DeployRoom('room_1');
-      expect(room.getAllowedTools()).toHaveLength(5);
+      expect(room.getAllowedTools()).toHaveLength(6);
     });
 
     it('getRules emphasizes health checks and rollback plan', () => {

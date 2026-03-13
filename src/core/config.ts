@@ -85,6 +85,9 @@ const ConfigSchema = z.object({
   ESCALATION_INTERVAL_MS: z.coerce.number().positive().default(5 * 60 * 1000),
   ESCALATION_THRESHOLD_MS: z.coerce.number().positive().default(30 * 60 * 1000),
 
+  // Context Management
+  CONTEXT_PRESERVE_RECENT: z.coerce.number().int().positive().default(10),
+
   // Log Broadcasting
   LOG_WINDOW_MS: z.coerce.number().positive().default(1_000),
   MAX_LOGS_PER_WINDOW: z.coerce.number().int().positive().default(50),

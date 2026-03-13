@@ -35,6 +35,7 @@ export class WarRoom extends BaseRoom {
       'qa_run_tests',
       'qa_check_lint',
       'github',
+      'session_note',
     ],
     fileScope: 'full',
     exitRequired: {

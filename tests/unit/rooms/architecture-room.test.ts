@@ -33,6 +33,7 @@ describe('ArchitectureRoom', () => {
       expect(contract.tools).toContain('fetch_webpage');
       expect(contract.tools).toContain('record_note');
       expect(contract.tools).toContain('recall_notes');
+      expect(contract.tools).toContain('session_note');
       expect(contract.tools).not.toContain('write_file');
       expect(contract.tools).not.toContain('patch_file');
       expect(contract.tools).not.toContain('bash');
@@ -68,9 +69,9 @@ describe('ArchitectureRoom', () => {
       expect(room.type).toBe('architecture');
     });
 
-    it('getAllowedTools returns all 6 research tools', () => {
+    it('getAllowedTools returns all 7 research tools', () => {
       const room = new ArchitectureRoom('room_1');
-      expect(room.getAllowedTools()).toHaveLength(6);
+      expect(room.getAllowedTools()).toHaveLength(7);
     });
 
     it('hasTool returns false for write tools', () => {
@@ -102,7 +103,7 @@ describe('ArchitectureRoom', () => {
       const ctx = room.buildContextInjection();
       expect(ctx.roomType).toBe('architecture');
       expect(ctx.fileScope).toBe('read-only');
-      expect((ctx.tools as string[]).length).toBe(6);
+      expect((ctx.tools as string[]).length).toBe(7);
     });
 
     it('validates complete exit document', () => {

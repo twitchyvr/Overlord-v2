@@ -37,6 +37,7 @@ describe('TestingLab', () => {
       expect(contract.tools).toContain('qa_check_types');
       expect(contract.tools).toContain('qa_check_coverage');
       expect(contract.tools).toContain('qa_audit_deps');
+      expect(contract.tools).toContain('session_note');
     });
 
     it('STRUCTURALLY CANNOT modify source code — write tools are absent', () => {
@@ -81,10 +82,10 @@ describe('TestingLab', () => {
       expect(room.type).toBe('testing-lab');
     });
 
-    it('getAllowedTools returns all 8 QA tools', () => {
+    it('getAllowedTools returns all 9 QA tools', () => {
       const room = new TestingLab('room_1');
       const tools = room.getAllowedTools();
-      expect(tools).toHaveLength(8);
+      expect(tools).toHaveLength(9);
     });
 
     it('hasTool is true for QA tools and false for write tools', () => {

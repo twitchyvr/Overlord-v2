@@ -59,8 +59,11 @@ import {
   EmailSendSchema, EmailReplySchema, EmailForwardSchema,
   EmailInboxSchema, EmailGetSchema, EmailThreadSchema,
   EmailMarkReadSchema, EmailUnreadCountSchema, EmailSentSchema,
+  SessionNoteWriteSchema, SessionNoteReadSchema, SessionNoteListSchema,
+  SessionNoteDeleteSchema, SessionNoteClearSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
+import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
@@ -1072,6 +1075,37 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     handle(socket, 'email:unread-count', EmailUnreadCountSchema, (parsed, ack) => {
       const count = getUnreadCount(parsed.agentId);
       if (ack) ack({ ok: true, data: { agentId: parsed.agentId, count } });
+    });
+
+    // ─── Session Notes ───
+
+    handle(socket, 'session-note:write', SessionNoteWriteSchema, (parsed, ack) => {
+      const result = writeNote(parsed.agentId, parsed.key, parsed.value, parsed.buildingId);
+      if (ack) ack({ ok: result.ok, data: result.ok ? { message: result.message } : undefined, error: result.ok ? undefined : { code: 'NOTE_WRITE_FAILED', message: result.message, retryable: false } });
+    });
+
+    handle(socket, 'session-note:read', SessionNoteReadSchema, (parsed, ack) => {
+      const note = readNote(parsed.agentId, parsed.key);
+      if (!note) {
+        if (ack) ack({ ok: false, error: { code: 'NOTE_NOT_FOUND', message: `Note "${parsed.key}" not found`, retryable: false } });
+        return;
+      }
+      if (ack) ack({ ok: true, data: note });
+    });
+
+    handle(socket, 'session-note:list', SessionNoteListSchema, (parsed, ack) => {
+      const notes = listNotes(parsed.agentId);
+      if (ack) ack({ ok: true, data: { notes, count: notes.length } });
+    });
+
+    handle(socket, 'session-note:delete', SessionNoteDeleteSchema, (parsed, ack) => {
+      const result = deleteNote(parsed.agentId, parsed.key);
+      if (ack) ack({ ok: result.ok, data: result.ok ? { message: result.message } : undefined, error: result.ok ? undefined : { code: 'NOTE_NOT_FOUND', message: result.message, retryable: false } });
+    });
+
+    handle(socket, 'session-note:clear', SessionNoteClearSchema, (parsed, ack) => {
+      const result = clearNotes(parsed.agentId);
+      if (ack) ack({ ok: true, data: { count: result.count } });
     });
 
     // ─── Command List ───

@@ -27,6 +27,7 @@ export class ArchitectureRoom extends BaseRoom {
       'fetch_webpage',
       'record_note',
       'recall_notes',
+      'session_note',
     ],
     fileScope: 'read-only',
     exitRequired: {

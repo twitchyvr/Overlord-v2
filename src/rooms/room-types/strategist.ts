@@ -132,6 +132,7 @@ export class StrategistOffice extends BaseRoom {
       'web_search',
       'record_note',
       'recall_notes',
+      'session_note',
       'list_dir',
     ],
     fileScope: 'read-only',

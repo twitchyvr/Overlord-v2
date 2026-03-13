@@ -26,6 +26,7 @@ export class DeployRoom extends BaseRoom {
       'bash',
       'github',
       'qa_run_tests',
+      'session_note',
     ],
     fileScope: 'read-only',
     exitRequired: {
