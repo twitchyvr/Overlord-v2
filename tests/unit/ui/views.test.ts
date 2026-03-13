@@ -1568,6 +1568,30 @@ describe('RoomView', () => {
 // ─── TaskView ──────────────────────────────────────────────
 
 describe('TaskView', () => {
+  // TaskView requires an active building to show tasks (otherwise shows "Select a project")
+  beforeEach(() => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', 'test-building-1', { silent: true });
+  });
+  afterEach(() => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', null, { silent: true });
+  });
+
+  it('shows "Select a project" when no building is active', async () => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', null, { silent: true });
+
+    const { TaskView } = await import('../../../public/ui/views/task-view.js');
+    const el = document.createElement('div');
+    const view = new TaskView(el);
+    view.mount();
+
+    const list = el.querySelector('#task-list');
+    expect(list!.querySelector('.empty-state')).not.toBeNull();
+    expect(list!.textContent).toContain('Select a project');
+  });
+
   it('exports the TaskView class', async () => {
     const mod = await import('../../../public/ui/views/task-view.js');
     expect(mod.TaskView).toBeDefined();

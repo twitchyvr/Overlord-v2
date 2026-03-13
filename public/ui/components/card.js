@@ -101,7 +101,7 @@ export class Card {
       }),
       h('span', { class: 'task-title' }, data.title || 'Untitled Task'),
       data.priority ? h('span', { class: `task-priority priority-${data.priority}` }, data.priority) : null,
-      data.id ? h('span', { class: 'task-id' }, `#${data.id}`) : null
+      data.id ? h('span', { class: 'task-id', title: data.id }, `#${data.id.slice(0, 6)}`) : null
     );
     card.appendChild(header);
 
