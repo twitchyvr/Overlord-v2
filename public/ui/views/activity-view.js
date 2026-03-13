@@ -232,8 +232,21 @@ export class ActivityView extends Component {
       this._countEl.textContent = `${total} event${total !== 1 ? 's' : ''}`;
     }
 
+    // Show "select a project" when no building is active
+    const store = OverlordUI.getStore();
+    const hasBuilding = store && store.get('building.active');
+
     if (filtered.length === 0) {
-      if (this._loading) {
+      if (!hasBuilding) {
+        this._timelineEl.appendChild(
+          h('div', { class: 'activity-view-empty' },
+            h('div', { class: 'activity-view-empty-icon' }, '\u{1F3E2}'),
+            h('p', { class: 'activity-view-empty-title' }, 'Select a project'),
+            h('p', { class: 'activity-view-empty-desc' },
+              'Choose a project from the Dashboard to view its activity.')
+          )
+        );
+      } else if (this._loading) {
         this._timelineEl.appendChild(
           h('div', { class: 'loading-state' },
             h('div', { class: 'loading-spinner' }),

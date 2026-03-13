@@ -700,7 +700,6 @@ export class AgentsView extends Component {
     infoSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Details'));
 
     const infoRows = [
-      ['ID', agent.id],
       ['Created', agent.created_at ? new Date(agent.created_at).toLocaleString() : '\u2014'],
       ['Updated', agent.updated_at ? new Date(agent.updated_at).toLocaleString() : '\u2014'],
     ];

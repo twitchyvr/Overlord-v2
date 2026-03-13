@@ -291,6 +291,15 @@ export class TaskView extends Component {
       return;
     }
 
+    // Show "select a building" message when no building is active
+    if (!this._buildingId) {
+      container.appendChild(h('div', { class: 'empty-state' },
+        h('p', { class: 'empty-state-title' }, 'Select a project'),
+        h('p', { class: 'empty-state-description' }, 'Choose a project from the Dashboard to view its tasks.')
+      ));
+      return;
+    }
+
     const tasks = this._getFilteredTasks();
 
     if (tasks.length === 0) {

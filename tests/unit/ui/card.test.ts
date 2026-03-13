@@ -225,10 +225,18 @@ describe('Card.create("task")', () => {
     expect(priority!.classList.contains('priority-high')).toBe(true);
   });
 
-  it('renders task id', () => {
+  it('renders short task id (first 6 chars)', () => {
     const card = Card.create('task', { title: 'T', id: '123' });
     const idEl = card.querySelector('.task-id');
     expect(idEl!.textContent).toBe('#123');
+  });
+
+  it('truncates long task ids to 6 characters', () => {
+    const uuid = 'de59f234-4199-4d63-85af-6c12abbd6647';
+    const card = Card.create('task', { title: 'T', id: uuid });
+    const idEl = card.querySelector('.task-id');
+    expect(idEl!.textContent).toBe('#de59f2');
+    expect(idEl!.getAttribute('title')).toBe(uuid);
   });
 
   it('renders description in .task-description', () => {
