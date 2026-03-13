@@ -375,7 +375,9 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     });
 
     handle(socket, 'room:exit', RoomExitSchema, (parsed, ack) => {
-      const result = rooms.exitRoom(parsed as Parameters<typeof rooms.exitRoom>[0]);
+      // Explicitly pass only roomId/agentId — never allow client to set 'reason: disconnect'
+      // which would bypass exit-doc enforcement (only the disconnect handler may set that)
+      const result = rooms.exitRoom({ roomId: parsed.roomId, agentId: parsed.agentId });
       if (result.ok) {
         getAssociations(socket.id).roomMemberships.delete(parsed.agentId);
         // Record stats — look up room type for activity context
@@ -2056,7 +2058,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
                 const durationMs = (session.endedAt ?? Date.now()) - session.startedAt;
                 onSessionEnd(agentId, roomId, durationMs, agent?.building_id ?? undefined);
               }
-              rooms.exitRoom({ roomId, agentId });
+              rooms.exitRoom({ roomId, agentId, reason: 'disconnect' });
               bus.emit('room:agent:exited', { roomId, agentId, reason: 'disconnect' });
               cleanedRooms++;
             } catch (e) {

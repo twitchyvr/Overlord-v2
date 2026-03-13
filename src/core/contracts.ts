@@ -283,7 +283,7 @@ export interface AIAdapter {
 export interface RoomManagerAPI {
   createRoom: (params: { type: string; floorId: string; name: string; config?: Record<string, unknown> }) => Result;
   enterRoom: (params: { roomId: string; agentId: string; tableType?: string }) => Result;
-  exitRoom: (params: { roomId: string; agentId: string }) => Result;
+  exitRoom: (params: { roomId: string; agentId: string; reason?: 'disconnect' | 'normal' }) => Result;
   getRoom: (roomId: string) => import('./contracts.js').BaseRoomLike | null;
   listRooms: () => RoomRow[];
   registerRoomType: (type: string, factory: BaseRoomConstructor) => void;
