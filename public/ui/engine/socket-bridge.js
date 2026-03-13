@@ -203,6 +203,20 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'raid:entry:added', ...data });
   });
 
+  socket.on('raid:entry:updated', (data) => {
+    store.update('raid.entries', (entries) => {
+      const list = entries || [];
+      const idx = list.findIndex((e) => e.id === data.id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], ...data };
+        return next;
+      }
+      return list;
+    });
+    engine.dispatch('raid:entry:updated', data);
+  });
+
   socket.on('phase-zero:complete', (data) => {
     store.update('activity.items', (items) => [{ event: 'phase-zero:complete', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('phase-zero:complete', data);
@@ -214,7 +228,8 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('scope-change:detected', (data) => {
-    store.update('raid.entries', (entries) => [{ ...data, type: 'scope-change' }, ...(entries || [])]);
+    // Don't inject into raid.entries — scope-change data lacks RAID entry shape
+    // (no id, phase, room_id, summary, etc.) and corrupts the store
     store.update('activity.items', (items) => [{ event: 'scope-change', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('scope-change:detected', data);
     engine.dispatch('activity:new', { event: 'scope-change', ...data });
@@ -1391,45 +1406,19 @@ export function initSocketBridge(socket, store, engine) {
     // ── RAID methods ──
 
     async addRaidEntry(params) {
-      const res = await _emitWithFeedback('raid:add', params);
-      if (res && res.ok) {
-        store.update('raid.entries', (entries) => [res.data, ...(entries || [])]);
-      }
-      return res;
+      // Don't update store here — the 'raid:entry:added' broadcast listener handles it
+      // to avoid duplicate entries in the store
+      return _emitWithFeedback('raid:add', params);
     },
 
     async updateRaidStatus(params) {
-      const res = await _emitWithFeedback('raid:update', params);
-      if (res && res.ok) {
-        store.update('raid.entries', (entries) => {
-          const list = entries || [];
-          const idx = list.findIndex((e) => e.id === params.id);
-          if (idx >= 0) {
-            const next = [...list];
-            next[idx] = { ...next[idx], status: params.status };
-            return next;
-          }
-          return list;
-        });
-      }
-      return res;
+      // Don't update store here — the 'raid:entry:updated' broadcast listener handles it
+      return _emitWithFeedback('raid:update', params);
     },
 
     async editRaidEntry(params) {
-      const res = await _emitWithFeedback('raid:edit', params);
-      if (res && res.ok) {
-        store.update('raid.entries', (entries) => {
-          const list = entries || [];
-          const idx = list.findIndex((e) => e.id === params.id);
-          if (idx >= 0) {
-            const next = [...list];
-            next[idx] = { ...next[idx], ...res.data };
-            return next;
-          }
-          return list;
-        });
-      }
-      return res;
+      // Don't update store here — the 'raid:entry:updated' broadcast listener handles it
+      return _emitWithFeedback('raid:edit', params);
     },
 
     // ── Phase Gate methods ──

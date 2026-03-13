@@ -141,5 +141,6 @@ export function updateRaidStatus({ id, status }: { id: string; status: string })
   const existing = db.prepare('SELECT id FROM raid_entries WHERE id = ?').get(id);
   if (!existing) return err('RAID_NOT_FOUND', `RAID entry ${id} does not exist`);
   db.prepare("UPDATE raid_entries SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, id);
-  return ok({ id, status });
+  const updated = db.prepare('SELECT * FROM raid_entries WHERE id = ?').get(id) as Record<string, unknown>;
+  return ok(updated);
 }

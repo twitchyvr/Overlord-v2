@@ -67,6 +67,26 @@ import { writeAgentPhoto } from '../ai/agent-photo-store.js';
 
 const log = logger.child({ module: 'transport' });
 
+// ─── Helpers ───
+
+/**
+ * Parse JSON string fields in an exit_documents row.
+ * DB stores `fields`, `artifacts`, `raid_entry_ids` as JSON strings.
+ */
+function parseExitDocRow(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...row,
+    fields: safeJsonParse(row.fields as string, {}),
+    artifacts: safeJsonParse(row.artifacts as string, []),
+    raid_entry_ids: safeJsonParse(row.raid_entry_ids as string, []),
+  };
+}
+
+function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try { return JSON.parse(raw) as T; } catch { return fallback; }
+}
+
 // ─── Types ───
 
 type Ack = (res: unknown) => void;
@@ -1405,22 +1425,32 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
     handle(socket, 'raid:add', RaidAddSchema, (parsed, ack) => {
       const result = addRaidEntry(parsed as unknown as Parameters<typeof addRaidEntry>[0]);
-      bus.emit('raid:entry:added', { ...(result.ok ? result.data as Record<string, unknown> : {}), ...parsed });
+      if (result.ok) {
+        bus.emit('raid:entry:added', { ...(result.data as Record<string, unknown>), ...parsed });
+      }
       if (ack) ack(result);
     });
 
     handle(socket, 'raid:update', RaidUpdateSchema, (parsed, ack) => {
-      if (ack) ack(updateRaidStatus({ id: parsed.id, status: parsed.status }));
+      const result = updateRaidStatus({ id: parsed.id, status: parsed.status });
+      if (result.ok) {
+        bus.emit('raid:entry:updated', { id: parsed.id, status: parsed.status, ...(result.data as Record<string, unknown>) });
+      }
+      if (ack) ack(result);
     });
 
     handle(socket, 'raid:edit', RaidEditSchema, (parsed, ack) => {
-      if (ack) ack(updateRaidEntry({
+      const result = updateRaidEntry({
         id: parsed.id,
         summary: parsed.summary,
         rationale: parsed.rationale,
         decidedBy: parsed.decidedBy,
         affectedAreas: parsed.affectedAreas,
-      }));
+      });
+      if (result.ok) {
+        bus.emit('raid:entry:updated', { id: parsed.id, ...(result.data as Record<string, unknown>) });
+      }
+      if (ack) ack(result);
     });
 
     // ─── Task Events ───
@@ -1865,21 +1895,20 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
     handle(socket, 'exit-doc:get', ExitDocGetSchema, (parsed, ack) => {
       const db = getDb();
-      if (ack) ack({ ok: true, data: db.prepare('SELECT * FROM exit_documents WHERE room_id = ? ORDER BY created_at DESC').all(parsed.roomId) });
+      const rows = db.prepare('SELECT * FROM exit_documents WHERE room_id = ? ORDER BY created_at DESC').all(parsed.roomId) as Array<Record<string, unknown>>;
+      if (ack) ack({ ok: true, data: rows.map(parseExitDocRow) });
     });
 
     handle(socket, 'exit-doc:list', ExitDocListSchema, (parsed, ack) => {
       const db = getDb();
-      if (ack) ack({
-        ok: true,
-        data: db.prepare(`
-          SELECT ed.* FROM exit_documents ed
-          JOIN rooms r ON ed.room_id = r.id
-          JOIN floors f ON r.floor_id = f.id
-          WHERE f.building_id = ?
-          ORDER BY ed.created_at DESC
-        `).all(parsed.buildingId),
-      });
+      const rows = db.prepare(`
+        SELECT ed.* FROM exit_documents ed
+        JOIN rooms r ON ed.room_id = r.id
+        JOIN floors f ON r.floor_id = f.id
+        WHERE f.building_id = ?
+        ORDER BY ed.created_at DESC
+      `).all(parsed.buildingId) as Array<Record<string, unknown>>;
+      if (ack) ack({ ok: true, data: rows.map(parseExitDocRow) });
     });
 
     // ─── Citation Events ───
@@ -1912,7 +1941,20 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       });
       if (result.ok) {
         const signoffData = result.data as { gateId: string; verdict: string; phaseAdvanced?: boolean; nextPhase?: string };
-        bus.emit('phase:gate:signed-off', signoffData as unknown as Record<string, unknown>);
+        // Re-read full gate row so the broadcast includes all fields the UI needs
+        // (id, phase, building_id, status, signoff_*, etc.)
+        const fullGate = getDb().prepare('SELECT * FROM phase_gates WHERE id = ?').get(parsed.gateId) as Record<string, unknown> | undefined;
+        const broadcastData = fullGate
+          ? {
+              ...fullGate,
+              gateId: parsed.gateId,
+              phaseAdvanced: signoffData.phaseAdvanced,
+              nextPhase: signoffData.nextPhase,
+              signoff_conditions: safeJsonParse(fullGate.signoff_conditions as string, []),
+              next_phase_input: safeJsonParse(fullGate.next_phase_input as string, {}),
+            }
+          : { ...(signoffData as unknown as Record<string, unknown>), gateId: parsed.gateId };
+        bus.emit('phase:gate:signed-off', broadcastData as Record<string, unknown>);
         // If GO verdict advanced the phase, emit phase:advanced for auto-room provisioning
         if (signoffData.phaseAdvanced && signoffData.nextPhase && gateRow) {
           bus.emit('phase:advanced', {
@@ -2103,6 +2145,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('tool:executed');
   forward('phase:advanced');
   forward('raid:entry:added');
+  forward('raid:entry:updated');
   forward('phase-zero:complete');
   forward('phase-zero:failed');
   forward('exit-doc:submitted');
@@ -2129,7 +2172,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('escalation:stale-gate');
   forward('escalation:war-room');
   forward('escalation:failed');
-  forward('scope-change:detected');
+  // scope-change:detected already forwarded above — removed duplicate
   forward('system:log');
   forward('building:created');
   forward('building:onboarded');
