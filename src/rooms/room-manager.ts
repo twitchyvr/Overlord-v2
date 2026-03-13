@@ -145,6 +145,22 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
       return err('AGENT_NOT_FOUND', `Agent ${agentId} does not exist`);
     }
 
+    // If agent is already in another room, auto-exit it first (prevents orphaned state)
+    if (agent.current_room_id && agent.current_room_id !== roomId) {
+      log.info({ agentId, previousRoom: agent.current_room_id, newRoom: roomId }, 'Agent already in another room — auto-exiting before entry');
+      const autoExit = exitRoom({ roomId: agent.current_room_id, agentId });
+      if (!autoExit.ok) {
+        return err('AUTO_EXIT_FAILED', `Agent is in room ${agent.current_room_id} and auto-exit failed: ${autoExit.error}`, { context: { previousRoom: agent.current_room_id } });
+      }
+    }
+
+    // If agent is already in THIS room, return success with current state
+    if (agent.current_room_id === roomId) {
+      log.info({ agentId, roomId }, 'Agent already in this room — returning current state');
+      const currentTable = agent.current_table_id;
+      return ok({ roomId, agentId, tableId: currentTable, tools: room.getAllowedTools(), fileScope: room.fileScope, alreadyPresent: true });
+    }
+
     let roomAccess: string[];
     try {
       roomAccess = JSON.parse(agent.room_access || '[]') as string[];
@@ -160,43 +176,55 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
       return accessResult;
     }
 
-    // Find or create the table row for this room+type
-    let tableRow = db
-      .prepare('SELECT id FROM tables_v2 WHERE room_id = ? AND type = ?')
-      .get(roomId, tableType) as { id: string } | undefined;
+    // Find or create table, check capacity, and seat agent — all in one transaction
+    // to prevent race conditions where two agents grab the last chair simultaneously
+    const seatAgent = db.transaction(() => {
+      let tableRow = db
+        .prepare('SELECT id FROM tables_v2 WHERE room_id = ? AND type = ?')
+        .get(roomId, tableType) as { id: string } | undefined;
 
-    if (!tableRow) {
-      const tableId = `table_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      db.prepare('INSERT INTO tables_v2 (id, room_id, type, chairs, description) VALUES (?, ?, ?, ?, ?)').run(
-        tableId,
+      if (!tableRow) {
+        const tableId = `table_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        db.prepare('INSERT INTO tables_v2 (id, room_id, type, chairs, description) VALUES (?, ?, ?, ?, ?)').run(
+          tableId,
+          roomId,
+          tableType,
+          tableConfig.chairs,
+          tableConfig.description,
+        );
+        tableRow = { id: tableId };
+      }
+
+      // Check chair capacity — count agents already seated at this table
+      const seatedCount = db
+        .prepare('SELECT COUNT(*) as cnt FROM agents WHERE current_table_id = ?')
+        .get(tableRow.id) as { cnt: number };
+
+      if (seatedCount.cnt >= tableConfig.chairs) {
+        return { error: true as const, tableId: tableRow.id, occupancy: seatedCount.cnt };
+      }
+
+      // Seat the agent atomically within the same transaction
+      db.prepare('UPDATE agents SET current_room_id = ?, current_table_id = ?, status = ? WHERE id = ?').run(
         roomId,
-        tableType,
-        tableConfig.chairs,
-        tableConfig.description,
+        tableRow.id,
+        'active',
+        agentId,
       );
-      tableRow = { id: tableId };
-    }
 
-    // Check chair capacity — count agents already seated at this table
-    const seatedCount = db
-      .prepare('SELECT COUNT(*) as cnt FROM agents WHERE current_table_id = ?')
-      .get(tableRow.id) as { cnt: number };
+      return { error: false as const, tableId: tableRow.id };
+    });
 
-    if (seatedCount.cnt >= tableConfig.chairs) {
+    const seatResult = seatAgent();
+    if (seatResult.error) {
       return err(
         'TABLE_FULL',
         `Table "${tableType}" in ${room.type} room is full (${tableConfig.chairs} chair${tableConfig.chairs === 1 ? '' : 's'})`,
-        { context: { tableType, maxChairs: tableConfig.chairs, currentOccupancy: seatedCount.cnt } },
+        { context: { tableType, maxChairs: tableConfig.chairs, currentOccupancy: seatResult.occupancy } },
       );
     }
 
-    // Update agent's current room and table
-    db.prepare('UPDATE agents SET current_room_id = ?, current_table_id = ?, status = ? WHERE id = ?').run(
-      roomId,
-      tableRow.id,
-      'active',
-      agentId,
-    );
+    const tableId = seatResult.tableId;
 
     // Fire lifecycle hook — room can track agent, emit bus events, run setup logic
     const enterResult = room.onAgentEnter(agentId, tableType);
@@ -209,8 +237,8 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
       return enterResult;
     }
 
-    log.info({ roomId, agentId, tableType, tableId: tableRow.id }, 'Agent entered room');
-    return ok({ roomId, agentId, tableId: tableRow.id, tools: room.getAllowedTools(), fileScope: room.fileScope });
+    log.info({ roomId, agentId, tableType, tableId }, 'Agent entered room');
+    return ok({ roomId, agentId, tableId, tools: room.getAllowedTools(), fileScope: room.fileScope });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     log.error({ roomId, agentId, tableType, err: msg }, 'Failed to enter room');
@@ -221,6 +249,7 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
 interface ExitRoomParams {
   roomId: string;
   agentId: string;
+  reason?: 'disconnect' | 'normal';
 }
 
 /**
@@ -228,15 +257,25 @@ interface ExitRoomParams {
  * If the room has required exit fields, the agent MUST have submitted
  * an exit document before they can leave. Structural enforcement.
  */
-export function exitRoom({ roomId, agentId }: ExitRoomParams): Result {
+export function exitRoom({ roomId, agentId, reason }: ExitRoomParams): Result {
   const room = activeRooms.get(roomId);
   if (!room) return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
 
   try {
-    // Enforce exit document requirement
+    const db = getDb();
+
+    // Verify agent is actually in this room
+    const agent = db.prepare('SELECT current_room_id FROM agents WHERE id = ?').get(agentId) as { current_room_id: string | null } | undefined;
+    if (!agent) return err('AGENT_NOT_FOUND', `Agent ${agentId} does not exist`);
+    if (agent.current_room_id !== roomId) {
+      log.warn({ agentId, roomId, actualRoom: agent.current_room_id }, 'Agent tried to exit room they are not in');
+      return err('NOT_IN_ROOM', `Agent ${agentId} is not in room ${roomId}`);
+    }
+
+    // Enforce exit document requirement (skip for disconnect — agent can't submit docs from a closed connection)
+    const isDisconnect = reason === 'disconnect';
     const exitReq = room.exitRequired;
-    if (exitReq && exitReq.fields.length > 0) {
-      const db = getDb();
+    if (!isDisconnect && exitReq && exitReq.fields.length > 0) {
       const exitDoc = db
         .prepare('SELECT id FROM exit_documents WHERE room_id = ? AND completed_by = ? ORDER BY created_at DESC LIMIT 1')
         .get(roomId, agentId) as { id: string } | undefined;
@@ -256,13 +295,16 @@ export function exitRoom({ roomId, agentId }: ExitRoomParams): Result {
       return exitResult;
     }
 
-    const db = getDb();
     db.prepare('UPDATE agents SET current_room_id = NULL, current_table_id = NULL, status = ? WHERE id = ?').run(
       'idle',
       agentId,
     );
 
-    log.info({ roomId, agentId }, 'Agent exited room');
+    if (isDisconnect) {
+      log.info({ roomId, agentId, reason: 'disconnect' }, 'Agent exited room due to disconnect (exit doc bypassed)');
+    } else {
+      log.info({ roomId, agentId }, 'Agent exited room');
+    }
     return ok({ roomId, agentId });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

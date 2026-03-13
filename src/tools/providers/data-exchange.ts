@@ -48,7 +48,12 @@ export async function fetchUrl(params: FetchUrlParams): Promise<FetchUrlResult> 
 
   switch (detectedFormat) {
     case 'json': {
-      data = JSON.parse(raw);
+      try {
+        data = JSON.parse(raw);
+      } catch (e) {
+        const parseErr = e instanceof Error ? e.message : String(e);
+        throw new Error(`Failed to parse JSON from ${url}: ${parseErr}`);
+      }
       recordCount = Array.isArray(data) ? data.length : 1;
       break;
     }

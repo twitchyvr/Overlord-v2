@@ -2056,7 +2056,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
                 const durationMs = (session.endedAt ?? Date.now()) - session.startedAt;
                 onSessionEnd(agentId, roomId, durationMs, agent?.building_id ?? undefined);
               }
-              rooms.exitRoom({ roomId, agentId });
+              rooms.exitRoom({ roomId, agentId, reason: 'disconnect' });
               bus.emit('room:agent:exited', { roomId, agentId, reason: 'disconnect' });
               cleanedRooms++;
             } catch (e) {
