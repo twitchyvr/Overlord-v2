@@ -27,6 +27,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Agent status changes in Activity feed** — Agents tab in activity view shows real-time status updates (#287)
 
 ### Fixed
+- **RAID Log raw errors and room IDs** — RAID queries now JOIN rooms table for human-readable names; error messages rewritten for non-technical users (#420, PR #433)
+- **Raw UUIDs exposed across all views** — agent cards, detail drawers, phase gates, and table modals now show human-friendly labels instead of internal IDs (#421, PR #434)
+- **Timestamps show only bare time** — all 18 formatTime() call sites now show contextual relative dates: "Just now", "3h ago", "Yesterday, 2:30 PM", "Mar 10, 2:30 PM" (#422, PR #435)
 - **Dashboard KPI agent count always 0** — agents now fetched eagerly on mount with building-level aggregation fallback (#418, PR #430)
 - **Chat defaults to Strategist Office** — auto-connects to a room on the floor matching the current phase instead of first-created room (#419, PR #431)
 - **Chat room routing on room switch** — chat messages now route to the correct room when switching between rooms (PR #414)
