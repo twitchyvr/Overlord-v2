@@ -218,6 +218,26 @@ export class Card {
     );
     card.appendChild(header);
 
+    // Health score badge (if available)
+    if (data.healthScore) {
+      const score = data.healthScore.total;
+      const color = score >= 75 ? 'green' : score >= 50 ? 'yellow' : score >= 25 ? 'orange' : 'red';
+      const badge = h('div', { class: `health-badge health-badge-${color}` },
+        h('span', { class: 'health-badge-score' }, String(score)),
+      );
+
+      // Tooltip with breakdown
+      const breakdown = [
+        `Phase: ${data.healthScore.phaseProgress}/25`,
+        `Tasks: ${data.healthScore.taskCompletion}/25`,
+        `RAID: ${data.healthScore.raidHealth}/25`,
+        `Activity: ${data.healthScore.agentActivity}/25`,
+      ].join('\n');
+      badge.title = `Health Score: ${score}/100\n${breakdown}`;
+
+      header.appendChild(badge);
+    }
+
     const body = h('div', { class: 'card-body' });
     if (data.description) {
       body.appendChild(h('div', { class: 'building-desc text-muted' }, data.description));

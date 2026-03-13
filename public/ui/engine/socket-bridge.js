@@ -747,6 +747,15 @@ export function initSocketBridge(socket, store, engine) {
       });
     },
 
+    fetchHealthScore(buildingId) {
+      return _emitWithTimeout('building:health-score', { buildingId }).then((res) => {
+        if (res && res.ok) {
+          store.set('building.healthScore', res.data);
+        }
+        return res;
+      });
+    },
+
     fetchFloors(buildingId) {
       return _emitWithTimeout('floor:list', { buildingId }).then((res) => {
         if (res && res.ok) {

@@ -85,6 +85,10 @@ export const BuildingApplyBlueprintSchema = z.object({
   agentId: id(),
 });
 
+export const BuildingHealthScoreSchema = z.object({
+  buildingId: id(),
+});
+
 // ─── Building Update Schema ───
 
 export const BuildingUpdateSchema = z.object({

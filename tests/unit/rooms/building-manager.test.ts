@@ -18,6 +18,7 @@ import {
   getFloorByType,
   applyBlueprint,
   applyCustomPlan,
+  getHealthScore,
 } from '../../../src/rooms/building-manager.js';
 
 let memDb: Database.Database;
@@ -56,6 +57,30 @@ function setupDb(): Database.Database {
     bio TEXT, photo_url TEXT, specialization TEXT, gender TEXT,
     profile_generated INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+
+  db.prepare(`CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY, building_id TEXT NOT NULL REFERENCES buildings(id),
+    title TEXT NOT NULL, description TEXT, status TEXT DEFAULT 'pending',
+    parent_id TEXT, milestone_id TEXT, assignee_id TEXT, room_id TEXT, table_id TEXT,
+    phase TEXT, priority TEXT DEFAULT 'normal',
+    created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+
+  db.prepare(`CREATE TABLE IF NOT EXISTS raid_entries (
+    id TEXT PRIMARY KEY, building_id TEXT NOT NULL REFERENCES buildings(id),
+    type TEXT NOT NULL CHECK(type IN ('risk', 'assumption', 'issue', 'decision')),
+    phase TEXT NOT NULL, room_id TEXT, summary TEXT NOT NULL, rationale TEXT,
+    decided_by TEXT, approved_by TEXT, affected_areas TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'active' CHECK(status IN ('active', 'superseded', 'closed')),
+    created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+
+  db.prepare(`CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY, room_id TEXT NOT NULL REFERENCES rooms(id),
+    agent_id TEXT, role TEXT NOT NULL, content TEXT, tool_calls TEXT,
+    attachments TEXT DEFAULT '[]', thread_id TEXT, parent_id TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
   )`).run();
 
   return db;
@@ -488,5 +513,124 @@ describe('applyCustomPlan', () => {
     const agent = memDb.prepare('SELECT capabilities, room_access FROM agents WHERE building_id = ?').get(bid) as Record<string, unknown>;
     expect(JSON.parse(agent.capabilities as string)).toEqual([]);
     expect(JSON.parse(agent.room_access as string)).toEqual([]);
+  });
+});
+
+// ─── Health Score ───
+
+describe('getHealthScore', () => {
+  function createTestBuilding(phase = 'strategy'): string {
+    const result = createBuilding({ name: 'Health Test', provisionFloors: true });
+    const bid = result.data.id;
+    memDb.prepare('UPDATE buildings SET active_phase = ? WHERE id = ?').run(phase, bid);
+    return bid;
+  }
+
+  it('returns error for non-existent building', () => {
+    const result = getHealthScore('fake_id');
+    expect(result.ok).toBe(false);
+  });
+
+  it('returns zero score for empty building', () => {
+    const bid = createTestBuilding('strategy');
+    const result = getHealthScore(bid);
+    expect(result.ok).toBe(true);
+
+    const { score } = result.data;
+    // Phase = strategy = 4, no tasks = 0, no RAID = 25 (healthy), no activity = 0
+    expect(score.phaseProgress).toBe(4);
+    expect(score.taskCompletion).toBe(0);
+    expect(score.raidHealth).toBe(25);
+    expect(score.agentActivity).toBe(0);
+    expect(score.total).toBe(29);
+  });
+
+  it('scores higher for advanced phase', () => {
+    const bid = createTestBuilding('deploy');
+    const result = getHealthScore(bid);
+    expect(result.ok).toBe(true);
+    expect(result.data.score.phaseProgress).toBe(25);
+  });
+
+  it('calculates task completion correctly', () => {
+    const bid = createTestBuilding();
+    // Insert 4 tasks: 3 done, 1 pending
+    for (let i = 0; i < 3; i++) {
+      memDb.prepare('INSERT INTO tasks (id, building_id, title, status) VALUES (?, ?, ?, ?)').run(`t${i}`, bid, `Task ${i}`, 'done');
+    }
+    memDb.prepare('INSERT INTO tasks (id, building_id, title, status) VALUES (?, ?, ?, ?)').run('t3', bid, 'Task 3', 'pending');
+
+    const result = getHealthScore(bid);
+    expect(result.ok).toBe(true);
+    // 3/4 = 75%, * 25 = 18.75, rounded to 19
+    expect(result.data.score.taskCompletion).toBe(19);
+  });
+
+  it('penalizes open risks and issues in RAID', () => {
+    const bid = createTestBuilding();
+    // 2 active risks (5 pts each) + 1 active issue (3 pts) = 13 penalty
+    memDb.prepare('INSERT INTO raid_entries (id, building_id, type, phase, summary, status) VALUES (?, ?, ?, ?, ?, ?)').run('r1', bid, 'risk', 'strategy', 'Risk 1', 'active');
+    memDb.prepare('INSERT INTO raid_entries (id, building_id, type, phase, summary, status) VALUES (?, ?, ?, ?, ?, ?)').run('r2', bid, 'risk', 'strategy', 'Risk 2', 'active');
+    memDb.prepare('INSERT INTO raid_entries (id, building_id, type, phase, summary, status) VALUES (?, ?, ?, ?, ?, ?)').run('i1', bid, 'issue', 'strategy', 'Issue 1', 'active');
+
+    const result = getHealthScore(bid);
+    expect(result.ok).toBe(true);
+    // 25 - (2*5 + 1*3) = 25 - 13 = 12
+    expect(result.data.score.raidHealth).toBe(12);
+  });
+
+  it('does not penalize closed RAID entries', () => {
+    const bid = createTestBuilding();
+    memDb.prepare('INSERT INTO raid_entries (id, building_id, type, phase, summary, status) VALUES (?, ?, ?, ?, ?, ?)').run('r1', bid, 'risk', 'strategy', 'Closed risk', 'closed');
+
+    const result = getHealthScore(bid);
+    expect(result.ok).toBe(true);
+    expect(result.data.score.raidHealth).toBe(25);
+  });
+
+  it('scores agent activity based on recent messages', () => {
+    const bid = createTestBuilding();
+    // Get a room from the building's floors
+    const floor = memDb.prepare('SELECT id FROM floors WHERE building_id = ? LIMIT 1').get(bid) as { id: string };
+    memDb.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('rm1', floor.id, 'code-lab', 'Lab');
+
+    // Insert 30 messages (should yield 30/50 * 25 = 15)
+    for (let i = 0; i < 30; i++) {
+      memDb.prepare('INSERT INTO messages (id, room_id, role, content) VALUES (?, ?, ?, ?)').run(`m${i}`, 'rm1', 'assistant', `msg ${i}`);
+    }
+
+    const result = getHealthScore(bid);
+    expect(result.ok).toBe(true);
+    expect(result.data.score.agentActivity).toBe(15);
+  });
+
+  it('caps agent activity at 25', () => {
+    const bid = createTestBuilding();
+    const floor = memDb.prepare('SELECT id FROM floors WHERE building_id = ? LIMIT 1').get(bid) as { id: string };
+    memDb.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('rm1', floor.id, 'code-lab', 'Lab');
+
+    // Insert 100 messages (exceeds 50 cap → should be 25)
+    for (let i = 0; i < 100; i++) {
+      memDb.prepare('INSERT INTO messages (id, room_id, role, content) VALUES (?, ?, ?, ?)').run(`m${i}`, 'rm1', 'assistant', `msg ${i}`);
+    }
+
+    const result = getHealthScore(bid);
+    expect(result.ok).toBe(true);
+    expect(result.data.score.agentActivity).toBe(25);
+  });
+
+  it('total is sum of all components', () => {
+    const bid = createTestBuilding('execution');
+    // Phase: execution = 17
+    // Tasks: 2 done out of 2 = 25
+    memDb.prepare('INSERT INTO tasks (id, building_id, title, status) VALUES (?, ?, ?, ?)').run('t1', bid, 'Task 1', 'done');
+    memDb.prepare('INSERT INTO tasks (id, building_id, title, status) VALUES (?, ?, ?, ?)').run('t2', bid, 'Task 2', 'done');
+    // RAID: no open items = 25
+    // Activity: 0 messages = 0
+    const result = getHealthScore(bid);
+    expect(result.ok).toBe(true);
+    const s = result.data.score;
+    expect(s.total).toBe(s.phaseProgress + s.taskCompletion + s.raidHealth + s.agentActivity);
+    expect(s.total).toBe(17 + 25 + 25 + 0);
   });
 });
