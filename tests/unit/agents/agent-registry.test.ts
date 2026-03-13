@@ -33,6 +33,15 @@ describe('Agent Registry', () => {
         current_room_id TEXT,
         current_table_id TEXT,
         config TEXT DEFAULT '{}',
+        first_name TEXT,
+        last_name TEXT,
+        display_name TEXT,
+        nickname TEXT,
+        bio TEXT,
+        photo_url TEXT,
+        specialization TEXT,
+        gender TEXT,
+        profile_generated INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       );

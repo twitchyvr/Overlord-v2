@@ -1078,19 +1078,19 @@ describe('RoomView', () => {
     expect(content.querySelector('.room-roster-empty')).not.toBeNull(); // no agents
 
     // Should have tools section
-    expect(content.querySelector('.room-tools-section')).not.toBeNull();
-    expect(content.querySelectorAll('.tool-tag').length).toBe(3);
+    expect(content.querySelector('.rv-tools-section')).not.toBeNull();
+    expect(content.querySelectorAll('.rv-tool-tag').length).toBe(3);
 
-    // Should have tables section
-    expect(content.querySelector('.room-tables-section')).not.toBeNull();
-    expect(content.querySelectorAll('.room-table-card').length).toBe(2);
+    // Should have table management section
+    expect(content.querySelector('.rv-table-mgmt')).not.toBeNull();
+    expect(content.querySelectorAll('.rv-contract-table-item').length).toBe(2);
 
     // Should have activity feed
     expect(content.querySelector('.room-activity-section')).not.toBeNull();
     expect(content.querySelector('.room-activity-empty')).not.toBeNull();
 
-    // Should have room details
-    expect(content.querySelector('.room-info-section')).not.toBeNull();
+    // Should have exit document section (exitRequired is set with fields)
+    expect(content.querySelector('.room-exit-doc-section')).not.toBeNull();
   });
 
   it('shows agent roster with status dots when agents are present', async () => {
@@ -1200,11 +1200,11 @@ describe('RoomView', () => {
     (view as any)._agentPositions = {};
 
     const content = (view as any)._buildContent();
-    const exitRow = [...content.querySelectorAll('.room-info-row')].find(
-      (row: any) => row.querySelector('.room-info-label')?.textContent === 'Exit Required'
-    );
-    expect(exitRow).toBeDefined();
-    expect(exitRow!.querySelector('.room-info-value')!.textContent).toContain('3 fields');
+    const exitDocSection = content.querySelector('.room-exit-doc-section');
+    expect(exitDocSection).not.toBeNull();
+    const fieldsCount = exitDocSection!.querySelector('.room-exit-doc-fields-count');
+    expect(fieldsCount).not.toBeNull();
+    expect(fieldsCount!.textContent).toContain('3 required fields');
   });
 });
 
@@ -1235,6 +1235,10 @@ describe('TaskView', () => {
     const el = document.createElement('div');
     const view = new TaskView(el);
     view.mount();
+
+    // Trigger the store subscription to move past the loading state
+    const store = OverlordUI.getStore();
+    store.set('tasks.list', []);
 
     const list = el.querySelector('#task-list');
     expect(list!.querySelector('.empty-state')).not.toBeNull();
@@ -1395,6 +1399,10 @@ describe('RaidLogView', () => {
     const el = document.createElement('div');
     const view = new RaidLogView(el);
     view.mount();
+
+    // Trigger the store subscription to move past the loading state
+    const store = OverlordUI.getStore();
+    store.set('raid.entries', []);
 
     const list = el.querySelector('#raid-list');
     expect(list!.querySelector('.empty-state')).not.toBeNull();
