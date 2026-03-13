@@ -67,12 +67,18 @@ export type PluginPermission =
 // ─── Plugin Lifecycle Hooks ───
 
 export type PluginHook =
-  | 'onLoad'          // Plugin loaded and initialized
-  | 'onUnload'        // Plugin being unloaded (cleanup)
-  | 'onRoomEnter'     // An agent entered any room
-  | 'onRoomExit'      // An agent exited any room
-  | 'onToolExecute'   // A tool was executed
-  | 'onPhaseAdvance'; // A phase gate advanced
+  | 'onLoad'               // Plugin loaded and initialized
+  | 'onUnload'             // Plugin being unloaded (cleanup)
+  | 'onRoomEnter'          // An agent entered any room
+  | 'onRoomExit'           // An agent exited any room
+  | 'onToolExecute'        // A tool was executed
+  | 'onPhaseAdvance'       // A phase gate advanced
+  | 'onPhaseGateEvaluate'  // Phase gate go/no-go decision (queryable)
+  | 'onExitDocValidate'    // Custom exit document validation (queryable)
+  | 'onAgentAssign'        // Agent assignment strategy (queryable)
+  | 'onNotificationRule'   // Alert/notification routing (queryable)
+  | 'onProgressReport'     // Custom progress metrics (queryable)
+  | 'onBuildingCreate';    // Building initialization customization (queryable)
 
 export interface PluginHookData {
   hook: PluginHook;
@@ -171,6 +177,18 @@ export interface PluginInstance {
   context: PluginContext;
   /** Timestamp when plugin was loaded */
   loadedAt: number;
+  /** Directory path from which this plugin was loaded */
+  dir: string;
+  /** Whether this plugin is a built-in (shipped with Overlord) */
+  isBuiltIn: boolean;
+}
+
+/** Log entry from a plugin's scoped logger */
+export interface PluginLogEntry {
+  timestamp: number;
+  level: 'info' | 'warn' | 'error' | 'debug';
+  message: string;
+  data?: Record<string, unknown>;
 }
 
 export type PluginHookHandler = (data: PluginHookData) => void | Promise<void>;

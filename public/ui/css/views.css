@@ -3236,3 +3236,554 @@
   color: var(--accent-amber, #f59e0b);
   font-style: italic;
 }
+
+/* ── Script Editor View ─────────────────────────── */
+
+.script-editor-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Toolbar */
+.script-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border-secondary);
+  background: var(--surface-secondary);
+  flex-shrink: 0;
+}
+
+.script-editor-back-btn {
+  background: none;
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-1) var(--sp-3);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.script-editor-back-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.script-editor-title-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.script-editor-name {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.script-editor-badge {
+  font-size: var(--text-xs);
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-sm);
+  background: var(--accent-amber, #f59e0b);
+  color: #000;
+  font-weight: var(--font-medium);
+}
+
+.script-editor-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.script-editor-btn {
+  padding: var(--sp-1) var(--sp-3);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  transition: all var(--duration-fast);
+}
+
+.script-editor-btn:hover {
+  background: var(--surface-hover);
+}
+
+.script-editor-btn.primary {
+  background: var(--accent-blue, #3b82f6);
+  border-color: var(--accent-blue, #3b82f6);
+  color: #fff;
+}
+
+.script-editor-btn.primary:hover {
+  filter: brightness(1.1);
+}
+
+.script-editor-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Body: editor + sidebar */
+.script-editor-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Editor pane */
+.script-editor-pane {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-width: 0;
+  position: relative;
+}
+
+.script-editor-pane.read-only {
+  opacity: 0.85;
+}
+
+.script-editor-pane.read-only::after {
+  content: 'READ ONLY';
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  font-size: var(--text-xs);
+  padding: 2px var(--sp-2);
+  background: var(--accent-amber, #f59e0b);
+  color: #000;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-bold);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.script-editor-gutter {
+  width: 48px;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--surface-secondary);
+  border-right: 1px solid var(--border-secondary);
+  padding-top: var(--sp-2);
+  user-select: none;
+}
+
+.script-editor-line-num {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  text-align: right;
+  padding-right: var(--sp-2);
+  color: var(--text-muted);
+  height: 1.5em;
+}
+
+.script-editor-line-num.error {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--accent-red, #ef4444);
+  font-weight: var(--font-bold);
+  cursor: help;
+}
+
+.script-editor-textarea {
+  flex: 1;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: var(--sp-2) var(--sp-3);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+
+.script-editor-textarea:focus {
+  outline: none;
+}
+
+/* API Reference sidebar */
+.script-editor-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-secondary);
+  background: var(--surface-secondary);
+  overflow-y: auto;
+  transition: width var(--duration-normal);
+}
+
+.script-editor-sidebar.collapsed {
+  width: 0;
+  overflow: hidden;
+  border-left: none;
+}
+
+.script-editor-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-3);
+  border-bottom: 1px solid var(--border-secondary);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.script-editor-sidebar-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-lg);
+  padding: 0;
+  line-height: 1;
+}
+
+.script-editor-sidebar-content {
+  padding: var(--sp-2);
+}
+
+.api-ref-section {
+  margin-bottom: var(--sp-3);
+}
+
+.api-ref-title {
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  margin-bottom: var(--sp-1);
+  padding: var(--sp-1) 0;
+}
+
+.api-ref-item {
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
+  margin-bottom: 2px;
+}
+
+.api-ref-item:hover {
+  background: var(--surface-hover);
+}
+
+.api-ref-sig {
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--accent-blue, #3b82f6);
+  word-break: break-all;
+}
+
+.api-ref-desc {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Console panel */
+.script-editor-console {
+  border-top: 1px solid var(--border-secondary);
+  background: var(--surface-secondary);
+  flex-shrink: 0;
+  max-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.script-editor-console.collapsed .script-editor-console-body {
+  display: none;
+}
+
+.script-editor-console-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-secondary);
+  flex-shrink: 0;
+}
+
+.script-editor-console-count {
+  font-weight: normal;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.script-editor-console-toggle,
+.script-editor-console-clear {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  padding: 2px var(--sp-1);
+}
+
+.script-editor-console-clear {
+  margin-left: var(--sp-1);
+}
+
+.script-editor-console-body {
+  overflow-y: auto;
+  padding: var(--sp-1) 0;
+  flex: 1;
+  min-height: 0;
+}
+
+.script-editor-console-line {
+  display: flex;
+  gap: var(--sp-2);
+  padding: 1px var(--sp-3);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.script-editor-console-line.console-error {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.script-editor-console-line.console-warn {
+  background: rgba(234, 179, 8, 0.08);
+}
+
+.console-time {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.console-level {
+  font-weight: var(--font-bold);
+  min-width: 40px;
+  flex-shrink: 0;
+}
+
+.console-info .console-level { color: var(--accent-blue, #3b82f6); }
+.console-warn .console-level { color: var(--accent-amber, #f59e0b); }
+.console-error .console-level { color: var(--accent-red, #ef4444); }
+.console-debug .console-level { color: var(--text-muted); }
+
+.console-msg {
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+/* ── Scripts View — New Elements ────────────────── */
+
+.scripts-header-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.scripts-create-btn,
+.scripts-import-btn {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  transition: all var(--duration-fast);
+}
+
+.scripts-create-btn {
+  background: var(--accent-blue, #3b82f6);
+  border-color: var(--accent-blue, #3b82f6);
+  color: #fff;
+}
+
+.scripts-create-btn:hover {
+  filter: brightness(1.1);
+}
+
+.scripts-import-btn:hover {
+  background: var(--surface-hover);
+}
+
+.scripts-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.scripts-action-btn {
+  flex: 1;
+  min-width: calc(50% - var(--sp-1));
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  text-align: center;
+  transition: all var(--duration-fast);
+}
+
+.scripts-action-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-accent, var(--accent-blue));
+}
+
+.scripts-action-btn.danger {
+  color: var(--accent-red, #ef4444);
+  border-color: var(--accent-red, #ef4444);
+}
+
+.scripts-action-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.scripts-builtin-badge,
+.scripts-engine-badge {
+  font-size: var(--text-xs);
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-tertiary, var(--surface-secondary));
+  color: var(--text-muted);
+}
+
+/* Create/Import Modals */
+.scripts-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn var(--duration-fast) var(--ease-default);
+}
+
+.scripts-modal {
+  background: var(--surface-primary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-6);
+  width: 460px;
+  max-width: 90vw;
+  box-shadow: var(--shadow-xl, 0 20px 60px rgba(0,0,0,0.3));
+}
+
+.scripts-modal-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--sp-4);
+}
+
+.scripts-modal-field {
+  margin-bottom: var(--sp-3);
+}
+
+.scripts-modal-field label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-1);
+}
+
+.scripts-modal-input,
+.scripts-modal-select,
+.scripts-modal-textarea {
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  box-sizing: border-box;
+}
+
+.scripts-modal-input:focus,
+.scripts-modal-select:focus,
+.scripts-modal-textarea:focus {
+  outline: none;
+  border-color: var(--accent-blue, #3b82f6);
+}
+
+.scripts-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+
+.scripts-modal-btn {
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+}
+
+.scripts-modal-btn.primary {
+  background: var(--accent-blue, #3b82f6);
+  border-color: var(--accent-blue, #3b82f6);
+  color: #fff;
+}
+
+.scripts-modal-btn.cancel:hover {
+  background: var(--surface-hover);
+}
+
+.scripts-modal-btn.primary:hover {
+  filter: brightness(1.1);
+}
+
+/* Import zone */
+.scripts-import-zone {
+  border: 2px dashed var(--border-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--sp-6);
+  text-align: center;
+  color: var(--text-muted);
+  margin-bottom: var(--sp-3);
+  transition: all var(--duration-fast);
+}
+
+.scripts-import-zone.drag-over {
+  border-color: var(--accent-blue, #3b82f6);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.scripts-import-icon {
+  font-size: var(--text-3xl, 30px);
+}
+
+.scripts-import-or {
+  margin: var(--sp-2) 0;
+  font-size: var(--text-sm);
+}
+
+.scripts-import-file-btn {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}

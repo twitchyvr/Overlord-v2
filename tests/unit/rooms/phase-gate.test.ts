@@ -106,11 +106,11 @@ describe('Phase Gate System', () => {
   });
 
   describe('signoffGate', () => {
-    it('signs off with GO verdict and advances phase', () => {
+    it('signs off with GO verdict and advances phase', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      const result = signoffGate({
+      const result = await signoffGate({
         gateId: gate.data.id,
         reviewer: 'architect-agent',
         verdict: 'GO',
@@ -127,11 +127,11 @@ describe('Phase Gate System', () => {
       expect(building.active_phase).toBe('discovery');
     });
 
-    it('signs off with NO-GO verdict and blocks advancement', () => {
+    it('signs off with NO-GO verdict and blocks advancement', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      signoffGate({
+      await signoffGate({
         gateId: gate.data.id,
         reviewer: 'architect-agent',
         verdict: 'NO-GO',
@@ -142,11 +142,11 @@ describe('Phase Gate System', () => {
       expect(building.active_phase).toBe('strategy');
     });
 
-    it('signs off with CONDITIONAL verdict and stores conditions', () => {
+    it('signs off with CONDITIONAL verdict and stores conditions', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      const result = signoffGate({
+      const result = await signoffGate({
         gateId: gate.data.id,
         reviewer: 'pm-agent',
         verdict: 'CONDITIONAL',
@@ -162,11 +162,11 @@ describe('Phase Gate System', () => {
       expect(JSON.parse(row.signoff_conditions)).toEqual(['Fix auth flow', 'Add rate limiting']);
     });
 
-    it('rejects invalid verdict', () => {
+    it('rejects invalid verdict', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      const result = signoffGate({
+      const result = await signoffGate({
         gateId: gate.data.id,
         reviewer: 'agent',
         verdict: 'MAYBE' as any,
@@ -178,8 +178,8 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('rejects non-existent gate', () => {
-      const result = signoffGate({
+    it('rejects non-existent gate', async () => {
+      const result = await signoffGate({
         gateId: 'gate_nonexistent',
         reviewer: 'agent',
         verdict: 'GO',
@@ -191,11 +191,11 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('links exit document to gate', () => {
+    it('links exit document to gate', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      signoffGate({
+      await signoffGate({
         gateId: gate.data.id,
         reviewer: 'architect',
         verdict: 'GO',
@@ -206,11 +206,11 @@ describe('Phase Gate System', () => {
       expect(row.exit_doc_id).toBe('exitdoc_123');
     });
 
-    it('stores next phase input for handoff', () => {
+    it('stores next phase input for handoff', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      signoffGate({
+      await signoffGate({
         gateId: gate.data.id,
         reviewer: 'architect',
         verdict: 'GO',
@@ -221,7 +221,7 @@ describe('Phase Gate System', () => {
       expect(JSON.parse(row.next_phase_input)).toEqual({ requirements: ['auth', 'api'], priority: 'high' });
     });
 
-    it('updates criteria with met status and evidence URLs on sign-off', () => {
+    it('updates criteria with met status and evidence URLs on sign-off', async () => {
       const gate = createGate({
         buildingId: 'bld_1',
         phase: 'strategy',
@@ -229,7 +229,7 @@ describe('Phase Gate System', () => {
       });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      signoffGate({
+      await signoffGate({
         gateId: gate.data.id,
         reviewer: 'architect',
         verdict: 'GO',
@@ -246,7 +246,7 @@ describe('Phase Gate System', () => {
       expect(parsed[1]).toEqual({ label: 'RAID complete', met: true });
     });
 
-    it('preserves existing criteria when not provided in sign-off', () => {
+    it('preserves existing criteria when not provided in sign-off', async () => {
       const gate = createGate({
         buildingId: 'bld_1',
         phase: 'strategy',
@@ -254,7 +254,7 @@ describe('Phase Gate System', () => {
       });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      signoffGate({
+      await signoffGate({
         gateId: gate.data.id,
         reviewer: 'pm',
         verdict: 'CONDITIONAL',
@@ -278,11 +278,11 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('returns true after GO verdict', () => {
+    it('returns true after GO verdict', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      signoffGate({ gateId: gate.data.id, reviewer: 'agent', verdict: 'GO' });
+      await signoffGate({ gateId: gate.data.id, reviewer: 'agent', verdict: 'GO' });
 
       // After GO, building advances to discovery — so check discovery gate
       const result = canAdvance('bld_1');
@@ -293,11 +293,11 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('returns false after NO-GO verdict', () => {
+    it('returns false after NO-GO verdict', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      signoffGate({ gateId: gate.data.id, reviewer: 'agent', verdict: 'NO-GO' });
+      await signoffGate({ gateId: gate.data.id, reviewer: 'agent', verdict: 'NO-GO' });
 
       const result = canAdvance('bld_1');
       expect(result.ok).toBe(true);
@@ -366,11 +366,11 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('returns conditional gates as pending approvals', () => {
+    it('returns conditional gates as pending approvals', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('failed');
 
-      signoffGate({
+      await signoffGate({
         gateId: gate.data.id,
         reviewer: 'pm',
         verdict: 'CONDITIONAL',
@@ -386,11 +386,11 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('excludes GO gates from pending', () => {
+    it('excludes GO gates from pending', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('failed');
 
-      signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'GO' });
+      await signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'GO' });
 
       const result = getPendingGates('bld_1');
       expect(result.ok).toBe(true);
@@ -415,18 +415,18 @@ describe('Phase Gate System', () => {
   });
 
   describe('resolveConditions', () => {
-    it('partially resolves conditions and returns remaining', () => {
+    it('partially resolves conditions and returns remaining', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('failed');
 
-      signoffGate({
+      await signoffGate({
         gateId: gate.data.id,
         reviewer: 'pm',
         verdict: 'CONDITIONAL',
         conditions: ['Fix auth', 'Add rate limiting', 'Update docs'],
       });
 
-      const result = resolveConditions({
+      const result = await resolveConditions({
         gateId: gate.data.id,
         resolvedConditions: ['Fix auth'],
         resolver: 'dev-agent',
@@ -440,18 +440,18 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('auto-advances gate to GO when all conditions resolved', () => {
+    it('auto-advances gate to GO when all conditions resolved', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('failed');
 
-      signoffGate({
+      await signoffGate({
         gateId: gate.data.id,
         reviewer: 'pm',
         verdict: 'CONDITIONAL',
         conditions: ['Fix auth'],
       });
 
-      const result = resolveConditions({
+      const result = await resolveConditions({
         gateId: gate.data.id,
         resolvedConditions: ['Fix auth'],
         resolver: 'dev-agent',
@@ -468,12 +468,12 @@ describe('Phase Gate System', () => {
       expect(building.active_phase).toBe('discovery');
     });
 
-    it('rejects resolve on non-conditional gate', () => {
+    it('rejects resolve on non-conditional gate', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('failed');
 
       // Gate is still pending (not conditional)
-      const result = resolveConditions({
+      const result = await resolveConditions({
         gateId: gate.data.id,
         resolvedConditions: ['something'],
         resolver: 'agent',
@@ -485,8 +485,8 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('rejects resolve on non-existent gate', () => {
-      const result = resolveConditions({
+    it('rejects resolve on non-existent gate', async () => {
+      const result = await resolveConditions({
         gateId: 'gate_nonexistent',
         resolvedConditions: ['something'],
         resolver: 'agent',
@@ -542,13 +542,13 @@ describe('Phase Gate System', () => {
   });
 
   describe('signoffGate — edge cases', () => {
-    it('does not advance when GO on final phase (deploy)', () => {
+    it('does not advance when GO on final phase (deploy)', async () => {
       // Move building to deploy (final phase)
       db.prepare("UPDATE buildings SET active_phase = 'deploy' WHERE id = 'bld_1'").run();
       const gate = createGate({ buildingId: 'bld_1', phase: 'deploy' });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      const result = signoffGate({
+      const result = await signoffGate({
         gateId: gate.data.id,
         reviewer: 'pm',
         verdict: 'GO',
@@ -567,11 +567,11 @@ describe('Phase Gate System', () => {
       expect(building.active_phase).toBe('deploy');
     });
 
-    it('returns phaseAdvanced=true and nextPhase when GO advances', () => {
+    it('returns phaseAdvanced=true and nextPhase when GO advances', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      const result = signoffGate({
+      const result = await signoffGate({
         gateId: gate.data.id,
         reviewer: 'pm',
         verdict: 'GO',
@@ -584,11 +584,11 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('does not set phaseAdvanced on NO-GO verdict', () => {
+    it('does not set phaseAdvanced on NO-GO verdict', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('gate creation failed');
 
-      const result = signoffGate({
+      const result = await signoffGate({
         gateId: gate.data.id,
         reviewer: 'pm',
         verdict: 'NO-GO',
@@ -601,14 +601,14 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('handles gate phase not in PHASE_ORDER gracefully', () => {
+    it('handles gate phase not in PHASE_ORDER gracefully', async () => {
       // Insert gate with a custom/unknown phase
       db.prepare(`
         INSERT INTO phase_gates (id, building_id, phase, status)
         VALUES ('gate_custom', 'bld_1', 'custom-phase', 'pending')
       `).run();
 
-      const result = signoffGate({
+      const result = await signoffGate({
         gateId: 'gate_custom',
         reviewer: 'pm',
         verdict: 'GO',
@@ -664,18 +664,18 @@ describe('Phase Gate System', () => {
   });
 
   describe('resolveConditions — edge cases', () => {
-    it('resolves multiple conditions at once', () => {
+    it('resolves multiple conditions at once', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('failed');
 
-      signoffGate({
+      await signoffGate({
         gateId: gate.data.id,
         reviewer: 'pm',
         verdict: 'CONDITIONAL',
         conditions: ['Fix auth', 'Add rate limiting', 'Update docs'],
       });
 
-      const result = resolveConditions({
+      const result = await resolveConditions({
         gateId: gate.data.id,
         resolvedConditions: ['Fix auth', 'Update docs'],
         resolver: 'dev-agent',
@@ -688,18 +688,18 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('ignores non-matching resolved conditions', () => {
+    it('ignores non-matching resolved conditions', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('failed');
 
-      signoffGate({
+      await signoffGate({
         gateId: gate.data.id,
         reviewer: 'pm',
         verdict: 'CONDITIONAL',
         conditions: ['Fix auth', 'Add tests'],
       });
 
-      const result = resolveConditions({
+      const result = await resolveConditions({
         gateId: gate.data.id,
         resolvedConditions: ['NonExistent condition'],
         resolver: 'agent',
@@ -712,13 +712,13 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('rejects resolve on a GO gate', () => {
+    it('rejects resolve on a GO gate', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('failed');
 
-      signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'GO' });
+      await signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'GO' });
 
-      const result = resolveConditions({
+      const result = await resolveConditions({
         gateId: gate.data.id,
         resolvedConditions: ['anything'],
         resolver: 'agent',
@@ -730,13 +730,13 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('rejects resolve on a NO-GO gate', () => {
+    it('rejects resolve on a NO-GO gate', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('failed');
 
-      signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'NO-GO' });
+      await signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'NO-GO' });
 
-      const result = resolveConditions({
+      const result = await resolveConditions({
         gateId: gate.data.id,
         resolvedConditions: ['anything'],
         resolver: 'agent',
@@ -765,12 +765,12 @@ describe('Phase Gate System', () => {
       }
     });
 
-    it('excludes non-pending (conditional/go/no-go) gates', () => {
+    it('excludes non-pending (conditional/go/no-go) gates', async () => {
       const gate = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!gate.ok) throw new Error('failed');
 
       // Sign off as conditional (not pending)
-      signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'CONDITIONAL', conditions: ['c1'] });
+      await signoffGate({ gateId: gate.data.id, reviewer: 'pm', verdict: 'CONDITIONAL', conditions: ['c1'] });
 
       // Backdate it
       db.prepare(`UPDATE phase_gates SET created_at = datetime('now', '-2 hours') WHERE id = ?`).run(gate.data.id);
@@ -809,11 +809,11 @@ describe('Phase Gate System', () => {
   });
 
   describe('full phase advancement', () => {
-    it('advances through strategy → discovery → architecture', () => {
+    it('advances through strategy → discovery → architecture', async () => {
       // Strategy gate
       const g1 = createGate({ buildingId: 'bld_1', phase: 'strategy' });
       if (!g1.ok) throw new Error('failed');
-      signoffGate({ gateId: g1.data.id, reviewer: 'pm', verdict: 'GO' });
+      await signoffGate({ gateId: g1.data.id, reviewer: 'pm', verdict: 'GO' });
 
       let building = db.prepare('SELECT active_phase FROM buildings WHERE id = ?').get('bld_1') as { active_phase: string };
       expect(building.active_phase).toBe('discovery');
@@ -821,7 +821,7 @@ describe('Phase Gate System', () => {
       // Discovery gate
       const g2 = createGate({ buildingId: 'bld_1', phase: 'discovery' });
       if (!g2.ok) throw new Error('failed');
-      signoffGate({ gateId: g2.data.id, reviewer: 'architect', verdict: 'GO' });
+      await signoffGate({ gateId: g2.data.id, reviewer: 'architect', verdict: 'GO' });
 
       building = db.prepare('SELECT active_phase FROM buildings WHERE id = ?').get('bld_1') as { active_phase: string };
       expect(building.active_phase).toBe('architecture');

@@ -29,7 +29,7 @@ const log = logger.child({ module: 'phase-zero' });
  * to the building, creates a strategy phase gate with GO verdict, and
  * emits a transition event so the system can create the first Discovery room.
  */
-export function handleBlueprintSubmission({
+export async function handleBlueprintSubmission({
   buildingId,
   blueprint,
   agentId,
@@ -37,7 +37,7 @@ export function handleBlueprintSubmission({
   buildingId: string;
   blueprint: Record<string, unknown>;
   agentId: string;
-}): Result {
+}): Promise<Result> {
   const db = getDb();
 
   // Verify building exists
@@ -79,7 +79,7 @@ export function handleBlueprintSubmission({
   }
 
   const gateData = gateResult.data as { id: string };
-  const signoff = signoffGate({
+  const signoff = await signoffGate({
     gateId: gateData.id,
     reviewer: agentId,
     verdict: 'GO',
@@ -122,7 +122,7 @@ export function handleBlueprintSubmission({
  *   orchestrator creates Discovery room
  */
 export function initPhaseZeroHandler(bus: Bus): void {
-  bus.on('exit-doc:submitted', (data: Record<string, unknown>) => {
+  bus.on('exit-doc:submitted', async (data: Record<string, unknown>) => {
     const roomType = data.roomType as string;
     if (roomType !== 'strategist' && roomType !== 'building-architect') return;
 
@@ -135,7 +135,7 @@ export function initPhaseZeroHandler(bus: Bus): void {
       return;
     }
 
-    const result = handleBlueprintSubmission({ buildingId, blueprint, agentId });
+    const result = await handleBlueprintSubmission({ buildingId, blueprint, agentId });
 
     if (result.ok) {
       const resultData = result.data as Record<string, unknown>;

@@ -11,6 +11,7 @@
 import { logger } from '../core/logger.js';
 import { getDb } from '../storage/db.js';
 import { ok, err } from '../core/contracts.js';
+import { queryHook } from '../plugins/plugin-loader.js';
 import type {
   Result,
   RoomManagerAPI,
@@ -326,12 +327,28 @@ interface SubmitExitDocParams {
  * If buildingId and phase are provided, a RAID decision entry is automatically
  * created linking this exit document to the project's decision log.
  */
-export function submitExitDocument({ roomId, agentId, document, buildingId, phase }: SubmitExitDocParams): Result {
+export async function submitExitDocument({ roomId, agentId, document, buildingId, phase }: SubmitExitDocParams): Promise<Result> {
   const room = activeRooms.get(roomId);
   if (!room) return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
 
   const validation = room.validateExitDocument(document);
   if (!validation.ok) return validation;
+
+  // Queryable hook: Let Lua plugins do additional exit document validation
+  try {
+    const hookResult = await queryHook('onExitDocValidate', {
+      roomId, roomType: room.type, agentId, exitDoc: document,
+    });
+    if (hookResult && typeof hookResult === 'object') {
+      const override = hookResult as { valid?: boolean; reason?: string };
+      if (override.valid === false) {
+        log.info({ roomId, reason: override.reason }, 'Plugin hook rejected exit document');
+        return err('PLUGIN_VALIDATION_FAILED', override.reason || 'Plugin rejected exit document');
+      }
+    }
+  } catch (hookErr) {
+    log.warn({ roomId, error: String(hookErr) }, 'Exit doc hook validation failed (proceeding with default)');
+  }
 
   try {
     const db = getDb();

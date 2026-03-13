@@ -241,8 +241,8 @@ describe('applyCustomPlan', () => {
 // ─── Blueprint Submission Handler ───
 
 describe('handleBlueprintSubmission', () => {
-  it('applies blueprint and creates strategy phase gate with GO verdict', () => {
-    const result = handleBlueprintSubmission({
+  it('applies blueprint and creates strategy phase gate with GO verdict', async () => {
+    const result = await handleBlueprintSubmission({
       buildingId,
       agentId: 'agent_test',
       blueprint: {
@@ -269,8 +269,8 @@ describe('handleBlueprintSubmission', () => {
     expect(gate!.signoff_verdict).toBe('GO');
   });
 
-  it('applies custom plan in advanced mode', () => {
-    const result = handleBlueprintSubmission({
+  it('applies custom plan in advanced mode', async () => {
+    const result = await handleBlueprintSubmission({
       buildingId,
       agentId: 'agent_test',
       blueprint: {
@@ -289,8 +289,8 @@ describe('handleBlueprintSubmission', () => {
     expect(data.mode).toBe('advanced');
   });
 
-  it('returns error for non-existent building', () => {
-    const result = handleBlueprintSubmission({
+  it('returns error for non-existent building', async () => {
+    const result = await handleBlueprintSubmission({
       buildingId: 'bld_nonexistent',
       agentId: 'agent_test',
       blueprint: {
@@ -303,13 +303,13 @@ describe('handleBlueprintSubmission', () => {
     expect(result.error.code).toBe('BUILDING_NOT_FOUND');
   });
 
-  it('returns GATE_CREATION_FAILED when gate creation fails', () => {
+  it('returns GATE_CREATION_FAILED when gate creation fails', async () => {
     vi.spyOn(phaseGateModule, 'createGate').mockReturnValue({
       ok: false,
       error: { code: 'DB_ERROR', message: 'insert failed', retryable: false },
     });
 
-    const result = handleBlueprintSubmission({
+    const result = await handleBlueprintSubmission({
       buildingId,
       agentId: 'agent_test',
       blueprint: {
@@ -326,13 +326,13 @@ describe('handleBlueprintSubmission', () => {
     vi.spyOn(dbModule, 'getDb').mockReturnValue(memDb as unknown as ReturnType<typeof dbModule.getDb>);
   });
 
-  it('returns GATE_SIGNOFF_FAILED when signoff fails', () => {
-    vi.spyOn(phaseGateModule, 'signoffGate').mockReturnValue({
+  it('returns GATE_SIGNOFF_FAILED when signoff fails', async () => {
+    vi.spyOn(phaseGateModule, 'signoffGate').mockResolvedValue({
       ok: false,
       error: { code: 'INVALID_VERDICT', message: 'signoff rejected', retryable: false },
     });
 
-    const result = handleBlueprintSubmission({
+    const result = await handleBlueprintSubmission({
       buildingId,
       agentId: 'agent_test',
       blueprint: {
@@ -353,7 +353,7 @@ describe('handleBlueprintSubmission', () => {
 // ─── Bus Handler ───
 
 describe('initPhaseZeroHandler', () => {
-  it('emits phase-zero:complete on strategist exit doc submission', () => {
+  it('emits phase-zero:complete on strategist exit doc submission', async () => {
     initPhaseZeroHandler(testBus);
 
     const completed: unknown[] = [];
@@ -373,13 +373,16 @@ describe('initPhaseZeroHandler', () => {
       },
     });
 
-    expect(completed).toHaveLength(1);
+    // Wait for async handler to complete
+    await vi.waitFor(() => {
+      expect(completed).toHaveLength(1);
+    });
     const event = completed[0] as Record<string, unknown>;
     expect(event.buildingId).toBe(buildingId);
     expect(event.nextPhase).toBe('discovery');
   });
 
-  it('emits phase-zero:complete on building-architect exit doc submission', () => {
+  it('emits phase-zero:complete on building-architect exit doc submission', async () => {
     initPhaseZeroHandler(testBus);
 
     const completed: unknown[] = [];
@@ -400,7 +403,9 @@ describe('initPhaseZeroHandler', () => {
       },
     });
 
-    expect(completed).toHaveLength(1);
+    await vi.waitFor(() => {
+      expect(completed).toHaveLength(1);
+    });
   });
 
   it('ignores non-strategist exit doc events', () => {
@@ -419,7 +424,7 @@ describe('initPhaseZeroHandler', () => {
     expect(completed).toHaveLength(0);
   });
 
-  it('emits phase-zero:failed when blueprint application fails', () => {
+  it('emits phase-zero:failed when blueprint application fails', async () => {
     initPhaseZeroHandler(testBus);
 
     const failed: unknown[] = [];
@@ -436,7 +441,9 @@ describe('initPhaseZeroHandler', () => {
       },
     });
 
-    expect(failed).toHaveLength(1);
+    await vi.waitFor(() => {
+      expect(failed).toHaveLength(1);
+    });
     const event = failed[0] as Record<string, unknown>;
     expect(event.buildingId).toBe('bld_nonexistent');
     expect(event.error).toBeDefined();

@@ -345,9 +345,9 @@ describe('Room Manager', () => {
       }
     });
 
-    it('allows exit after submitting valid exit document', () => {
+    it('allows exit after submitting valid exit document', async () => {
       // Submit exit document first
-      submitExitDocument({
+      await submitExitDocument({
         roomId,
         agentId: 'agent_1',
         document: { filesChanged: ['a.ts'], testsAdded: 1, summary: 'Done' },
@@ -361,8 +361,8 @@ describe('Room Manager', () => {
       }
     });
 
-    it('sets agent status to idle and clears table after valid exit', () => {
-      submitExitDocument({
+    it('sets agent status to idle and clears table after valid exit', async () => {
+      await submitExitDocument({
         roomId,
         agentId: 'agent_1',
         document: { filesChanged: ['a.ts'], testsAdded: 1, summary: 'Done' },
@@ -379,7 +379,7 @@ describe('Room Manager', () => {
       expect(agent.current_table_id).toBeNull();
     });
 
-    it('frees chair for next agent after exit', () => {
+    it('frees chair for next agent after exit', async () => {
       // Agent 1 takes the focus chair (1 chair limit)
       db.prepare(`INSERT INTO agents (id, name, role, room_access) VALUES ('agent_3', 'Coder2', 'developer', '["code-lab"]')`).run();
 
@@ -388,7 +388,7 @@ describe('Room Manager', () => {
       expect(blocked.ok).toBe(false);
 
       // Agent 1 submits exit doc and leaves
-      submitExitDocument({
+      await submitExitDocument({
         roomId,
         agentId: 'agent_1',
         document: { filesChanged: ['a.ts'], testsAdded: 1, summary: 'Done' },
@@ -418,8 +418,8 @@ describe('Room Manager', () => {
       roomId = room.data.id;
     });
 
-    it('accepts valid exit document with all required fields', () => {
-      const result = submitExitDocument({
+    it('accepts valid exit document with all required fields', async () => {
+      const result = await submitExitDocument({
         roomId,
         agentId: 'agent_1',
         document: {
@@ -435,8 +435,8 @@ describe('Room Manager', () => {
       }
     });
 
-    it('persists exit document to database', () => {
-      submitExitDocument({
+    it('persists exit document to database', async () => {
+      await submitExitDocument({
         roomId,
         agentId: 'agent_1',
         document: { filesChanged: ['a.ts'], testsAdded: 1, summary: 'Quick fix' },
@@ -445,8 +445,8 @@ describe('Room Manager', () => {
       expect(rows).toHaveLength(1);
     });
 
-    it('rejects document missing required fields', () => {
-      const result = submitExitDocument({
+    it('rejects document missing required fields', async () => {
+      const result = await submitExitDocument({
         roomId,
         agentId: 'agent_1',
         document: { filesChanged: ['a.ts'] }, // missing testsAdded and summary
@@ -459,8 +459,8 @@ describe('Room Manager', () => {
       }
     });
 
-    it('rejects non-existent room', () => {
-      const result = submitExitDocument({
+    it('rejects non-existent room', async () => {
+      const result = await submitExitDocument({
         roomId: 'room_ghost',
         agentId: 'agent_1',
         document: { filesChanged: [], testsAdded: 0, summary: 'Nothing' },
@@ -530,13 +530,13 @@ describe('Room Manager', () => {
       }
     });
 
-    it('submitExitDocument returns DB_ERROR when insert fails', () => {
+    it('submitExitDocument returns DB_ERROR when insert fails', async () => {
       const room = createRoom({ type: 'code-lab', floorId: 'floor_exec', name: 'Lab' });
       if (!room.ok) throw new Error('room creation failed');
 
       // Drop exit_documents table to force DB error
       db.prepare('DROP TABLE exit_documents').run();
-      const result = submitExitDocument({
+      const result = await submitExitDocument({
         roomId: room.data.id,
         agentId: 'agent_1',
         document: { filesChanged: ['a.ts'], testsAdded: 1, summary: 'Done' },

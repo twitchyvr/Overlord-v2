@@ -143,6 +143,8 @@ data/
 # Runtime plugin directory (user-installed plugins, not source code)
 /plugins/*
 !/plugins/built-in/
+!/plugins/templates/
+!/plugins/marketplace.json
 tmp/
 temp/
 .DS_Store
