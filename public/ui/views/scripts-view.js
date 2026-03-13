@@ -106,6 +106,15 @@ const FILTER_TABS = [
   { id: 'error',    label: 'Errors' },
 ];
 
+const TEMPLATES = [
+  { id: 'blank',            label: 'Blank Script' },
+  { id: 'room-hook',        label: 'Room Lifecycle Hook' },
+  { id: 'tool-hook',        label: 'Tool Execution Hook' },
+  { id: 'phase-hook',       label: 'Phase Gate Hook' },
+  { id: 'dashboard-widget', label: 'Dashboard Widget' },
+  { id: 'validator',        label: 'Exit Doc Validator' },
+];
+
 /* ── ScriptsView ───────────────────────────────────── */
 
 export class ScriptsView extends Component {
@@ -152,10 +161,19 @@ export class ScriptsView extends Component {
   /* ── Layout ──────────────────────────── */
 
   _buildLayout() {
+    const createBtn = h('button', { class: 'scripts-create-btn', title: 'Create a new script' }, '+ New Script');
+    createBtn.addEventListener('click', () => this._showCreateModal());
+
+    const importBtn = h('button', { class: 'scripts-import-btn', title: 'Import a script' }, 'Import');
+    importBtn.addEventListener('click', () => this._showImportDialog());
+
     const header = h('div', { class: 'scripts-header' },
       h('div', { class: 'scripts-header-top' },
-        h('h2', { class: 'scripts-title' }, 'Scripts'),
-        h('span', { class: 'scripts-subtitle' }, 'Manage automation scripts that enhance your project'),
+        h('div', null,
+          h('h2', { class: 'scripts-title' }, 'Scripts'),
+          h('span', { class: 'scripts-subtitle' }, 'Manage automation scripts that enhance your project'),
+        ),
+        h('div', { class: 'scripts-header-actions' }, createBtn, importBtn),
       ),
     );
 
@@ -418,11 +436,50 @@ export class ScriptsView extends Component {
           h('p', { class: 'scripts-detail-error-text' }, plugin.error),
         ),
       ] : []),
+      // Action buttons
+      h('div', { class: 'scripts-detail-actions' },
+        h('button', {
+          class: 'scripts-action-btn',
+          'data-action': 'view-source',
+          title: 'View script source code',
+        }, 'View Source'),
+        h('button', {
+          class: 'scripts-action-btn',
+          'data-action': 'edit-script',
+          title: plugin.isBuiltIn ? 'Fork built-in and edit' : 'Edit script',
+        }, plugin.isBuiltIn ? 'Fork & Edit' : 'Edit Script'),
+        h('button', {
+          class: 'scripts-action-btn',
+          'data-action': 'export',
+          title: 'Export as .overlord-script bundle',
+        }, 'Export'),
+        ...(!plugin.isBuiltIn ? [h('button', {
+          class: 'scripts-action-btn danger',
+          'data-action': 'delete',
+          title: 'Delete this script',
+        }, 'Delete')] : []),
+      ),
       // Loaded time
       h('div', { class: 'scripts-detail-meta' },
         h('span', null, `Loaded: ${plugin.loadedAt ? formatTime(plugin.loadedAt) : 'Never'}`),
+        plugin.isBuiltIn ? h('span', { class: 'scripts-builtin-badge' }, 'Built-in') : null,
+        plugin.engine ? h('span', { class: 'scripts-engine-badge' }, plugin.engine.toUpperCase()) : null,
       ),
     );
+
+    // Wire action button handlers
+    content.querySelector('[data-action="view-source"]')?.addEventListener('click', () => {
+      OverlordUI.dispatch('navigate:script-editor', { pluginId: plugin.id });
+    });
+    content.querySelector('[data-action="edit-script"]')?.addEventListener('click', () => {
+      OverlordUI.dispatch('navigate:script-editor', { pluginId: plugin.id });
+    });
+    content.querySelector('[data-action="export"]')?.addEventListener('click', () => {
+      this._exportPlugin(plugin.id);
+    });
+    content.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
+      this._deletePlugin(plugin.id);
+    });
 
     this._drawer.setContent(content);
   }
@@ -447,12 +504,18 @@ export class ScriptsView extends Component {
       return h('p', { class: 'scripts-detail-none' }, 'No event hooks registered');
     }
     const HOOK_LABELS = {
-      onLoad:         'When script starts',
-      onUnload:       'When script stops',
-      onRoomEnter:    'When agent enters a room',
-      onRoomExit:     'When agent leaves a room',
-      onToolExecute:  'When a tool runs',
-      onPhaseAdvance: 'When phase changes',
+      onLoad:              'When script starts',
+      onUnload:            'When script stops',
+      onRoomEnter:         'When agent enters a room',
+      onRoomExit:          'When agent leaves a room',
+      onToolExecute:       'When a tool runs',
+      onPhaseAdvance:      'When phase changes',
+      onPhaseGateEvaluate: 'Override phase gate decisions',
+      onExitDocValidate:   'Override exit doc validation',
+      onAgentAssign:       'Override agent assignment',
+      onNotificationRule:  'Override notification routing',
+      onProgressReport:    'Custom progress metrics',
+      onBuildingCreate:    'When building is created',
     };
     const list = h('ul', { class: 'scripts-hook-list' });
     for (const hook of hooks) {
@@ -462,6 +525,211 @@ export class ScriptsView extends Component {
       ));
     }
     return list;
+  }
+
+  /* ── Create Script ───────────────────── */
+
+  _showCreateModal() {
+    const modal = h('div', { class: 'scripts-modal-overlay' },
+      h('div', { class: 'scripts-modal' },
+        h('h3', { class: 'scripts-modal-title' }, 'Create New Script'),
+        h('div', { class: 'scripts-modal-field' },
+          h('label', null, 'Script ID (kebab-case)'),
+          h('input', { type: 'text', class: 'scripts-modal-input', id: 'create-id', placeholder: 'my-custom-script' }),
+        ),
+        h('div', { class: 'scripts-modal-field' },
+          h('label', null, 'Display Name'),
+          h('input', { type: 'text', class: 'scripts-modal-input', id: 'create-name', placeholder: 'My Custom Script' }),
+        ),
+        h('div', { class: 'scripts-modal-field' },
+          h('label', null, 'Description'),
+          h('input', { type: 'text', class: 'scripts-modal-input', id: 'create-desc', placeholder: 'What does this script do?' }),
+        ),
+        h('div', { class: 'scripts-modal-field' },
+          h('label', null, 'Template'),
+          h('select', { class: 'scripts-modal-select', id: 'create-template' },
+            ...TEMPLATES.map(t => h('option', { value: t.id }, t.label)),
+          ),
+        ),
+        h('div', { class: 'scripts-modal-actions' },
+          h('button', { class: 'scripts-modal-btn cancel' }, 'Cancel'),
+          h('button', { class: 'scripts-modal-btn primary' }, 'Create'),
+        ),
+      ),
+    );
+
+    // Cancel
+    modal.querySelector('.cancel').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    // Create
+    modal.querySelector('.primary').addEventListener('click', () => {
+      const id = modal.querySelector('#create-id').value.trim();
+      const name = modal.querySelector('#create-name').value.trim();
+      const description = modal.querySelector('#create-desc').value.trim();
+      const template = modal.querySelector('#create-template').value;
+
+      if (!id || !name) {
+        OverlordUI.dispatch('toast', { message: 'ID and Name are required', type: 'warning' });
+        return;
+      }
+
+      const socket = window.overlordSocket?.socket;
+      if (!socket) return;
+
+      socket.emit('plugin:create', { id, name, description, template }, (res) => {
+        if (res?.ok) {
+          modal.remove();
+          this._fetchPlugins();
+          OverlordUI.dispatch('toast', { message: `Script "${name}" created`, type: 'success' });
+          // Open in editor
+          OverlordUI.dispatch('navigate:script-editor', { pluginId: id });
+        } else {
+          OverlordUI.dispatch('toast', { message: `Failed: ${res?.error?.message}`, type: 'error' });
+        }
+      });
+    });
+
+    document.body.appendChild(modal);
+    modal.querySelector('#create-id').focus();
+  }
+
+  /* ── Import ─────────────────────────── */
+
+  _showImportDialog() {
+    const modal = h('div', { class: 'scripts-modal-overlay' },
+      h('div', { class: 'scripts-modal' },
+        h('h3', { class: 'scripts-modal-title' }, 'Import Script'),
+        h('div', { class: 'scripts-import-zone', tabindex: '0' },
+          h('p', { class: 'scripts-import-icon' }, '\u{1F4E5}'),
+          h('p', null, 'Drop a .overlord-script file here'),
+          h('p', { class: 'scripts-import-or' }, 'or'),
+          h('button', { class: 'scripts-import-file-btn' }, 'Choose File'),
+          h('input', { type: 'file', class: 'scripts-import-file-input', accept: '.overlord-script', hidden: '' }),
+        ),
+        h('div', { class: 'scripts-modal-field' },
+          h('label', null, 'Or paste bundle (base64)'),
+          h('textarea', { class: 'scripts-modal-textarea', id: 'import-base64', placeholder: 'Paste base64 bundle here...', rows: '3' }),
+        ),
+        h('div', { class: 'scripts-modal-actions' },
+          h('button', { class: 'scripts-modal-btn cancel' }, 'Cancel'),
+          h('button', { class: 'scripts-modal-btn primary' }, 'Import'),
+        ),
+      ),
+    );
+
+    const zone = modal.querySelector('.scripts-import-zone');
+    const fileInput = modal.querySelector('.scripts-import-file-input');
+
+    // File button
+    modal.querySelector('.scripts-import-file-btn').addEventListener('click', () => fileInput.click());
+
+    // File selection
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        this._readFileAsBase64(fileInput.files[0], modal);
+      }
+    });
+
+    // Drag and drop
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length > 0) {
+        this._readFileAsBase64(e.dataTransfer.files[0], modal);
+      }
+    });
+
+    // Cancel
+    modal.querySelector('.cancel').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+    // Import from textarea
+    modal.querySelector('.primary').addEventListener('click', () => {
+      const base64 = modal.querySelector('#import-base64').value.trim();
+      if (base64) {
+        this._importBundle(base64, modal);
+      } else {
+        OverlordUI.dispatch('toast', { message: 'No bundle data provided', type: 'warning' });
+      }
+    });
+
+    document.body.appendChild(modal);
+  }
+
+  _readFileAsBase64(file, modal) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      // File content is the raw bundle — base64 encode it
+      const base64 = btoa(reader.result);
+      modal.querySelector('#import-base64').value = base64;
+      this._importBundle(base64, modal);
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  _importBundle(base64, modal) {
+    const socket = window.overlordSocket?.socket;
+    if (!socket) return;
+
+    socket.emit('plugin:import', { bundle: base64 }, (res) => {
+      if (res?.ok) {
+        modal.remove();
+        this._fetchPlugins();
+        OverlordUI.dispatch('toast', {
+          message: `Script "${res.data.manifest?.name || res.data.pluginId}" imported`,
+          type: 'success',
+        });
+      } else {
+        OverlordUI.dispatch('toast', { message: `Import failed: ${res?.error?.message}`, type: 'error' });
+      }
+    });
+  }
+
+  /* ── Export ─────────────────────────── */
+
+  _exportPlugin(pluginId) {
+    const socket = window.overlordSocket?.socket;
+    if (!socket) return;
+
+    socket.emit('plugin:export', { pluginId }, (res) => {
+      if (res?.ok && res.data?.bundle) {
+        // Trigger browser download
+        const blob = new Blob([atob(res.data.bundle)], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${pluginId}.overlord-script`;
+        a.click();
+        URL.revokeObjectURL(url);
+        OverlordUI.dispatch('toast', { message: `Exported "${pluginId}"`, type: 'success' });
+      } else {
+        OverlordUI.dispatch('toast', { message: `Export failed: ${res?.error?.message}`, type: 'error' });
+      }
+    });
+  }
+
+  /* ── Delete ─────────────────────────── */
+
+  _deletePlugin(pluginId) {
+    if (!confirm(`Delete script "${pluginId}"? This cannot be undone.`)) return;
+
+    const socket = window.overlordSocket?.socket;
+    if (!socket) return;
+
+    socket.emit('plugin:delete', { pluginId }, (res) => {
+      if (res?.ok) {
+        this._plugins = this._plugins.filter(p => p.id !== pluginId);
+        this._selectedId = null;
+        this._drawer.close();
+        this._renderGrid();
+        OverlordUI.dispatch('toast', { message: `Deleted "${pluginId}"`, type: 'success' });
+      } else {
+        OverlordUI.dispatch('toast', { message: `Delete failed: ${res?.error?.message}`, type: 'error' });
+      }
+    });
   }
 
   /* ── Empty State ─────────────────────── */

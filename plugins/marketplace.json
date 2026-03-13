@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-03-13",
+  "scripts": [
+    {
+      "id": "daily-standup",
+      "name": "Daily Standup Reporter",
+      "description": "Generates daily standup reports from room and agent activity",
+      "author": "Overlord Team",
+      "version": "1.0.0",
+      "category": "productivity",
+      "tags": ["standup", "reports", "daily"],
+      "downloads": 0,
+      "rating": 5,
+      "builtIn": true
+    },
+    {
+      "id": "theme-switcher",
+      "name": "Theme Switcher",
+      "description": "Dynamic theme switching with custom color schemes",
+      "author": "Overlord Team",
+      "version": "1.0.0",
+      "category": "appearance",
+      "tags": ["theme", "colors", "ui"],
+      "downloads": 0,
+      "rating": 5,
+      "builtIn": true
+    },
+    {
+      "id": "agent-activity-tracker",
+      "name": "Agent Activity Tracker",
+      "description": "Tracks agent actions across rooms with hourly summaries",
+      "author": "Overlord Team",
+      "version": "1.0.0",
+      "category": "analytics",
+      "tags": ["agents", "tracking", "metrics"],
+      "downloads": 0,
+      "rating": 5,
+      "builtIn": true
+    },
+    {
+      "id": "exit-doc-validator",
+      "name": "Exit Document Validator",
+      "description": "Advanced exit document validation beyond built-in schema checks",
+      "author": "Overlord Team",
+      "version": "1.0.0",
+      "category": "governance",
+      "tags": ["validation", "exit-docs", "quality"],
+      "downloads": 0,
+      "rating": 5,
+      "builtIn": true
+    },
+    {
+      "id": "deadline-tracker",
+      "name": "Deadline Tracker",
+      "description": "Tracks and alerts on approaching deadlines across rooms",
+      "author": "Overlord Team",
+      "version": "1.0.0",
+      "category": "productivity",
+      "tags": ["deadlines", "alerts", "time"],
+      "downloads": 0,
+      "rating": 4,
+      "builtIn": true
+    },
+    {
+      "id": "escalation-notifier",
+      "name": "Escalation Notifier",
+      "description": "Sends notifications when issues are escalated or stale",
+      "author": "Overlord Team",
+      "version": "1.0.0",
+      "category": "alerts",
+      "tags": ["escalation", "notifications", "alerts"],
+      "downloads": 0,
+      "rating": 4,
+      "builtIn": true
+    }
+  ],
+  "categories": [
+    { "id": "productivity", "name": "Productivity", "icon": "clipboard" },
+    { "id": "analytics", "name": "Analytics", "icon": "chart" },
+    { "id": "appearance", "name": "Appearance", "icon": "palette" },
+    { "id": "governance", "name": "Governance", "icon": "shield" },
+    { "id": "alerts", "name": "Alerts", "icon": "bell" },
+    { "id": "automation", "name": "Automation", "icon": "zap" }
+  ]
+}

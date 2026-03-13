@@ -134,7 +134,7 @@ describe('Full Lifecycle Integration', () => {
     registerRoomType('deploy', DeployRoom as any);
   });
 
-  it('walks full project lifecycle: strategy → discovery → architecture → execution → review → deploy', () => {
+  it('walks full project lifecycle: strategy → discovery → architecture → execution → review → deploy', async () => {
     // Dynamically import to get the fresh module functions
     // Uses top-level imports: createRoom, enterRoom, exitRoom, submitExitDocument
 
@@ -147,7 +147,7 @@ describe('Full Lifecycle Integration', () => {
     expect(stratEnter.ok).toBe(true);
 
     // Submit building blueprint
-    const stratExitDoc = submitExitDocument({
+    const stratExitDoc = await submitExitDocument({
       roomId: stratRoomId,
       agentId,
       document: {
@@ -171,7 +171,7 @@ describe('Full Lifecycle Integration', () => {
     // Create and sign off strategy gate → advance to discovery
     const stratGate = createGate({ buildingId, phase: 'strategy' });
     expect(stratGate.ok).toBe(true);
-    const stratSignoff = signoffGate({
+    const stratSignoff = await signoffGate({
       gateId: stratGate.data.id,
       reviewer: 'user',
       verdict: 'GO',
@@ -191,7 +191,7 @@ describe('Full Lifecycle Integration', () => {
 
     enterRoom({ roomId: discRoomId, agentId, tableType: 'collab' });
 
-    const discExitDoc = submitExitDocument({
+    const discExitDoc = await submitExitDocument({
       roomId: discRoomId,
       agentId,
       document: {
@@ -211,7 +211,7 @@ describe('Full Lifecycle Integration', () => {
 
     // Gate: discovery → architecture
     const discGate = createGate({ buildingId, phase: 'discovery' });
-    signoffGate({
+    await signoffGate({
       gateId: discGate.data.id,
       reviewer: 'architect',
       verdict: 'GO',
@@ -224,7 +224,7 @@ describe('Full Lifecycle Integration', () => {
     const archRoomId = archRoom.data.id;
     enterRoom({ roomId: archRoomId, agentId, tableType: 'collab' });
 
-    const archExitDoc = submitExitDocument({
+    const archExitDoc = await submitExitDocument({
       roomId: archRoomId,
       agentId,
       document: {
@@ -243,7 +243,7 @@ describe('Full Lifecycle Integration', () => {
 
     // Gate: architecture → execution
     const archGate = createGate({ buildingId, phase: 'architecture' });
-    signoffGate({
+    await signoffGate({
       gateId: archGate.data.id,
       reviewer: 'architect',
       verdict: 'GO',
@@ -256,7 +256,7 @@ describe('Full Lifecycle Integration', () => {
     const codeRoomId = codeRoom.data.id;
     enterRoom({ roomId: codeRoomId, agentId, tableType: 'focus' });
 
-    const codeExitDoc = submitExitDocument({
+    const codeExitDoc = await submitExitDocument({
       roomId: codeRoomId,
       agentId,
       document: {
@@ -277,7 +277,7 @@ describe('Full Lifecycle Integration', () => {
     const testRoomId = testRoom.data.id;
     enterRoom({ roomId: testRoomId, agentId, tableType: 'focus' });
 
-    const testExitDoc = submitExitDocument({
+    const testExitDoc = await submitExitDocument({
       roomId: testRoomId,
       agentId,
       document: {
@@ -297,7 +297,7 @@ describe('Full Lifecycle Integration', () => {
 
     // Gate: execution → review
     const execGate = createGate({ buildingId, phase: 'execution' });
-    signoffGate({
+    await signoffGate({
       gateId: execGate.data.id,
       reviewer: 'qa',
       verdict: 'GO',
@@ -310,7 +310,7 @@ describe('Full Lifecycle Integration', () => {
     const revRoomId = revRoom.data.id;
     enterRoom({ roomId: revRoomId, agentId, tableType: 'review' });
 
-    const revExitDoc = submitExitDocument({
+    const revExitDoc = await submitExitDocument({
       roomId: revRoomId,
       agentId,
       document: {
@@ -328,7 +328,7 @@ describe('Full Lifecycle Integration', () => {
 
     // Gate: review → deploy
     const revGate = createGate({ buildingId, phase: 'review' });
-    signoffGate({
+    await signoffGate({
       gateId: revGate.data.id,
       reviewer: 'architect',
       verdict: 'GO',
@@ -340,7 +340,7 @@ describe('Full Lifecycle Integration', () => {
     const depRoomId = depRoom.data.id;
     enterRoom({ roomId: depRoomId, agentId, tableType: 'focus' });
 
-    const depExitDoc = submitExitDocument({
+    const depExitDoc = await submitExitDocument({
       roomId: depRoomId,
       agentId,
       document: {
@@ -359,7 +359,7 @@ describe('Full Lifecycle Integration', () => {
 
     // Gate: deploy (final)
     const depGate = createGate({ buildingId, phase: 'deploy' });
-    signoffGate({
+    await signoffGate({
       gateId: depGate.data.id,
       reviewer: 'ops',
       verdict: 'GO',
@@ -395,14 +395,14 @@ describe('Full Lifecycle Integration', () => {
     expect(docsWithRaid).toHaveLength(7);
   });
 
-  it('NO-GO verdict blocks phase advancement', () => {
+  it('NO-GO verdict blocks phase advancement', async () => {
     // Uses top-level imports: createRoom, enterRoom, exitRoom, submitExitDocument
 
     // Create and enter a discovery room
     const room = createRoom({ type: 'discovery', floorId: 'f_collab', name: 'Blocked' });
     enterRoom({ roomId: room.data.id, agentId, tableType: 'collab' });
 
-    submitExitDocument({
+    await submitExitDocument({
       roomId: room.data.id,
       agentId,
       document: {
@@ -421,7 +421,7 @@ describe('Full Lifecycle Integration', () => {
 
     // Create gate and reject
     const gate = createGate({ buildingId, phase: 'strategy' });
-    signoffGate({
+    await signoffGate({
       gateId: gate.data.id,
       reviewer: 'architect',
       verdict: 'NO-GO',
@@ -438,9 +438,9 @@ describe('Full Lifecycle Integration', () => {
     expect(advance.data.canAdvance).toBe(false);
   });
 
-  it('CONDITIONAL verdict does not auto-advance', () => {
+  it('CONDITIONAL verdict does not auto-advance', async () => {
     const gate = createGate({ buildingId, phase: 'strategy' });
-    signoffGate({
+    await signoffGate({
       gateId: gate.data.id,
       reviewer: 'architect',
       verdict: 'CONDITIONAL',
@@ -451,7 +451,7 @@ describe('Full Lifecycle Integration', () => {
     expect(building.active_phase).toBe('strategy');
   });
 
-  it('scope change creates RAID issue and allows re-entry to prior phase room', () => {
+  it('scope change creates RAID issue and allows re-entry to prior phase room', async () => {
     // Uses top-level imports: createRoom, enterRoom, exitRoom, submitExitDocument
 
     // Start in architecture phase
@@ -474,7 +474,7 @@ describe('Full Lifecycle Integration', () => {
     expect(raidResult.ok).toBe(true);
 
     // Submit exit doc and exit architecture
-    submitExitDocument({
+    await submitExitDocument({
       roomId: archRoom.data.id,
       agentId,
       document: {
@@ -501,7 +501,7 @@ describe('Full Lifecycle Integration', () => {
     expect(brief.data.issues[0].summary.toLowerCase()).toContain('scope change');
 
     // The agent can work in discovery with the RAID context
-    submitExitDocument({
+    await submitExitDocument({
       roomId: discRoom.data.id,
       agentId,
       document: {
@@ -527,13 +527,13 @@ describe('Full Lifecycle Integration', () => {
     expect(decisions.length).toBeGreaterThanOrEqual(2); // arch + disc exit docs
   });
 
-  it('exit doc RAID entries are linked back to exit document', () => {
+  it('exit doc RAID entries are linked back to exit document', async () => {
     // Uses top-level imports: createRoom, enterRoom, submitExitDocument
 
     const room = createRoom({ type: 'discovery', floorId: 'f_collab', name: 'RAID Link Test' });
     enterRoom({ roomId: room.data.id, agentId, tableType: 'collab' });
 
-    const result = submitExitDocument({
+    const result = await submitExitDocument({
       roomId: room.data.id,
       agentId,
       document: {
@@ -564,9 +564,9 @@ describe('Full Lifecycle Integration', () => {
     expect(linkedIds).toContain(raidId);
   });
 
-  it('previous phase nextPhaseInput is stored in gate record', () => {
+  it('previous phase nextPhaseInput is stored in gate record', async () => {
     const gate = createGate({ buildingId, phase: 'strategy' });
-    const signoff = signoffGate({
+    const signoff = await signoffGate({
       gateId: gate.data.id,
       reviewer: 'user',
       verdict: 'GO',

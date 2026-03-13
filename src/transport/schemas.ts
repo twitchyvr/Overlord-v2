@@ -814,3 +814,43 @@ export const PluginActivitySchema = z.object({
   pluginId: optionalId(),
   limit: z.number().int().min(1).max(100).optional(),
 });
+
+// ─── Plugin Source / IDE Schemas ───
+
+export const PluginSourceGetSchema = z.object({
+  pluginId: id(),
+});
+
+export const PluginSourceSaveSchema = z.object({
+  pluginId: id(),
+  code: z.string().min(1).max(500_000),
+});
+
+export const PluginCreateSchema = z.object({
+  id: z.string().min(1).max(MAX_ID).regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/),
+  name: z.string().min(1).max(MAX_NAME),
+  description: z.string().min(1).max(MAX_DESCRIPTION).optional().default('Custom Overlord script'),
+  template: z.enum([
+    'blank', 'room-hook', 'tool-hook', 'phase-hook', 'dashboard-widget', 'validator',
+  ]).optional().default('blank'),
+});
+
+export const PluginDeleteSchema = z.object({
+  pluginId: id(),
+});
+
+export const PluginValidateSchema = z.object({
+  code: z.string().min(1).max(500_000),
+});
+
+export const PluginExportSchema = z.object({
+  pluginId: id(),
+});
+
+export const PluginImportSchema = z.object({
+  bundle: z.string().min(1).max(10_000_000), // base64-encoded bundle
+});
+
+export const PluginLogSubscribeSchema = z.object({
+  pluginId: id(),
+});

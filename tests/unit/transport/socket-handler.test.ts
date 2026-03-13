@@ -26,7 +26,7 @@ import { createBuilding, getBuilding, listBuildings, listFloors, getFloor, getHe
 vi.mock('../../../src/rooms/phase-gate.js', () => ({
   getGates: vi.fn().mockReturnValue({ ok: true, data: [] }),
   canAdvance: vi.fn().mockReturnValue({ ok: true, data: { canAdvance: false, reason: 'No gate exists' } }),
-  signoffGate: vi.fn().mockReturnValue({ ok: true, data: { gateId: 'gate_1', verdict: 'GO', status: 'go' } }),
+  signoffGate: vi.fn().mockResolvedValue({ ok: true, data: { gateId: 'gate_1', verdict: 'GO', status: 'go' } }),
   createGate: vi.fn().mockReturnValue({ ok: true, data: { id: 'gate_1', phase: 'strategy', status: 'pending' } }),
 }));
 
@@ -43,7 +43,7 @@ import { searchRaid, addRaidEntry, updateRaidStatus } from '../../../src/rooms/r
 
 // Mock room-manager — submitExitDocument imported directly by socket-handler
 vi.mock('../../../src/rooms/room-manager.js', () => ({
-  submitExitDocument: vi.fn().mockReturnValue({ ok: true, data: { id: 'exitdoc_1', roomId: 'r1', raidEntryIds: [] } }),
+  submitExitDocument: vi.fn().mockResolvedValue({ ok: true, data: { id: 'exitdoc_1', roomId: 'r1', raidEntryIds: [] } }),
 }));
 
 import { submitExitDocument } from '../../../src/rooms/room-manager.js';
@@ -66,7 +66,7 @@ import { getDb } from '../../../src/storage/db.js';
 
 // Mock phase-zero — imported directly by socket-handler
 vi.mock('../../../src/rooms/phase-zero.js', () => ({
-  handleBlueprintSubmission: vi.fn().mockReturnValue({ ok: true, data: { buildingId: 'bld_1', mode: 'quickStart', phaseAdvanced: true } }),
+  handleBlueprintSubmission: vi.fn().mockResolvedValue({ ok: true, data: { buildingId: 'bld_1', mode: 'quickStart', phaseAdvanced: true } }),
 }));
 
 import { handleBlueprintSubmission } from '../../../src/rooms/phase-zero.js';
@@ -461,24 +461,26 @@ describe('Socket Handler (Transport Layer)', () => {
   });
 
   describe('exit document events', () => {
-    it('exit-doc:submit calls submitExitDocument, emits to bus, and acks result', () => {
+    it('exit-doc:submit calls submitExitDocument, emits to bus, and acks result', async () => {
       const ack = vi.fn();
       socket.emit('exit-doc:submit', { roomId: 'r1', agentId: 'a1', document: { summary: 'test' } }, ack);
 
-      expect(submitExitDocument).toHaveBeenCalledWith(expect.objectContaining({
-        roomId: 'r1',
-        agentId: 'a1',
-        document: { summary: 'test' },
-      }));
+      await vi.waitFor(() => {
+        expect(submitExitDocument).toHaveBeenCalledWith(expect.objectContaining({
+          roomId: 'r1',
+          agentId: 'a1',
+          document: { summary: 'test' },
+        }));
 
-      const busEvent = bus.emitted.find((e) => e.event === 'exit-doc:submitted');
-      expect(busEvent).toBeDefined();
-      expect(busEvent!.data).toEqual(expect.objectContaining({
-        roomId: 'r1',
-        agentId: 'a1',
-        document: { summary: 'test' },
-      }));
-      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+        const busEvent = bus.emitted.find((e) => e.event === 'exit-doc:submitted');
+        expect(busEvent).toBeDefined();
+        expect(busEvent!.data).toEqual(expect.objectContaining({
+          roomId: 'r1',
+          agentId: 'a1',
+          document: { summary: 'test' },
+        }));
+        expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+      });
     });
   });
 
@@ -513,15 +515,17 @@ describe('Socket Handler (Transport Layer)', () => {
       expect(ack).toHaveBeenCalled();
     });
 
-    it('building:apply-blueprint calls handleBlueprintSubmission and acks', () => {
+    it('building:apply-blueprint calls handleBlueprintSubmission and acks', async () => {
       const ack = vi.fn();
       socket.emit('building:apply-blueprint', { buildingId: 'bld_1', blueprint: { mode: 'quickStart' }, agentId: 'a1' }, ack);
-      expect(handleBlueprintSubmission).toHaveBeenCalledWith({
-        buildingId: 'bld_1',
-        blueprint: { mode: 'quickStart' },
-        agentId: 'a1',
+      await vi.waitFor(() => {
+        expect(handleBlueprintSubmission).toHaveBeenCalledWith({
+          buildingId: 'bld_1',
+          blueprint: { mode: 'quickStart' },
+          agentId: 'a1',
+        });
+        expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
       });
-      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
     });
   });
 

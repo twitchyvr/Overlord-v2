@@ -10,8 +10,11 @@
  * All incoming payloads are validated with Zod schemas before processing.
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { randomUUID } from 'crypto';
 import { logger, broadcastLog } from '../core/logger.js';
+import { config as appConfig } from '../core/config.js';
 import type { Bus } from '../core/bus.js';
 import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
@@ -64,11 +67,16 @@ import {
   SearchGlobalSchema,
   PluginListSchema, PluginGetSchema, PluginToggleSchema,
   PluginConfigGetSchema, PluginConfigSetSchema, PluginActivitySchema,
+  PluginSourceGetSchema, PluginSourceSaveSchema, PluginCreateSchema,
+  PluginDeleteSchema, PluginValidateSchema, PluginExportSchema,
+  PluginImportSchema, PluginLogSubscribeSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
 import { globalSearch } from '../storage/global-search.js';
-import { listPlugins, getPlugin, loadPlugin, unloadPlugin } from '../plugins/plugin-loader.js';
+import { listPlugins, getPlugin, loadPlugin, unloadPlugin, reloadPlugin, getPluginDir, getPluginLogs } from '../plugins/plugin-loader.js';
+import { validateLuaSyntax } from '../plugins/lua-validator.js';
+import { exportBundle, importBundle } from '../plugins/plugin-bundler.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
@@ -303,8 +311,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (ack) ack({ ok: result.success, data: result, error: result.success ? undefined : { code: 'GIT_CLONE_FAILED', message: result.message } });
     });
 
-    handle(socket, 'building:apply-blueprint', BuildingApplyBlueprintSchema, (parsed, ack) => {
-      const result = handleBlueprintSubmission({
+    handle(socket, 'building:apply-blueprint', BuildingApplyBlueprintSchema, async (parsed, ack) => {
+      const result = await handleBlueprintSubmission({
         buildingId: parsed.buildingId,
         blueprint: parsed.blueprint,
         agentId: parsed.agentId,
@@ -1157,6 +1165,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         provides: p.manifest.provides || {},
         loadedAt: p.loadedAt,
         error: p.error || null,
+        isBuiltIn: p.isBuiltIn,
+        engine: p.manifest.engine,
       }));
       if (ack) ack({ ok: true, data: { plugins: items, total: items.length } });
     });
@@ -1181,6 +1191,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         provides: plugin.manifest.provides || {},
         loadedAt: plugin.loadedAt,
         error: plugin.error || null,
+        isBuiltIn: plugin.isBuiltIn,
+        dir: plugin.dir,
       };
       if (ack) ack({ ok: true, data });
     });
@@ -1242,6 +1254,260 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       // Activity is tracked via bus events — return recent plugin-related events from memory
       // For now, return empty list (activity tracking will be wired via bus listener)
       if (ack) ack({ ok: true, data: { events: [], total: 0 } });
+    });
+
+    // ─── Plugin Source / IDE Events ───
+
+    handle(socket, 'plugin:source:get', PluginSourceGetSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+
+      const dir = plugin.dir;
+      if (!dir) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NO_DIR', message: `Plugin "${parsed.pluginId}" has no stored directory`, retryable: false } });
+        return;
+      }
+
+
+
+      const entrypointPath = path.join(dir, plugin.manifest.entrypoint);
+
+      try {
+        const code = fs.readFileSync(entrypointPath, 'utf-8');
+        if (ack) ack({
+          ok: true,
+          data: {
+            pluginId: parsed.pluginId,
+            code,
+            isBuiltIn: plugin.isBuiltIn,
+            manifest: plugin.manifest,
+          },
+        });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_SOURCE_READ_ERROR', message, retryable: false } });
+      }
+    });
+
+    handle(socket, 'plugin:source:save', PluginSourceSaveSchema, async (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+
+
+
+
+
+
+      let targetDir = plugin.dir;
+
+      // For built-in plugins, save to user plugin dir (creating an override)
+      if (plugin.isBuiltIn) {
+        const pluginBaseDir = path.resolve(appConfig.get('PLUGIN_DIR'));
+        targetDir = path.join(pluginBaseDir, plugin.manifest.id);
+        fs.mkdirSync(targetDir, { recursive: true });
+
+        // Copy manifest to user dir if not present
+        const manifestDest = path.join(targetDir, 'plugin.json');
+        if (!fs.existsSync(manifestDest)) {
+          fs.writeFileSync(manifestDest, JSON.stringify(plugin.manifest, null, 2), 'utf-8');
+        }
+      }
+
+      const entrypointPath = path.join(targetDir, plugin.manifest.entrypoint);
+
+      try {
+        fs.writeFileSync(entrypointPath, parsed.code, 'utf-8');
+
+        // Hot-reload the plugin
+        const result = await reloadPlugin(parsed.pluginId);
+        if (result.ok) {
+          io.emit('plugin:source-changed', { pluginId: parsed.pluginId });
+          io.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'active' });
+        }
+        if (ack) ack(result.ok
+          ? { ok: true, data: { pluginId: parsed.pluginId, reloaded: true } }
+          : { ok: false, error: { code: 'PLUGIN_RELOAD_ERROR', message: result.error.message, retryable: false } },
+        );
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_SOURCE_WRITE_ERROR', message, retryable: false } });
+      }
+    });
+
+    handle(socket, 'plugin:create', PluginCreateSchema, async (parsed, ack) => {
+
+
+
+
+
+      // Check for ID conflict
+      if (getPlugin(parsed.id)) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_DUPLICATE', message: `Plugin "${parsed.id}" already exists`, retryable: false } });
+        return;
+      }
+
+      const pluginBaseDir = path.resolve(appConfig.get('PLUGIN_DIR'));
+      const pluginDir = path.join(pluginBaseDir, parsed.id);
+
+      // Create plugin directory
+      fs.mkdirSync(pluginDir, { recursive: true });
+
+      // Create manifest
+      const manifest = {
+        id: parsed.id,
+        name: parsed.name,
+        version: '1.0.0',
+        description: parsed.description || 'Custom Overlord script',
+        author: 'User',
+        engine: 'lua' as const,
+        entrypoint: 'main.lua',
+        permissions: ['bus:emit', 'storage:read', 'storage:write'] as string[],
+      };
+      fs.writeFileSync(path.join(pluginDir, 'plugin.json'), JSON.stringify(manifest, null, 2), 'utf-8');
+
+      // Read template
+      const templateName = parsed.template || 'blank';
+      const templatePath = path.join(pluginBaseDir, '..', 'plugins', 'templates', `${templateName}.lua`);
+      let templateCode = '-- New plugin\nregisterHook("onLoad", function()\n  overlord.log.info("Plugin loaded")\nend)\n';
+
+      try {
+        if (fs.existsSync(templatePath)) {
+          templateCode = fs.readFileSync(templatePath, 'utf-8');
+        } else {
+          // Try alternate path structure
+          const altPath = path.join(path.resolve('.'), 'plugins', 'templates', `${templateName}.lua`);
+          if (fs.existsSync(altPath)) {
+            templateCode = fs.readFileSync(altPath, 'utf-8');
+          }
+        }
+      } catch {
+        // Use default template on read failure
+      }
+
+      // Replace template placeholders
+      templateCode = templateCode
+        .replace(/\{\{PLUGIN_NAME\}\}/g, parsed.name)
+        .replace(/\{\{PLUGIN_DESCRIPTION\}\}/g, parsed.description || 'Custom Overlord script')
+        .replace(/\{\{PLUGIN_ID\}\}/g, parsed.id);
+
+      fs.writeFileSync(path.join(pluginDir, 'main.lua'), templateCode, 'utf-8');
+
+      // Load the new plugin
+      const result = await loadPlugin(manifest as any, pluginDir);
+      if (result.ok) {
+        io.emit('plugin:status-changed', { pluginId: parsed.id, status: 'active' });
+        bus.emit('plugin:status-changed', { pluginId: parsed.id, status: 'active' });
+      }
+      if (ack) ack(result.ok
+        ? { ok: true, data: { pluginId: parsed.id, manifest } }
+        : { ok: false, error: { code: 'PLUGIN_CREATE_ERROR', message: result.error.message, retryable: false } },
+      );
+    });
+
+    handle(socket, 'plugin:delete', PluginDeleteSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+
+      // Refuse to delete built-in plugins
+      if (plugin.isBuiltIn) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_DELETE_BUILTIN', message: 'Cannot delete built-in plugins', retryable: false } });
+        return;
+      }
+
+      const dir = plugin.dir;
+
+      // Unload first
+      unloadPlugin(parsed.pluginId);
+
+      // Remove the plugin directory
+      if (dir) {
+        try {
+          fs.rmSync(dir, { recursive: true, force: true });
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          log.warn({ pluginId: parsed.pluginId, error: message }, 'Failed to remove plugin directory');
+        }
+      }
+
+      io.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'deleted' });
+      bus.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'deleted' });
+      if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId } });
+    });
+
+    handle(socket, 'plugin:validate', PluginValidateSchema, async (parsed, ack) => {
+      const result = await validateLuaSyntax(parsed.code);
+      if (ack) ack({ ok: true, data: result });
+    });
+
+    handle(socket, 'plugin:export', PluginExportSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+      const dir = plugin.dir;
+      if (!dir) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NO_DIR', message: `Plugin "${parsed.pluginId}" has no stored directory`, retryable: false } });
+        return;
+      }
+      const result = exportBundle(dir);
+      if (ack) ack(result.ok
+        ? { ok: true, data: { pluginId: parsed.pluginId, bundle: result.data } }
+        : result,
+      );
+    });
+
+    handle(socket, 'plugin:import', PluginImportSchema, async (parsed, ack) => {
+
+
+
+      const pluginBaseDir = path.resolve(appConfig.get('PLUGIN_DIR'));
+      const result = importBundle(parsed.bundle, pluginBaseDir);
+      if (!result.ok) {
+        if (ack) ack(result);
+        return;
+      }
+
+      const manifest = result.data;
+      const pluginDir = path.join(pluginBaseDir, manifest.id);
+
+      // Load the imported plugin
+      const loadResult = await loadPlugin(manifest, pluginDir);
+      if (loadResult.ok) {
+        io.emit('plugin:status-changed', { pluginId: manifest.id, status: 'active' });
+        bus.emit('plugin:status-changed', { pluginId: manifest.id, status: 'active' });
+      }
+      if (ack) ack(loadResult.ok
+        ? { ok: true, data: { pluginId: manifest.id, manifest } }
+        : { ok: false, error: { code: 'PLUGIN_IMPORT_LOAD_ERROR', message: loadResult.error.message, retryable: false } },
+      );
+    });
+
+    handle(socket, 'plugin:log:subscribe', PluginLogSubscribeSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+
+      // Return existing logs and subscribe to live updates
+      const logs = getPluginLogs(parsed.pluginId);
+      socket.join(`plugin-logs:${parsed.pluginId}`);
+      if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId, logs } });
+    });
+
+    handle(socket, 'plugin:log:unsubscribe', PluginLogSubscribeSchema, (parsed, ack) => {
+      socket.leave(`plugin-logs:${parsed.pluginId}`);
+      if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId } });
     });
 
     // ─── Command List ───
@@ -1607,8 +1873,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (ack) ack(getPendingGates(parsed?.buildingId));
     });
 
-    handle(socket, 'phase:resolve-conditions', PhaseResolveConditionsSchema, (parsed, ack) => {
-      const result = resolveConditions({
+    handle(socket, 'phase:resolve-conditions', PhaseResolveConditionsSchema, async (parsed, ack) => {
+      const result = await resolveConditions({
         gateId: parsed.gateId,
         resolvedConditions: parsed.resolvedConditions,
         resolver: parsed.resolver,
@@ -2089,8 +2355,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
     // ─── Exit Document Events ───
 
-    handle(socket, 'exit-doc:submit', ExitDocSubmitSchema, (parsed, ack) => {
-      const result = submitExitDocument({
+    handle(socket, 'exit-doc:submit', ExitDocSubmitSchema, async (parsed, ack) => {
+      const result = await submitExitDocument({
         roomId: parsed.roomId, agentId: parsed.agentId,
         document: parsed.document ?? {}, buildingId: parsed.buildingId, phase: parsed.phase,
       });
@@ -2161,11 +2427,11 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (ack) ack(result);
     });
 
-    handle(socket, 'phase:gate:signoff', PhaseGateSignoffSchema, (parsed, ack) => {
+    handle(socket, 'phase:gate:signoff', PhaseGateSignoffSchema, async (parsed, ack) => {
       // Look up the gate to get buildingId and phase before signoff
       const gateRow = getDb().prepare('SELECT building_id, phase FROM phase_gates WHERE id = ?').get(parsed.gateId) as { building_id: string; phase: string } | undefined;
 
-      const result = signoffGate({
+      const result = await signoffGate({
         gateId: parsed.gateId, reviewer: parsed.reviewer, verdict: parsed.verdict,
         conditions: parsed.conditions, criteria: parsed.criteria, exitDocId: parsed.exitDocId, nextPhaseInput: parsed.nextPhaseInput,
       });
@@ -2200,7 +2466,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (ack) ack(result);
     });
 
-    handle(socket, 'phase:advance', PhaseAdvanceSchema, (parsed, ack) => {
+    handle(socket, 'phase:advance', PhaseAdvanceSchema, async (parsed, ack) => {
       const buildingId = parsed.buildingId;
       const phaseOrder = getPhaseOrder();
 
@@ -2227,7 +2493,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       }
 
       const gateData = gateResult.data as { id: string };
-      const signoffResult = signoffGate({
+      const signoffResult = await signoffGate({
         gateId: gateData.id, reviewer: parsed.reviewer || 'system',
         verdict: 'GO', conditions: [], nextPhaseInput: parsed.nextPhaseInput,
       });
@@ -2426,6 +2692,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('email:dispatched');
   forward('plugin:status-changed');
   forward('plugin:config-changed');
+  forward('plugin:source-changed');
 
   // ─── Stats: record every agent status change ───
   bus.on('agent:status-changed', (data: Record<string, unknown>) => {

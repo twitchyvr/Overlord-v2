@@ -29,6 +29,7 @@ import {
   discoverPlugins,
   loadPlugin,
   broadcastHook,
+  queryHook,
 } from './plugin-loader.js';
 import type { InitPluginsParams } from './contracts.js';
 
@@ -165,13 +166,36 @@ function wireBusHooks(params: InitPluginsParams): void {
     });
   });
 
+  // Building creation → plugin hooks
+  bus.on('building:created', (data: Record<string, unknown>) => {
+    broadcastHook('onBuildingCreate', {
+      buildingId: data.buildingId as string,
+      name: data.name as string,
+    }).catch((error: unknown) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      log.error({ error: msg }, 'Failed to broadcast onBuildingCreate hook');
+    });
+  });
+
+  // Phase gate evaluation → queryable hook (handled by queryHook in rooms layer)
+  // Agent assignment → queryable hook (handled by queryHook in rooms layer)
+  // Exit doc validation → queryable hook (handled by queryHook in rooms layer)
+  // Notification rules → queryable hook (handled by queryHook in rooms layer)
+  // These are invoked directly by the TypeScript code via queryHook() rather than bus events,
+  // because they need to return values to influence behavior.
+
   log.debug('Bus hooks wired for plugin lifecycle events');
 }
 
 // ─── Re-exports ───
 
-export { discoverPlugins, loadPlugin, unloadPlugin, getPlugin, listPlugins, broadcastHook } from './plugin-loader.js';
+export {
+  discoverPlugins, loadPlugin, unloadPlugin, getPlugin, listPlugins, broadcastHook,
+  queryHook, reloadPlugin, getPluginDir, getPluginLogs,
+} from './plugin-loader.js';
 export { createSandbox } from './plugin-sandbox.js';
+export { validateLuaSyntax } from './lua-validator.js';
+export { exportBundle, importBundle } from './plugin-bundler.js';
 
 // Re-export all types
 export type {
@@ -182,6 +206,7 @@ export type {
   PluginHookHandler,
   PluginContext,
   PluginInstance,
+  PluginLogEntry,
   PluginSandbox,
   PluginStatus,
   PluginProvides,

@@ -26,6 +26,7 @@ let _activeViewName = null;
 let _centerPanel = null;
 let _buildingPanel = null;
 let _views = {};
+let _scriptEditorOpts = {};
 
 /**
  * Initialize the router.
@@ -51,6 +52,10 @@ export function initRouter({ centerPanel, buildingPanel }) {
   OverlordUI.subscribe('navigate:milestones', () => navigateTo('milestones'));
   OverlordUI.subscribe('navigate:phase', () => navigateTo('phase'));
   OverlordUI.subscribe('navigate:scripts', () => navigateTo('scripts'));
+  OverlordUI.subscribe('navigate:script-editor', (data) => {
+    _scriptEditorOpts = data || {};
+    navigateTo('script-editor');
+  });
 
   // Mobile bottom nav
   document.querySelectorAll('#mobile-nav .mobile-nav-item').forEach(item => {
@@ -158,7 +163,8 @@ export async function navigateTo(viewName) {
   }
 
   // Always create a fresh view instance
-  _views[viewName] = new ViewClass(container);
+  const viewOpts = viewName === 'script-editor' ? _scriptEditorOpts : {};
+  _views[viewName] = new ViewClass(container, viewOpts);
   _activeView = _views[viewName];
   _activeView.mount();
 
@@ -219,7 +225,8 @@ async function _loadViewModules() {
     { PhaseView },
     { MilestoneView },
     { EmailView },
-    { ScriptsView }
+    { ScriptsView },
+    { ScriptEditorView }
   ] = await Promise.all([
     import('../views/dashboard-view.js'),
     import('../views/strategist-view.js'),
@@ -233,7 +240,8 @@ async function _loadViewModules() {
     import('../views/phase-view.js'),
     import('../views/milestone-view.js'),
     import('../views/email-view.js'),
-    import('../views/scripts-view.js')
+    import('../views/scripts-view.js'),
+    import('../views/script-editor-view.js')
   ]);
 
   return {
@@ -249,7 +257,8 @@ async function _loadViewModules() {
     phase:      PhaseView,
     milestones: MilestoneView,
     email:      EmailView,
-    scripts:    ScriptsView
+    scripts:    ScriptsView,
+    'script-editor': ScriptEditorView
   };
 }
 

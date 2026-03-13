@@ -365,7 +365,7 @@ describe('Room Tool Scoping — Integration', () => {
       expect(writeInCode.ok).toBe(true);
 
       // Agent submits exit doc and leaves CodeLab
-      submitExitDocument({
+      await submitExitDocument({
         roomId: codeRoom.data.id,
         agentId: 'agent_qa',
         document: { filesModified: ['x.ts'], testsAdded: ['x.test.ts'], changesDescription: 'test', riskAssessment: 'low' },
@@ -405,12 +405,12 @@ describe('Room Tool Scoping — Integration', () => {
       }
     });
 
-    it('TestingLab allows exit after submitting complete test-report', () => {
+    it('TestingLab allows exit after submitting complete test-report', async () => {
       const room = createRoom({ type: 'testing-lab', floorId: 'floor_exec', name: 'Lab' });
       if (!room.ok) throw new Error('failed');
       enterRoom({ roomId: room.data.id, agentId: 'agent_qa', tableType: 'focus' });
 
-      submitExitDocument({
+      await submitExitDocument({
         roomId: room.data.id,
         agentId: 'agent_qa',
         document: {
