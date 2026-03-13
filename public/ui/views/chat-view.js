@@ -147,6 +147,16 @@ export class ChatView extends Component {
     this.subscribe(store, 'rooms.list', () => { this._refCache = null; });
     this.subscribe(store, 'raid.entries', () => { this._refCache = null; });
 
+    // Update chat header when active room changes
+    this.subscribe(store, 'rooms.active', () => { this._updateRoomIndicator(); });
+
+    // Listen for room selection from building sidebar
+    this._listeners.push(
+      OverlordUI.subscribe('building:room-selected', (data) => {
+        this._updateRoomIndicator();
+      })
+    );
+
     // Hydrate from store — messages may have arrived before this view mounted
     const existingMessages = store.get('chat.messages');
     if (existingMessages && existingMessages.length > 0) {
@@ -166,7 +176,8 @@ export class ChatView extends Component {
           title: 'Conversations',
           onClick: () => this._toggleConversations()
         }, '\u{1F4AC}'),
-        h('span', { class: 'chat-header-title' }, 'Chat')
+        h('span', { class: 'chat-header-title' }, 'Chat'),
+        h('span', { class: 'chat-room-indicator', id: 'chat-room-indicator' })
       ),
       h('div', { class: 'chat-header-actions' },
         h('button', {
@@ -182,6 +193,9 @@ export class ChatView extends Component {
       )
     );
     this.el.appendChild(header);
+
+    // Initialize room indicator
+    this._updateRoomIndicator();
 
     // Conversations sidebar (hidden by default)
     this._conversationsEl = h('div', { class: 'chat-conversations', hidden: true });
@@ -886,6 +900,30 @@ export class ChatView extends Component {
   _clearChat() {
     const store = OverlordUI.getStore();
     if (store) store.set('chat.messages', []);
+  }
+
+  /** Update the room indicator badge in the chat header. */
+  _updateRoomIndicator() {
+    const indicator = this.el?.querySelector('#chat-room-indicator');
+    if (!indicator) return;
+
+    const store = OverlordUI.getStore();
+    const activeRoomId = store?.get('rooms.active');
+    const rooms = store?.get('rooms.list') || [];
+    const room = rooms.find(r => r.id === activeRoomId);
+
+    if (room) {
+      indicator.textContent = room.name || room.type || 'Unknown Room';
+      indicator.title = `Chat is connected to: ${room.name || room.type} (${room.type})`;
+      indicator.hidden = false;
+    } else if (activeRoomId) {
+      indicator.textContent = 'Room';
+      indicator.title = `Active room: ${activeRoomId}`;
+      indicator.hidden = false;
+    } else {
+      indicator.textContent = '';
+      indicator.hidden = true;
+    }
   }
 
   // ── File Attachment ─────────────────────────────────────────
