@@ -141,8 +141,8 @@ describe('Config Service', () => {
       expect(config.get('PROVIDER_DISCOVERY')).toBe('minimax');
       expect(config.get('PROVIDER_CODE_LAB')).toBe('ollama');
       // Defaults for others
-      expect(config.get('PROVIDER_ARCHITECTURE')).toBe('anthropic');
-      expect(config.get('PROVIDER_REVIEW')).toBe('anthropic');
+      expect(config.get('PROVIDER_ARCHITECTURE')).toBe('minimax');
+      expect(config.get('PROVIDER_REVIEW')).toBe('minimax');
     });
 
     it('rejects invalid NODE_ENV values', async () => {

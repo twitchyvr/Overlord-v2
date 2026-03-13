@@ -28,6 +28,7 @@ function setupDb(): Database.Database {
 
   db.prepare(`CREATE TABLE IF NOT EXISTS buildings (
     id TEXT PRIMARY KEY, project_id TEXT, name TEXT NOT NULL,
+    working_directory TEXT, repo_url TEXT,
     config TEXT DEFAULT '{}', active_phase TEXT DEFAULT 'strategy',
     created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
   )`).run();
@@ -49,15 +50,18 @@ function setupDb(): Database.Database {
   db.prepare(`CREATE TABLE IF NOT EXISTS tables_v2 (
     id TEXT PRIMARY KEY, room_id TEXT NOT NULL REFERENCES rooms(id),
     type TEXT NOT NULL DEFAULT 'focus', chairs INTEGER DEFAULT 1,
-    description TEXT, created_at TEXT DEFAULT (datetime('now'))
+    description TEXT, config TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now'))
   )`).run();
 
   db.prepare(`CREATE TABLE IF NOT EXISTS agents (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL,
-    building_id TEXT REFERENCES buildings(id),
-    capabilities TEXT DEFAULT '[]', room_access TEXT DEFAULT '[]',
-    badge TEXT, status TEXT DEFAULT 'idle', current_room_id TEXT,
-    current_table_id TEXT, config TEXT DEFAULT '{}',
+    building_id TEXT, capabilities TEXT DEFAULT '[]',
+    room_access TEXT DEFAULT '[]', badge TEXT, status TEXT DEFAULT 'idle',
+    current_room_id TEXT, current_table_id TEXT, config TEXT DEFAULT '{}',
+    first_name TEXT, last_name TEXT, display_name TEXT, nickname TEXT,
+    bio TEXT, photo_url TEXT, specialization TEXT, gender TEXT,
+    profile_generated INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
   )`).run();
 

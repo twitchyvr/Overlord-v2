@@ -427,9 +427,9 @@ describe('Socket Handler (Transport Layer)', () => {
 
     it('raid:search calls searchRaid and acks result', () => {
       const ack = vi.fn();
-      socket.emit('raid:search', { type: 'risk' }, ack);
+      socket.emit('raid:search', { buildingId: 'bld_1', type: 'risk' }, ack);
 
-      expect(searchRaid).toHaveBeenCalledWith({ type: 'risk' });
+      expect(searchRaid).toHaveBeenCalledWith(expect.objectContaining({ buildingId: 'bld_1', type: 'risk' }));
       expect(ack).toHaveBeenCalledWith({ ok: true, data: [] });
     });
   });
@@ -486,7 +486,13 @@ describe('Socket Handler (Transport Layer)', () => {
       const ack = vi.fn();
       socket.emit('building:create', { name: 'My Project' }, ack);
 
-      expect(createBuilding).toHaveBeenCalledWith({ name: 'My Project' });
+      expect(createBuilding).toHaveBeenCalledWith({
+        name: 'My Project',
+        projectId: undefined,
+        workingDirectory: undefined,
+        repoUrl: undefined,
+        config: {},
+      });
       expect(ack).toHaveBeenCalledWith({ ok: true, data: { id: 'bld_1', name: 'Test Building' } });
     });
 
@@ -532,7 +538,7 @@ describe('Socket Handler (Transport Layer)', () => {
     it('returns isNewUser=false when buildings exist', () => {
       (listBuildings as ReturnType<typeof vi.fn>).mockReturnValue({
         ok: true,
-        data: [{ id: 'bld_1', name: 'Project Alpha', active_phase: 'discovery' }],
+        data: [{ id: 'bld_1', name: 'Project Alpha', active_phase: 'discovery', config: {}, repo_url: '' }],
       });
 
       const ack = vi.fn();
@@ -542,7 +548,15 @@ describe('Socket Handler (Transport Layer)', () => {
         ok: true,
         data: {
           isNewUser: false,
-          buildings: [{ id: 'bld_1', name: 'Project Alpha', activePhase: 'discovery' }],
+          buildings: [{
+            id: 'bld_1',
+            name: 'Project Alpha',
+            activePhase: 'discovery',
+            description: '',
+            repoUrl: '',
+            floorCount: 0,
+            agentCount: 0,
+          }],
         },
       });
     });
@@ -1043,11 +1057,11 @@ describe('Socket Handler (Transport Layer)', () => {
       // Disconnect
       socket.emit('disconnect');
 
-      // exitRoom should have been called for the room membership
-      expect(rooms.exitRoom).toHaveBeenCalledWith({ roomId: 'room_1', agentId: 'agent_1' });
+      // exitRoom should have been called for the room membership with disconnect reason
+      expect(rooms.exitRoom).toHaveBeenCalledWith({ roomId: 'room_1', agentId: 'agent_1', reason: 'disconnect' });
     });
 
-    it('removes agents on disconnect that were registered by the socket', () => {
+    it('marks agents as idle on disconnect (does not remove them)', () => {
       // Register an agent
       const regAck = vi.fn();
       socket.emit('agent:register', { name: 'TestAgent', role: 'coder' }, regAck);
@@ -1055,8 +1069,19 @@ describe('Socket Handler (Transport Layer)', () => {
       // Disconnect
       socket.emit('disconnect');
 
-      // removeAgent should have been called
-      expect(agents.removeAgent).toHaveBeenCalledWith('agent_1');
+      // removeAgent should NOT be called — agents are persistent
+      expect(agents.removeAgent).not.toHaveBeenCalled();
+
+      // Instead, agent:status-changed should be emitted with 'idle'
+      const statusEvent = bus.emitted.find(
+        (e) => e.event === 'agent:status-changed' && (e.data as Record<string, unknown>)?.agentId === 'agent_1'
+      );
+      expect(statusEvent).toBeDefined();
+      expect(statusEvent!.data).toEqual(expect.objectContaining({
+        agentId: 'agent_1',
+        status: 'idle',
+        reason: 'disconnect',
+      }));
     });
 
     it('emits room:agent:exited bus event with disconnect reason', () => {
@@ -1092,7 +1117,7 @@ describe('Socket Handler (Transport Layer)', () => {
       expect(statusEvent).toBeDefined();
       expect(statusEvent!.data).toEqual(expect.objectContaining({
         agentId: 'agent_1',
-        status: 'removed',
+        status: 'idle',
         reason: 'disconnect',
       }));
     });
@@ -1157,16 +1182,19 @@ describe('Socket Handler (Transport Layer)', () => {
 
       // Reset to track only disconnect calls
       (rooms.exitRoom as ReturnType<typeof vi.fn>).mockClear();
-      (agents.removeAgent as ReturnType<typeof vi.fn>).mockClear();
+      bus.emitted.length = 0;
 
       socket.emit('disconnect');
 
-      // Both rooms exited
+      // Both rooms exited with disconnect reason
       expect(rooms.exitRoom).toHaveBeenCalledTimes(2);
-      // Both agents removed
-      expect(agents.removeAgent).toHaveBeenCalledTimes(2);
-      expect(agents.removeAgent).toHaveBeenCalledWith('agent_A');
-      expect(agents.removeAgent).toHaveBeenCalledWith('agent_B');
+      // Agents are NOT removed — they are marked idle via bus events
+      expect(agents.removeAgent).not.toHaveBeenCalled();
+      // Both agents should have status-changed events
+      const statusEvents = bus.emitted.filter(
+        (e) => e.event === 'agent:status-changed' && (e.data as Record<string, unknown>)?.status === 'idle'
+      );
+      expect(statusEvents).toHaveLength(2);
     });
   });
 

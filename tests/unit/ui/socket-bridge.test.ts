@@ -605,15 +605,17 @@ describe('socket "phase-zero:failed" event', () => {
 });
 
 describe('socket "scope-change:detected" event', () => {
-  it('prepends scope-change entry to raid.entries with type "scope-change"', () => {
+  it('prepends scope-change entry to activity.items with event "scope-change"', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
+    const now = 1700000000000;
+    vi.spyOn(Date, 'now').mockReturnValue(now);
     const data = { description: 'scope creep detected', severity: 'high' };
     mockSocket._trigger('scope-change:detected', data);
 
-    const raidUpdater = mockStore.update.mock.calls.find((c: any) => c[0] === 'raid.entries');
-    expect(raidUpdater).toBeDefined();
-    const result = raidUpdater![1]([]);
-    expect(result[0]).toEqual({ ...data, type: 'scope-change' });
+    const activityUpdater = mockStore.update.mock.calls.find((c: any) => c[0] === 'activity.items');
+    expect(activityUpdater).toBeDefined();
+    const result = activityUpdater![1]([]);
+    expect(result[0]).toEqual({ event: 'scope-change', ...data, timestamp: now });
   });
 
   it('dispatches scope-change:detected to engine', () => {
@@ -986,7 +988,7 @@ describe('window.overlordSocket.sendMessage()', () => {
     expect(mockStore.update).toHaveBeenCalledWith('chat.messages', expect.any(Function));
     const updaterFn = mockStore.update.mock.calls.find((c: any) => c[0] === 'chat.messages')![1];
     const result = updaterFn([]);
-    expect(result[0]).toEqual({ id: String(now), role: 'user', content: 'hello', agentId: 'a1', type: 'user', timestamp: now });
+    expect(result[0]).toEqual({ id: String(now), role: 'user', content: 'hello', agentId: 'a1', attachments: [], type: 'user', timestamp: now });
   });
 
   it('sets ui.processing to true', () => {
@@ -1000,7 +1002,7 @@ describe('window.overlordSocket.sendMessage()', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
     api.sendMessage({ content: 'hello world', agentId: 'agent-5' });
-    expect(mockSocket.emit).toHaveBeenCalledWith('chat:message', { text: 'hello world', agentId: 'agent-5', tokens: [], buildingId: '', roomId: '' });
+    expect(mockSocket.emit).toHaveBeenCalledWith('chat:message', { text: 'hello world', agentId: 'agent-5', tokens: [], attachments: [], buildingId: '', roomId: '', threadId: '' });
   });
 
   it('does not return a promise (synchronous fire-and-forget)', () => {

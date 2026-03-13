@@ -1,7 +1,7 @@
 /**
  * Storage Layer Tests
  *
- * Tests initStorage creates all 14 tables, 15 indexes,
+ * Tests initStorage creates all 21 tables, 42 indexes,
  * enables WAL mode and foreign keys.
  * Uses a temp directory — cleaned up after each test.
  */
@@ -85,7 +85,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 15 tables', () => {
+  describe('schema — all 21 tables', () => {
     const expectedTables = [
       'buildings',
       'floors',
@@ -93,18 +93,24 @@ describe('Storage Layer', () => {
       'tables_v2',
       'agents',
       'messages',
+      'plans',
       'tasks',
       'todos',
+      'milestones',
       'exit_documents',
       'phase_gates',
       'raid_entries',
-      'migrations',
       'notes',
       'agent_sessions',
       'citations',
+      'agent_activity_log',
+      'agent_stats',
+      'agent_emails',
+      'agent_email_recipients',
+      'migrations',
     ];
 
-    it('creates all 15 tables', async () => {
+    it('creates all 21 tables', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -114,7 +120,7 @@ describe('Storage Layer', () => {
 
       const tableNames = tables.map((t) => t.name).sort();
       expect(tableNames).toEqual(expectedTables.sort());
-      expect(tableNames).toHaveLength(15);
+      expect(tableNames).toHaveLength(21);
     });
 
     it.each(expectedTables)('creates table: %s', async (tableName) => {
@@ -206,7 +212,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 19 indexes', () => {
+  describe('schema — all 42 indexes', () => {
     const expectedIndexes = [
       'idx_rooms_floor',
       'idx_rooms_type',
@@ -216,20 +222,43 @@ describe('Storage Layer', () => {
       'idx_agents_building',
       'idx_tasks_building',
       'idx_todos_task',
+      'idx_todos_agent',
+      'idx_tasks_table',
+      'idx_tasks_room',
+      'idx_milestones_building',
+      'idx_tasks_milestone',
       'idx_raid_building',
       'idx_raid_phase',
       'idx_raid_type',
       'idx_exit_docs_room',
-      'idx_citations_source',
-      'idx_citations_target',
-      'idx_citations_type',
       'idx_phase_gates_building',
       'idx_notes_agent',
       'idx_sessions_agent',
       'idx_sessions_room',
+      'idx_citations_source',
+      'idx_citations_target',
+      'idx_citations_type',
+      'idx_activity_agent',
+      'idx_activity_type',
+      'idx_activity_created',
+      'idx_stats_agent',
+      'idx_stats_metric',
+      'idx_stats_compound',
+      'idx_plans_building',
+      'idx_plans_agent',
+      'idx_plans_thread',
+      'idx_plans_status',
+      'idx_emails_thread',
+      'idx_emails_from',
+      'idx_emails_building',
+      'idx_emails_status',
+      'idx_emails_priority',
+      'idx_email_recipients_email',
+      'idx_email_recipients_agent',
+      'idx_email_recipients_unread',
     ];
 
-    it('creates all 19 custom indexes', async () => {
+    it('creates all 42 custom indexes', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -239,7 +268,7 @@ describe('Storage Layer', () => {
 
       const indexNames = indexes.map((i) => i.name).sort();
       expect(indexNames).toEqual(expectedIndexes.sort());
-      expect(indexNames).toHaveLength(19);
+      expect(indexNames).toHaveLength(42);
     });
 
     it.each(expectedIndexes)('creates index: %s', async (indexName) => {
@@ -282,7 +311,7 @@ describe('Storage Layer', () => {
         .prepare("SELECT count(*) as cnt FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         .get() as { cnt: number };
 
-      expect(tables.cnt).toBe(15);
+      expect(tables.cnt).toBe(21);
     });
   });
 

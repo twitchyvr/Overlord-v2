@@ -122,9 +122,11 @@ describe('validate()', () => {
     expect(result).toEqual({
       text: '',
       tokens: [],
+      attachments: [],
       buildingId: '',
       roomId: '',
       agentId: '',
+      threadId: '',
     });
   });
 });
@@ -631,7 +633,7 @@ describe('RAID Schemas', () => {
 
   describe('RaidUpdateSchema', () => {
     it('accepts id and status', () => {
-      const result = RaidUpdateSchema.safeParse({ id: 'raid_1', status: 'resolved' });
+      const result = RaidUpdateSchema.safeParse({ id: 'raid_1', status: 'closed' });
       expect(result.success).toBe(true);
     });
 
@@ -667,8 +669,9 @@ describe('RAID Schemas', () => {
     });
   });
 
-  it('RaidSearchSchema accepts optional filters', () => {
-    expect(RaidSearchSchema.safeParse({}).success).toBe(true);
+  it('RaidSearchSchema accepts buildingId with optional filters', () => {
+    expect(RaidSearchSchema.safeParse({}).success).toBe(false);
+    expect(RaidSearchSchema.safeParse({ buildingId: 'bld_1' }).success).toBe(true);
     expect(RaidSearchSchema.safeParse({ buildingId: 'bld_1', type: 'risk', status: 'open' }).success).toBe(true);
   });
 
