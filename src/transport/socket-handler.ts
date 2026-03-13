@@ -1425,7 +1425,9 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
     handle(socket, 'raid:add', RaidAddSchema, (parsed, ack) => {
       const result = addRaidEntry(parsed as unknown as Parameters<typeof addRaidEntry>[0]);
-      bus.emit('raid:entry:added', { ...(result.ok ? result.data as Record<string, unknown> : {}), ...parsed });
+      if (result.ok) {
+        bus.emit('raid:entry:added', { ...(result.data as Record<string, unknown>), ...parsed });
+      }
       if (ack) ack(result);
     });
 
@@ -1942,15 +1944,16 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         // Re-read full gate row so the broadcast includes all fields the UI needs
         // (id, phase, building_id, status, signoff_*, etc.)
         const fullGate = getDb().prepare('SELECT * FROM phase_gates WHERE id = ?').get(parsed.gateId) as Record<string, unknown> | undefined;
-        const broadcastData = {
-          ...fullGate,
-          // Include signoff metadata from result
-          phaseAdvanced: signoffData.phaseAdvanced,
-          nextPhase: signoffData.nextPhase,
-          // Parse JSON fields for the frontend
-          signoff_conditions: safeJsonParse(fullGate?.signoff_conditions as string, []),
-          next_phase_input: safeJsonParse(fullGate?.next_phase_input as string, {}),
-        };
+        const broadcastData = fullGate
+          ? {
+              ...fullGate,
+              gateId: parsed.gateId,
+              phaseAdvanced: signoffData.phaseAdvanced,
+              nextPhase: signoffData.nextPhase,
+              signoff_conditions: safeJsonParse(fullGate.signoff_conditions as string, []),
+              next_phase_input: safeJsonParse(fullGate.next_phase_input as string, {}),
+            }
+          : { ...(signoffData as unknown as Record<string, unknown>), gateId: parsed.gateId };
         bus.emit('phase:gate:signed-off', broadcastData as Record<string, unknown>);
         // If GO verdict advanced the phase, emit phase:advanced for auto-room provisioning
         if (signoffData.phaseAdvanced && signoffData.nextPhase && gateRow) {

@@ -1412,37 +1412,13 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     async updateRaidStatus(params) {
-      const res = await _emitWithFeedback('raid:update', params);
-      if (res && res.ok) {
-        store.update('raid.entries', (entries) => {
-          const list = entries || [];
-          const idx = list.findIndex((e) => e.id === params.id);
-          if (idx >= 0) {
-            const next = [...list];
-            next[idx] = { ...next[idx], status: params.status };
-            return next;
-          }
-          return list;
-        });
-      }
-      return res;
+      // Don't update store here — the 'raid:entry:updated' broadcast listener handles it
+      return _emitWithFeedback('raid:update', params);
     },
 
     async editRaidEntry(params) {
-      const res = await _emitWithFeedback('raid:edit', params);
-      if (res && res.ok) {
-        store.update('raid.entries', (entries) => {
-          const list = entries || [];
-          const idx = list.findIndex((e) => e.id === params.id);
-          if (idx >= 0) {
-            const next = [...list];
-            next[idx] = { ...next[idx], ...res.data };
-            return next;
-          }
-          return list;
-        });
-      }
-      return res;
+      // Don't update store here — the 'raid:entry:updated' broadcast listener handles it
+      return _emitWithFeedback('raid:edit', params);
     },
 
     // ── Phase Gate methods ──
