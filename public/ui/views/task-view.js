@@ -231,7 +231,10 @@ export class TaskView extends Component {
   // ── Data fetching ──────────────────────────────────────────
 
   _fetchTasks() {
-    if (!this._buildingId || !window.overlordSocket) return;
+    if (!this._buildingId || !window.overlordSocket) {
+      this._loading = false;
+      return;
+    }
     window.overlordSocket.fetchTasks(this._buildingId);
   }
 
