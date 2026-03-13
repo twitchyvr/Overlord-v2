@@ -12,7 +12,7 @@
  *
  * Socket API:
  *   window.overlordSocket.advancePhase(buildingId)
- *   window.overlordSocket.signOffGate({ buildingId, gateId, verdict, reason })
+ *   window.overlordSocket.signoffGate({ gateId, reviewer, verdict, conditions })
  */
 
 import { Component } from '../engine/component.js';
