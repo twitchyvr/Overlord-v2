@@ -8,7 +8,7 @@
   "postCreateCommand": "npm install && npm run build",
 
   // Forward both the server port and potential Vite dev port
-  "forwardPorts": [4000, 5173],
+  "forwardPorts": [4080, 5173],
 
   "customizations": {
     "vscode": {
