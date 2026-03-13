@@ -51,6 +51,7 @@ import {
   TableSetContextSchema, TableGetContextSchema, TableClearContextSchema,
   TableGetAssignmentsSchema, TableDivideWorkSchema,
   AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema,
+  PlanSubmitSchema, PlanReviewSchema, PlanGetSchema, PlanListSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
@@ -978,8 +979,30 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         }
       }
 
-      // 4. Regular message — forward to bus (include threadId for persistence)
-      bus.emit('chat:message', { socketId: socket.id, ...parsed });
+      // 4. Process attachments — strip base64 data for storage, keep metadata
+      const attachmentsMeta = (parsed.attachments || []).map((att: Record<string, unknown>) => ({
+        id: att.id,
+        fileName: att.fileName,
+        mimeType: att.mimeType,
+        size: att.size,
+        url: att.url || null,
+      }));
+
+      // 5. Regular message — forward to bus (include threadId for persistence)
+      bus.emit('chat:message', {
+        socketId: socket.id,
+        ...parsed,
+        attachments: attachmentsMeta,
+      });
+
+      // Broadcast attachments to other clients (without base64 data)
+      if (attachmentsMeta.length > 0) {
+        io.emit('chat:attachments', {
+          threadId: parsed.threadId || '',
+          agentId: parsed.agentId || '',
+          attachments: attachmentsMeta,
+        });
+      }
 
       // Record message stats if sent by an agent
       if (parsed.agentId) {
@@ -1029,7 +1052,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     handle(socket, 'conversation:load', ConversationLoadSchema, (parsed, ack) => {
       const db = getDb();
       const messages = db.prepare(`
-        SELECT id, room_id, agent_id, role, content, tool_calls, thread_id, created_at
+        SELECT id, room_id, agent_id, role, content, tool_calls, attachments, thread_id, created_at
         FROM messages
         WHERE thread_id = ?
         ORDER BY created_at ASC
@@ -1037,13 +1060,17 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       `).all(parsed.threadId, parsed.limit || 100) as Array<{
         id: string; room_id: string; agent_id: string | null;
         role: string; content: string; tool_calls: string | null;
-        thread_id: string; created_at: string;
+        attachments: string | null; thread_id: string; created_at: string;
       }>;
 
       const formatted = messages.map((m) => {
         let toolCalls: unknown;
         if (m.tool_calls) {
           try { toolCalls = JSON.parse(m.tool_calls); } catch { /* corrupted — skip */ }
+        }
+        let attachments: unknown[] = [];
+        if (m.attachments) {
+          try { attachments = JSON.parse(m.attachments); } catch { /* corrupted — skip */ }
         }
         return {
           id: m.id,
@@ -1052,6 +1079,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
           role: m.role,
           content: m.content,
           toolCalls,
+          attachments,
           threadId: m.thread_id,
           timestamp: new Date(m.created_at).getTime(),
         };
@@ -1069,6 +1097,114 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       const db = getDb();
       db.prepare('DELETE FROM messages WHERE thread_id = ?').run(parsed.threadId);
       if (ack) ack({ ok: true });
+    });
+
+    // ─── Plan Events ───
+
+    handle(socket, 'plan:submit', PlanSubmitSchema, (parsed, ack) => {
+      const db = getDb();
+      const id = `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      db.prepare(`
+        INSERT INTO plans (id, building_id, room_id, agent_id, thread_id, title, rationale, steps, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+      `).run(
+        id,
+        parsed.buildingId || null,
+        parsed.roomId || null,
+        parsed.agentId,
+        parsed.threadId || null,
+        parsed.title,
+        parsed.rationale || null,
+        JSON.stringify(parsed.steps),
+      );
+
+      const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(id) as Record<string, unknown>;
+      log.info({ planId: id, agentId: parsed.agentId, title: parsed.title }, 'Plan submitted');
+      bus.emit('plan:submitted', plan);
+      io.emit('plan:submitted', { ...plan, steps: JSON.parse((plan.steps as string) || '[]') });
+      if (ack) ack({ ok: true, data: { ...plan, steps: JSON.parse((plan.steps as string) || '[]') } });
+    });
+
+    handle(socket, 'plan:review', PlanReviewSchema, (parsed, ack) => {
+      const db = getDb();
+      const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(parsed.planId) as Record<string, unknown> | undefined;
+      if (!plan) {
+        if (ack) ack({ ok: false, error: { code: 'PLAN_NOT_FOUND', message: `Plan ${parsed.planId} does not exist`, retryable: false } });
+        return;
+      }
+
+      const statusMap: Record<string, string> = {
+        'approved': 'approved',
+        'rejected': 'rejected',
+        'changes-requested': 'changes-requested',
+      };
+
+      db.prepare(`
+        UPDATE plans SET status = ?, reviewed_by = ?, review_comment = ?, reviewed_at = datetime('now'), updated_at = datetime('now')
+        WHERE id = ?
+      `).run(statusMap[parsed.verdict], parsed.reviewer, parsed.comment || null, parsed.planId);
+
+      const updated = db.prepare('SELECT * FROM plans WHERE id = ?').get(parsed.planId) as Record<string, unknown>;
+      log.info({ planId: parsed.planId, verdict: parsed.verdict, reviewer: parsed.reviewer }, 'Plan reviewed');
+      bus.emit('plan:reviewed', updated);
+      io.emit('plan:reviewed', { ...updated, steps: JSON.parse((updated.steps as string) || '[]') });
+
+      // If approved, auto-create tasks from plan steps
+      if (parsed.verdict === 'approved' && updated.building_id) {
+        const steps = JSON.parse((updated.steps as string) || '[]') as Array<{ id: string; description: string }>;
+        const parentTaskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+        // Create parent task for the plan
+        db.prepare(`
+          INSERT INTO tasks (id, building_id, title, description, status, assignee_id, phase, priority)
+          VALUES (?, ?, ?, ?, 'pending', ?, 'execution', 'normal')
+        `).run(parentTaskId, updated.building_id, updated.title, updated.rationale || '', updated.agent_id);
+
+        // Create child tasks for each step
+        for (const step of steps) {
+          const stepTaskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          db.prepare(`
+            INSERT INTO tasks (id, building_id, title, status, parent_id, assignee_id, phase, priority)
+            VALUES (?, ?, ?, 'pending', ?, ?, 'execution', 'normal')
+          `).run(stepTaskId, updated.building_id, step.description, parentTaskId, updated.agent_id);
+        }
+
+        log.info({ planId: parsed.planId, parentTaskId, stepCount: steps.length }, 'Tasks created from approved plan');
+        bus.emit('task:created', { planId: parsed.planId, parentTaskId });
+      }
+
+      if (ack) ack({ ok: true, data: { ...updated, steps: JSON.parse((updated.steps as string) || '[]') } });
+    });
+
+    handle(socket, 'plan:get', PlanGetSchema, (parsed, ack) => {
+      const db = getDb();
+      const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(parsed.planId) as Record<string, unknown> | undefined;
+      if (!plan) {
+        if (ack) ack({ ok: false, error: { code: 'PLAN_NOT_FOUND', message: `Plan ${parsed.planId} does not exist`, retryable: false } });
+        return;
+      }
+      if (ack) ack({ ok: true, data: { ...plan, steps: JSON.parse((plan.steps as string) || '[]') } });
+    });
+
+    handle(socket, 'plan:list', PlanListSchema, (parsed, ack) => {
+      const db = getDb();
+      let sql = 'SELECT * FROM plans WHERE 1=1';
+      const params: unknown[] = [];
+
+      if (parsed.buildingId) { sql += ' AND building_id = ?'; params.push(parsed.buildingId); }
+      if (parsed.agentId) { sql += ' AND agent_id = ?'; params.push(parsed.agentId); }
+      if (parsed.status) { sql += ' AND status = ?'; params.push(parsed.status); }
+      if (parsed.threadId) { sql += ' AND thread_id = ?'; params.push(parsed.threadId); }
+
+      sql += ' ORDER BY created_at DESC';
+
+      const plans = (db.prepare(sql).all(...params) as Array<Record<string, unknown>>).map((p) => ({
+        ...p,
+        steps: JSON.parse((p.steps as string) || '[]'),
+      }));
+
+      if (ack) ack({ ok: true, data: plans });
     });
 
     // ─── Phase Events ───
@@ -1860,6 +1996,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('floor:sorted');
   forward('room:updated');
   forward('room:deleted');
+  forward('plan:submitted');
+  forward('plan:reviewed');
 
   log.info('Transport layer initialized');
   broadcastLog('info', 'Transport layer initialized', 'transport');

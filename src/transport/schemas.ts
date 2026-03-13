@@ -257,6 +257,18 @@ export const AgentGenerateProfileSchema = z.object({
 
 // ─── Chat Schemas ───
 
+/** Attachment metadata sent with chat messages */
+const AttachmentSchema = z.object({
+  id: z.string().max(MAX_ID),
+  fileName: z.string().max(MAX_NAME),
+  mimeType: z.string().max(200),
+  size: z.number().int().min(0).max(50_000_000),
+  /** Base64-encoded file content (max ~10MB encoded) */
+  data: z.string().max(14_000_000).optional(),
+  /** Server-side URL after upload */
+  url: z.string().max(2000).optional(),
+});
+
 export const ChatMessageSchema = z.object({
   text: z.string().max(MAX_TEXT).optional().default(''),
   tokens: z.array(z.object({
@@ -266,6 +278,7 @@ export const ChatMessageSchema = z.object({
     label: z.string().max(MAX_NAME).optional().default(''),
     value: z.string().max(MAX_NAME).optional().default(''),
   }).passthrough()).max(MAX_ARRAY_ITEMS).optional().default([]),
+  attachments: z.array(AttachmentSchema).max(10).optional().default([]),
   buildingId: z.string().max(MAX_ID).optional().default(''),
   roomId: z.string().max(MAX_ID).optional().default(''),
   agentId: z.string().max(MAX_ID).optional().default(''),
@@ -593,4 +606,40 @@ export const AgentLeaderboardSchema = z.object({
   metric: z.string().max(MAX_NAME),
   limit: z.number().int().min(1).max(50).optional().default(10),
   buildingId: optionalId(),
+});
+
+// ─── Plan Schemas ───
+
+const PlanStepSchema = z.object({
+  id: z.string().max(MAX_ID),
+  description: z.string().min(1).max(MAX_DESCRIPTION),
+  status: z.enum(['pending', 'in-progress', 'done', 'skipped']).optional().default('pending'),
+});
+
+export const PlanSubmitSchema = z.object({
+  buildingId: optionalId(),
+  roomId: optionalId(),
+  agentId: id(),
+  threadId: z.string().max(MAX_ID).optional().default(''),
+  title: name(),
+  rationale: optionalDescription(),
+  steps: z.array(PlanStepSchema).min(1).max(100),
+});
+
+export const PlanReviewSchema = z.object({
+  planId: id(),
+  verdict: z.enum(['approved', 'rejected', 'changes-requested']),
+  comment: z.string().max(MAX_DESCRIPTION).optional().default(''),
+  reviewer: z.string().max(MAX_NAME).optional().default('user'),
+});
+
+export const PlanGetSchema = z.object({
+  planId: id(),
+});
+
+export const PlanListSchema = z.object({
+  buildingId: optionalId(),
+  agentId: optionalId(),
+  status: z.string().max(MAX_NAME).optional(),
+  threadId: z.string().max(MAX_ID).optional(),
 });

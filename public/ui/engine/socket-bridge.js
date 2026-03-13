@@ -163,6 +163,26 @@ export function initSocketBridge(socket, store, engine) {
     }
   });
 
+  // Plan events
+  socket.on('plan:submitted', (data) => {
+    store.update('plans.list', (plans) => [data, ...(plans || [])]);
+    store.update('activity.items', (items) => [{ event: 'plan:submitted', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('plan:submitted', data);
+    engine.dispatch('activity:new', { event: 'plan:submitted', ...data });
+  });
+
+  socket.on('plan:reviewed', (data) => {
+    store.update('plans.list', (plans) => (plans || []).map((p) => p.id === data.id ? data : p));
+    store.update('activity.items', (items) => [{ event: 'plan:reviewed', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('plan:reviewed', data);
+    engine.dispatch('activity:new', { event: 'plan:reviewed', ...data });
+  });
+
+  // Attachment broadcast (other clients)
+  socket.on('chat:attachments', (data) => {
+    engine.dispatch('chat:attachments', data);
+  });
+
   socket.on('tool:executed', (data) => {
     store.update('activity.items', (items) => [{ event: 'tool:executed', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('tool:executed', data);
@@ -998,14 +1018,15 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     sendMessage(params) {
-      const { content, text, agentId, tokens, buildingId, roomId } = params;
+      const { content, text, agentId, tokens, buildingId, roomId, attachments } = params;
       const messageText = text || content || '';
       const activeRoom = roomId || store.get('rooms.active') || '';
       const activeBuilding = buildingId || store.get('building.active') || '';
       const threadId = store.get('conversations.active') || '';
-      store.update('chat.messages', (msgs) => [...(msgs || []), { id: Date.now().toString(), role: 'user', content: messageText, agentId, type: 'user', timestamp: Date.now() }]);
+      const attachMeta = (attachments || []).map((a) => ({ id: a.id, fileName: a.fileName, mimeType: a.mimeType, size: a.size }));
+      store.update('chat.messages', (msgs) => [...(msgs || []), { id: Date.now().toString(), role: 'user', content: messageText, agentId, attachments: attachMeta, type: 'user', timestamp: Date.now() }]);
       store.set('ui.processing', true);
-      socket.emit('chat:message', { text: messageText, agentId: agentId || '', tokens: tokens || [], buildingId: activeBuilding, roomId: activeRoom, threadId });
+      socket.emit('chat:message', { text: messageText, agentId: agentId || '', tokens: tokens || [], attachments: attachments || [], buildingId: activeBuilding, roomId: activeRoom, threadId });
     },
 
     // ── Conversation methods ──
@@ -1033,6 +1054,7 @@ export function initSocketBridge(socket, store, engine) {
               content: m.content,
               agentId: m.agentId,
               toolCalls: m.toolCalls,
+              attachments: m.attachments || [],
               type: m.role === 'user' ? 'user' : 'response',
               timestamp: m.timestamp,
             }));
@@ -1071,6 +1093,33 @@ export function initSocketBridge(socket, store, engine) {
             // Refresh list
             const buildingId = store.get('building.active') || '';
             this.fetchConversations(buildingId);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    // ── Plan methods ──
+
+    submitPlan(params) {
+      return _emitWithFeedback('plan:submit', params);
+    },
+
+    reviewPlan(planId, verdict, comment, reviewer) {
+      return _emitWithFeedback('plan:review', { planId, verdict, comment: comment || '', reviewer: reviewer || 'user' });
+    },
+
+    fetchPlan(planId) {
+      return new Promise((resolve) => {
+        socket.emit('plan:get', { planId }, (res) => resolve(res));
+      });
+    },
+
+    fetchPlans(filters) {
+      return new Promise((resolve) => {
+        socket.emit('plan:list', filters || {}, (res) => {
+          if (res && res.ok) {
+            store.set('plans.list', res.data);
           }
           resolve(res);
         });
