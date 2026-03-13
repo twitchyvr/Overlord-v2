@@ -124,9 +124,11 @@ export class BuildingView extends Component {
     if (this._buildingData.working_directory || this._buildingData.repo_url) {
       const projectInfo = h('div', { class: 'building-project-info' });
       if (this._buildingData.working_directory) {
-        projectInfo.appendChild(h('div', { class: 'building-project-path mono' },
+        const fullPath = this._buildingData.working_directory;
+        const shortPath = fullPath.split('/').filter(Boolean).pop() || fullPath;
+        projectInfo.appendChild(h('div', { class: 'building-project-path mono', title: fullPath },
           h('span', { class: 'building-project-icon' }, '\u{1F4C1}'),
-          this._buildingData.working_directory
+          shortPath
         ));
       }
       if (this._buildingData.repo_url) {
@@ -216,7 +218,7 @@ export class BuildingView extends Component {
       h('span', { class: 'floor-bar-name', title: floorLabel }, floorLabel),
       h('span', { class: 'floor-bar-meta-row' },
         h('span', { class: 'floor-bar-type' }, floorType),
-        h('span', { class: 'floor-bar-rooms' }, `${roomCount} rm`)
+        h('span', { class: 'floor-bar-rooms' }, `${roomCount} room${roomCount !== 1 ? 's' : ''}`)
       )
     );
     bar.appendChild(infoRow);
