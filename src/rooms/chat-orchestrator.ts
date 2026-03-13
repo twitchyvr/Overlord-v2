@@ -249,14 +249,21 @@ async function handleChatMessage(
       status: 'thinking',
     });
 
-    // 8. Resolve building working directory for tool scoping
+    // 8. Resolve building working directory and allowed paths for tool scoping
     let workingDirectory: string | undefined;
+    let allowedPaths: string[] = [];
     if (buildingId) {
       try {
         const db = getDb();
-        const building = db.prepare('SELECT working_directory FROM buildings WHERE id = ?').get(buildingId) as Pick<BuildingRow, 'working_directory'> | undefined;
+        const building = db.prepare('SELECT working_directory, allowed_paths FROM buildings WHERE id = ?').get(buildingId) as Pick<BuildingRow, 'working_directory' | 'allowed_paths'> | undefined;
         if (building?.working_directory) {
           workingDirectory = building.working_directory;
+        }
+        if (building?.allowed_paths) {
+          try {
+            const parsed = JSON.parse(building.allowed_paths);
+            if (Array.isArray(parsed)) allowedPaths = parsed;
+          } catch { /* malformed JSON — use empty array */ }
         }
       } catch {
         // DB not ready — not fatal, tools will use process.cwd()
@@ -293,6 +300,7 @@ async function handleChatMessage(
       tools,
       bus,
       workingDirectory,
+      allowedPaths,
       options: {
         buildingId,
         socketId,

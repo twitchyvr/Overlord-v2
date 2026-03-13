@@ -79,6 +79,8 @@ interface ConversationParams {
   options?: Record<string, unknown>;
   /** Building's project working directory — scopes file/shell tools */
   workingDirectory?: string;
+  /** Additional paths the building has been granted access to */
+  allowedPaths?: string[];
 }
 
 /**
@@ -300,6 +302,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
               agentId,
               fileScope: room.fileScope,
               workingDirectory: params.workingDirectory,
+              allowedPaths: params.allowedPaths,
             },
           }),
           TOOL_TIMEOUT_MS,

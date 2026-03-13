@@ -9,6 +9,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { resolve as resolvePath } from 'node:path';
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
 import { ok, err, safeJsonParse } from '../core/contracts.js';
@@ -37,6 +38,7 @@ interface CreateBuildingParams {
   projectId?: string;
   workingDirectory?: string;
   repoUrl?: string;
+  allowedPaths?: string[];
   config?: Record<string, unknown>;
   provisionFloors?: boolean;
 }
@@ -45,14 +47,14 @@ interface CreateBuildingParams {
  * Create a new building (project container).
  * By default provisions all standard floors.
  */
-export function createBuilding({ name, projectId, workingDirectory, repoUrl, config = {}, provisionFloors = true }: CreateBuildingParams): Result {
+export function createBuilding({ name, projectId, workingDirectory, repoUrl, allowedPaths = [], config = {}, provisionFloors = true }: CreateBuildingParams): Result {
   const db = getDb();
   const id = uid('bld');
 
   db.prepare(`
-    INSERT INTO buildings (id, project_id, name, working_directory, repo_url, config)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, projectId || null, name, workingDirectory || null, repoUrl || null, JSON.stringify(config));
+    INSERT INTO buildings (id, project_id, name, working_directory, repo_url, allowed_paths, config)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, projectId || null, name, workingDirectory || null, repoUrl || null, JSON.stringify(allowedPaths), JSON.stringify(config));
 
   const floorIds: string[] = [];
 
@@ -69,7 +71,7 @@ export function createBuilding({ name, projectId, workingDirectory, repoUrl, con
   }
 
   log.info({ id, name, projectId, workingDirectory, repoUrl }, 'Building created');
-  return ok({ id, name, workingDirectory: workingDirectory || null, repoUrl: repoUrl || null, floorIds });
+  return ok({ id, name, workingDirectory: workingDirectory || null, repoUrl: repoUrl || null, allowedPaths, floorIds });
 }
 
 /**
@@ -108,7 +110,7 @@ export function listBuildings(projectId?: string): Result {
 /**
  * Update a building's config or name (atomic single UPDATE)
  */
-export function updateBuilding(buildingId: string, updates: { name?: string; workingDirectory?: string; repoUrl?: string; config?: Record<string, unknown> }): Result {
+export function updateBuilding(buildingId: string, updates: { name?: string; workingDirectory?: string; repoUrl?: string; allowedPaths?: string[]; config?: Record<string, unknown> }): Result {
   const db = getDb();
   const building = db.prepare('SELECT * FROM buildings WHERE id = ?').get(buildingId) as BuildingRow | undefined;
   if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
@@ -118,6 +120,7 @@ export function updateBuilding(buildingId: string, updates: { name?: string; wor
       name = COALESCE(?, name),
       working_directory = COALESCE(?, working_directory),
       repo_url = COALESCE(?, repo_url),
+      allowed_paths = COALESCE(?, allowed_paths),
       config = COALESCE(?, config),
       updated_at = datetime('now')
     WHERE id = ?
@@ -125,12 +128,61 @@ export function updateBuilding(buildingId: string, updates: { name?: string; wor
     updates.name || null,
     updates.workingDirectory !== undefined ? (updates.workingDirectory || null) : null,
     updates.repoUrl !== undefined ? (updates.repoUrl || null) : null,
+    updates.allowedPaths ? JSON.stringify(updates.allowedPaths) : null,
     updates.config ? JSON.stringify(updates.config) : null,
     buildingId,
   );
 
   log.info({ buildingId, updates: Object.keys(updates) }, 'Building updated');
   return ok({ buildingId });
+}
+
+/**
+ * Add an allowed path to a building's permission list.
+ * Returns a warning if the path is dangerous (but still adds it).
+ */
+export function addAllowedPath(buildingId: string, pathToAdd: string): Result {
+  const db = getDb();
+  const building = db.prepare('SELECT * FROM buildings WHERE id = ?').get(buildingId) as BuildingRow | undefined;
+  if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
+
+  const resolvedPath = resolvePath(pathToAdd);
+
+  const current: string[] = safeJsonParse(building.allowed_paths, []);
+  if (current.includes(resolvedPath)) {
+    return ok({ buildingId, path: resolvedPath, action: 'already_exists', allowedPaths: current });
+  }
+
+  current.push(resolvedPath);
+  db.prepare('UPDATE buildings SET allowed_paths = ?, updated_at = datetime(\'now\') WHERE id = ?')
+    .run(JSON.stringify(current), buildingId);
+
+  log.info({ buildingId, path: resolvedPath }, 'Allowed path added');
+  return ok({ buildingId, path: resolvedPath, action: 'added', allowedPaths: current });
+}
+
+/**
+ * Remove an allowed path from a building's permission list.
+ */
+export function removeAllowedPath(buildingId: string, pathToRemove: string): Result {
+  const db = getDb();
+  const building = db.prepare('SELECT * FROM buildings WHERE id = ?').get(buildingId) as BuildingRow | undefined;
+  if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
+
+  const resolvedPath = resolvePath(pathToRemove);
+
+  const current: string[] = safeJsonParse(building.allowed_paths, []);
+  const filtered = current.filter((p) => p !== resolvedPath);
+
+  if (filtered.length === current.length) {
+    return err('PATH_NOT_FOUND', `Path "${resolvedPath}" is not in the allowed list`);
+  }
+
+  db.prepare('UPDATE buildings SET allowed_paths = ?, updated_at = datetime(\'now\') WHERE id = ?')
+    .run(JSON.stringify(filtered), buildingId);
+
+  log.info({ buildingId, path: resolvedPath }, 'Allowed path removed');
+  return ok({ buildingId, path: resolvedPath, action: 'removed', allowedPaths: filtered });
 }
 
 // ─── Floors ───

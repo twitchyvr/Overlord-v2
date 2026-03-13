@@ -138,7 +138,7 @@ function registerBuiltinTools(): void {
       required: ['path'],
     },
     execute: async (p, ctx) => {
-      const result = await readFileImpl({ path: p.path as string, cwd: ctx?.workingDirectory });
+      const result = await readFileImpl({ path: p.path as string, cwd: ctx?.workingDirectory, allowedPaths: ctx?.allowedPaths });
       return { output: result.content, path: result.path, size: result.size };
     },
   });
@@ -156,7 +156,7 @@ function registerBuiltinTools(): void {
       required: ['path', 'content'],
     },
     execute: async (p, ctx) => {
-      const result = await writeFileImpl({ path: p.path as string, content: p.content as string, cwd: ctx?.workingDirectory });
+      const result = await writeFileImpl({ path: p.path as string, content: p.content as string, cwd: ctx?.workingDirectory, allowedPaths: ctx?.allowedPaths });
       return { output: `Written ${result.bytesWritten} bytes to ${result.path}`, path: result.path };
     },
   });
@@ -180,6 +180,7 @@ function registerBuiltinTools(): void {
         search: p.search as string,
         replace: p.replace as string,
         cwd: ctx?.workingDirectory,
+        allowedPaths: ctx?.allowedPaths,
       });
       if (!result.matched) {
         return { output: `Search string not found in ${result.path}`, matched: false };
@@ -198,7 +199,7 @@ function registerBuiltinTools(): void {
       required: ['path'],
     },
     execute: async (p, ctx) => {
-      const result = await listDirImpl({ path: p.path as string, cwd: ctx?.workingDirectory });
+      const result = await listDirImpl({ path: p.path as string, cwd: ctx?.workingDirectory, allowedPaths: ctx?.allowedPaths });
       const listing = result.entries
         .map((e) => `${e.type === 'directory' ? '[dir]' : `[${e.size}B]`} ${e.name}`)
         .join('\n');

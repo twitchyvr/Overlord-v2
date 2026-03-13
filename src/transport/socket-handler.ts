@@ -16,7 +16,8 @@ import type { Bus } from '../core/bus.js';
 import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { AgentSession } from '../agents/agent-session.js';
-import { createBuilding, getBuilding, listBuildings, updateBuilding, listFloors, getFloor, createFloor, updateFloor, deleteFloor, sortFloors } from '../rooms/building-manager.js';
+import { createBuilding, getBuilding, listBuildings, updateBuilding, addAllowedPath, removeAllowedPath, listFloors, getFloor, createFloor, updateFloor, deleteFloor, sortFloors } from '../rooms/building-manager.js';
+import { getGitInfo, initGitRepo, cloneGitRepo } from '../tools/git-detector.js';
 import { getGates, canAdvance, signoffGate, createGate, getPendingGates, resolveConditions, getStalePendingGates, getPhaseOrder } from '../rooms/phase-gate.js';
 import { searchRaid, addRaidEntry, updateRaidEntry, updateRaidStatus } from '../rooms/raid-log.js';
 import { submitExitDocument } from '../rooms/room-manager.js';
@@ -30,6 +31,8 @@ import type { z } from 'zod';
 import {
   validate,
   BuildingCreateSchema, BuildingGetSchema, BuildingListSchema, BuildingApplyBlueprintSchema, BuildingUpdateSchema,
+  FolderAddPathSchema, FolderRemovePathSchema, FolderListPathsSchema,
+  GitDetectSchema, GitInitSchema, GitCloneSchema,
   FloorListSchema, FloorGetSchema, FloorCreateSchema, FloorUpdateSchema, FloorDeleteSchema, FloorSortSchema,
   RoomCreateSchema, RoomGetSchema, RoomEnterSchema, RoomExitSchema, RoomUpdateSchema, RoomDeleteSchema,
   TableCreateSchema, TableListSchema, TableUpdateSchema, TableDeleteSchema, AgentMoveSchema,
@@ -215,6 +218,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         name: parsed.name,
         workingDirectory: parsed.workingDirectory,
         repoUrl: parsed.repoUrl,
+        allowedPaths: parsed.allowedPaths,
         config: parsed.config,
       });
       if (result.ok) {
@@ -227,6 +231,62 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         });
       }
       if (ack) ack(result);
+    });
+
+    // ─── Folder / Path Permission Events ───
+
+    handle(socket, 'folder:add-path', FolderAddPathSchema, (parsed, ack) => {
+      const result = addAllowedPath(parsed.buildingId, parsed.path);
+      if (result.ok) {
+        const data = result.data as { allowedPaths: string[] };
+        broadcastLog('info', `Allowed path added: ${parsed.path}`, 'building');
+        bus.emit('building:updated', { id: parsed.buildingId, allowedPaths: data.allowedPaths });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'folder:remove-path', FolderRemovePathSchema, (parsed, ack) => {
+      const result = removeAllowedPath(parsed.buildingId, parsed.path);
+      if (result.ok) {
+        const data = result.data as { allowedPaths: string[] };
+        broadcastLog('info', `Allowed path removed: ${parsed.path}`, 'building');
+        bus.emit('building:updated', { id: parsed.buildingId, allowedPaths: data.allowedPaths });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'folder:list-paths', FolderListPathsSchema, (parsed, ack) => {
+      const buildingResult = getBuilding(parsed.buildingId);
+      if (!buildingResult.ok) {
+        if (ack) ack(buildingResult);
+        return;
+      }
+      const building = buildingResult.data as Record<string, unknown>;
+      const allowedPaths = safeJsonParse(building.allowed_paths as string, []);
+      if (ack) ack({ ok: true, data: { buildingId: parsed.buildingId, allowedPaths } });
+    });
+
+    // ─── Git Detection Events ───
+
+    handle(socket, 'git:detect', GitDetectSchema, (parsed, ack) => {
+      const info = getGitInfo(parsed.path);
+      if (ack) ack({ ok: true, data: info });
+    });
+
+    handle(socket, 'git:init', GitInitSchema, (parsed, ack) => {
+      const result = initGitRepo(parsed.path);
+      if (result.success) {
+        broadcastLog('info', `Git repo initialized: ${parsed.path}`, 'git');
+      }
+      if (ack) ack({ ok: result.success, data: result, error: result.success ? undefined : { code: 'GIT_INIT_FAILED', message: result.message } });
+    });
+
+    handle(socket, 'git:clone', GitCloneSchema, (parsed, ack) => {
+      const result = cloneGitRepo(parsed.url, parsed.targetDir);
+      if (result.success) {
+        broadcastLog('info', `Git repo cloned: ${parsed.url} → ${parsed.targetDir}`, 'git');
+      }
+      if (ack) ack({ ok: result.success, data: result, error: result.success ? undefined : { code: 'GIT_CLONE_FAILED', message: result.message } });
     });
 
     handle(socket, 'building:apply-blueprint', BuildingApplyBlueprintSchema, (parsed, ack) => {

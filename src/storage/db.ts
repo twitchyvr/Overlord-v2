@@ -26,6 +26,7 @@ const SCHEMA_SQL = `
     name TEXT NOT NULL,
     working_directory TEXT,
     repo_url TEXT,
+    allowed_paths TEXT DEFAULT '[]',
     config TEXT DEFAULT '{}',
     active_phase TEXT DEFAULT 'strategy',
     created_at TEXT DEFAULT (datetime('now')),
@@ -352,6 +353,7 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['tables_v2', 'config', "TEXT DEFAULT '{}'"],
   ['buildings', 'working_directory', 'TEXT'],
   ['buildings', 'repo_url', 'TEXT'],
+  ['buildings', 'allowed_paths', "TEXT DEFAULT '[]'"],
   ['messages', 'attachments', "TEXT DEFAULT '[]'"],
 ];
 
