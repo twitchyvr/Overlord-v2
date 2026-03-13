@@ -24,6 +24,7 @@ import { Button } from '../components/button.js';
 import { Modal } from '../components/modal.js';
 import { Drawer } from '../components/drawer.js';
 import { Toast } from '../components/toast.js';
+import { EntityLink, resolveAgent } from '../engine/entity-nav.js';
 
 
 const RAID_TYPES = ['risk', 'assumption', 'issue', 'decision'];
@@ -364,15 +365,21 @@ export class RaidLogView extends Component {
       ));
     }
     if (entry.decided_by) {
+      const decidedAgent = resolveAgent(entry.decided_by);
       infoSection.appendChild(h('div', { class: 'raid-detail-info-row' },
         h('span', { class: 'raid-detail-label' }, 'Decided By'),
-        h('span', null, entry.decided_by)
+        decidedAgent && decidedAgent.id !== entry.decided_by
+          ? EntityLink.agent(decidedAgent.id, decidedAgent.name)
+          : EntityLink.agent(entry.decided_by, entry.decided_by)
       ));
     }
     if (entry.approved_by) {
+      const approvedAgent = resolveAgent(entry.approved_by);
       infoSection.appendChild(h('div', { class: 'raid-detail-info-row' },
         h('span', { class: 'raid-detail-label' }, 'Approved By'),
-        h('span', null, entry.approved_by)
+        approvedAgent && approvedAgent.id !== entry.approved_by
+          ? EntityLink.agent(approvedAgent.id, approvedAgent.name)
+          : EntityLink.agent(entry.approved_by, entry.approved_by)
       ));
     }
     if (entry.created_at) {

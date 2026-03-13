@@ -2780,6 +2780,58 @@
   padding: 6px 0;
 }
 
+/* Agent avatar photo support */
+.agent-detail-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Agent specialization subtitle */
+.agent-detail-specialization {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ── Agent Quick Actions Bar ── */
+.agent-detail-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.agent-quick-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-default);
+  white-space: nowrap;
+}
+.agent-quick-action-btn:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-color: var(--border-accent);
+}
+.agent-quick-action-btn:active {
+  transform: scale(0.97);
+}
+.agent-quick-action-icon {
+  font-size: var(--text-sm);
+}
+.agent-quick-action-label {
+  font-weight: var(--font-medium);
+}
+
 /* ── Task Detail ── */
 
 .task-detail-header {
