@@ -61,14 +61,13 @@ export class DashboardView extends Component {
     this._raidEntries = store.get('raid.entries') || [];
     this._activeBuilding = store.get('building.active');
 
-    // If a building is active but agents/RAID data is missing, fetch it
-    if (this._activeBuilding && window.overlordSocket) {
-      if (this._agents.length === 0) {
-        window.overlordSocket.fetchAgents({});
-      }
-      if (this._raidEntries.length === 0) {
-        window.overlordSocket.fetchRaidEntries(this._activeBuilding);
-      }
+    // Agents are global — fetch on mount regardless of building selection
+    if (window.overlordSocket && this._agents.length === 0) {
+      window.overlordSocket.fetchAgents({});
+    }
+    // RAID entries are building-specific — fetch only when a building is active
+    if (this._activeBuilding && window.overlordSocket && this._raidEntries.length === 0) {
+      window.overlordSocket.fetchRaidEntries(this._activeBuilding);
     }
 
     this.render();
@@ -124,7 +123,7 @@ export class DashboardView extends Component {
       },
       {
         label: 'Agents',
-        value: this._agents.length,
+        value: this._getAgentCount(),
         icon: '\u{1F916}',
         color: 'var(--accent-green)'
       },
@@ -236,13 +235,19 @@ export class DashboardView extends Component {
     return 'None';
   }
 
+  _getAgentCount() {
+    // Use fetched agent list when available; fall back to building-level counts
+    if (this._agents.length > 0) return this._agents.length;
+    return this._buildings.reduce((sum, b) => sum + (b.agentCount ?? b.agent_count ?? 0), 0);
+  }
+
   _updateKPIs() {
     // Lightweight KPI update without full re-render
     const kpiValues = this.el.querySelectorAll('.kpi-card-value');
     if (kpiValues.length >= 4) {
       kpiValues[0].textContent = String(this._buildings.length);
       kpiValues[1].textContent = this._getActivePhase();
-      kpiValues[2].textContent = String(this._agents.length);
+      kpiValues[2].textContent = String(this._getAgentCount());
       kpiValues[3].textContent = String(this._raidEntries.length);
     }
   }
