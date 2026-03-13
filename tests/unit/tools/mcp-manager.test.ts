@@ -12,7 +12,7 @@ import { EventEmitter } from 'eventemitter3';
 // ─── Mocks ───
 
 // Track registered tools
-const registeredTools = new Map<string, { name: string; description: string; execute: Function }>();
+const registeredTools = new Map<string, { name: string; description: string; execute: (...args: unknown[]) => unknown }>();
 
 const mockToolRegistry = {
   registerTool: vi.fn((def: { name: string; description: string }) => {
@@ -149,7 +149,7 @@ import {
 function createMockBus() {
   const emitter = new EventEmitter();
   const bus = {
-    on: vi.fn((event: string, handler: Function) => {
+    on: vi.fn((event: string, handler: (...args: unknown[]) => unknown) => {
       emitter.on(event, handler as any);
     }),
     emit: vi.fn((event: string, data?: any) => {
