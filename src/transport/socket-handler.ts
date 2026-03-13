@@ -197,7 +197,9 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         projectId: parsed.projectId,
         workingDirectory: parsed.workingDirectory,
         repoUrl: parsed.repoUrl,
-        config: {},
+        config: {
+          ...(parsed.effortLevel ? { effortLevel: parsed.effortLevel } : {}),
+        },
       });
       if (result.ok) {
         const buildingData = result.data as { id: string; name: string; workingDirectory: string | null; repoUrl: string | null; floorIds: string[] };

@@ -41,10 +41,11 @@ describe('StrategistOffice', () => {
       expect(contract.tools).not.toContain('bash');
     });
 
-    it('requires building-blueprint exit template with 6 fields', () => {
+    it('requires building-blueprint exit template with 7 fields (including effortLevel)', () => {
       expect(contract.exitRequired.type).toBe('building-blueprint');
-      expect(contract.exitRequired.fields).toHaveLength(6);
+      expect(contract.exitRequired.fields).toHaveLength(7);
       expect(contract.exitRequired.fields).toEqual([
+        'effortLevel',
         'projectGoals',
         'successCriteria',
         'floorsNeeded',
@@ -178,6 +179,7 @@ describe('StrategistOffice', () => {
     it('validates complete exit document (building blueprint)', () => {
       const room = new StrategistOffice('room_1');
       const result = room.validateExitDocument({
+        effortLevel: 'medium',
         projectGoals: ['Build a task manager'],
         successCriteria: ['Users can create tasks'],
         floorsNeeded: ['collaboration', 'execution'],
@@ -286,6 +288,116 @@ describe('StrategistOffice', () => {
     it('accepts exit doc with all valid fields (happy path value validation)', () => {
       const room = new StrategistOffice('room_test');
       const result = room.validateExitDocumentValues(validDoc);
+      expect(result.ok).toBe(true);
+    });
+  });
+
+  describe('effortLevel validation', () => {
+    const validDoc = {
+      projectGoals: ['Build a web app'],
+      successCriteria: ['100% test coverage'],
+      floorsNeeded: ['strategy', 'execution'],
+      roomConfig: [{ floor: 'execution', rooms: ['code-lab'] }],
+      agentRoster: [{ name: 'Dev', role: 'developer', rooms: ['code-lab'] }],
+      estimatedPhases: ['discovery', 'execution'],
+    };
+
+    it('accepts effortLevel "easy"', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, effortLevel: 'easy' });
+      expect(result.ok).toBe(true);
+    });
+
+    it('accepts effortLevel "medium"', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, effortLevel: 'medium' });
+      expect(result.ok).toBe(true);
+    });
+
+    it('accepts effortLevel "advanced"', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, effortLevel: 'advanced' });
+      expect(result.ok).toBe(true);
+    });
+
+    it('rejects invalid effortLevel value', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, effortLevel: 'extreme' });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('effortLevel');
+    });
+
+    it('accepts exit doc without effortLevel (optional)', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues(validDoc);
+      expect(result.ok).toBe(true);
+    });
+  });
+
+  describe('effortLevel in blueprint builder', () => {
+    it('buildBlueprintFromTemplate includes effortLevel from overrides', () => {
+      const blueprint = StrategistOffice.buildBlueprintFromTemplate('web-app', {
+        projectGoals: ['Build a dashboard'],
+        successCriteria: ['Loads in under 2s'],
+        effortLevel: 'easy',
+      });
+      expect(blueprint).not.toBeNull();
+      expect(blueprint!.effortLevel).toBe('easy');
+    });
+
+    it('buildBlueprintFromTemplate defaults effortLevel to "medium"', () => {
+      const blueprint = StrategistOffice.buildBlueprintFromTemplate('web-app', {
+        projectGoals: ['Build an app'],
+        successCriteria: ['It works'],
+      });
+      expect(blueprint).not.toBeNull();
+      expect(blueprint!.effortLevel).toBe('medium');
+    });
+  });
+
+  describe('effortLevel in rules', () => {
+    it('getRules includes effort-level-aware instructions', () => {
+      const room = new StrategistOffice('room_test');
+      const rules = room.getRules();
+      expect(rules.some((r) => r.includes('EASY mode'))).toBe(true);
+      expect(rules.some((r) => r.includes('MEDIUM mode'))).toBe(true);
+      expect(rules.some((r) => r.includes('ADVANCED mode'))).toBe(true);
+    });
+
+    it('getRules mentions effortLevel setting', () => {
+      const room = new StrategistOffice('room_test');
+      const rules = room.getRules();
+      expect(rules.some((r) => r.includes('effortLevel'))).toBe(true);
+    });
+  });
+
+  describe('effortLevel in output format', () => {
+    it('getOutputFormat includes effortLevel field', () => {
+      const room = new StrategistOffice('room_test');
+      const format = room.getOutputFormat() as Record<string, unknown>;
+      expect(format).toHaveProperty('effortLevel');
+      expect(format.effortLevel).toContain('easy');
+      expect(format.effortLevel).toContain('medium');
+      expect(format.effortLevel).toContain('advanced');
+    });
+  });
+
+  describe('write tool blocking', () => {
+    it('blocks write_file in the Strategist Office (consultation-only)', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.onBeforeToolCall('write_file', 'agent_1', {});
+      expect(result.ok).toBe(false);
+    });
+
+    it('blocks bash in the Strategist Office', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.onBeforeToolCall('bash', 'agent_1', {});
+      expect(result.ok).toBe(false);
+    });
+
+    it('allows web_search in the Strategist Office', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.onBeforeToolCall('web_search', 'agent_1', {});
       expect(result.ok).toBe(true);
     });
   });

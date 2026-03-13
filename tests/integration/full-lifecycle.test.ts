@@ -151,6 +151,7 @@ describe('Full Lifecycle Integration', () => {
       roomId: stratRoomId,
       agentId,
       document: {
+        effortLevel: 'medium',
         projectGoals: ['Build task manager'],
         successCriteria: ['CRUD operations work'],
         floorsNeeded: ['collaboration', 'execution', 'governance'],

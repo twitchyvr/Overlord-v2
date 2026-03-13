@@ -181,6 +181,33 @@ describe('Building Schemas', () => {
       const result = BuildingCreateSchema.safeParse({ name: 'x'.repeat(501) });
       expect(result.success).toBe(false);
     });
+
+    it('accepts valid effortLevel "easy"', () => {
+      const result = BuildingCreateSchema.safeParse({ name: 'Test', effortLevel: 'easy' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.effortLevel).toBe('easy');
+    });
+
+    it('accepts valid effortLevel "medium"', () => {
+      const result = BuildingCreateSchema.safeParse({ name: 'Test', effortLevel: 'medium' });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts valid effortLevel "advanced"', () => {
+      const result = BuildingCreateSchema.safeParse({ name: 'Test', effortLevel: 'advanced' });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts omitted effortLevel (optional)', () => {
+      const result = BuildingCreateSchema.safeParse({ name: 'Test' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.effortLevel).toBeUndefined();
+    });
+
+    it('rejects invalid effortLevel value', () => {
+      const result = BuildingCreateSchema.safeParse({ name: 'Test', effortLevel: 'extreme' });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('BuildingGetSchema', () => {

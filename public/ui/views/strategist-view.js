@@ -127,7 +127,8 @@ export class StrategistView extends Component {
   constructor(el, opts = {}) {
     super(el, opts);
     this._selectedTemplate = null;
-    this._step = 'select'; // 'select' | 'configure' | 'creating'
+    this._step = 'select'; // 'select' | 'effort' | 'configure' | 'creating'
+    this._effortLevel = 'medium'; // 'easy' | 'medium' | 'advanced'
     this._projectName = '';
     this._projectGoals = '';
     this._successCriteria = '';
@@ -154,6 +155,9 @@ export class StrategistView extends Component {
     switch (this._step) {
       case 'select':
         this._renderTemplateSelection();
+        break;
+      case 'effort':
+        this._renderEffortSelection();
         break;
       case 'configure':
         this._renderConfiguration();
@@ -202,7 +206,7 @@ export class StrategistView extends Component {
 
       card.addEventListener('click', () => {
         this._selectedTemplate = template;
-        this._step = 'configure';
+        this._step = 'effort';
         this.render();
       });
 
@@ -210,6 +214,138 @@ export class StrategistView extends Component {
     }
 
     this.el.appendChild(grid);
+  }
+
+  _renderEffortSelection() {
+    const template = this._selectedTemplate;
+    if (!template) return;
+
+    // Header with back button
+    const header = h('div', { class: 'strategist-header' },
+      h('button', {
+        class: 'btn btn-ghost btn-sm',
+        onClick: () => { this._step = 'select'; this.render(); }
+      }, '\u2190 Back'),
+      h('h2', null, 'How much control do you want?'),
+      h('p', { class: 'strategist-subtitle' }, 'Choose how involved you want to be in the technical decisions.')
+    );
+    this.el.appendChild(header);
+
+    // Effort level cards
+    const LEVELS = [
+      {
+        id: 'easy',
+        name: 'Just Build It',
+        icon: '\u{1F7E2}',
+        description: 'Describe what you want in plain language. Overlord makes all the technical decisions for you.',
+        detail: 'Best for: Quick prototypes, non-technical users, "I know what I want but not how to build it"',
+      },
+      {
+        id: 'medium',
+        name: 'Guide Me',
+        icon: '\u{1F7E1}',
+        description: 'Overlord asks you targeted questions and explains options in simple terms. You make the key decisions.',
+        detail: 'Best for: Most projects, users who want input without technical jargon',
+      },
+      {
+        id: 'advanced',
+        name: 'Full Control',
+        icon: '\u{1F534}',
+        description: 'Complete access to all configuration. You specify architecture, tech stack, and implementation details.',
+        detail: 'Best for: Technical users, complex requirements, specific architectural needs',
+      },
+    ];
+
+    const grid = h('div', { class: 'effort-grid' });
+
+    for (const level of LEVELS) {
+      const isSelected = this._effortLevel === level.id;
+      const card = h('div', {
+        class: `effort-card ${isSelected ? 'selected' : ''}`,
+        role: 'radio',
+        'aria-checked': String(isSelected),
+        tabindex: '0',
+        'aria-label': `${level.name}: ${level.description}`,
+      },
+        h('div', { class: 'effort-card-icon' }, level.icon),
+        h('div', { class: 'effort-card-body' },
+          h('h3', { class: 'effort-card-name' }, level.name),
+          h('p', { class: 'effort-card-desc' }, level.description),
+          h('p', { class: 'effort-card-detail' }, level.detail),
+        ),
+        isSelected
+          ? h('div', { class: 'effort-card-check' }, '\u2713')
+          : null,
+      );
+
+      card.addEventListener('click', () => {
+        this._effortLevel = level.id;
+        this._renderEffortCards(grid, LEVELS);
+      });
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          this._effortLevel = level.id;
+          this._renderEffortCards(grid, LEVELS);
+        }
+      });
+
+      grid.appendChild(card);
+    }
+
+    this.el.appendChild(grid);
+
+    // Continue button
+    const actions = h('div', { class: 'strategist-actions' });
+    const continueBtn = Button.create('Continue', {
+      variant: 'primary',
+      size: 'lg',
+      icon: '\u2192',
+      onClick: () => {
+        this._step = 'configure';
+        this.render();
+      }
+    });
+    actions.appendChild(continueBtn);
+    this.el.appendChild(actions);
+  }
+
+  /** Re-render just the effort cards without rebuilding the whole page */
+  _renderEffortCards(grid, levels) {
+    grid.textContent = '';
+    for (const level of levels) {
+      const isSelected = this._effortLevel === level.id;
+      const card = h('div', {
+        class: `effort-card ${isSelected ? 'selected' : ''}`,
+        role: 'radio',
+        'aria-checked': String(isSelected),
+        tabindex: '0',
+        'aria-label': `${level.name}: ${level.description}`,
+      },
+        h('div', { class: 'effort-card-icon' }, level.icon),
+        h('div', { class: 'effort-card-body' },
+          h('h3', { class: 'effort-card-name' }, level.name),
+          h('p', { class: 'effort-card-desc' }, level.description),
+          h('p', { class: 'effort-card-detail' }, level.detail),
+        ),
+        isSelected
+          ? h('div', { class: 'effort-card-check' }, '\u2713')
+          : null,
+      );
+
+      card.addEventListener('click', () => {
+        this._effortLevel = level.id;
+        this._renderEffortCards(grid, levels);
+      });
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          this._effortLevel = level.id;
+          this._renderEffortCards(grid, levels);
+        }
+      });
+      grid.appendChild(card);
+    }
   }
 
   _renderConfiguration() {
@@ -220,10 +356,22 @@ export class StrategistView extends Component {
     const header = h('div', { class: 'strategist-header' },
       h('button', {
         class: 'btn btn-ghost btn-sm',
-        onClick: () => { this._step = 'select'; this.render(); }
+        onClick: () => { this._step = 'effort'; this.render(); }
       }, '\u2190 Back'),
       h('h2', null, `Configure: ${template.name}`),
-      h('p', { class: 'strategist-subtitle' }, template.description)
+      h('p', { class: 'strategist-subtitle' }, template.description),
+      h('div', { class: 'effort-level-badge' },
+        h('span', { class: 'effort-level-badge-dot' },
+          this._effortLevel === 'easy' ? '\u{1F7E2}'
+            : this._effortLevel === 'advanced' ? '\u{1F534}'
+            : '\u{1F7E1}'
+        ),
+        h('span', null,
+          this._effortLevel === 'easy' ? 'Just Build It'
+            : this._effortLevel === 'advanced' ? 'Full Control'
+            : 'Guide Me'
+        )
+      )
     );
     this.el.appendChild(header);
 
@@ -352,12 +500,14 @@ export class StrategistView extends Component {
         throw new Error('Socket not connected');
       }
 
-      // Step 1: Create building
+      // Step 1: Create building (include effortLevel in config)
       const buildResult = await window.overlordSocket.createBuilding({
         name: projectName,
+        effortLevel: this._effortLevel,
         config: {
           projectDescription: this._projectGoals || `${template.name} project`,
-          template: template.id
+          template: template.id,
+          effortLevel: this._effortLevel,
         }
       });
 
@@ -372,6 +522,7 @@ export class StrategistView extends Component {
         buildingId,
         blueprint: {
           mode: 'quickStart',
+          effortLevel: this._effortLevel,
           floorsNeeded: template.floorsNeeded,
           roomConfig: template.roomConfig,
           agentRoster: template.agentRoster,
