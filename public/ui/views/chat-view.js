@@ -902,7 +902,10 @@ export class ChatView extends Component {
   _addFiles(files) {
     for (const file of files) {
       if (file.size > 10 * 1024 * 1024) {
-        // Skip files over 10MB
+        // Skip files over 10MB — inform user
+        import('../engine/engine.js').then(({ OverlordUI }) => {
+          OverlordUI.dispatch('toast:show', { message: `File "${file.name}" exceeds 10MB limit`, type: 'warning' });
+        });
         continue;
       }
       const id = `att_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

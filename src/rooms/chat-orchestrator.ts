@@ -41,13 +41,19 @@ function persistMessage(
   content: string,
   threadId: string,
   toolCalls?: Array<{ name: string; input: unknown }>,
+  attachments?: Array<{ id: string; fileName: string; mimeType: string; size: number; url?: string | null }>,
 ): string {
   const db = getDb();
   const id = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   db.prepare(`
-    INSERT INTO messages (id, room_id, agent_id, role, content, tool_calls, thread_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-  `).run(id, roomId, agentId, role, content, toolCalls ? JSON.stringify(toolCalls) : null, threadId);
+    INSERT INTO messages (id, room_id, agent_id, role, content, tool_calls, attachments, thread_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `).run(
+    id, roomId, agentId, role, content,
+    toolCalls ? JSON.stringify(toolCalls) : null,
+    attachments && attachments.length > 0 ? JSON.stringify(attachments) : '[]',
+    threadId,
+  );
   return id;
 }
 
@@ -107,10 +113,11 @@ async function handleChatMessage(
   const agentId = data.agentId as string || '';
   const buildingId = data.buildingId as string || '';
   const threadId = (data.threadId as string) || `thread_${roomId || 'default'}_${socketId}`;
+  const attachments = (data.attachments as Array<{ id: string; fileName: string; mimeType: string; size: number; url?: string | null }>) || [];
 
-  // Skip empty messages
-  if (!text) {
-    log.debug({ socketId }, 'Empty chat message — ignoring');
+  // Skip truly empty messages (no text AND no attachments)
+  if (!text && attachments.length === 0) {
+    log.debug({ socketId }, 'Empty chat message (no text, no attachments) — ignoring');
     return;
   }
 
@@ -256,9 +263,9 @@ async function handleChatMessage(
       }
     }
 
-    // 9. Persist user message and load conversation history
+    // 9. Persist user message (with attachments if any) and load conversation history
     try {
-      persistMessage(room.id, null, 'user', text, threadId);
+      persistMessage(room.id, null, 'user', text, threadId, undefined, attachments);
     } catch (persistErr) {
       log.warn({ persistErr }, 'Failed to persist user message — continuing without history');
     }
@@ -271,12 +278,17 @@ async function handleChatMessage(
       historyMessages = [{ role: 'user' as const, content: text }];
     }
 
-    // 10. Run the conversation loop with full history
+    // 10. Build user content — include attachment descriptions for attachment-only messages
+    const userContent = text || (attachments.length > 0
+      ? `[Attached ${attachments.length} file(s): ${attachments.map(a => a.fileName).join(', ')}]`
+      : '');
+
+    // 10b. Run the conversation loop with full history
     const result = await runConversationLoop({
       provider,
       room,
       agentId: resolvedAgentId,
-      messages: historyMessages.length > 0 ? historyMessages : [{ role: 'user' as const, content: text }],
+      messages: historyMessages.length > 0 ? historyMessages : [{ role: 'user' as const, content: userContent }],
       ai,
       tools,
       bus,

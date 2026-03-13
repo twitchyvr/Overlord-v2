@@ -1120,10 +1120,11 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       );
 
       const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(id) as Record<string, unknown>;
+      const planWithSteps = { ...plan, steps: JSON.parse((plan.steps as string) || '[]') };
       log.info({ planId: id, agentId: parsed.agentId, title: parsed.title }, 'Plan submitted');
-      bus.emit('plan:submitted', plan);
-      io.emit('plan:submitted', { ...plan, steps: JSON.parse((plan.steps as string) || '[]') });
-      if (ack) ack({ ok: true, data: { ...plan, steps: JSON.parse((plan.steps as string) || '[]') } });
+      // bus.emit triggers forward('plan:submitted') → io.emit automatically; no manual io.emit needed
+      bus.emit('plan:submitted', planWithSteps as unknown as Record<string, unknown>);
+      if (ack) ack({ ok: true, data: planWithSteps });
     });
 
     handle(socket, 'plan:review', PlanReviewSchema, (parsed, ack) => {
@@ -1146,35 +1147,39 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       `).run(statusMap[parsed.verdict], parsed.reviewer, parsed.comment || null, parsed.planId);
 
       const updated = db.prepare('SELECT * FROM plans WHERE id = ?').get(parsed.planId) as Record<string, unknown>;
+      const updatedWithSteps = { ...updated, steps: JSON.parse((updated.steps as string) || '[]') };
       log.info({ planId: parsed.planId, verdict: parsed.verdict, reviewer: parsed.reviewer }, 'Plan reviewed');
-      bus.emit('plan:reviewed', updated);
-      io.emit('plan:reviewed', { ...updated, steps: JSON.parse((updated.steps as string) || '[]') });
+      // bus.emit triggers forward('plan:reviewed') → io.emit automatically; no manual io.emit needed
+      bus.emit('plan:reviewed', updatedWithSteps as unknown as Record<string, unknown>);
 
-      // If approved, auto-create tasks from plan steps
+      // If approved, auto-create tasks from plan steps (atomic transaction)
       if (parsed.verdict === 'approved' && updated.building_id) {
         const steps = JSON.parse((updated.steps as string) || '[]') as Array<{ id: string; description: string }>;
-        const parentTaskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const parentTaskId = `task_${randomUUID()}`;
 
-        // Create parent task for the plan
-        db.prepare(`
-          INSERT INTO tasks (id, building_id, title, description, status, assignee_id, phase, priority)
-          VALUES (?, ?, ?, ?, 'pending', ?, 'execution', 'normal')
-        `).run(parentTaskId, updated.building_id, updated.title, updated.rationale || '', updated.agent_id);
-
-        // Create child tasks for each step
-        for (const step of steps) {
-          const stepTaskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const createTasks = db.transaction(() => {
+          // Create parent task for the plan
           db.prepare(`
-            INSERT INTO tasks (id, building_id, title, status, parent_id, assignee_id, phase, priority)
-            VALUES (?, ?, ?, 'pending', ?, ?, 'execution', 'normal')
-          `).run(stepTaskId, updated.building_id, step.description, parentTaskId, updated.agent_id);
-        }
+            INSERT INTO tasks (id, building_id, title, description, status, assignee_id, phase, priority)
+            VALUES (?, ?, ?, ?, 'pending', ?, 'execution', 'normal')
+          `).run(parentTaskId, updated.building_id, updated.title, updated.rationale || '', updated.agent_id);
+
+          // Create child tasks for each step (randomUUID avoids collision)
+          for (const step of steps) {
+            const stepTaskId = `task_${randomUUID()}`;
+            db.prepare(`
+              INSERT INTO tasks (id, building_id, title, status, parent_id, assignee_id, phase, priority)
+              VALUES (?, ?, ?, 'pending', ?, ?, 'execution', 'normal')
+            `).run(stepTaskId, updated.building_id, step.description, parentTaskId, updated.agent_id);
+          }
+        });
+        createTasks();
 
         log.info({ planId: parsed.planId, parentTaskId, stepCount: steps.length }, 'Tasks created from approved plan');
         bus.emit('task:created', { planId: parsed.planId, parentTaskId });
       }
 
-      if (ack) ack({ ok: true, data: { ...updated, steps: JSON.parse((updated.steps as string) || '[]') } });
+      if (ack) ack({ ok: true, data: updatedWithSteps });
     });
 
     handle(socket, 'plan:get', PlanGetSchema, (parsed, ack) => {
@@ -1197,7 +1202,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (parsed.status) { sql += ' AND status = ?'; params.push(parsed.status); }
       if (parsed.threadId) { sql += ' AND thread_id = ?'; params.push(parsed.threadId); }
 
-      sql += ' ORDER BY created_at DESC';
+      sql += ' ORDER BY created_at DESC LIMIT 200';
 
       const plans = (db.prepare(sql).all(...params) as Array<Record<string, unknown>>).map((p) => ({
         ...p,

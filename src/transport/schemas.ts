@@ -640,6 +640,6 @@ export const PlanGetSchema = z.object({
 export const PlanListSchema = z.object({
   buildingId: optionalId(),
   agentId: optionalId(),
-  status: z.string().max(MAX_NAME).optional(),
+  status: z.enum(['pending', 'approved', 'rejected', 'changes-requested']).optional(),
   threadId: z.string().max(MAX_ID).optional(),
 });

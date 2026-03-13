@@ -1111,13 +1111,19 @@ export function initSocketBridge(socket, store, engine) {
 
     fetchPlan(planId) {
       return new Promise((resolve) => {
-        socket.emit('plan:get', { planId }, (res) => resolve(res));
+        const timeout = setTimeout(() => resolve({ ok: false, error: { code: 'TIMEOUT', message: 'Plan fetch timed out' } }), 15000);
+        socket.emit('plan:get', { planId }, (res) => {
+          clearTimeout(timeout);
+          resolve(res);
+        });
       });
     },
 
     fetchPlans(filters) {
       return new Promise((resolve) => {
+        const timeout = setTimeout(() => resolve({ ok: false, error: { code: 'TIMEOUT', message: 'Plan list fetch timed out' } }), 15000);
         socket.emit('plan:list', filters || {}, (res) => {
+          clearTimeout(timeout);
           if (res && res.ok) {
             store.set('plans.list', res.data);
           }
