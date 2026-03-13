@@ -131,13 +131,14 @@ export class DashboardView extends Component {
         label: 'RAID Entries',
         value: this._raidEntries.length,
         icon: '\u26A0',
-        color: 'var(--accent-amber)'
+        color: 'var(--accent-amber)',
+        tooltip: 'Risks, Assumptions, Issues, and Decisions tracked for this project'
       }
     ];
 
     const kpiRow = h('div', { class: 'kpi-card-row' });
     for (const kpi of kpis) {
-      const card = h('div', { class: 'kpi-card glass-card' },
+      const card = h('div', { class: 'kpi-card glass-card', title: kpi.tooltip || '' },
         h('div', { class: 'kpi-card-icon', style: { color: kpi.color } }, kpi.icon),
         h('div', { class: 'kpi-card-value' }, String(kpi.value)),
         h('div', { class: 'kpi-card-label' }, kpi.label)

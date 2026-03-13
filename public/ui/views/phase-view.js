@@ -17,7 +17,7 @@
 
 import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
-import { h, formatTime } from '../engine/helpers.js';
+import { h, formatTime, tip } from '../engine/helpers.js';
 import { Toast } from '../components/toast.js';
 import { EntityLink, resolveAgent } from '../engine/entity-nav.js';
 
@@ -166,7 +166,7 @@ export class PhaseView extends Component {
 
     return h('div', { class: 'phase-view-header' },
       h('div', { class: 'phase-view-header-left' },
-        h('h1', { class: 'phase-view-title' }, 'Phase Gates'),
+        h('h1', { class: 'phase-view-title' }, tip('Phase Gate', 'Checkpoints where work must be reviewed before moving to the next phase')),
         h('span', { class: 'phase-view-subtitle' },
           `Phase ${phaseIdx + 1} of ${PHASE_ORDER.length} — ${progress}% complete`
         )

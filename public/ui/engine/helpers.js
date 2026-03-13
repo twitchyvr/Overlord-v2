@@ -149,6 +149,52 @@ export function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
 }
 
+/**
+ * Glossary of plain-English explanations for technical jargon.
+ * Used by `tip()` to add hover tooltips that help non-technical users.
+ */
+const GLOSSARY = {
+  'File Scope':            'Controls which project files agents in this room can access',
+  'Exit Document':         'A summary report agents must complete before leaving this room',
+  'Cross-Room Citations':  'References linking work done in one room to related work in another',
+  'AI Provider':           'Which AI service powers the agents in this room',
+  'Foundation':            'The base infrastructure that supports all floors and rooms',
+  'RAID Log':              'A project journal tracking Risks, Assumptions, Issues, and Decisions',
+  'RAID':                  'Risks, Assumptions, Issues, and Decisions — a project tracking method',
+  'Phase Gate':            'A checkpoint where work must be reviewed before moving to the next phase',
+  'Strategist':            'Planning room where project goals, phases, and resources are defined',
+  'Building Architect':    'Design room that creates the blueprint for your project structure',
+  'Discovery':             'Research room where requirements are gathered and analyzed',
+  'Architecture':          'Design room for system structure and technical decisions',
+  'Code Lab':              'Development room where agents write and modify code',
+  'Testing Lab':           'Quality room where agents run tests and verify correctness',
+  'Review':                'Governance room for code review and quality standards',
+  'Deploy':                'Operations room for releasing and deploying your project',
+  'War Room':              'Emergency room activated when critical issues need immediate attention',
+  'Data Exchange':         'Transfer room for sharing files and data between other rooms',
+  'Plugin Bay':            'Extension room for managing add-ons, scripts, and custom tools',
+  'Provider Hub':          'Configuration room for AI service settings',
+};
+
+/**
+ * Create a label with a tooltip hint for non-technical users.
+ * Looks up the term in the GLOSSARY; if found, wraps it with a dotted underline
+ * and a hover tooltip. If not found, returns plain text.
+ *
+ * @param {string} term - The jargon term to explain
+ * @param {string} [override] - Custom tooltip text (skips glossary lookup)
+ * @returns {HTMLElement}
+ */
+export function tip(term, override) {
+  const explanation = override || GLOSSARY[term];
+  if (!explanation) return document.createTextNode(term);
+
+  return h('span', {
+    class: 'has-tooltip',
+    dataset: { tooltip: explanation },
+  }, term);
+}
+
 /** Scoped querySelector */
 export function $(selector, scope = document) {
   return scope.querySelector(selector);
