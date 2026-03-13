@@ -225,6 +225,7 @@ if (socket) {
   }
 
   // ── Determine initial view after connection ──
+  let _initialNavDone = false;
   engine.subscribe('system:status', (data) => {
     const loadingEl = document.getElementById('loading-state');
     if (loadingEl) loadingEl.remove();
@@ -234,9 +235,13 @@ if (socket) {
       store.set('building.list', data.buildings);
     }
 
-    // Navigate to the appropriate view
-    const route = getInitialRoute(data.isNewUser || !data.buildings?.length);
-    navigateTo(route);
+    // Only navigate on the FIRST connection, not on reconnects.
+    // Reconnects should preserve the user's current view.
+    if (!_initialNavDone) {
+      _initialNavDone = true;
+      const route = getInitialRoute(data.isNewUser || !data.buildings?.length);
+      navigateTo(route);
+    }
   });
 
   // ── Connection lost / reconnected ──
