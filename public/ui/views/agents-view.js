@@ -520,6 +520,74 @@ export class AgentsView extends Component {
       content.appendChild(bioSection);
     }
 
+    // ── Stats Cards (loaded async) ──
+    const statsSection = h('div', { class: 'agents-view-detail-section agents-view-stats-section' });
+    statsSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Statistics'));
+    const statsGrid = h('div', { class: 'agents-view-stats-grid' });
+    // Placeholder cards while loading
+    const statCards = [
+      { key: 'tasksCompleted', label: 'Tasks Done', icon: '\u2705' },
+      { key: 'tasksAssigned', label: 'Assigned', icon: '\uD83D\uDCCB' },
+      { key: 'messagesCount', label: 'Messages', icon: '\uD83D\uDCAC' },
+      { key: 'roomJoins', label: 'Room Joins', icon: '\uD83D\uDEAA' },
+      { key: 'sessionsCount', label: 'Sessions', icon: '\u23F1' },
+    ];
+    for (const sc of statCards) {
+      const card = h('div', { class: 'agents-view-stat-card', 'data-stat': sc.key },
+        h('div', { class: 'agents-view-stat-icon' }, sc.icon),
+        h('div', { class: 'agents-view-stat-value' }, '--'),
+        h('div', { class: 'agents-view-stat-label' }, sc.label)
+      );
+      statsGrid.appendChild(card);
+    }
+    statsSection.appendChild(statsGrid);
+    content.appendChild(statsSection);
+
+    // Fetch stats asynchronously
+    if (window.overlordSocket) {
+      window.overlordSocket.fetchAgentStats(agent.id).then((res) => {
+        if (res && res.ok && res.data) {
+          for (const sc of statCards) {
+            const el = statsGrid.querySelector(`[data-stat="${sc.key}"] .agents-view-stat-value`);
+            if (el) {
+              const val = res.data[sc.key] ?? 0;
+              el.textContent = sc.key === 'totalActiveTimeMs'
+                ? _formatDuration(val) : String(val);
+            }
+          }
+        }
+      });
+    }
+
+    // ── Recent Activity Timeline ──
+    const activitySection = h('div', { class: 'agents-view-detail-section' });
+    activitySection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Recent Activity'));
+    const activityList = h('div', { class: 'agents-view-activity-list' });
+    activityList.appendChild(h('div', { class: 'agents-view-activity-loading' }, 'Loading...'));
+    activitySection.appendChild(activityList);
+    content.appendChild(activitySection);
+
+    // Fetch activity asynchronously
+    if (window.overlordSocket) {
+      window.overlordSocket.fetchAgentActivityLog(agent.id, { limit: 15 }).then((res) => {
+        activityList.textContent = '';
+        if (res && res.ok && res.data && res.data.length > 0) {
+          for (const entry of res.data) {
+            const icon = _activityIcon(entry.event_type);
+            const desc = _activityDescription(entry);
+            const time = _relativeTime(entry.created_at);
+            activityList.appendChild(h('div', { class: 'agents-view-activity-entry' },
+              h('span', { class: 'agents-view-activity-icon' }, icon),
+              h('span', { class: 'agents-view-activity-desc' }, desc),
+              h('span', { class: 'agents-view-activity-time' }, time)
+            ));
+          }
+        } else {
+          activityList.appendChild(h('div', { class: 'agents-view-activity-empty' }, 'No activity recorded yet'));
+        }
+      });
+    }
+
     // ── Profile Fields (first_name, last_name, etc.) ──
     const profileSection = h('div', { class: 'agents-view-detail-section' });
     profileSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Profile'));
@@ -1338,4 +1406,59 @@ export class AgentsView extends Component {
     });
   }
 
+}
+
+// ── Stats Helper Functions (module-scoped) ──
+
+function _formatDuration(ms) {
+  if (!ms || ms <= 0) return '0m';
+  const hours = Math.floor(ms / 3600000);
+  const minutes = Math.floor((ms % 3600000) / 60000);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+const ACTIVITY_ICONS = {
+  room_join: '\uD83D\uDEAA',
+  room_leave: '\uD83D\uDEB6',
+  status_change: '\uD83D\uDD04',
+  task_complete: '\u2705',
+  task_assign: '\uD83D\uDCCB',
+  session_start: '\u25B6',
+  session_end: '\u23F9',
+  message_sent: '\uD83D\uDCAC',
+};
+
+function _activityIcon(eventType) {
+  return ACTIVITY_ICONS[eventType] || '\u2022';
+}
+
+function _activityDescription(entry) {
+  const data = entry.event_data || {};
+  switch (entry.event_type) {
+    case 'room_join': return `Joined room${data.roomType ? ` (${data.roomType})` : ''}`;
+    case 'room_leave': return `Left room${data.roomType ? ` (${data.roomType})` : ''}`;
+    case 'status_change': return `Status: ${data.from || '?'} → ${data.to || '?'}`;
+    case 'task_complete': return `Completed task: ${data.taskTitle || data.taskId || 'unknown'}`;
+    case 'task_assign': return `Assigned task: ${data.taskTitle || data.taskId || 'unknown'}`;
+    case 'session_start': return 'Session started';
+    case 'session_end': return `Session ended${data.durationMs ? ` (${_formatDuration(data.durationMs)})` : ''}`;
+    default: return entry.event_type.replace(/_/g, ' ');
+  }
+}
+
+function _relativeTime(isoStr) {
+  if (!isoStr) return '';
+  const date = new Date(isoStr);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return date.toLocaleDateString();
 }

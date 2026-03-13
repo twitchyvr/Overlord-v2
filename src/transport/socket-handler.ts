@@ -50,7 +50,9 @@ import {
   CitationListSchema, CitationBacklinksSchema,
   TableSetContextSchema, TableGetContextSchema, TableClearContextSchema,
   TableGetAssignmentsSchema, TableDivideWorkSchema,
+  AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema,
 } from './schemas.js';
+import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
 import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
@@ -356,6 +358,9 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       const result = rooms.enterRoom(parsed as Parameters<typeof rooms.enterRoom>[0]);
       if (result.ok) {
         getAssociations(socket.id).roomMemberships.set(parsed.agentId, parsed.roomId);
+        // Record stats
+        onRoomJoin(parsed.agentId, parsed.roomId, '', undefined);
+        onSessionStart(parsed.agentId, parsed.roomId);
       }
       if (ack) ack(result);
     });
@@ -364,6 +369,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       const result = rooms.exitRoom(parsed as Parameters<typeof rooms.exitRoom>[0]);
       if (result.ok) {
         getAssociations(socket.id).roomMemberships.delete(parsed.agentId);
+        // Record stats
+        onRoomLeave(parsed.agentId, parsed.roomId, '');
       }
       if (ack) ack(result);
     });
@@ -833,6 +840,30 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       });
     });
 
+    // ─── Agent Stats ───
+
+    handle(socket, 'agent:stats', AgentStatsGetSchema, (parsed, ack) => {
+      const summary = getStatsSummary(parsed.agentId);
+      if (ack) ack({ ok: true, data: summary });
+    });
+
+    handle(socket, 'agent:activity-log', AgentActivityLogSchema, (parsed, ack) => {
+      const entries = getActivityLog(parsed.agentId, {
+        limit: parsed.limit,
+        offset: parsed.offset,
+        eventType: parsed.eventType,
+      });
+      if (ack) ack({ ok: true, data: entries });
+    });
+
+    handle(socket, 'agent:leaderboard', AgentLeaderboardSchema, (parsed, ack) => {
+      const leaderboard = getLeaderboard(parsed.metric, {
+        limit: parsed.limit,
+        buildingId: parsed.buildingId,
+      });
+      if (ack) ack({ ok: true, data: leaderboard });
+    });
+
     // ─── Command List ───
 
     handle(socket, 'command:list', EmptyPayloadSchema, (_data, ack) => {
@@ -1176,9 +1207,18 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
       db.prepare(`UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 
-      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as Record<string, unknown> | undefined;
       log.info({ taskId, updatedFields: fields.length }, 'Task updated');
       bus.emit('task:updated', task as Record<string, unknown>);
+
+      // Track stats when task is completed or assigned
+      if (task && parsed.status === 'done' && task.assignee_id) {
+        onTaskComplete(task.assignee_id as string, taskId, (task.title as string) || '', (task.building_id as string) || undefined);
+      }
+      if (task && parsed.assigneeId) {
+        onTaskAssign(parsed.assigneeId, taskId, (task.title as string) || '', (task.building_id as string) || undefined);
+      }
+
       if (ack) ack({ ok: true, data: task });
     });
 
