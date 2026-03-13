@@ -101,6 +101,27 @@ const ROOM_SUGGESTIONS = {
 };
 
 
+/* ── Friendly tool labels for non-technical users (#521) ───── */
+
+const TOOL_LABELS = {
+  'list_dir':      'Browsing files',
+  'read_file':     'Reading a file',
+  'write_file':    'Writing code',
+  'web_search':    'Searching the web',
+  'record_note':   'Taking notes',
+  'recall_notes':  'Checking notes',
+  'session_note':  'Saving context',
+  'bash':          'Running a command',
+  'fetch_webpage': 'Fetching a page',
+  'patch_file':    'Updating code',
+  'search_files':  'Searching files',
+  'create_dir':    'Creating a folder',
+  'delete_file':   'Removing a file',
+  'move_file':     'Moving a file',
+  'copy_file':     'Copying a file',
+};
+
+
 export class ChatView extends Component {
 
   constructor(el, opts = {}) {
@@ -392,19 +413,31 @@ export class ChatView extends Component {
     );
     contentWrap.appendChild(meta);
 
-    // Message content
+    // Message content — handle both string and array-of-blocks formats (#532)
     const content = h('div', { class: 'chat-message-content' });
 
-    if (msg.content) {
-      // Render markdown if marked is available
-      if (typeof marked !== 'undefined' && this._looksLikeMarkdown(msg.content)) {
-        const text = this._wrapJsonBlocks(msg.content);
+    const rawContent = msg.content;
+    let textContent = '';
+
+    if (Array.isArray(rawContent)) {
+      // Content is an array of blocks (e.g. [{type:'text', text:'...'}, {type:'tool_use',...}])
+      textContent = rawContent
+        .filter((b) => b.type === 'text' && b.text)
+        .map((b) => b.text)
+        .join('\n');
+    } else if (rawContent && typeof rawContent === 'string') {
+      textContent = rawContent;
+    }
+
+    if (textContent) {
+      if (typeof marked !== 'undefined' && this._looksLikeMarkdown(textContent)) {
+        const text = this._formatContentBlocks(textContent);
         const parsed = marked.parse(text, { breaks: true, gfm: true });
         setTrustedContent(content, parsed);
         Table.styleMarkdownTables(content);
       } else {
         // Use entity linking for plain text messages (@agent, #123)
-        const linked = linkEntities(msg.content);
+        const linked = linkEntities(textContent);
         content.appendChild(linked);
       }
     }
@@ -591,20 +624,43 @@ export class ChatView extends Component {
     return bubble;
   }
 
-  /** Build a tool call chip. */
+  /** Build a tool call chip with friendly labels (#521). */
   _buildToolChip(toolCall) {
+    const rawName = toolCall.name || toolCall.tool || '';
+    const friendlyLabel = TOOL_LABELS[rawName] || rawName.replace(/_/g, ' ');
+
     const chip = h('div', { class: 'tool-chip' },
-      h('span', { class: 'tool-chip-name' }, toolCall.name || toolCall.tool),
+      h('span', { class: 'tool-chip-name' }, friendlyLabel),
       toolCall.status ? h('span', {
         class: `tool-chip-status tool-chip-${toolCall.status}`
       }, toolCall.status) : null
     );
 
+    // Add hidden details with a toggle for advanced users
     if (toolCall.input) {
       const paramText = typeof toolCall.input === 'object'
         ? Object.keys(toolCall.input).join(', ')
         : String(toolCall.input);
-      chip.appendChild(h('span', { class: 'tool-chip-params' }, paramText));
+
+      const detailsEl = h('span', {
+        class: 'tool-chip-params',
+        style: { display: 'none' }
+      }, `${rawName}(${paramText})`);
+
+      const toggleBtn = h('button', {
+        class: 'tool-chip-toggle',
+        title: 'Show details',
+        onClick: (e) => {
+          e.stopPropagation();
+          const hidden = detailsEl.style.display === 'none';
+          detailsEl.style.display = hidden ? '' : 'none';
+          toggleBtn.textContent = hidden ? '\u25B4' : '\u25BE';
+          toggleBtn.title = hidden ? 'Hide details' : 'Show details';
+        }
+      }, '\u25BE');
+
+      chip.appendChild(toggleBtn);
+      chip.appendChild(detailsEl);
     }
 
     return chip;
@@ -619,7 +675,10 @@ export class ChatView extends Component {
       class: 'chat-action-btn',
       title: 'Copy',
       onClick: () => {
-        navigator.clipboard.writeText(msg.content || '').catch(() => {});
+        const copyText = Array.isArray(msg.content)
+          ? msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n')
+          : (msg.content || '');
+        navigator.clipboard.writeText(copyText).catch(() => {});
       }
     }, '\u{1F4CB}');
     actions.appendChild(copyBtn);
@@ -1082,11 +1141,92 @@ export class ChatView extends Component {
   }
 
   /**
-   * Detect bare JSON blocks in message text and wrap them in markdown
-   * code fences so marked renders them as formatted code blocks.
-   * Handles: entire message is JSON, or JSON embedded between prose.
+   * Check if a parsed JSON object looks like an exit document (#522).
+   * Exit documents contain fields like effortLevel, projectGoals, etc.
    */
-  _wrapJsonBlocks(text) {
+  _isExitDocument(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+    const exitFields = ['effortLevel', 'projectGoals', 'successCriteria', 'phases', 'milestones',
+      'projectName', 'deliverables', 'acceptanceCriteria', 'requirements', 'taskBreakdown'];
+    const matchCount = exitFields.filter((f) => f in obj).length;
+    return matchCount >= 2;
+  }
+
+  /**
+   * Render an exit document as a friendly summary card (#522).
+   * Returns a markdown string with a human-readable summary.
+   */
+  _renderExitDocumentSummary(obj) {
+    const parts = [];
+    const title = obj.projectName || obj.title || 'Blueprint';
+    parts.push(`### ${title} ready`);
+
+    const stats = [];
+    if (obj.projectGoals) {
+      const count = Array.isArray(obj.projectGoals) ? obj.projectGoals.length : 1;
+      stats.push(`${count} goal${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.successCriteria || obj.acceptanceCriteria) {
+      const criteria = obj.successCriteria || obj.acceptanceCriteria;
+      const count = Array.isArray(criteria) ? criteria.length : 1;
+      stats.push(`${count} ${obj.successCriteria ? 'success' : 'acceptance'} criteria`);
+    }
+    if (obj.phases) {
+      const count = Array.isArray(obj.phases) ? obj.phases.length : 1;
+      stats.push(`${count} phase${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.milestones) {
+      const count = Array.isArray(obj.milestones) ? obj.milestones.length : 1;
+      stats.push(`${count} milestone${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.deliverables) {
+      const count = Array.isArray(obj.deliverables) ? obj.deliverables.length : 1;
+      stats.push(`${count} deliverable${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.requirements) {
+      const count = Array.isArray(obj.requirements) ? obj.requirements.length : 1;
+      stats.push(`${count} requirement${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.taskBreakdown) {
+      const count = Array.isArray(obj.taskBreakdown) ? obj.taskBreakdown.length : 1;
+      stats.push(`${count} task${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.effortLevel) {
+      stats.push(`effort: ${obj.effortLevel}`);
+    }
+
+    if (stats.length > 0) {
+      parts.push(stats.join(' | '));
+    }
+
+    // List goals as bullet points if present
+    if (Array.isArray(obj.projectGoals) && obj.projectGoals.length > 0) {
+      parts.push('\n**Goals:**');
+      for (const goal of obj.projectGoals.slice(0, 5)) {
+        const goalText = typeof goal === 'string' ? goal : (goal.description || goal.name || JSON.stringify(goal));
+        parts.push(`- ${goalText}`);
+      }
+    }
+
+    // List phases if present
+    if (Array.isArray(obj.phases) && obj.phases.length > 0) {
+      parts.push('\n**Phases:**');
+      for (const phase of obj.phases.slice(0, 6)) {
+        const phaseText = typeof phase === 'string' ? phase : (phase.name || phase.title || JSON.stringify(phase));
+        parts.push(`- ${phaseText}`);
+      }
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Format message content: detect exit documents and wrap bare JSON blocks
+   * in markdown code fences so marked renders them as formatted blocks.
+   * Handles: exit documents (#522), entire-message JSON, embedded JSON,
+   * and JSON already wrapped in code fences.
+   */
+  _formatContentBlocks(text) {
     const trimmed = text.trim();
 
     // Entire message is a single JSON value
@@ -1094,23 +1234,49 @@ export class ChatView extends Component {
         (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
       try {
         const obj = JSON.parse(trimmed);
+        if (this._isExitDocument(obj)) {
+          return this._renderExitDocumentSummary(obj);
+        }
         return '```json\n' + JSON.stringify(obj, null, 2) + '\n```';
       } catch { /* not valid JSON — continue */ }
     }
 
-    // Look for JSON objects/arrays embedded between text.
-    // Match lines starting with { or [ that form valid JSON spanning multiple lines.
+    // Detect exit documents already wrapped in code fences by the AI (#522)
+    // e.g. ```json\n{...}\n```
+    const fencedResult = text.replace(
+      /```(?:json)?\s*\n(\{[\s\S]*?\})\s*\n```/g,
+      (fullMatch, jsonContent) => {
+        try {
+          const obj = JSON.parse(jsonContent);
+          if (this._isExitDocument(obj)) {
+            return this._renderExitDocumentSummary(obj);
+          }
+        } catch { /* not valid JSON — leave as-is */ }
+        return fullMatch;
+      }
+    );
+    if (fencedResult !== text) return fencedResult;
+
+    // Look for bare JSON objects/arrays embedded between text.
     return text.replace(
       /^(\{[\s\S]*?\n\}|\[[\s\S]*?\n\])/gm,
       (match) => {
         try {
           const obj = JSON.parse(match);
+          if (this._isExitDocument(obj)) {
+            return this._renderExitDocumentSummary(obj);
+          }
           return '```json\n' + JSON.stringify(obj, null, 2) + '\n```';
         } catch {
           return match;
         }
       }
     );
+  }
+
+  /** @deprecated Use _formatContentBlocks instead */
+  _wrapJsonBlocks(text) {
+    return this._formatContentBlocks(text);
   }
 
   // ── Conversations ──────────────────────────────────────────
