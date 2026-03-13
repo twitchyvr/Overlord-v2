@@ -133,20 +133,20 @@ export function incrementStat(agentId: string, metric: string, amount = 1): Resu
   const id = `stat_${agentId}_${metric}_all-time`;
 
   try {
-    // Upsert: increment if exists, insert if not
-    const existing = db.prepare(
-      'SELECT id, value FROM agent_stats WHERE agent_id = ? AND metric = ? AND period = ?',
-    ).get(agentId, metric, 'all-time') as { id: string; value: number } | undefined;
+    // Atomic upsert: insert or increment on conflict
+    db.prepare(`
+      INSERT INTO agent_stats (id, agent_id, metric, value, period, recorded_at)
+      VALUES (?, ?, ?, ?, 'all-time', datetime('now'))
+      ON CONFLICT(agent_id, metric, period)
+      DO UPDATE SET value = value + ?, recorded_at = datetime('now')
+    `).run(id, agentId, metric, amount, amount);
 
-    if (existing) {
-      db.prepare('UPDATE agent_stats SET value = value + ?, recorded_at = datetime(?) WHERE id = ?')
-        .run(amount, new Date().toISOString(), existing.id);
-    } else {
-      db.prepare('INSERT INTO agent_stats (id, agent_id, metric, value, period) VALUES (?, ?, ?, ?, ?)')
-        .run(id, agentId, metric, amount, 'all-time');
-    }
+    // Read back the current value
+    const row = db.prepare(
+      'SELECT value FROM agent_stats WHERE agent_id = ? AND metric = ? AND period = ?',
+    ).get(agentId, metric, 'all-time') as { value: number } | undefined;
 
-    return ok({ metric, value: (existing?.value ?? 0) + amount });
+    return ok({ metric, value: row?.value ?? amount });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     log.error({ agentId, metric, error: message }, 'Failed to increment stat');
@@ -162,17 +162,13 @@ export function setStat(agentId: string, metric: string, value: number): Result 
   const id = `stat_${agentId}_${metric}_all-time`;
 
   try {
-    const existing = db.prepare(
-      'SELECT id FROM agent_stats WHERE agent_id = ? AND metric = ? AND period = ?',
-    ).get(agentId, metric, 'all-time') as { id: string } | undefined;
-
-    if (existing) {
-      db.prepare('UPDATE agent_stats SET value = ?, recorded_at = datetime(?) WHERE id = ?')
-        .run(value, new Date().toISOString(), existing.id);
-    } else {
-      db.prepare('INSERT INTO agent_stats (id, agent_id, metric, value, period) VALUES (?, ?, ?, ?, ?)')
-        .run(id, agentId, metric, value, 'all-time');
-    }
+    // Atomic upsert: insert or overwrite on conflict
+    db.prepare(`
+      INSERT INTO agent_stats (id, agent_id, metric, value, period, recorded_at)
+      VALUES (?, ?, ?, ?, 'all-time', datetime('now'))
+      ON CONFLICT(agent_id, metric, period)
+      DO UPDATE SET value = ?, recorded_at = datetime('now')
+    `).run(id, agentId, metric, value, value);
 
     return ok({ metric, value });
   } catch (error: unknown) {

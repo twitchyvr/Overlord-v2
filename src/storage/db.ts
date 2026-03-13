@@ -236,7 +236,8 @@ const SCHEMA_SQL = `
     metric TEXT NOT NULL,
     value REAL DEFAULT 0,
     period TEXT DEFAULT 'all-time',
-    recorded_at TEXT DEFAULT (datetime('now'))
+    recorded_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(agent_id, metric, period)
   );
 
   CREATE TABLE IF NOT EXISTS migrations (
@@ -274,6 +275,7 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_activity_created ON agent_activity_log(created_at);
   CREATE INDEX IF NOT EXISTS idx_stats_agent ON agent_stats(agent_id);
   CREATE INDEX IF NOT EXISTS idx_stats_metric ON agent_stats(metric);
+  CREATE INDEX IF NOT EXISTS idx_stats_compound ON agent_stats(agent_id, metric, period);
 `;
 
 /**

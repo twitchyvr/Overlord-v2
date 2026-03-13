@@ -52,7 +52,7 @@ import {
   TableGetAssignmentsSchema, TableDivideWorkSchema,
   AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema,
 } from './schemas.js';
-import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
+import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
 import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
@@ -358,9 +358,12 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       const result = rooms.enterRoom(parsed as Parameters<typeof rooms.enterRoom>[0]);
       if (result.ok) {
         getAssociations(socket.id).roomMemberships.set(parsed.agentId, parsed.roomId);
-        // Record stats
-        onRoomJoin(parsed.agentId, parsed.roomId, '', undefined);
-        onSessionStart(parsed.agentId, parsed.roomId);
+        // Record stats — look up room type for activity context
+        const room = rooms.getRoom(parsed.roomId);
+        const roomType = room?.type ?? 'unknown';
+        const agent = agents.getAgent(parsed.agentId);
+        onRoomJoin(parsed.agentId, parsed.roomId, roomType, agent?.building_id ?? undefined);
+        onSessionStart(parsed.agentId, parsed.roomId, agent?.building_id ?? undefined);
       }
       if (ack) ack(result);
     });
@@ -369,8 +372,11 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       const result = rooms.exitRoom(parsed as Parameters<typeof rooms.exitRoom>[0]);
       if (result.ok) {
         getAssociations(socket.id).roomMemberships.delete(parsed.agentId);
-        // Record stats
-        onRoomLeave(parsed.agentId, parsed.roomId, '');
+        // Record stats — look up room type for activity context
+        const room = rooms.getRoom(parsed.roomId);
+        const roomType = room?.type ?? 'unknown';
+        const agent = agents.getAgent(parsed.agentId);
+        onRoomLeave(parsed.agentId, parsed.roomId, roomType, agent?.building_id ?? undefined);
       }
       if (ack) ack(result);
     });
@@ -974,6 +980,11 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
       // 4. Regular message — forward to bus (include threadId for persistence)
       bus.emit('chat:message', { socketId: socket.id, ...parsed });
+
+      // Record message stats if sent by an agent
+      if (parsed.agentId) {
+        onMessageSent(parsed.agentId, parsed.roomId || '', parsed.buildingId || undefined);
+      }
     });
 
     // ─── Conversation Events ───
@@ -1177,11 +1188,12 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       const db = getDb();
       const taskId = parsed.id;
 
-      const existing = db.prepare('SELECT id FROM tasks WHERE id = ?').get(taskId);
+      const existing = db.prepare('SELECT id, assignee_id FROM tasks WHERE id = ?').get(taskId) as { id: string; assignee_id: string | null } | undefined;
       if (!existing) {
         if (ack) ack({ ok: false, error: { code: 'TASK_NOT_FOUND', message: `Task ${taskId} does not exist`, retryable: false } });
         return;
       }
+      const previousAssignee = existing.assignee_id;
 
       const fields: string[] = [];
       const values: unknown[] = [];
@@ -1213,11 +1225,13 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       log.info({ taskId, updatedFields: fields.length }, 'Task updated');
       bus.emit('task:updated', task as Record<string, unknown>);
 
-      // Track stats when task is completed or assigned
-      if (task && parsed.status === 'done' && task.assignee_id) {
+      // Track stats when task reaches a terminal status
+      const terminalStatuses = ['done', 'completed', 'finished', 'closed'];
+      if (task && parsed.status && terminalStatuses.includes(parsed.status) && task.assignee_id) {
         onTaskComplete(task.assignee_id as string, taskId, (task.title as string) || '', (task.building_id as string) || undefined);
       }
-      if (task && parsed.assigneeId) {
+      // Only record assignment when assignee actually changes
+      if (task && parsed.assigneeId && parsed.assigneeId !== previousAssignee) {
         onTaskAssign(parsed.assigneeId, taskId, (task.title as string) || '', (task.building_id as string) || undefined);
       }
 
@@ -1768,7 +1782,10 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
           // They should only be removed via explicit 'agent:remove' events.
           for (const agentId of assoc.agentIds) {
             try {
+              const agentBefore = agents.getAgent(agentId);
+              const oldStatus = agentBefore?.status ?? 'unknown';
               bus.emit('agent:status-changed', { agentId, status: 'idle', reason: 'disconnect' });
+              onStatusChange(agentId, oldStatus, 'idle');
               cleanedAgents++;
             } catch (e) {
               log.warn({ agentId, err: e, socketId: socket.id }, 'Failed to update agent status on disconnect');

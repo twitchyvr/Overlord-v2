@@ -559,6 +559,11 @@ export class AgentsView extends Component {
             }
           }
         }
+      }).catch(() => {
+        for (const sc of statCards) {
+          const el = statsGrid.querySelector(`[data-stat="${sc.key}"] .agents-view-stat-value`);
+          if (el) el.textContent = '0';
+        }
       });
     }
 
@@ -588,6 +593,9 @@ export class AgentsView extends Component {
         } else {
           activityList.appendChild(h('div', { class: 'agents-view-activity-empty' }, 'No activity recorded yet'));
         }
+      }).catch(() => {
+        activityList.textContent = '';
+        activityList.appendChild(h('div', { class: 'agents-view-activity-empty' }, 'Failed to load activity'));
       });
     }
 
