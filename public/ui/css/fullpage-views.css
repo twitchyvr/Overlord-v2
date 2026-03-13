@@ -2285,6 +2285,62 @@
   flex-shrink: 0;
   font-size: var(--text-sm);
 }
+.phase-view-criterion-evidence {
+  font-size: var(--text-xs);
+  color: var(--accent-blue);
+  text-decoration: none;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.phase-view-criterion-evidence:hover {
+  text-decoration: underline;
+}
+
+/* Form criteria checklist (inside sign-off form) */
+.phase-view-form-criteria-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.phase-view-form-criterion-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-secondary);
+}
+.phase-view-form-criterion-label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.phase-view-form-criterion-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-green);
+  cursor: pointer;
+}
+.phase-view-form-evidence-input {
+  font-size: var(--text-xs);
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+}
+.phase-view-form-evidence-input::placeholder {
+  color: var(--text-muted);
+}
+.phase-view-form-evidence-input:focus {
+  border-color: var(--accent-blue);
+  outline: none;
+}
 
 /* ═══════════════════════════════════════════════════
    GATE SIGN-OFFS

@@ -359,10 +359,11 @@ export const PhaseGateSchema = z.object({
   phase: optionalName(),
 });
 
-/** phase:gate:create — requires both buildingId and phase */
+/** phase:gate:create — requires both buildingId and phase, with optional criteria checklist */
 export const PhaseGateCreateSchema = z.object({
   buildingId: id(),
   phase: name(),
+  criteria: z.array(z.string().max(MAX_NAME)).max(50).optional().default([]),
 });
 
 // ─── Phase Schemas ───
@@ -394,6 +395,11 @@ export const PhaseGateSignoffSchema = z.object({
   reviewer: name(),
   verdict: z.enum(['GO', 'NO-GO', 'CONDITIONAL']),
   conditions: stringArray().optional().default([]),
+  criteria: z.array(z.object({
+    label: z.string().max(MAX_NAME),
+    met: z.boolean(),
+    evidenceUrl: z.string().max(2000).optional(),
+  })).max(50).optional(),
   exitDocId: optionalId(),
   nextPhaseInput: z.record(z.unknown()).optional().default({}),
 });

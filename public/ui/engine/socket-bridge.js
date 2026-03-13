@@ -1369,8 +1369,8 @@ export function initSocketBridge(socket, store, engine) {
 
     // ── Phase Gate methods ──
 
-    createGate(buildingId, phase) {
-      return _emitWithFeedback('phase:gate:create', { buildingId, phase });
+    createGate(buildingId, phase, criteria) {
+      return _emitWithFeedback('phase:gate:create', { buildingId, phase, ...(criteria ? { criteria } : {}) });
     },
 
     signoffGate(params) {
