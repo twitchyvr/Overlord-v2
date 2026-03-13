@@ -656,9 +656,11 @@ describe('TokenInput — input history', () => {
   it('limits history to 50 entries', () => {
     const ti = create({ onSubmit: vi.fn() });
 
+    // Call _submit() directly to avoid 110 getComputedStyle calls
+    // (setText + clear each trigger _autoResize) which timeout in jsdom
     for (let i = 0; i < 55; i++) {
-      ti.setText(`msg ${i}`);
-      keydown(ti, 'Enter');
+      ti._textareaEl.value = `msg ${i}`;
+      ti._submit();
     }
 
     expect(ti._history.length).toBe(50);
