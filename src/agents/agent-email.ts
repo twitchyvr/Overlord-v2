@@ -8,6 +8,7 @@
  * Layer: Agents (depends on Storage, Core)
  */
 
+import { randomUUID } from 'crypto';
 import { logger } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
 import type { Result } from '../core/contracts.js';
@@ -64,46 +65,62 @@ export interface SendEmailParams {
  */
 export function sendEmail(params: SendEmailParams): Result {
   const db = getDb();
-  const id = `email_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const threadId = params.threadId || params.parentId
-    ? getThreadId(params.parentId || '') || id
-    : id;
+
+  // Prevent self-send
+  if (params.to.includes(params.fromId)) {
+    return err('EMAIL_SELF_SEND', 'Cannot send email to self');
+  }
+
+  const id = `email_${randomUUID()}`;
+
+  // Fix operator precedence: explicit threadId > parentId lookup > new thread
+  const threadId = params.threadId
+    ? params.threadId
+    : params.parentId
+      ? (getThreadId(params.parentId) || id)
+      : id;
 
   try {
-    // Insert the email
-    db.prepare(`
-      INSERT INTO agent_emails (id, thread_id, from_id, subject, body, priority, building_id, parent_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      threadId,
-      params.fromId,
-      params.subject,
-      params.body,
-      params.priority || 'normal',
-      params.buildingId || null,
-      params.parentId || null,
-    );
-
-    // Insert recipients (to)
-    for (const agentId of params.to) {
-      const recipientId = `rcpt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    // Wrap in transaction for atomicity — if any recipient insert fails,
+    // the entire operation rolls back (no orphaned emails).
+    const insertAll = db.transaction(() => {
+      // Insert the email
       db.prepare(`
-        INSERT INTO agent_email_recipients (id, email_id, agent_id, type)
-        VALUES (?, ?, ?, 'to')
-      `).run(recipientId, id, agentId);
-    }
+        INSERT INTO agent_emails (id, thread_id, from_id, subject, body, priority, building_id, parent_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        threadId,
+        params.fromId,
+        params.subject,
+        params.body,
+        params.priority || 'normal',
+        params.buildingId || null,
+        params.parentId || null,
+      );
 
-    // Insert recipients (cc)
-    if (params.cc) {
-      for (const agentId of params.cc) {
-        const recipientId = `rcpt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      // Insert recipients (to)
+      for (const agentId of params.to) {
+        const recipientId = `rcpt_${randomUUID()}`;
         db.prepare(`
           INSERT INTO agent_email_recipients (id, email_id, agent_id, type)
-          VALUES (?, ?, ?, 'cc')
+          VALUES (?, ?, ?, 'to')
         `).run(recipientId, id, agentId);
       }
-    }
+
+      // Insert recipients (cc)
+      if (params.cc) {
+        for (const agentId of params.cc) {
+          const recipientId = `rcpt_${randomUUID()}`;
+          db.prepare(`
+            INSERT INTO agent_email_recipients (id, email_id, agent_id, type)
+            VALUES (?, ?, ?, 'cc')
+          `).run(recipientId, id, agentId);
+        }
+      }
+    });
+
+    insertAll();
 
     log.info({ emailId: id, from: params.fromId, to: params.to, cc: params.cc, subject: params.subject, priority: params.priority }, 'Email sent');
     return ok({ id, threadId });
@@ -246,11 +263,19 @@ function getRecipients(emailId: string): EmailRecipientRow[] {
  */
 export function markAsRead(emailId: string, agentId: string): Result {
   const db = getDb();
-  const now = new Date().toISOString();
 
   try {
+    // Verify the agent is actually a recipient of this email
+    const recipient = db.prepare(
+      'SELECT id FROM agent_email_recipients WHERE email_id = ? AND agent_id = ?',
+    ).get(emailId, agentId) as { id: string } | undefined;
+
+    if (!recipient) {
+      return err('EMAIL_NOT_RECIPIENT', `Agent ${agentId} is not a recipient of email ${emailId}`);
+    }
+
     // Mark the recipient's copy as read
-    db.prepare(`
+    const result = db.prepare(`
       UPDATE agent_email_recipients SET read_at = datetime('now')
       WHERE email_id = ? AND agent_id = ? AND read_at IS NULL
     `).run(emailId, agentId);
@@ -265,7 +290,12 @@ export function markAsRead(emailId: string, agentId: string): Result {
       db.prepare("UPDATE agent_emails SET status = 'read', read_at = datetime('now') WHERE id = ?").run(emailId);
     }
 
-    return ok({ emailId, agentId, readAt: now });
+    // Read back the actual stored timestamp for consistency
+    const updated = db.prepare(
+      'SELECT read_at FROM agent_email_recipients WHERE email_id = ? AND agent_id = ?',
+    ).get(emailId, agentId) as { read_at: string | null } | undefined;
+
+    return ok({ emailId, agentId, readAt: updated?.read_at || null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return err('EMAIL_MARK_READ_FAILED', message);
@@ -372,5 +402,7 @@ export function forwardEmail(
     subject: original.subject.startsWith('Fwd: ') ? original.subject : `Fwd: ${original.subject}`,
     body: forwardBody,
     buildingId: original.building_id || undefined,
+    parentId: emailId,
+    threadId: original.thread_id,
   });
 }

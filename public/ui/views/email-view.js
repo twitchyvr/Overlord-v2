@@ -14,7 +14,7 @@
 
 import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
-import { h, formatTime, escapeHtml } from '../engine/helpers.js';
+import { h, formatTime } from '../engine/helpers.js';
 import { Tabs } from '../components/tabs.js';
 import { Toast } from '../components/toast.js';
 import { Modal } from '../components/modal.js';
@@ -508,7 +508,8 @@ export class EmailView extends Component {
           const replyRes = await api.replyToEmail(emailId || thread[thread.length - 1]?.id, fromId, body);
           if (replyRes && replyRes.ok) {
             Toast.success('Reply sent');
-            // Refresh thread
+            // Close and refresh thread to avoid stacking
+            Drawer.close('email-thread');
             this._openThreadDrawer(threadId, emailId);
             this._fetchData();
           } else {
@@ -537,7 +538,6 @@ export class EmailView extends Component {
     const fromAgent = resolveAgent(email.from_id);
     const fromName = email.from_name || fromAgent?.name || email.from_id;
     const ts = email.created_at;
-    const priorityCfg = PRIORITY_CONFIG[email.priority] || PRIORITY_CONFIG.normal;
 
     const msg = h('div', { class: 'email-thread-message' },
       h('div', { class: 'email-thread-message-header' },

@@ -327,6 +327,7 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_emails_priority ON agent_emails(priority);
   CREATE INDEX IF NOT EXISTS idx_email_recipients_email ON agent_email_recipients(email_id);
   CREATE INDEX IF NOT EXISTS idx_email_recipients_agent ON agent_email_recipients(agent_id);
+  CREATE INDEX IF NOT EXISTS idx_email_recipients_unread ON agent_email_recipients(agent_id, read_at);
 `;
 
 /**

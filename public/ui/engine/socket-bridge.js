@@ -1596,9 +1596,18 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('email:received', data);
   });
 
-  socket.on('email:sent', (data) => {
-    log.info('Email sent broadcast:', data);
-    engine.dispatch('email:sent', data);
+  socket.on('email:dispatched', (data) => {
+    log.info('Email dispatched broadcast:', data);
+    engine.dispatch('email:dispatched', data);
+  });
+
+  socket.on('email:read', (data) => {
+    log.info('Email read:', data);
+    store.update('email.inbox', (inbox) => (inbox || []).map((e) =>
+      e.id === data.emailId ? { ...e, status: 'read', read_at: new Date().toISOString() } : e
+    ));
+    store.update('email.unreadCount', (c) => Math.max(0, (c || 0) - 1));
+    engine.dispatch('email:read', data);
   });
 
   log.info('v2 bridge initialized');

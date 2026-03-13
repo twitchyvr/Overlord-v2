@@ -893,7 +893,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (result.ok) {
         const email = getEmail((result.data as { id: string }).id);
         if (email) {
-          bus.emit('email:sent', email as unknown as Record<string, unknown>);
+          bus.emit('email:dispatched', email as unknown as Record<string, unknown>);
           // Notify recipients
           for (const agentId of [...parsed.to, ...(parsed.cc || [])]) {
             io.emit('email:received', { agentId, email });
@@ -912,7 +912,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (result.ok) {
         const email = getEmail((result.data as { id: string }).id);
         if (email) {
-          bus.emit('email:sent', email as unknown as Record<string, unknown>);
+          bus.emit('email:dispatched', email as unknown as Record<string, unknown>);
           for (const r of email.recipients) {
             io.emit('email:received', { agentId: r.agent_id, email });
           }
@@ -927,7 +927,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (result.ok) {
         const email = getEmail((result.data as { id: string }).id);
         if (email) {
-          bus.emit('email:sent', email as unknown as Record<string, unknown>);
+          bus.emit('email:dispatched', email as unknown as Record<string, unknown>);
           for (const r of email.recipients) {
             io.emit('email:received', { agentId: r.agent_id, email });
           }
@@ -2111,7 +2111,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('room:deleted');
   forward('plan:submitted');
   forward('plan:reviewed');
-  forward('email:sent');
+  forward('email:dispatched');
 
   log.info('Transport layer initialized');
   broadcastLog('info', 'Transport layer initialized', 'transport');
