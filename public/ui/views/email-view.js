@@ -45,6 +45,7 @@ export class EmailView extends Component {
     this._listEl = null;
     this._loading = true;
     this._selectedAgentForContext = null;
+    this._fetchGen = 0;
   }
 
   // ── Lifecycle ────────────────────────────────────────────────
@@ -119,10 +120,12 @@ export class EmailView extends Component {
 
     const agentId = this._selectedAgentForContext || agents[0].id;
     this._loading = true;
+    const gen = ++this._fetchGen;
 
     // Fetch inbox — always resolve loading state regardless of success/failure
     api.fetchInbox(agentId)
       .then((res) => {
+        if (!this._mounted || gen !== this._fetchGen) return;
         // On success, store subscription already set _loading = false.
         // On failure (ok: false), subscription never fires — handle it here.
         if (!res || !res.ok) {
@@ -131,6 +134,7 @@ export class EmailView extends Component {
         }
       })
       .catch(() => {
+        if (!this._mounted || gen !== this._fetchGen) return;
         this._loading = false;
         this._renderList();
       });
