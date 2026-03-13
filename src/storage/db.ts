@@ -182,6 +182,7 @@ const SCHEMA_SQL = `
     building_id TEXT NOT NULL REFERENCES buildings(id),
     phase TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
+    criteria TEXT DEFAULT '[]',
     exit_doc_id TEXT REFERENCES exit_documents(id),
     signoff_reviewer TEXT,
     signoff_verdict TEXT,
@@ -355,6 +356,7 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['buildings', 'repo_url', 'TEXT'],
   ['buildings', 'allowed_paths', "TEXT DEFAULT '[]'"],
   ['messages', 'attachments', "TEXT DEFAULT '[]'"],
+  ['phase_gates', 'criteria', "TEXT DEFAULT '[]'"],
 ];
 
 /**

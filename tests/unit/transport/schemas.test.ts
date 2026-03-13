@@ -45,6 +45,7 @@ import {
   PhasePendingGatesSchema,
   PhaseResolveConditionsSchema,
   PhaseStaleGatesSchema,
+  PhaseGateCreateSchema,
   PhaseGateSignoffSchema,
   PhaseAdvanceSchema,
   RaidSearchSchema,
@@ -450,6 +451,31 @@ describe('Phase Schemas', () => {
     });
   });
 
+  describe('PhaseGateCreateSchema', () => {
+    it('accepts buildingId and phase with optional criteria', () => {
+      const result = PhaseGateCreateSchema.safeParse({
+        buildingId: 'bld_1',
+        phase: 'strategy',
+        criteria: ['Exit doc ready', 'Tests passing', 'RAID log complete'],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.criteria).toEqual(['Exit doc ready', 'Tests passing', 'RAID log complete']);
+      }
+    });
+
+    it('defaults criteria to empty array when not provided', () => {
+      const result = PhaseGateCreateSchema.safeParse({
+        buildingId: 'bld_1',
+        phase: 'strategy',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.criteria).toEqual([]);
+      }
+    });
+  });
+
   describe('PhaseGateSignoffSchema', () => {
     it('accepts valid GO signoff', () => {
       const result = PhaseGateSignoffSchema.safeParse({
@@ -498,6 +524,37 @@ describe('Phase Schemas', () => {
     it('rejects missing required fields', () => {
       const result = PhaseGateSignoffSchema.safeParse({});
       expect(result.success).toBe(false);
+    });
+
+    it('accepts criteria array with met status and evidence URLs', () => {
+      const result = PhaseGateSignoffSchema.safeParse({
+        gateId: 'gate_1',
+        reviewer: 'admin',
+        verdict: 'GO',
+        criteria: [
+          { label: 'Exit doc reviewed', met: true, evidenceUrl: 'https://example.com/doc' },
+          { label: 'Tests passing', met: true },
+          { label: 'RAID complete', met: false },
+        ],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.criteria).toHaveLength(3);
+        expect(result.data.criteria![0].evidenceUrl).toBe('https://example.com/doc');
+        expect(result.data.criteria![2].met).toBe(false);
+      }
+    });
+
+    it('accepts signoff without criteria (optional field)', () => {
+      const result = PhaseGateSignoffSchema.safeParse({
+        gateId: 'gate_1',
+        reviewer: 'admin',
+        verdict: 'GO',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.criteria).toBeUndefined();
+      }
     });
   });
 

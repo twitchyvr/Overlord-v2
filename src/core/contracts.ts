@@ -96,6 +96,12 @@ export interface RaidEntry {
 export type GateStatus = 'pending' | 'go' | 'no-go' | 'conditional';
 export type GateVerdict = 'GO' | 'NO-GO' | 'CONDITIONAL';
 
+export interface PhaseGateCriterion {
+  label: string;
+  met: boolean;
+  evidenceUrl?: string;
+}
+
 export interface PhaseGateSignoff {
   reviewer: string;
   verdict: GateVerdict;
@@ -107,6 +113,7 @@ export interface PhaseGate {
   id: string;
   phase: string;
   status: GateStatus;
+  criteria: PhaseGateCriterion[];
   exitDocId?: string;
   raidEntries: string[];
   signoff?: PhaseGateSignoff;
@@ -179,6 +186,7 @@ export interface PhaseGateRow {
   building_id: string;
   phase: string;
   status: string;
+  criteria: string;
   exit_doc_id: string | null;
   signoff_reviewer: string | null;
   signoff_verdict: string | null;

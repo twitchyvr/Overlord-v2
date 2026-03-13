@@ -35,6 +35,7 @@ function setupDb(): Database.Database {
       building_id TEXT NOT NULL,
       phase TEXT NOT NULL,
       status TEXT DEFAULT 'pending',
+      criteria TEXT DEFAULT '[]',
       exit_doc_id TEXT,
       signoff_reviewer TEXT,
       signoff_verdict TEXT,
@@ -71,6 +72,36 @@ describe('Phase Gate System', () => {
       createGate({ buildingId: 'bld_1', phase: 'discovery' });
       const rows = db.prepare('SELECT * FROM phase_gates WHERE building_id = ?').all('bld_1');
       expect(rows).toHaveLength(1);
+    });
+  });
+
+  describe('createGate — criteria', () => {
+    it('stores criteria labels as { label, met: false } objects', () => {
+      const result = createGate({
+        buildingId: 'bld_1',
+        phase: 'strategy',
+        criteria: ['Exit doc reviewed', 'RAID entries complete', 'Tests passing'],
+      });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.criteria).toHaveLength(3);
+        expect(result.data.criteria[0]).toEqual({ label: 'Exit doc reviewed', met: false });
+        expect(result.data.criteria[2]).toEqual({ label: 'Tests passing', met: false });
+      }
+
+      // Verify in DB
+      const row = db.prepare('SELECT criteria FROM phase_gates WHERE id = ?').get(result.ok ? result.data.id : '') as { criteria: string };
+      const parsed = JSON.parse(row.criteria);
+      expect(parsed).toHaveLength(3);
+      expect(parsed.every((c: { met: boolean }) => c.met === false)).toBe(true);
+    });
+
+    it('defaults to empty criteria array when not provided', () => {
+      const result = createGate({ buildingId: 'bld_1', phase: 'strategy' });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.criteria).toEqual([]);
+      }
     });
   });
 
@@ -189,6 +220,53 @@ describe('Phase Gate System', () => {
       const row = db.prepare('SELECT next_phase_input FROM phase_gates WHERE id = ?').get(gate.data.id) as { next_phase_input: string };
       expect(JSON.parse(row.next_phase_input)).toEqual({ requirements: ['auth', 'api'], priority: 'high' });
     });
+
+    it('updates criteria with met status and evidence URLs on sign-off', () => {
+      const gate = createGate({
+        buildingId: 'bld_1',
+        phase: 'strategy',
+        criteria: ['Exit doc reviewed', 'RAID complete'],
+      });
+      if (!gate.ok) throw new Error('gate creation failed');
+
+      signoffGate({
+        gateId: gate.data.id,
+        reviewer: 'architect',
+        verdict: 'GO',
+        criteria: [
+          { label: 'Exit doc reviewed', met: true, evidenceUrl: 'https://example.com/doc' },
+          { label: 'RAID complete', met: true },
+        ],
+      });
+
+      const row = db.prepare('SELECT criteria FROM phase_gates WHERE id = ?').get(gate.data.id) as { criteria: string };
+      const parsed = JSON.parse(row.criteria);
+      expect(parsed).toHaveLength(2);
+      expect(parsed[0]).toEqual({ label: 'Exit doc reviewed', met: true, evidenceUrl: 'https://example.com/doc' });
+      expect(parsed[1]).toEqual({ label: 'RAID complete', met: true });
+    });
+
+    it('preserves existing criteria when not provided in sign-off', () => {
+      const gate = createGate({
+        buildingId: 'bld_1',
+        phase: 'strategy',
+        criteria: ['Test criteria'],
+      });
+      if (!gate.ok) throw new Error('gate creation failed');
+
+      signoffGate({
+        gateId: gate.data.id,
+        reviewer: 'pm',
+        verdict: 'CONDITIONAL',
+        conditions: ['Need more review'],
+        // No criteria parameter — should preserve existing
+      });
+
+      const row = db.prepare('SELECT criteria FROM phase_gates WHERE id = ?').get(gate.data.id) as { criteria: string };
+      const parsed = JSON.parse(row.criteria);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0]).toEqual({ label: 'Test criteria', met: false });
+    });
   });
 
   describe('canAdvance', () => {
@@ -254,6 +332,23 @@ describe('Phase Gate System', () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.data).toHaveLength(0);
+      }
+    });
+
+    it('returns parsed criteria objects instead of JSON strings', () => {
+      createGate({
+        buildingId: 'bld_1',
+        phase: 'strategy',
+        criteria: ['Exit doc ready', 'Tests passing'],
+      });
+
+      const result = getGates('bld_1');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const gates = result.data as Array<{ criteria: Array<{ label: string; met: boolean }> }>;
+        expect(gates[0].criteria).toHaveLength(2);
+        expect(gates[0].criteria[0]).toEqual({ label: 'Exit doc ready', met: false });
+        expect(typeof gates[0].criteria).toBe('object'); // not a string
       }
     });
   });

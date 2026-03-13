@@ -2018,7 +2018,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     // ─── Phase Gate Events ───
 
     handle(socket, 'phase:gate:create', PhaseGateCreateSchema, (parsed, ack) => {
-      const result = createGate({ buildingId: parsed.buildingId, phase: parsed.phase });
+      const result = createGate({ buildingId: parsed.buildingId, phase: parsed.phase, criteria: parsed.criteria });
       if (result.ok) {
         bus.emit('phase:gate:created', { buildingId: parsed.buildingId, ...(result.data as Record<string, unknown>) });
       }
@@ -2031,7 +2031,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
       const result = signoffGate({
         gateId: parsed.gateId, reviewer: parsed.reviewer, verdict: parsed.verdict,
-        conditions: parsed.conditions, exitDocId: parsed.exitDocId, nextPhaseInput: parsed.nextPhaseInput,
+        conditions: parsed.conditions, criteria: parsed.criteria, exitDocId: parsed.exitDocId, nextPhaseInput: parsed.nextPhaseInput,
       });
       if (result.ok) {
         const signoffData = result.data as { gateId: string; verdict: string; phaseAdvanced?: boolean; nextPhase?: string };
@@ -2044,6 +2044,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
               gateId: parsed.gateId,
               phaseAdvanced: signoffData.phaseAdvanced,
               nextPhase: signoffData.nextPhase,
+              criteria: safeJsonParse(fullGate.criteria as string, []),
               signoff_conditions: safeJsonParse(fullGate.signoff_conditions as string, []),
               next_phase_input: safeJsonParse(fullGate.next_phase_input as string, {}),
             }
