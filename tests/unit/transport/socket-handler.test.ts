@@ -485,14 +485,14 @@ describe('Socket Handler (Transport Layer)', () => {
   });
 
   describe('building events', () => {
-    it('building:create calls createBuilding and acks', () => {
+    it('building:create calls createBuilding and acks with default working directory (#540)', () => {
       const ack = vi.fn();
       socket.emit('building:create', { name: 'My Project' }, ack);
 
       expect(createBuilding).toHaveBeenCalledWith({
         name: 'My Project',
         projectId: undefined,
-        workingDirectory: undefined,
+        workingDirectory: '/tmp/overlord-projects/my-project',
         repoUrl: undefined,
         config: {},
       });
