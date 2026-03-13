@@ -63,6 +63,8 @@ vi.mock('../../../public/ui/engine/helpers.js', () => ({
   setContent: vi.fn((el: HTMLElement) => {
     el.textContent = '';
   }),
+  debounce: vi.fn((fn: any) => fn),
+  escapeHtml: vi.fn((s: string) => s),
 }));
 
 vi.mock('../../../public/ui/engine/router.js', () => ({
@@ -83,6 +85,11 @@ vi.mock('../../../public/ui/components/toast.js', () => ({
 
 vi.mock('../../../public/ui/views/room-view.js', () => ({
   RoomView: vi.fn().mockImplementation(() => mockRoomViewInstance),
+}));
+
+const mockGlobalSearchInstance = { mount: vi.fn() };
+vi.mock('../../../public/ui/components/global-search.js', () => ({
+  GlobalSearch: vi.fn().mockImplementation(() => mockGlobalSearchInstance),
 }));
 
 vi.mock('../../../public/ui/engine/logger.js', () => ({

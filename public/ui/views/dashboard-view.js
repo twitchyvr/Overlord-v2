@@ -116,10 +116,10 @@ export class DashboardView extends Component {
         color: 'var(--accent-cyan)'
       },
       {
-        label: 'Active Phase',
-        value: this._getActivePhase(),
-        icon: '\u{1F4CD}',
-        color: 'var(--electric)'
+        label: 'Avg Health',
+        value: this._getAvgHealth(),
+        icon: '\u{1F4CA}',
+        color: this._getAvgHealthColor()
       },
       {
         label: 'Agents',
@@ -205,6 +205,7 @@ export class DashboardView extends Component {
         floorCount: building.floorCount ?? building.floor_count,
         agentCount: building.agentCount ?? building.agent_count ?? 0,
         repoUrl: building.repoUrl || building.repo_url || '',
+        healthScore: building.healthScore || null,
       }, {
         variant: isActive ? 'solid' : 'glass',
         className: isActive ? 'building-card-active' : '',
@@ -242,12 +243,29 @@ export class DashboardView extends Component {
     return this._buildings.reduce((sum, b) => sum + (b.agentCount ?? b.agent_count ?? 0), 0);
   }
 
+  _getAvgHealth() {
+    const scores = this._buildings
+      .filter(b => b.healthScore && b.healthScore.total !== undefined)
+      .map(b => b.healthScore.total);
+    if (scores.length === 0) return '--';
+    return Math.round(scores.reduce((s, v) => s + v, 0) / scores.length);
+  }
+
+  _getAvgHealthColor() {
+    const avg = this._getAvgHealth();
+    if (avg === '--') return 'var(--text-muted)';
+    if (avg >= 75) return 'var(--accent-green)';
+    if (avg >= 50) return 'var(--accent-amber)';
+    if (avg >= 25) return 'var(--accent-orange, #f97316)';
+    return 'var(--accent-red, #ef4444)';
+  }
+
   _updateKPIs() {
     // Lightweight KPI update without full re-render
     const kpiValues = this.el.querySelectorAll('.kpi-card-value');
     if (kpiValues.length >= 4) {
       kpiValues[0].textContent = String(this._buildings.length);
-      kpiValues[1].textContent = this._getActivePhase();
+      kpiValues[1].textContent = String(this._getAvgHealth());
       kpiValues[2].textContent = String(this._getAgentCount());
       kpiValues[3].textContent = String(this._raidEntries.length);
     }

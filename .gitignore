@@ -141,7 +141,8 @@ data/
 *.db-journal
 *.db-wal
 # Runtime plugin directory (user-installed plugins, not source code)
-/plugins/
+/plugins/*
+!/plugins/built-in/
 tmp/
 temp/
 .DS_Store

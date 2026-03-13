@@ -11,9 +11,14 @@
  *
  * Plugin directory structure:
  *   plugins/
- *     my-plugin/
- *       plugin.json    ← manifest (id, name, version, engine, entrypoint, permissions)
- *       main.js        ← entrypoint script
+ *     built-in/                  ← ships with Overlord
+ *       daily-standup/
+ *         plugin.json
+ *         main.lua
+ *         README.md
+ *     my-plugin/                 ← user plugins (can override built-in by ID)
+ *       plugin.json
+ *       main.lua
  */
 
 import * as path from 'node:path';
@@ -54,20 +59,36 @@ export async function initPlugins(params: InitPluginsParams): Promise<void> {
   // Initialize the loader with system API references
   initPluginLoader(params);
 
-  // Discover plugins
-  const manifests = discoverPlugins(resolvedDir);
-  if (manifests.length === 0) {
+  // Discover plugins from user directory and built-in directory
+  const userManifests = discoverPlugins(resolvedDir);
+  const builtInDir = path.join(resolvedDir, 'built-in');
+  const builtInManifests = discoverPlugins(builtInDir);
+
+  // Merge: built-in first, user plugins can override by matching ID
+  const pluginMap = new Map<string, { manifest: typeof userManifests[0]; dir: string }>();
+  for (const m of builtInManifests) {
+    pluginMap.set(m.id, { manifest: m, dir: path.join(builtInDir, m.id) });
+  }
+  for (const m of userManifests) {
+    pluginMap.set(m.id, { manifest: m, dir: path.join(resolvedDir, m.id) });
+  }
+
+  if (pluginMap.size === 0) {
     log.info('No plugins found');
     return;
   }
+
+  log.info(
+    { builtIn: builtInManifests.length, user: userManifests.length, total: pluginMap.size },
+    'Plugins discovered',
+  );
 
   // Load each discovered plugin
   let loaded = 0;
   let failed = 0;
 
-  for (const manifest of manifests) {
-    const pluginPath = path.join(resolvedDir, manifest.id);
-    const result = await loadPlugin(manifest, pluginPath);
+  for (const [, { manifest, dir }] of pluginMap) {
+    const result = await loadPlugin(manifest, dir);
     if (result.ok) {
       loaded++;
     } else {
@@ -83,7 +104,7 @@ export async function initPlugins(params: InitPluginsParams): Promise<void> {
   wireBusHooks(params);
 
   log.info(
-    { total: manifests.length, loaded, failed },
+    { total: pluginMap.size, loaded, failed },
     'Plugin system initialized',
   );
 }

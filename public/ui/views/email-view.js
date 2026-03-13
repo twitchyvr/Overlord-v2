@@ -273,7 +273,11 @@ export class EmailView extends Component {
     // Sender/recipient column
     const senderCol = h('div', { class: 'email-view-sender' });
     if (this._filter === 'inbox') {
-      senderCol.appendChild(h('span', { class: 'email-view-sender-name' }, fromName));
+      const senderLink = email.from_id
+        ? EntityLink.agent(email.from_id, fromName)
+        : h('span', { class: 'email-view-sender-name' }, fromName);
+      if (senderLink.classList) senderLink.classList.add('email-view-sender-name');
+      senderCol.appendChild(senderLink);
     } else {
       // Sent view: show recipients
       const toNames = (email.recipients || [])
@@ -580,7 +584,9 @@ export class EmailView extends Component {
 
     const msg = h('div', { class: 'email-thread-message' },
       h('div', { class: 'email-thread-message-header' },
-        h('span', { class: 'email-thread-message-from' }, fromName),
+        email.from_id
+          ? EntityLink.agent(email.from_id, fromName)
+          : h('span', { class: 'email-thread-message-from' }, fromName),
         email.priority === 'urgent'
           ? h('span', { class: 'email-priority--urgent email-thread-priority-badge' }, 'URGENT')
           : null,

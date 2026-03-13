@@ -21,6 +21,11 @@ import { RoomView } from './views/room-view.js';
 import { ExitDocForm } from './views/exit-doc-form.js';
 import { SettingsView } from './views/settings-view.js';
 import { initEntityNav } from './engine/entity-nav.js';
+import { GlobalSearch } from './components/global-search.js';
+import { QuickActions } from './components/quick-actions.js';
+import { NotificationCenter } from './components/notification-center.js';
+import { AgentActivityTracker } from './components/agent-activity-tracker.js';
+import { BreadcrumbNav } from './components/breadcrumb-nav.js';
 
 // ═══════════════════════════════════════════════════════════
 //  THEME MANAGEMENT
@@ -110,6 +115,40 @@ if (socket) {
   // ── Mount settings view handler (listens for settings:open events) ──
   const settingsView = new SettingsView(document.createElement('div'));
   settingsView.mount();
+
+  // ── Mount global search (Cmd+K) ──
+  const searchContainer = document.createElement('div');
+  searchContainer.id = 'global-search-container';
+  const toolbarRight = document.querySelector('.toolbar-right');
+  if (toolbarRight) {
+    toolbarRight.insertBefore(searchContainer, toolbarRight.firstChild);
+  }
+  const globalSearch = new GlobalSearch(searchContainer);
+  globalSearch.mount();
+
+  // ── Mount Quick Actions FAB (floating action button, bottom-right) ──
+  const qaContainer = document.createElement('div');
+  document.body.appendChild(qaContainer);
+  const quickActions = new QuickActions(qaContainer);
+  quickActions.mount();
+
+  // ── Mount Notification Center (bell icon in toolbar) ──
+  const bellEl = document.getElementById('notification-bell');
+  if (bellEl) {
+    const notifCenter = new NotificationCenter(bellEl);
+    notifCenter.mount();
+  }
+
+  // ── Mount agent activity tracker (visual animation states) ──
+  const activityTracker = new AgentActivityTracker(document.createElement('div'));
+  activityTracker.mount();
+
+  // ── Mount breadcrumb navigation (spatial context bar) ──
+  const breadcrumbEl = document.getElementById('breadcrumb-bar');
+  if (breadcrumbEl) {
+    const breadcrumbNav = new BreadcrumbNav(breadcrumbEl);
+    breadcrumbNav.mount();
+  }
 
   // Wire settings button
   const settingsBtn = document.getElementById('settings-btn');

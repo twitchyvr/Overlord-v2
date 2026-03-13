@@ -27,6 +27,7 @@ import {
   BuildingGetSchema,
   BuildingListSchema,
   BuildingApplyBlueprintSchema,
+  BuildingHealthScoreSchema,
   FloorListSchema,
   FloorGetSchema,
   RoomCreateSchema,
@@ -45,6 +46,7 @@ import {
   PhasePendingGatesSchema,
   PhaseResolveConditionsSchema,
   PhaseStaleGatesSchema,
+  PhaseGateCreateSchema,
   PhaseGateSignoffSchema,
   PhaseAdvanceSchema,
   RaidSearchSchema,
@@ -63,6 +65,7 @@ import {
   ExitDocSubmitSchema,
   ExitDocGetSchema,
   ExitDocListSchema,
+  SearchGlobalSchema,
 } from '../../../src/transport/schemas.js';
 
 // ═══════════════════════════════════════════════════════════
@@ -232,6 +235,18 @@ describe('Building Schemas', () => {
 
     it('rejects missing required fields', () => {
       const result = BuildingApplyBlueprintSchema.safeParse({});
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('BuildingHealthScoreSchema', () => {
+    it('accepts valid buildingId', () => {
+      const result = BuildingHealthScoreSchema.safeParse({ buildingId: 'bld_123' });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects empty payload', () => {
+      const result = BuildingHealthScoreSchema.safeParse({});
       expect(result.success).toBe(false);
     });
   });
@@ -450,6 +465,31 @@ describe('Phase Schemas', () => {
     });
   });
 
+  describe('PhaseGateCreateSchema', () => {
+    it('accepts buildingId and phase with optional criteria', () => {
+      const result = PhaseGateCreateSchema.safeParse({
+        buildingId: 'bld_1',
+        phase: 'strategy',
+        criteria: ['Exit doc ready', 'Tests passing', 'RAID log complete'],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.criteria).toEqual(['Exit doc ready', 'Tests passing', 'RAID log complete']);
+      }
+    });
+
+    it('defaults criteria to empty array when not provided', () => {
+      const result = PhaseGateCreateSchema.safeParse({
+        buildingId: 'bld_1',
+        phase: 'strategy',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.criteria).toEqual([]);
+      }
+    });
+  });
+
   describe('PhaseGateSignoffSchema', () => {
     it('accepts valid GO signoff', () => {
       const result = PhaseGateSignoffSchema.safeParse({
@@ -498,6 +538,37 @@ describe('Phase Schemas', () => {
     it('rejects missing required fields', () => {
       const result = PhaseGateSignoffSchema.safeParse({});
       expect(result.success).toBe(false);
+    });
+
+    it('accepts criteria array with met status and evidence URLs', () => {
+      const result = PhaseGateSignoffSchema.safeParse({
+        gateId: 'gate_1',
+        reviewer: 'admin',
+        verdict: 'GO',
+        criteria: [
+          { label: 'Exit doc reviewed', met: true, evidenceUrl: 'https://example.com/doc' },
+          { label: 'Tests passing', met: true },
+          { label: 'RAID complete', met: false },
+        ],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.criteria).toHaveLength(3);
+        expect(result.data.criteria![0].evidenceUrl).toBe('https://example.com/doc');
+        expect(result.data.criteria![2].met).toBe(false);
+      }
+    });
+
+    it('accepts signoff without criteria (optional field)', () => {
+      const result = PhaseGateSignoffSchema.safeParse({
+        gateId: 'gate_1',
+        reviewer: 'admin',
+        verdict: 'GO',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.criteria).toBeUndefined();
+      }
     });
   });
 
@@ -933,6 +1004,60 @@ describe('Field Length Limits', () => {
     const result = PhaseResolveConditionsSchema.safeParse({
       gateId: 'gate_1',
       resolvedConditions: Array.from({ length: 501 }, (_, i) => `cond_${i}`),
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ─── Global Search Schema ───
+
+describe('SearchGlobalSchema', () => {
+  it('accepts valid search payload', () => {
+    const result = SearchGlobalSchema.safeParse({
+      buildingId: 'b1',
+      query: 'API endpoints',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.filters).toEqual([]);
+      expect(result.data.limit).toBe(10);
+    }
+  });
+
+  it('accepts payload with filters and limit', () => {
+    const result = SearchGlobalSchema.safeParse({
+      buildingId: 'b1',
+      query: 'test',
+      filters: ['task', 'agent'],
+      limit: 20,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.filters).toEqual(['task', 'agent']);
+      expect(result.data.limit).toBe(20);
+    }
+  });
+
+  it('rejects empty query', () => {
+    const result = SearchGlobalSchema.safeParse({
+      buildingId: 'b1',
+      query: '',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects missing buildingId', () => {
+    const result = SearchGlobalSchema.safeParse({
+      query: 'test',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects limit over 50', () => {
+    const result = SearchGlobalSchema.safeParse({
+      buildingId: 'b1',
+      query: 'test',
+      limit: 100,
     });
     expect(result.success).toBe(false);
   });

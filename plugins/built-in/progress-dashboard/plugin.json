@@ -1,0 +1,16 @@
+{
+  "id": "progress-dashboard",
+  "name": "Progress Dashboard",
+  "version": "1.0.0",
+  "description": "Calculates project completion percentage across all phases by mapping rooms to workflow stages and tracking progress through the pipeline.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

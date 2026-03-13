@@ -1,0 +1,17 @@
+{
+  "id": "github-sync",
+  "name": "GitHub Sync",
+  "version": "1.0.0",
+  "description": "Prepares sync payloads from Overlord state (rooms, agents, tool results) for GitHub integration, emitting github:sync-ready events. Full HTTP sync requires net:http (not yet available).",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit",
+    "net:http"
+  ]
+}

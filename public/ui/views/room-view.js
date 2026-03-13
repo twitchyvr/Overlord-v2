@@ -13,6 +13,7 @@ import { h, formatTime, escapeHtml, tip } from '../engine/helpers.js';
 import { Modal } from '../components/modal.js';
 import { Button } from '../components/button.js';
 import { Toast } from '../components/toast.js';
+import { EntityLink } from '../engine/entity-nav.js';
 
 
 /** Room type → icon mapping. */
@@ -602,7 +603,7 @@ export class RoomView extends Component {
           (agent.name || '?')[0].toUpperCase()
         ),
         h('div', { class: 'room-roster-info' },
-          h('span', { class: 'room-roster-name' }, agent.name || agent.id || 'Agent'),
+          EntityLink.agent(agent.agentId || agent.id, agent.name || agent.agentId || agent.id || 'Agent'),
           h('span', { class: 'room-roster-role' }, agent.role || ''),
           h('span', { class: 'room-roster-table text-muted' }, tableName)
         ),

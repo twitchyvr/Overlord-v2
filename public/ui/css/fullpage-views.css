@@ -2285,6 +2285,62 @@
   flex-shrink: 0;
   font-size: var(--text-sm);
 }
+.phase-view-criterion-evidence {
+  font-size: var(--text-xs);
+  color: var(--accent-blue);
+  text-decoration: none;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.phase-view-criterion-evidence:hover {
+  text-decoration: underline;
+}
+
+/* Form criteria checklist (inside sign-off form) */
+.phase-view-form-criteria-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.phase-view-form-criterion-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-secondary);
+}
+.phase-view-form-criterion-label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.phase-view-form-criterion-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-green);
+  cursor: pointer;
+}
+.phase-view-form-evidence-input {
+  font-size: var(--text-xs);
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+}
+.phase-view-form-evidence-input::placeholder {
+  color: var(--text-muted);
+}
+.phase-view-form-evidence-input:focus {
+  border-color: var(--accent-blue);
+  outline: none;
+}
 
 /* ═══════════════════════════════════════════════════
    GATE SIGN-OFFS
@@ -3342,4 +3398,147 @@
   display: flex;
   justify-content: flex-end;
   margin-top: var(--sp-2);
+}
+
+/* ═══════════════════════════════════════════════════
+   Agent Activity Animations
+   Applied via AgentActivityTracker (agent-activity-tracker.js)
+   Classes: .agent-activity-{thinking,working,chatting,waiting,idle,error}
+   ═══════════════════════════════════════════════════ */
+
+/* ── Thinking: pulsing glow on avatar ── */
+.agent-activity-thinking.agents-view-card-avatar {
+  animation: agent-think-glow 1.8s ease-in-out infinite;
+  border-color: var(--accent-purple);
+}
+.agent-activity-thinking.agents-view-status-dot {
+  background: var(--accent-purple);
+  animation: agent-think-dot 1.8s ease-in-out infinite;
+}
+.agents-view-card .agent-activity-thinking {
+  border-top-color: var(--accent-purple);
+}
+
+@keyframes agent-think-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); }
+  50%      { box-shadow: 0 0 16px 4px rgba(168, 85, 247, 0.45); }
+}
+@keyframes agent-think-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.3); opacity: 0.7; }
+}
+
+/* ── Working: spinning ring effect ── */
+.agent-activity-working.agents-view-card-avatar {
+  border-color: var(--accent-blue);
+  animation: agent-work-spin 1.2s linear infinite;
+  border-top-color: transparent;
+}
+.agent-activity-working.agents-view-status-dot {
+  background: var(--accent-blue);
+  animation: agent-work-dot 0.8s ease-in-out infinite alternate;
+}
+.agents-view-card .agent-activity-working {
+  border-top-color: var(--accent-blue);
+}
+
+@keyframes agent-work-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes agent-work-dot {
+  from { transform: scale(1); }
+  to   { transform: scale(1.4); }
+}
+
+/* ── Chatting: typing indicator pulse ── */
+.agent-activity-chatting.agents-view-card-avatar {
+  border-color: var(--accent-green);
+  animation: agent-chat-pulse 0.6s ease-in-out infinite alternate;
+}
+.agent-activity-chatting.agents-view-status-dot {
+  background: var(--accent-green);
+  animation: agent-chat-blink 0.5s steps(2) infinite;
+}
+.agents-view-card .agent-activity-chatting {
+  border-top-color: var(--accent-green);
+}
+
+@keyframes agent-chat-pulse {
+  from { transform: scale(1); border-color: var(--accent-green); }
+  to   { transform: scale(1.06); border-color: var(--status-active); }
+}
+@keyframes agent-chat-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.4; }
+}
+
+/* ── Waiting: slow subtle pulse ── */
+.agent-activity-waiting.agents-view-card-avatar {
+  border-color: var(--accent-yellow);
+  animation: agent-wait-breathe 3s ease-in-out infinite;
+}
+.agent-activity-waiting.agents-view-status-dot {
+  background: var(--accent-yellow);
+  animation: agent-wait-breathe 3s ease-in-out infinite;
+}
+.agents-view-card .agent-activity-waiting {
+  border-top-color: var(--accent-yellow);
+}
+
+@keyframes agent-wait-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+/* ── Idle: very subtle breathing (barely perceptible) ── */
+.agent-activity-idle.agents-view-card-avatar {
+  border-color: var(--status-idle);
+  animation: agent-idle-breathe 5s ease-in-out infinite;
+}
+.agent-activity-idle.agents-view-status-dot {
+  background: var(--status-idle);
+}
+
+@keyframes agent-idle-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.85; }
+}
+
+/* ── Error: red attention pulse ── */
+.agent-activity-error.agents-view-card-avatar {
+  border-color: var(--accent-red);
+  animation: agent-error-flash 0.8s ease-in-out infinite;
+}
+.agent-activity-error.agents-view-status-dot {
+  background: var(--accent-red);
+  animation: agent-error-dot 0.8s ease-in-out infinite;
+}
+.agents-view-card .agent-activity-error {
+  border-top-color: var(--accent-red);
+}
+
+@keyframes agent-error-flash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0); border-color: var(--accent-red); }
+  50%      { box-shadow: 0 0 12px 3px rgba(248, 113, 113, 0.5); border-color: var(--status-error); }
+}
+@keyframes agent-error-dot {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.5); }
+}
+
+/* ── Accessibility: reduce motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .agent-activity-thinking.agents-view-card-avatar,
+  .agent-activity-thinking.agents-view-status-dot,
+  .agent-activity-working.agents-view-card-avatar,
+  .agent-activity-working.agents-view-status-dot,
+  .agent-activity-chatting.agents-view-card-avatar,
+  .agent-activity-chatting.agents-view-status-dot,
+  .agent-activity-waiting.agents-view-card-avatar,
+  .agent-activity-waiting.agents-view-status-dot,
+  .agent-activity-idle.agents-view-card-avatar,
+  .agent-activity-error.agents-view-card-avatar,
+  .agent-activity-error.agents-view-status-dot {
+    animation: none;
+  }
 }

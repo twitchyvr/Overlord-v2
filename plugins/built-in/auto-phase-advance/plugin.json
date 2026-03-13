@@ -1,0 +1,17 @@
+{
+  "id": "auto-phase-advance",
+  "name": "Auto Phase Advance",
+  "version": "1.0.0",
+  "description": "Automatically detects when a room's exit criteria are satisfied and emits a phase advance request, eliminating manual phase promotion for completed work.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "tool:execute",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

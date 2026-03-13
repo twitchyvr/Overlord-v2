@@ -580,3 +580,86 @@ export function applyCustomPlan(buildingId: string, plan: CustomPlanData): Resul
   log.info({ buildingId, floorsCreated, roomsCreated, agentsCreated }, 'Custom plan applied');
   return ok({ buildingId, floorsCreated, roomsCreated, agentsCreated });
 }
+
+// ─── Health Score ───
+
+const PHASE_SCORES: Record<string, number> = {
+  strategy: 4,
+  discovery: 8,
+  architecture: 12,
+  execution: 17,
+  review: 21,
+  deploy: 25,
+};
+
+export interface HealthScoreBreakdown {
+  phaseProgress: number;
+  taskCompletion: number;
+  raidHealth: number;
+  agentActivity: number;
+  total: number;
+}
+
+/**
+ * Calculate a 0-100 health score for a building (project).
+ *
+ * Components (each 0-25):
+ * - Phase Progress: how far through the phase pipeline
+ * - Task Completion: % of tasks marked done
+ * - RAID Health: fewer open risks/issues = healthier
+ * - Agent Activity: recent message volume indicates momentum
+ */
+export function getHealthScore(buildingId: string): Result {
+  const db = getDb();
+
+  const building = db.prepare('SELECT * FROM buildings WHERE id = ?').get(buildingId) as BuildingRow | undefined;
+  if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
+
+  // 1. Phase Progress (0-25)
+  const phase = building.active_phase || 'strategy';
+  const phaseProgress = PHASE_SCORES[phase] ?? 0;
+
+  // 2. Task Completion (0-25)
+  const taskStats = db.prepare(`
+    SELECT
+      COUNT(*) as total,
+      SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as done
+    FROM tasks WHERE building_id = ?
+  `).get(buildingId) as { total: number; done: number };
+
+  const taskCompletion = taskStats.total > 0
+    ? Math.round((taskStats.done / taskStats.total) * 25)
+    : 0;
+
+  // 3. RAID Health (0-25) — fewer active risks/issues = healthier
+  const raidStats = db.prepare(`
+    SELECT
+      SUM(CASE WHEN type = 'risk' AND status = 'active' THEN 1 ELSE 0 END) as risks,
+      SUM(CASE WHEN type = 'issue' AND status = 'active' THEN 1 ELSE 0 END) as issues
+    FROM raid_entries WHERE building_id = ?
+  `).get(buildingId) as { risks: number; issues: number };
+
+  const raidPenalty = (raidStats.risks || 0) * 5 + (raidStats.issues || 0) * 3;
+  const raidHealth = Math.max(0, 25 - raidPenalty);
+
+  // 4. Agent Activity (0-25) — messages in last 7 days
+  const activityCount = db.prepare(`
+    SELECT COUNT(*) as count FROM messages
+    WHERE room_id IN (
+      SELECT r.id FROM rooms r
+      JOIN floors f ON r.floor_id = f.id
+      WHERE f.building_id = ?
+    )
+    AND created_at >= datetime('now', '-7 days')
+  `).get(buildingId) as { count: number };
+
+  // Scale: 0 msgs = 0, 50+ msgs = 25 (linear with cap)
+  const agentActivity = Math.min(25, Math.round((activityCount.count / 50) * 25));
+
+  const total = phaseProgress + taskCompletion + raidHealth + agentActivity;
+
+  return ok({
+    buildingId,
+    score: { phaseProgress, taskCompletion, raidHealth, agentActivity, total },
+  });
+}

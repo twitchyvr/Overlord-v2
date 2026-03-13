@@ -86,6 +86,7 @@ function setupDb(): Database.Database {
   db.prepare(`CREATE TABLE IF NOT EXISTS phase_gates (
     id TEXT PRIMARY KEY, building_id TEXT NOT NULL REFERENCES buildings(id),
     phase TEXT NOT NULL, status TEXT DEFAULT 'pending',
+    criteria TEXT DEFAULT '[]',
     exit_doc_id TEXT, signoff_reviewer TEXT, signoff_verdict TEXT,
     signoff_conditions TEXT DEFAULT '[]', signoff_timestamp TEXT,
     next_phase_input TEXT DEFAULT '{}',

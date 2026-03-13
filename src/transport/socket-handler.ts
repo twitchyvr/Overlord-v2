@@ -16,7 +16,7 @@ import type { Bus } from '../core/bus.js';
 import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { AgentSession } from '../agents/agent-session.js';
-import { createBuilding, getBuilding, listBuildings, updateBuilding, addAllowedPath, removeAllowedPath, listFloors, getFloor, createFloor, updateFloor, deleteFloor, sortFloors } from '../rooms/building-manager.js';
+import { createBuilding, getBuilding, listBuildings, updateBuilding, addAllowedPath, removeAllowedPath, listFloors, getFloor, createFloor, updateFloor, deleteFloor, sortFloors, getHealthScore } from '../rooms/building-manager.js';
 import { getGitInfo, initGitRepo, cloneGitRepo } from '../tools/git-detector.js';
 import { getGates, canAdvance, signoffGate, createGate, getPendingGates, resolveConditions, getStalePendingGates, getPhaseOrder } from '../rooms/phase-gate.js';
 import { searchRaid, addRaidEntry, updateRaidEntry, updateRaidStatus } from '../rooms/raid-log.js';
@@ -30,7 +30,7 @@ import type { z } from 'zod';
 
 import {
   validate,
-  BuildingCreateSchema, BuildingGetSchema, BuildingListSchema, BuildingApplyBlueprintSchema, BuildingUpdateSchema,
+  BuildingCreateSchema, BuildingGetSchema, BuildingListSchema, BuildingApplyBlueprintSchema, BuildingUpdateSchema, BuildingHealthScoreSchema,
   FolderAddPathSchema, FolderRemovePathSchema, FolderListPathsSchema,
   GitDetectSchema, GitInitSchema, GitCloneSchema,
   FloorListSchema, FloorGetSchema, FloorCreateSchema, FloorUpdateSchema, FloorDeleteSchema, FloorSortSchema,
@@ -61,9 +61,11 @@ import {
   EmailMarkReadSchema, EmailUnreadCountSchema, EmailSentSchema,
   SessionNoteWriteSchema, SessionNoteReadSchema, SessionNoteListSchema,
   SessionNoteDeleteSchema, SessionNoteClearSchema,
+  SearchGlobalSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
+import { globalSearch } from '../storage/global-search.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
@@ -236,6 +238,10 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (ack) ack(result);
     });
 
+    handle(socket, 'building:health-score', BuildingHealthScoreSchema, (parsed, ack) => {
+      if (ack) ack(getHealthScore(parsed.buildingId));
+    });
+
     // ─── Folder / Path Permission Events ───
 
     handle(socket, 'folder:add-path', FolderAddPathSchema, (parsed, ack) => {
@@ -325,6 +331,15 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       ).all() as Array<{ building_id: string; count: number }>;
       const agentMap = new Map(agentCounts.map(r => [r.building_id, r.count]));
 
+      // Compute health scores for each building
+      const healthMap = new Map<string, { phaseProgress: number; taskCompletion: number; raidHealth: number; agentActivity: number; total: number }>();
+      for (const b of buildings) {
+        const hResult = getHealthScore(b.id);
+        if (hResult.ok) {
+          healthMap.set(b.id, (hResult.data as { score: { phaseProgress: number; taskCompletion: number; raidHealth: number; agentActivity: number; total: number } }).score);
+        }
+      }
+
       if (ack) ack({
         ok: true,
         data: {
@@ -337,6 +352,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
             repoUrl: b.repo_url || '',
             floorCount: floorMap.get(b.id) || 0,
             agentCount: agentMap.get(b.id) || 0,
+            healthScore: healthMap.get(b.id) || null,
           })),
         },
       });
@@ -1106,6 +1122,18 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     handle(socket, 'session-note:clear', SessionNoteClearSchema, (parsed, ack) => {
       const result = clearNotes(parsed.agentId);
       if (ack) ack({ ok: true, data: { count: result.count } });
+    });
+
+    // ─── Global Search ───
+
+    handle(socket, 'search:global', SearchGlobalSchema, (parsed, ack) => {
+      const result = globalSearch({
+        buildingId: parsed.buildingId,
+        query: parsed.query,
+        filters: parsed.filters,
+        limit: parsed.limit,
+      });
+      if (ack) ack(result);
     });
 
     // ─── Command List ───
@@ -2018,7 +2046,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     // ─── Phase Gate Events ───
 
     handle(socket, 'phase:gate:create', PhaseGateCreateSchema, (parsed, ack) => {
-      const result = createGate({ buildingId: parsed.buildingId, phase: parsed.phase });
+      const result = createGate({ buildingId: parsed.buildingId, phase: parsed.phase, criteria: parsed.criteria });
       if (result.ok) {
         bus.emit('phase:gate:created', { buildingId: parsed.buildingId, ...(result.data as Record<string, unknown>) });
       }
@@ -2031,7 +2059,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
       const result = signoffGate({
         gateId: parsed.gateId, reviewer: parsed.reviewer, verdict: parsed.verdict,
-        conditions: parsed.conditions, exitDocId: parsed.exitDocId, nextPhaseInput: parsed.nextPhaseInput,
+        conditions: parsed.conditions, criteria: parsed.criteria, exitDocId: parsed.exitDocId, nextPhaseInput: parsed.nextPhaseInput,
       });
       if (result.ok) {
         const signoffData = result.data as { gateId: string; verdict: string; phaseAdvanced?: boolean; nextPhase?: string };
@@ -2044,6 +2072,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
               gateId: parsed.gateId,
               phaseAdvanced: signoffData.phaseAdvanced,
               nextPhase: signoffData.nextPhase,
+              criteria: safeJsonParse(fullGate.criteria as string, []),
               signoff_conditions: safeJsonParse(fullGate.signoff_conditions as string, []),
               next_phase_input: safeJsonParse(fullGate.next_phase_input as string, {}),
             }

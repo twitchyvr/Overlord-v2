@@ -85,6 +85,10 @@ export const BuildingApplyBlueprintSchema = z.object({
   agentId: id(),
 });
 
+export const BuildingHealthScoreSchema = z.object({
+  buildingId: id(),
+});
+
 // ─── Building Update Schema ───
 
 export const BuildingUpdateSchema = z.object({
@@ -359,10 +363,11 @@ export const PhaseGateSchema = z.object({
   phase: optionalName(),
 });
 
-/** phase:gate:create — requires both buildingId and phase */
+/** phase:gate:create — requires both buildingId and phase, with optional criteria checklist */
 export const PhaseGateCreateSchema = z.object({
   buildingId: id(),
   phase: name(),
+  criteria: z.array(z.string().max(MAX_NAME)).max(50).optional().default([]),
 });
 
 // ─── Phase Schemas ───
@@ -394,6 +399,11 @@ export const PhaseGateSignoffSchema = z.object({
   reviewer: name(),
   verdict: z.enum(['GO', 'NO-GO', 'CONDITIONAL']),
   conditions: stringArray().optional().default([]),
+  criteria: z.array(z.object({
+    label: z.string().max(MAX_NAME),
+    met: z.boolean(),
+    evidenceUrl: z.string().max(2000).optional(),
+  })).max(50).optional(),
   exitDocId: optionalId(),
   nextPhaseInput: z.record(z.unknown()).optional().default({}),
 });
@@ -763,4 +773,13 @@ export const SessionNoteDeleteSchema = z.object({
 
 export const SessionNoteClearSchema = z.object({
   agentId: id(),
+});
+
+// ─── Global Search Schema ───
+
+export const SearchGlobalSchema = z.object({
+  buildingId: id(),
+  query: z.string().min(1).max(MAX_NAME),
+  filters: z.array(z.string().max(50)).max(10).optional().default([]),
+  limit: z.number().int().min(1).max(50).optional().default(10),
 });

@@ -747,6 +747,15 @@ export function initSocketBridge(socket, store, engine) {
       });
     },
 
+    fetchHealthScore(buildingId) {
+      return _emitWithTimeout('building:health-score', { buildingId }).then((res) => {
+        if (res && res.ok) {
+          store.set('building.healthScore', res.data);
+        }
+        return res;
+      });
+    },
+
     fetchFloors(buildingId) {
       return _emitWithTimeout('floor:list', { buildingId }).then((res) => {
         if (res && res.ok) {
@@ -1369,8 +1378,8 @@ export function initSocketBridge(socket, store, engine) {
 
     // ── Phase Gate methods ──
 
-    createGate(buildingId, phase) {
-      return _emitWithFeedback('phase:gate:create', { buildingId, phase });
+    createGate(buildingId, phase, criteria) {
+      return _emitWithFeedback('phase:gate:create', { buildingId, phase, ...(criteria ? { criteria } : {}) });
     },
 
     signoffGate(params) {
@@ -1454,6 +1463,17 @@ export function initSocketBridge(socket, store, engine) {
 
     fetchLeaderboard(metric, opts = {}) {
       return _emitWithTimeout('agent:leaderboard', { metric, ...opts });
+    },
+
+    // ── Global Search ──
+
+    globalSearch(buildingId, query, filters = [], limit = 10) {
+      return _emitWithTimeout('search:global', { buildingId, query, filters, limit }).then((res) => {
+        if (res && res.ok) {
+          store.set('search.results', res.data);
+        }
+        return res;
+      });
     },
 
     // ── Email methods ──

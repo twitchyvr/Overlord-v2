@@ -12,7 +12,7 @@
  *
  * Socket API:
  *   window.overlordSocket.advancePhase(buildingId)
- *   window.overlordSocket.signoffGate({ gateId, reviewer, verdict, conditions })
+ *   window.overlordSocket.signoffGate({ gateId, reviewer, verdict, conditions, criteria })
  */
 
 import { Component } from '../engine/component.js';
@@ -392,17 +392,29 @@ export class PhaseView extends Component {
     if (gate.criteria && gate.criteria.length > 0) {
       const criteriaSection = h('div', { class: 'phase-view-gate-criteria' });
       criteriaSection.appendChild(
-        h('h5', { class: 'phase-view-gate-criteria-title' }, 'Criteria')
+        h('h5', { class: 'phase-view-gate-criteria-title' },
+          `Criteria (${gate.criteria.filter(c => c.met).length}/${gate.criteria.length} met)`
+        )
       );
       const criteriaList = h('ul', { class: 'phase-view-gate-criteria-list' });
       for (const criterion of gate.criteria) {
-        const isChecked = gate.status === 'go';
-        criteriaList.appendChild(
-          h('li', { class: `phase-view-criterion${isChecked ? ' phase-view-criterion-met' : ''}` },
-            h('span', { class: 'phase-view-criterion-check' }, isChecked ? '\u2611' : '\u2610'),
-            h('span', null, criterion)
-          )
+        const isChecked = !!criterion.met;
+        const li = h('li', { class: `phase-view-criterion${isChecked ? ' phase-view-criterion-met' : ''}` },
+          h('span', { class: 'phase-view-criterion-check' }, isChecked ? '\u2611' : '\u2610'),
+          h('span', null, criterion.label || criterion)
         );
+        if (criterion.evidenceUrl) {
+          li.appendChild(
+            h('a', {
+              class: 'phase-view-criterion-evidence',
+              href: criterion.evidenceUrl,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              title: 'View evidence'
+            }, '\u{1F517} Evidence')
+          );
+        }
+        criteriaList.appendChild(li);
       }
       criteriaSection.appendChild(criteriaList);
       card.appendChild(criteriaSection);
@@ -476,6 +488,55 @@ export class PhaseView extends Component {
       h('h5', { class: 'phase-view-signoff-form-title' }, 'Submit Sign-Off')
     );
 
+    // Criteria checklist (if gate has criteria)
+    const criteriaState = (gate.criteria || []).map(c => ({
+      label: c.label || c,
+      met: !!c.met,
+      evidenceUrl: c.evidenceUrl || '',
+    }));
+
+    if (criteriaState.length > 0) {
+      const criteriaGroup = h('div', { class: 'phase-view-form-group' });
+      criteriaGroup.appendChild(
+        h('label', { class: 'phase-view-form-label' }, 'Review Criteria')
+      );
+
+      const criteriaList = h('div', { class: 'phase-view-form-criteria-list' });
+
+      for (let i = 0; i < criteriaState.length; i++) {
+        const criterion = criteriaState[i];
+
+        const row = h('div', { class: 'phase-view-form-criterion-row' });
+
+        // Checkbox + label
+        const checkLabel = h('label', { class: 'phase-view-form-criterion-label' });
+        const checkbox = h('input', { type: 'checkbox', checked: criterion.met ? 'checked' : null });
+        checkbox.addEventListener('change', () => {
+          criteriaState[i].met = checkbox.checked;
+        });
+        checkLabel.appendChild(checkbox);
+        checkLabel.appendChild(h('span', null, ` ${criterion.label}`));
+        row.appendChild(checkLabel);
+
+        // Evidence URL input
+        const evidenceInput = h('input', {
+          type: 'text',
+          class: 'phase-view-form-evidence-input',
+          placeholder: 'Evidence URL (optional)',
+          value: criterion.evidenceUrl || ''
+        });
+        evidenceInput.addEventListener('input', () => {
+          criteriaState[i].evidenceUrl = evidenceInput.value.trim();
+        });
+        row.appendChild(evidenceInput);
+
+        criteriaList.appendChild(row);
+      }
+
+      criteriaGroup.appendChild(criteriaList);
+      form.appendChild(criteriaGroup);
+    }
+
     // Verdict selector
     const verdictGroup = h('div', { class: 'phase-view-form-group' });
     verdictGroup.appendChild(h('label', { class: 'phase-view-form-label' }, 'Verdict'));
@@ -526,7 +587,15 @@ export class PhaseView extends Component {
     const submitBtn = h('button', { class: 'phase-view-form-submit' }, 'Submit Sign-Off');
     submitBtn.addEventListener('click', () => {
       const reason = reasonTextarea.value.trim();
-      this._handleSignOff(gate.id, selectedVerdict, reason);
+      // Pass criteria state with sign-off (strip empty evidenceUrl values)
+      const criteriaPayload = criteriaState.length > 0
+        ? criteriaState.map(c => ({
+            label: c.label,
+            met: c.met,
+            ...(c.evidenceUrl ? { evidenceUrl: c.evidenceUrl } : {}),
+          }))
+        : undefined;
+      this._handleSignOff(gate.id, selectedVerdict, reason, criteriaPayload);
     });
 
     const cancelBtn = h('button', { class: 'phase-view-form-cancel' }, 'Cancel');
@@ -636,7 +705,7 @@ export class PhaseView extends Component {
 
   /* ── Actions ── */
 
-  async _handleSignOff(gateId, verdict, reason) {
+  async _handleSignOff(gateId, verdict, reason, criteria) {
     if (!this._buildingId) {
       Toast.error('No active building');
       return;
@@ -652,6 +721,7 @@ export class PhaseView extends Component {
         reviewer: 'user',
         verdict,
         conditions: verdict === 'CONDITIONAL' && reason ? [reason] : [],
+        ...(criteria ? { criteria } : {}),
       });
 
       if (result && result.ok) {

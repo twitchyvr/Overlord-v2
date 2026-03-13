@@ -1,0 +1,16 @@
+{
+  "id": "exit-doc-validator",
+  "name": "Exit Doc Validator",
+  "version": "1.0.0",
+  "description": "Applies custom validation rules to exit documents beyond the built-in schema, checking for required fields, minimum content length, and evidence links before allowing phase transitions.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "tool:execute",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

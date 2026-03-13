@@ -1,0 +1,626 @@
+/**
+ * Overlord v2 — Onboarding Wizard
+ *
+ * Guided first-run experience for new users. Replaces the technical
+ * Strategist view with a friendly, step-by-step setup flow.
+ *
+ * Steps:
+ *   1. Welcome  — greeting + value proposition
+ *   2. Name     — project name + short description
+ *   3. Type     — what kind of project (plain language)
+ *   4. Scale    — how big is this project
+ *   5. Review   — summary of what we'll create
+ *   6. Creating — spinner while building is provisioned
+ *
+ * All technical concepts (floors, rooms, blueprints) are hidden.
+ * Users see "team members", "workspaces", and "your project".
+ */
+
+import { Component } from '../engine/component.js';
+import { OverlordUI } from '../engine/engine.js';
+import { h } from '../engine/helpers.js';
+import { Toast } from '../components/toast.js';
+
+// ─── Project Type Templates (plain-language wrappers) ───
+
+const PROJECT_TYPES = [
+  {
+    id: 'web-app',
+    label: 'Website or Web App',
+    icon: '\u{1F310}',
+    tagline: 'A website, dashboard, or online tool',
+    examples: 'Marketing site, SaaS platform, admin panel, e-commerce store',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
+      { floor: 'integration', rooms: ['deploy', 'monitoring'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Frontend Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Backend Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'DevOps', role: 'devops', rooms: ['deploy', 'monitoring'] }
+    ]
+  },
+  {
+    id: 'mobile-app',
+    label: 'Mobile App',
+    icon: '\u{1F4F1}',
+    tagline: 'An app for phones or tablets',
+    examples: 'iOS app, Android app, cross-platform app',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
+      { floor: 'integration', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'App Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Mobile Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'API Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Release Manager', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
+    id: 'api-service',
+    label: 'Backend or API',
+    icon: '\u{1F517}',
+    tagline: 'A service that powers other apps',
+    examples: 'REST API, GraphQL service, webhook handler, integration layer',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'review'] },
+      { floor: 'integration', rooms: ['deploy', 'monitoring'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'API Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Backend Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'API Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'DevOps', role: 'devops', rooms: ['deploy', 'monitoring'] }
+    ]
+  },
+  {
+    id: 'data-pipeline',
+    label: 'Data or Analytics',
+    icon: '\u{1F4CA}',
+    tagline: 'Data processing, reports, or dashboards',
+    examples: 'Data pipeline, analytics dashboard, ML model, reporting tool',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
+      { floor: 'integration', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Data Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Data Engineer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'ML Engineer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Data Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Infra Engineer', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
+    id: 'other',
+    label: 'Something Else',
+    icon: '\u{1F4A1}',
+    tagline: 'CLI tool, game, library, or anything custom',
+    examples: 'Command-line tool, desktop app, game, open-source library',
+    floorsNeeded: ['strategy', 'collaboration', 'execution'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'review'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Developer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Reviewer', role: 'reviewer', rooms: ['review'] }
+    ]
+  }
+];
+
+// ─── Scale Options ───
+
+const SCALE_OPTIONS = [
+  {
+    id: 'small',
+    label: 'Small',
+    icon: '\u{1F331}',
+    description: 'A focused project with a small team',
+    detail: '3\u20134 AI team members',
+    agentMultiplier: 0.7
+  },
+  {
+    id: 'medium',
+    label: 'Medium',
+    icon: '\u{1F333}',
+    description: 'A typical project with a balanced team',
+    detail: '5\u20136 AI team members',
+    agentMultiplier: 1.0
+  },
+  {
+    id: 'large',
+    label: 'Large',
+    icon: '\u{1F3D7}\uFE0F',
+    description: 'A complex project with a larger team',
+    detail: '7+ AI team members',
+    agentMultiplier: 1.3
+  }
+];
+
+const TOTAL_STEPS = 5;
+
+
+export class OnboardingWizard extends Component {
+
+  constructor(el, opts = {}) {
+    super(el, opts);
+    this._step = 1;
+    this._projectName = '';
+    this._projectDescription = '';
+    this._selectedType = null;
+    this._selectedScale = null;
+    this._creating = false;
+  }
+
+  mount() {
+    this._mounted = true;
+    this.render();
+
+    this._listeners.push(
+      OverlordUI.subscribe('navigate:onboarding', () => {
+        this._step = 1;
+        this._creating = false;
+        this.render();
+      })
+    );
+  }
+
+  render() {
+    this.el.textContent = '';
+    this.el.className = 'onboarding-wizard';
+
+    if (this._creating) {
+      this._renderCreating();
+      return;
+    }
+
+    // Progress indicator
+    if (this._step > 1) {
+      this.el.appendChild(this._renderProgress());
+    }
+
+    switch (this._step) {
+      case 1: this._renderWelcome(); break;
+      case 2: this._renderNameStep(); break;
+      case 3: this._renderTypeStep(); break;
+      case 4: this._renderScaleStep(); break;
+      case 5: this._renderReviewStep(); break;
+    }
+  }
+
+  // ─── Progress Bar ───
+
+  _renderProgress() {
+    const bar = h('div', { class: 'wizard-progress' });
+    const labels = ['Name', 'Type', 'Scale', 'Review'];
+    for (let i = 0; i < labels.length; i++) {
+      const stepNum = i + 2; // Steps 2-5
+      const dot = h('div', {
+        class: `wizard-progress-step${stepNum < this._step ? ' completed' : ''}${stepNum === this._step ? ' active' : ''}`
+      },
+        h('div', { class: 'wizard-progress-dot' }, stepNum < this._step ? '\u2713' : String(i + 1)),
+        h('span', { class: 'wizard-progress-label' }, labels[i])
+      );
+      bar.appendChild(dot);
+
+      if (i < labels.length - 1) {
+        bar.appendChild(h('div', {
+          class: `wizard-progress-line${stepNum < this._step ? ' completed' : ''}`
+        }));
+      }
+    }
+    return bar;
+  }
+
+  // ─── Step 1: Welcome ───
+
+  _renderWelcome() {
+    const content = h('div', { class: 'wizard-welcome' },
+      h('div', { class: 'wizard-welcome-icon' }, '\u{1F3D7}\uFE0F'),
+      h('h1', { class: 'wizard-welcome-title' }, 'Welcome to Overlord'),
+      h('p', { class: 'wizard-welcome-subtitle' },
+        'Your AI-powered project management team. Let\u2019s set up your first project in under a minute.'
+      ),
+      h('div', { class: 'wizard-welcome-features' },
+        this._featureItem('\u{1F916}', 'AI Team Members', 'Specialized assistants that plan, build, review, and deploy your project'),
+        this._featureItem('\u{1F4CB}', 'Automated Workflow', 'From idea to launch, every step is tracked and managed'),
+        this._featureItem('\u{1F50D}', 'Full Visibility', 'See what\u2019s happening across your entire project at a glance')
+      )
+    );
+
+    const actions = h('div', { class: 'wizard-actions' });
+    const startBtn = h('button', {
+      class: 'wizard-btn wizard-btn-primary wizard-btn-lg'
+    }, 'Get Started');
+    startBtn.addEventListener('click', () => {
+      this._step = 2;
+      this.render();
+    });
+    actions.appendChild(startBtn);
+
+    const skipBtn = h('button', {
+      class: 'wizard-btn wizard-btn-ghost'
+    }, 'Skip \u2014 I\u2019ll set up manually');
+    skipBtn.addEventListener('click', () => {
+      OverlordUI.dispatch('navigate:strategist');
+    });
+    actions.appendChild(skipBtn);
+
+    content.appendChild(actions);
+    this.el.appendChild(content);
+  }
+
+  _featureItem(icon, title, desc) {
+    return h('div', { class: 'wizard-feature' },
+      h('span', { class: 'wizard-feature-icon' }, icon),
+      h('div', null,
+        h('strong', null, title),
+        h('p', null, desc)
+      )
+    );
+  }
+
+  // ─── Step 2: Project Name ───
+
+  _renderNameStep() {
+    const content = h('div', { class: 'wizard-step' },
+      h('h2', { class: 'wizard-step-title' }, 'What\u2019s your project called?'),
+      h('p', { class: 'wizard-step-subtitle' }, 'Give your project a name and a short description. You can always change these later.')
+    );
+
+    const form = h('div', { class: 'wizard-form' });
+
+    // Project name
+    const nameInput = h('input', {
+      class: 'wizard-input',
+      type: 'text',
+      placeholder: 'e.g. Customer Portal, Marketing Website, Mobile App...',
+      value: this._projectName,
+      maxlength: '100',
+      autofocus: ''
+    });
+    nameInput.addEventListener('input', (e) => {
+      this._projectName = e.target.value;
+    });
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && this._projectName.trim()) {
+        this._step = 3;
+        this.render();
+      }
+    });
+    form.appendChild(h('label', { class: 'wizard-label' }, 'Project Name'));
+    form.appendChild(nameInput);
+
+    // Description
+    const descInput = h('textarea', {
+      class: 'wizard-textarea',
+      placeholder: 'Briefly describe what you\u2019re building and who it\u2019s for...',
+      rows: '3',
+      maxlength: '500'
+    }, this._projectDescription);
+    descInput.addEventListener('input', (e) => {
+      this._projectDescription = e.target.value;
+    });
+    form.appendChild(h('label', { class: 'wizard-label', style: { marginTop: '1.5rem' } }, 'Description (optional)'));
+    form.appendChild(descInput);
+
+    content.appendChild(form);
+
+    // Actions
+    const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
+    const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
+    backBtn.addEventListener('click', () => { this._step = 1; this.render(); });
+    actions.appendChild(backBtn);
+
+    const hasName = this._projectName.trim().length > 0;
+    const nextBtn = h('button', {
+      class: `wizard-btn wizard-btn-primary${hasName ? '' : ' wizard-btn-muted'}`
+    }, 'Next \u2192');
+    nextBtn.addEventListener('click', () => {
+      if (this._projectName.trim()) {
+        this._step = 3;
+        this.render();
+      }
+    });
+    actions.appendChild(nextBtn);
+
+    content.appendChild(actions);
+    this.el.appendChild(content);
+
+    // Focus the input
+    requestAnimationFrame(() => nameInput.focus());
+  }
+
+  // ─── Step 3: Project Type ───
+
+  _renderTypeStep() {
+    const content = h('div', { class: 'wizard-step' },
+      h('h2', { class: 'wizard-step-title' }, 'What kind of project is this?'),
+      h('p', { class: 'wizard-step-subtitle' }, 'This helps us assign the right team members and workspaces for your project.')
+    );
+
+    const grid = h('div', { class: 'wizard-type-grid' });
+
+    for (const type of PROJECT_TYPES) {
+      const card = h('div', {
+        class: `wizard-type-card${this._selectedType?.id === type.id ? ' selected' : ''}`
+      });
+
+      card.appendChild(h('div', { class: 'wizard-type-icon' }, type.icon));
+      card.appendChild(h('div', { class: 'wizard-type-label' }, type.label));
+      card.appendChild(h('div', { class: 'wizard-type-tagline' }, type.tagline));
+      card.appendChild(h('div', { class: 'wizard-type-examples' }, type.examples));
+
+      card.addEventListener('click', () => {
+        this._selectedType = type;
+        this._step = 4;
+        this.render();
+      });
+
+      grid.appendChild(card);
+    }
+
+    content.appendChild(grid);
+
+    // Actions
+    const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
+    const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
+    backBtn.addEventListener('click', () => { this._step = 2; this.render(); });
+    actions.appendChild(backBtn);
+    content.appendChild(actions);
+
+    this.el.appendChild(content);
+  }
+
+  // ─── Step 4: Scale ───
+
+  _renderScaleStep() {
+    const content = h('div', { class: 'wizard-step' },
+      h('h2', { class: 'wizard-step-title' }, 'How big is this project?'),
+      h('p', { class: 'wizard-step-subtitle' }, 'This determines how many AI team members will work on your project.')
+    );
+
+    const grid = h('div', { class: 'wizard-scale-grid' });
+
+    for (const scale of SCALE_OPTIONS) {
+      const card = h('div', {
+        class: `wizard-scale-card${this._selectedScale?.id === scale.id ? ' selected' : ''}`
+      });
+
+      card.appendChild(h('div', { class: 'wizard-scale-icon' }, scale.icon));
+      card.appendChild(h('div', { class: 'wizard-scale-label' }, scale.label));
+      card.appendChild(h('div', { class: 'wizard-scale-desc' }, scale.description));
+      card.appendChild(h('div', { class: 'wizard-scale-detail' }, scale.detail));
+
+      card.addEventListener('click', () => {
+        this._selectedScale = scale;
+        this._step = 5;
+        this.render();
+      });
+
+      grid.appendChild(card);
+    }
+
+    content.appendChild(grid);
+
+    // Actions
+    const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
+    const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
+    backBtn.addEventListener('click', () => { this._step = 3; this.render(); });
+    actions.appendChild(backBtn);
+    content.appendChild(actions);
+
+    this.el.appendChild(content);
+  }
+
+  // ─── Step 5: Review ───
+
+  _renderReviewStep() {
+    const type = this._selectedType;
+    const scale = this._selectedScale;
+    if (!type || !scale) return;
+
+    const teamSize = this._getAdjustedRoster().length;
+
+    const content = h('div', { class: 'wizard-step' },
+      h('h2', { class: 'wizard-step-title' }, 'Ready to launch!'),
+      h('p', { class: 'wizard-step-subtitle' }, 'Here\u2019s a summary of your project setup. You can adjust everything later.')
+    );
+
+    // Summary cards
+    const summary = h('div', { class: 'wizard-summary' });
+
+    summary.appendChild(this._summaryRow('\u{1F4DD}', 'Project', this._projectName));
+    summary.appendChild(this._summaryRow(type.icon, 'Type', type.label));
+    summary.appendChild(this._summaryRow(scale.icon, 'Scale', `${scale.label} \u2014 ${teamSize} AI team members`));
+
+    if (this._projectDescription) {
+      summary.appendChild(this._summaryRow('\u{1F4AC}', 'Description', this._projectDescription));
+    }
+
+    // Team preview
+    const teamSection = h('div', { class: 'wizard-team-preview' },
+      h('h3', null, 'Your AI Team')
+    );
+
+    const roster = this._getAdjustedRoster();
+    const teamGrid = h('div', { class: 'wizard-team-grid' });
+    for (const agent of roster) {
+      teamGrid.appendChild(h('div', { class: 'wizard-team-member' },
+        h('div', { class: 'wizard-team-avatar' }, agent.name.charAt(0)),
+        h('div', { class: 'wizard-team-name' }, agent.name),
+        h('div', { class: 'wizard-team-role' }, this._friendlyRole(agent.role))
+      ));
+    }
+    teamSection.appendChild(teamGrid);
+    summary.appendChild(teamSection);
+
+    content.appendChild(summary);
+
+    // Actions
+    const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
+    const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
+    backBtn.addEventListener('click', () => { this._step = 4; this.render(); });
+    actions.appendChild(backBtn);
+
+    const launchBtn = h('button', {
+      class: 'wizard-btn wizard-btn-primary wizard-btn-lg'
+    }, '\u{1F680} Launch Project');
+    launchBtn.addEventListener('click', () => this._createProject());
+    actions.appendChild(launchBtn);
+
+    content.appendChild(actions);
+    this.el.appendChild(content);
+  }
+
+  _summaryRow(icon, label, value) {
+    return h('div', { class: 'wizard-summary-row' },
+      h('span', { class: 'wizard-summary-icon' }, icon),
+      h('span', { class: 'wizard-summary-label' }, label),
+      h('span', { class: 'wizard-summary-value' }, value)
+    );
+  }
+
+  _friendlyRole(role) {
+    const map = {
+      strategist: 'Planner',
+      architect: 'Designer',
+      developer: 'Builder',
+      reviewer: 'Quality Checker',
+      devops: 'Deployment Manager'
+    };
+    return map[role] || role;
+  }
+
+  // ─── Step 6: Creating ───
+
+  _renderCreating() {
+    this.el.appendChild(h('div', { class: 'wizard-creating' },
+      h('div', { class: 'wizard-spinner' }),
+      h('h2', null, 'Setting up your project...'),
+      h('p', null, 'Creating your AI team and workspaces. This only takes a moment.')
+    ));
+  }
+
+  // ─── Team Adjustment Logic ───
+
+  _getAdjustedRoster() {
+    const type = this._selectedType;
+    const scale = this._selectedScale;
+    if (!type || !scale) return [];
+
+    const base = [...type.agentRoster];
+
+    if (scale.id === 'small') {
+      // Remove extra developers, keep at least one of each role
+      const seen = new Set();
+      return base.filter(a => {
+        if (seen.has(a.role)) return false;
+        seen.add(a.role);
+        return true;
+      });
+    }
+
+    if (scale.id === 'large') {
+      // Add extra developer and a tester
+      return [
+        ...base,
+        { name: 'Senior Dev', role: 'developer', rooms: ['code-lab'] },
+        { name: 'Tester', role: 'reviewer', rooms: ['review'] }
+      ];
+    }
+
+    return base; // medium = base roster
+  }
+
+  // ─── Project Creation ───
+
+  async _createProject() {
+    const type = this._selectedType;
+    const scale = this._selectedScale;
+    if (!type || !scale) return;
+
+    const projectName = this._projectName.trim() || 'My Project';
+
+    this._creating = true;
+    this.render();
+
+    try {
+      if (!window.overlordSocket) {
+        throw new Error('Not connected to server');
+      }
+
+      // Create building
+      const buildResult = await window.overlordSocket.createBuilding({
+        name: projectName,
+        config: {
+          projectDescription: this._projectDescription || `${type.label} project`,
+          template: type.id
+        }
+      });
+
+      if (!buildResult || !buildResult.ok) {
+        throw new Error(buildResult?.error?.message || 'Failed to create project');
+      }
+
+      const buildingId = buildResult.data.id;
+
+      // Apply blueprint with adjusted roster
+      const roster = this._getAdjustedRoster();
+      const blueprintResult = await window.overlordSocket.applyBlueprint({
+        buildingId,
+        blueprint: {
+          mode: 'quickStart',
+          floorsNeeded: type.floorsNeeded,
+          roomConfig: type.roomConfig,
+          agentRoster: roster,
+          projectGoals: this._projectDescription,
+          successCriteria: ''
+        },
+        agentId: 'user'
+      });
+
+      if (!blueprintResult || !blueprintResult.ok) {
+        throw new Error(blueprintResult?.error?.message || 'Failed to set up project');
+      }
+
+      Toast.success(`"${projectName}" is ready! Your AI team is standing by.`);
+
+      await window.overlordSocket.selectBuilding(buildingId);
+
+      OverlordUI.dispatch('navigate:dashboard');
+      OverlordUI.dispatch('building:selected', { buildingId });
+
+    } catch (err) {
+      console.error('[OnboardingWizard] Project creation failed:', err);
+      Toast.error(`Something went wrong: ${err.message}`);
+      this._creating = false;
+      this._step = 5;
+      this.render();
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "email-digest",
+  "name": "Email Digest",
+  "version": "1.0.0",
+  "description": "Compiles a daily digest of all agent-to-agent communications, tracking tool executions related to email and messaging, storing message counts per agent, and emitting a formatted summary.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit",
+    "tool:execute"
+  ]
+}

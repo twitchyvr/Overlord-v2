@@ -10,7 +10,7 @@ import { randomUUID } from 'crypto';
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
 import { ok, err, safeJsonParse } from '../core/contracts.js';
-import type { Result, PhaseGateRow, BuildingRow, GateVerdict } from '../core/contracts.js';
+import type { Result, PhaseGateRow, BuildingRow, GateVerdict, PhaseGateCriterion } from '../core/contracts.js';
 
 const log = logger.child({ module: 'phase-gate' });
 
@@ -20,22 +20,30 @@ const PHASE_ORDER = ['strategy', 'discovery', 'architecture', 'execution', 'revi
 interface CreateGateParams {
   buildingId: string;
   phase: string;
+  criteria?: string[];
 }
 
 /**
- * Create a new phase gate
+ * Create a new phase gate.
+ * Optional `criteria` array supplies the checklist labels that reviewers
+ * must evaluate when signing off. Each label becomes a
+ * `{ label, met: false }` entry stored as JSON in the `criteria` column.
  */
-export function createGate({ buildingId, phase }: CreateGateParams): Result {
+export function createGate({ buildingId, phase, criteria = [] }: CreateGateParams): Result {
   const db = getDb();
   const id = `gate_${randomUUID()}`;
 
-  db.prepare(`
-    INSERT INTO phase_gates (id, building_id, phase, status)
-    VALUES (?, ?, ?, 'pending')
-  `).run(id, buildingId, phase);
+  const criteriaJson = JSON.stringify(
+    criteria.map((label) => ({ label, met: false } satisfies PhaseGateCriterion)),
+  );
 
-  log.info({ id, buildingId, phase }, 'Phase gate created');
-  return ok({ id, phase, status: 'pending' });
+  db.prepare(`
+    INSERT INTO phase_gates (id, building_id, phase, status, criteria)
+    VALUES (?, ?, ?, 'pending', ?)
+  `).run(id, buildingId, phase, criteriaJson);
+
+  log.info({ id, buildingId, phase, criteriaCount: criteria.length }, 'Phase gate created');
+  return ok({ id, phase, status: 'pending', criteria: safeJsonParse<PhaseGateCriterion[]>(criteriaJson, []) });
 }
 
 interface SignoffGateParams {
@@ -43,14 +51,17 @@ interface SignoffGateParams {
   reviewer: string;
   verdict: GateVerdict;
   conditions?: string[];
+  criteria?: PhaseGateCriterion[];
   exitDocId?: string;
   nextPhaseInput?: Record<string, unknown>;
 }
 
 /**
- * Submit sign-off for a phase gate
+ * Submit sign-off for a phase gate.
+ * Optional `criteria` array lets the reviewer mark each criterion as met/unmet
+ * and attach an evidence URL. If omitted, existing criteria are preserved.
  */
-export function signoffGate({ gateId, reviewer, verdict, conditions = [], exitDocId, nextPhaseInput = {} }: SignoffGateParams): Result {
+export function signoffGate({ gateId, reviewer, verdict, conditions = [], criteria, exitDocId, nextPhaseInput = {} }: SignoffGateParams): Result {
   if (!(['GO', 'NO-GO', 'CONDITIONAL'] as GateVerdict[]).includes(verdict)) {
     return err('INVALID_VERDICT', `Verdict must be GO, NO-GO, or CONDITIONAL. Got: ${verdict}`);
   }
@@ -66,13 +77,19 @@ export function signoffGate({ gateId, reviewer, verdict, conditions = [], exitDo
 
   const status = verdict === 'GO' ? 'go' : verdict === 'NO-GO' ? 'no-go' : 'conditional';
 
+  // If criteria provided, update them; otherwise preserve existing
+  const criteriaJson = criteria
+    ? JSON.stringify(criteria)
+    : gate.criteria;
+
   db.prepare(`
     UPDATE phase_gates
-    SET status = ?, exit_doc_id = ?, signoff_reviewer = ?, signoff_verdict = ?,
+    SET status = ?, criteria = ?, exit_doc_id = ?, signoff_reviewer = ?, signoff_verdict = ?,
         signoff_conditions = ?, signoff_timestamp = datetime(?), next_phase_input = ?
     WHERE id = ?
   `).run(
     status,
+    criteriaJson,
     exitDocId || null,
     reviewer,
     verdict,
@@ -130,11 +147,19 @@ export function canAdvance(buildingId: string): Result {
 }
 
 /**
- * Get all gates for a building
+ * Get all gates for a building.
+ * Parses JSON columns (criteria, signoff_conditions, next_phase_input) so the
+ * UI receives structured data instead of raw JSON strings.
  */
 export function getGates(buildingId: string): Result {
   const db = getDb();
-  return ok(db.prepare('SELECT * FROM phase_gates WHERE building_id = ? ORDER BY created_at').all(buildingId));
+  const rows = db.prepare('SELECT * FROM phase_gates WHERE building_id = ? ORDER BY created_at').all(buildingId) as PhaseGateRow[];
+  return ok(rows.map((row) => ({
+    ...row,
+    criteria: safeJsonParse<PhaseGateCriterion[]>(row.criteria, []),
+    signoff_conditions: safeJsonParse<string[]>(row.signoff_conditions, []),
+    next_phase_input: safeJsonParse<Record<string, unknown>>(row.next_phase_input, {}),
+  })));
 }
 
 /**

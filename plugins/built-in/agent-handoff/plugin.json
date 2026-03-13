@@ -1,0 +1,16 @@
+{
+  "id": "agent-handoff",
+  "name": "Agent Handoff",
+  "version": "1.0.0",
+  "description": "Enables smooth context handoff between agents when work moves across rooms. Captures a context summary on room exit and delivers it to the next agent on room entry, ensuring continuity.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}
