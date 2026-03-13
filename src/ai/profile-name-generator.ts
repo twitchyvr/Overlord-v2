@@ -20,6 +20,7 @@ export interface GeneratedIdentity {
   firstName: string;
   lastName: string;
   displayName: string;
+  nickname: string;
   bio: string;
   specialization: string;
 }
@@ -40,8 +41,9 @@ All roles exist in this SOFTWARE ENGINEERING context. For example, "Operator" me
 CRITICAL RULES:
 1. Generate a realistic first name and last name. The name should sound like a real professional working in the SOFTWARE ENGINEERING field.
 2. Create a display name in the format "FirstName LastName" (or a professional variant if appropriate).
-3. Write a detailed specialization description (1-2 sentences) that captures what this professional excels at within software engineering.
-4. Write a high-quality professional bio (3-5 paragraphs) that reads like a genuine professional resume/about page. The bio MUST include:
+3. Create a short, memorable nickname (1-2 words) that this professional might be known by among colleagues. Examples: "Dev", "The Architect", "Bug Hunter", "Pixel", "Ace", "Matrix", "Nova", "Zen". The nickname should relate to their role or personality — it should feel natural, like a real team member's handle or callsign.
+4. Write a detailed specialization description (1-2 sentences) that captures what this professional excels at within software engineering.
+5. Write a high-quality professional bio (3-5 paragraphs) that reads like a genuine professional resume/about page. The bio MUST include:
    - A compelling professional summary opening paragraph
    - Areas of deep expertise and domain knowledge in software engineering
    - Relevant educational background (university, degrees, certifications)
@@ -50,8 +52,8 @@ CRITICAL RULES:
    - Professional philosophy or approach to work
    - The bio should feel authentic — like reading a real LinkedIn profile or professional website
 
-5. If a gender preference is provided, choose a name that matches. Otherwise, choose freely.
-6. Vary ethnicity and cultural background naturally — do not default to any single demographic.
+6. If a gender preference is provided, choose a name that matches. Otherwise, choose freely.
+7. Vary ethnicity and cultural background naturally — do not default to any single demographic.
 
 RESPOND WITH VALID JSON ONLY. No markdown, no code fences, no explanation. Just the JSON object:
 
@@ -59,6 +61,7 @@ RESPOND WITH VALID JSON ONLY. No markdown, no code fences, no explanation. Just 
   "firstName": "...",
   "lastName": "...",
   "displayName": "...",
+  "nickname": "...",
   "specialization": "...",
   "bio": "..."
 }`;
@@ -102,6 +105,7 @@ function parseIdentityResponse(raw: string): GeneratedIdentity | null {
     const firstName = typeof parsed.firstName === 'string' ? parsed.firstName.trim() : '';
     const lastName = typeof parsed.lastName === 'string' ? parsed.lastName.trim() : '';
     const displayName = typeof parsed.displayName === 'string' ? parsed.displayName.trim() : `${firstName} ${lastName}`;
+    const nickname = typeof parsed.nickname === 'string' ? parsed.nickname.trim() : firstName;
     const bio = typeof parsed.bio === 'string' ? parsed.bio.trim() : '';
     const specialization = typeof parsed.specialization === 'string' ? parsed.specialization.trim() : '';
 
@@ -109,7 +113,7 @@ function parseIdentityResponse(raw: string): GeneratedIdentity | null {
       return null;
     }
 
-    return { firstName, lastName, displayName, bio, specialization };
+    return { firstName, lastName, displayName, nickname, bio, specialization };
   } catch {
     return null;
   }

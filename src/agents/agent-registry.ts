@@ -54,9 +54,11 @@ interface RegisterAgentParams {
   firstName?: string | null;
   lastName?: string | null;
   displayName?: string | null;
+  nickname?: string | null;
   bio?: string | null;
   photoUrl?: string | null;
   specialization?: string | null;
+  gender?: string;
 }
 
 interface AgentUpdates {
@@ -89,7 +91,8 @@ export function initAgents({ bus }: InitAgentsParams): AgentRegistryAPI {
  */
 export function registerAgent({
   name, role, capabilities = [], roomAccess = [], badge = null, config = {}, buildingId = null,
-  firstName = null, lastName = null, displayName = null, bio = null, photoUrl = null, specialization = null,
+  firstName = null, lastName = null, displayName = null, nickname = null, bio = null, photoUrl = null, specialization = null,
+  gender,
 }: RegisterAgentParams): Result {
   const db = getDb();
   const id = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -111,8 +114,8 @@ export function registerAgent({
 
   db.prepare(`
     INSERT INTO agents (id, name, role, building_id, capabilities, room_access, badge, config,
-      first_name, last_name, display_name, bio, photo_url, specialization, profile_generated)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      first_name, last_name, display_name, nickname, bio, photo_url, specialization, profile_generated)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name,
@@ -125,6 +128,7 @@ export function registerAgent({
     firstName || null,
     lastName || null,
     computedDisplayName,
+    nickname || null,
     bio || null,
     photoUrl || null,
     specialization || null,
@@ -136,7 +140,7 @@ export function registerAgent({
   // Auto-generate profile photo if MiniMax API is configured and no photo was provided.
   // Runs asynchronously — does not block registration.
   if (!photoUrl && isImageGenerationAvailable()) {
-    scheduleProfilePhotoGeneration(id, name, role, specialization ?? undefined);
+    scheduleProfilePhotoGeneration(id, name, role, specialization ?? undefined, gender);
   }
 
   return ok({ id, name, role });
@@ -236,6 +240,7 @@ export function updateAgentProfile(agentId: string, profile: AgentProfileFields)
   if (profile.lastName !== undefined) { fields.push('last_name = ?'); params.push(profile.lastName ?? null); }
   if (profile.bio !== undefined) { fields.push('bio = ?'); params.push(profile.bio ?? null); }
   if (profile.photoUrl !== undefined) { fields.push('photo_url = ?'); params.push(profile.photoUrl ?? null); }
+  if (profile.nickname !== undefined) { fields.push('nickname = ?'); params.push(profile.nickname ?? null); }
   if (profile.specialization !== undefined) { fields.push('specialization = ?'); params.push(profile.specialization ?? null); }
   if (profile.profileGenerated !== undefined) { fields.push('profile_generated = ?'); params.push(profile.profileGenerated ? 1 : 0); }
 
@@ -285,13 +290,14 @@ function scheduleProfilePhotoGeneration(
   agentName: string,
   role: string,
   specialization?: string,
+  gender?: string,
 ): void {
   // Use void to explicitly discard the promise (fire-and-forget)
   void (async () => {
     try {
       log.info({ agentId, agentName, role }, 'Starting auto profile photo generation');
 
-      const result = await generateAgentProfilePhoto(agentName, role, specialization);
+      const result = await generateAgentProfilePhoto(agentName, role, specialization, gender);
 
       if (!result.ok) {
         log.warn(

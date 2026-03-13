@@ -1269,6 +1269,18 @@
   background: var(--bg-tertiary);
 }
 
+/* Card nickname text */
+.agents-view-card-nickname {
+  font-size: var(--text-xs);
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+  font-style: italic;
+  opacity: 0.85;
+}
+
 /* Card specialization text */
 .agents-view-card-specialization {
   font-size: var(--text-xs);

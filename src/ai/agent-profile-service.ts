@@ -100,6 +100,7 @@ export async function generateFullProfile(
       // Apply generated values, but don't overwrite existing fields
       profile.firstName = options.existing?.firstName ?? identity.firstName;
       profile.lastName = options.existing?.lastName ?? identity.lastName;
+      profile.nickname = options.existing?.nickname ?? identity.nickname;
       profile.bio = options.existing?.bio ?? identity.bio;
       profile.specialization = options.existing?.specialization ?? identity.specialization;
 
@@ -118,6 +119,7 @@ export async function generateFullProfile(
         profile.firstName = options.existing.firstName;
         profile.lastName = options.existing.lastName;
         profile.displayName = options.existing.displayName;
+        profile.nickname = options.existing.nickname;
         profile.bio = options.existing.bio;
         profile.specialization = options.existing.specialization;
       }
@@ -128,6 +130,7 @@ export async function generateFullProfile(
       profile.firstName = options.existing.firstName;
       profile.lastName = options.existing.lastName;
       profile.displayName = options.existing.displayName;
+      profile.nickname = options.existing.nickname;
       profile.bio = options.existing.bio;
       profile.specialization = options.existing.specialization;
     }
@@ -141,7 +144,7 @@ export async function generateFullProfile(
 
     log.info({ role, photoName }, 'Generating profile photo via MiniMax');
 
-    const photoResult = await generateAgentProfilePhoto(photoName, role, photoSpecialization);
+    const photoResult = await generateAgentProfilePhoto(photoName, role, photoSpecialization, options.gender);
 
     if (photoResult.ok) {
       // Write to disk and get serving URL.
