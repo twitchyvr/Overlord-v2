@@ -12,6 +12,7 @@
  */
 
 import { logger } from '../core/logger.js';
+import { config } from '../core/config.js';
 import { AgentSession } from './agent-session.js';
 import type { Bus } from '../core/bus.js';
 import type {
@@ -23,10 +24,11 @@ import type {
 
 const log = logger.child({ module: 'conversation-loop' });
 
-const MAX_TOOL_ITERATIONS = 40;
-const TOOL_TIMEOUT_MS = 60_000; // 60 seconds per tool execution
-const AI_MAX_RETRIES = 2;
-const AI_RETRY_DELAY_MS = 1_000; // 1 second base delay (doubles each retry)
+/** All limits are user-configurable via environment variables / config */
+const MAX_TOOL_ITERATIONS = config.get('MAX_TOOL_ITERATIONS');
+const TOOL_TIMEOUT_MS = config.get('TOOL_TIMEOUT_MS');
+const AI_MAX_RETRIES = config.get('AI_MAX_RETRIES');
+const AI_RETRY_DELAY_MS = config.get('AI_RETRY_DELAY_MS');
 
 interface ContentBlock {
   type: 'text' | 'thinking' | 'tool_use' | 'tool_result';

@@ -14,6 +14,7 @@
 
 import * as vm from 'node:vm';
 import { logger } from '../core/logger.js';
+import { config } from '../core/config.js';
 import { ok, err } from '../core/contracts.js';
 import type { Result } from '../core/contracts.js';
 import type {
@@ -29,8 +30,8 @@ import { createLuaSandbox } from './lua-sandbox.js';
 
 const log = logger.child({ module: 'plugin-sandbox' });
 
-/** Default timeout for script execution in milliseconds */
-const DEFAULT_TIMEOUT_MS = 5_000;
+/** Default timeout for script execution in milliseconds — configurable */
+const DEFAULT_TIMEOUT_MS = config.get('PLUGIN_TIMEOUT_MS');
 
 /** Globals that are NEVER exposed to plugin code */
 const BLOCKED_GLOBALS = [
@@ -361,7 +362,7 @@ function buildSandboxConsole(pluginId: string, context: PluginContext): Record<s
 // ─── Safe setTimeout (limited to prevent resource leaks) ───
 
 function buildSafeTimeout(): (fn: () => void, ms?: number) => ReturnType<typeof setTimeout> {
-  const MAX_TIMEOUT_MS = 30_000; // 30 second max for plugin timers
+  const MAX_TIMEOUT_MS = config.get('PLUGIN_MAX_TIMEOUT_MS');
   return (fn: () => void, ms?: number) => {
     const clamped = Math.min(ms ?? 0, MAX_TIMEOUT_MS);
     return setTimeout(fn, clamped);
