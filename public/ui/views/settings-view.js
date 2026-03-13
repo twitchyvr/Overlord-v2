@@ -18,6 +18,7 @@ import { Toast } from '../components/toast.js';
 
 const TABS = [
   { id: 'general',  label: 'General',  icon: '\u2699\uFE0F' },
+  { id: 'folders',  label: 'Folders',  icon: '\u{1F4C2}' },
   { id: 'ai',       label: 'AI',       icon: '\u{1F916}' },
   { id: 'display',  label: 'Display',  icon: '\u{1F5A5}\uFE0F' },
 ];
@@ -129,6 +130,9 @@ export class SettingsView extends Component {
       case 'general':
         tabContent.appendChild(this._buildGeneralTab());
         break;
+      case 'folders':
+        tabContent.appendChild(this._buildFoldersTab());
+        break;
       case 'ai':
         tabContent.appendChild(this._buildAITab());
         break;
@@ -237,6 +241,181 @@ export class SettingsView extends Component {
     }));
 
     return section;
+  }
+
+  // ── Folders Tab ─────────────────────────────────────────
+
+  _buildFoldersTab() {
+    const section = h('div', { class: 'settings-section' });
+    const store = OverlordUI.getStore();
+    const buildingId = store?.get('activeBuildingId');
+
+    if (!buildingId) {
+      section.appendChild(h('div', { class: 'settings-empty-state' },
+        h('p', null, 'No active building selected. Create or select a building first.'),
+      ));
+      return section;
+    }
+
+    // Working directory display with git status
+    section.appendChild(h('h4', { class: 'settings-section-title' }, 'Working Directory'));
+    const workingDir = store?.get('building.workingDirectory') || '(not set)';
+    const wdRow = h('div', { class: 'settings-folder-row settings-folder-primary' });
+    const wdInfo = h('div', { class: 'settings-folder-info' },
+      h('span', { class: 'settings-folder-path mono' }, workingDir),
+      h('span', { class: 'settings-folder-badge', id: 'settings-git-status' }, 'Checking...')
+    );
+    wdRow.appendChild(wdInfo);
+    section.appendChild(wdRow);
+
+    // Detect git status for working directory
+    if (workingDir !== '(not set)' && window.overlordSocket) {
+      this._detectGitStatus(workingDir);
+    }
+
+    // Allowed paths section
+    section.appendChild(h('h4', { class: 'settings-section-title', style: { marginTop: 'var(--sp-6)' } },
+      'Allowed Folders'));
+    section.appendChild(h('p', { class: 'settings-section-desc' },
+      'Additional folders agents can access beyond the working directory. Subfolders inherit access.'));
+
+    const pathList = h('div', { class: 'settings-folder-list', id: 'settings-folder-list' });
+    section.appendChild(pathList);
+
+    // Load and render existing paths
+    this._loadAllowedPaths(buildingId, pathList);
+
+    // Add folder button
+    const addRow = h('div', { class: 'settings-folder-add-row' });
+    const addInput = h('input', {
+      type: 'text',
+      class: 'form-input settings-folder-input',
+      placeholder: '/path/to/folder',
+      id: 'settings-add-folder-input',
+    });
+    const addBtn = h('button', { class: 'btn btn-sm btn-primary' }, '+ Add Folder');
+    addBtn.addEventListener('click', () => {
+      const input = document.getElementById('settings-add-folder-input');
+      const path = input?.value?.trim();
+      if (!path) {
+        Toast.warn('Enter a folder path');
+        return;
+      }
+      this._addAllowedPath(buildingId, path, pathList);
+      if (input) input.value = '';
+    });
+    addInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addBtn.click();
+    });
+    addRow.appendChild(addInput);
+    addRow.appendChild(addBtn);
+    section.appendChild(addRow);
+
+    return section;
+  }
+
+  async _detectGitStatus(dirPath) {
+    if (!window.overlordSocket?.socket) return;
+    try {
+      const result = await new Promise((resolve) => {
+        window.overlordSocket.socket.emit('git:detect', { path: dirPath }, resolve);
+      });
+      const badge = document.getElementById('settings-git-status');
+      if (!badge) return;
+
+      if (result?.ok && result.data?.isRepo) {
+        const info = result.data;
+        badge.textContent = `git: ${info.branch || 'unknown'}`;
+        badge.classList.add('git-active');
+        if (info.hasUncommitted) {
+          badge.textContent += ' (modified)';
+          badge.classList.add('git-modified');
+        }
+      } else {
+        badge.textContent = 'Not a git repo';
+        badge.classList.add('git-none');
+      }
+    } catch {
+      const badge = document.getElementById('settings-git-status');
+      if (badge) {
+        badge.textContent = 'Git check failed';
+        badge.classList.add('git-none');
+      }
+    }
+  }
+
+  async _loadAllowedPaths(buildingId, listEl) {
+    if (!window.overlordSocket?.socket) return;
+    try {
+      const result = await new Promise((resolve) => {
+        window.overlordSocket.socket.emit('folder:list-paths', { buildingId }, resolve);
+      });
+
+      listEl.textContent = '';
+
+      if (!result?.ok || !result.data?.allowedPaths?.length) {
+        listEl.appendChild(h('div', { class: 'settings-empty-hint' },
+          'No additional folders configured. The working directory is always accessible.'
+        ));
+        return;
+      }
+
+      for (const folderPath of result.data.allowedPaths) {
+        listEl.appendChild(this._buildFolderRow(buildingId, folderPath, listEl));
+      }
+    } catch {
+      listEl.textContent = '';
+      listEl.appendChild(h('div', { class: 'settings-empty-hint' }, 'Failed to load folder list'));
+    }
+  }
+
+  _buildFolderRow(buildingId, folderPath, listEl) {
+    const row = h('div', { class: 'settings-folder-row' });
+    row.appendChild(h('span', { class: 'settings-folder-path mono' }, folderPath));
+
+    const removeBtn = h('button', {
+      class: 'btn btn-sm btn-ghost settings-folder-remove',
+      title: 'Remove folder access',
+    }, '\u2715');
+    removeBtn.addEventListener('click', () => {
+      this._removeAllowedPath(buildingId, folderPath, listEl);
+    });
+    row.appendChild(removeBtn);
+    return row;
+  }
+
+  async _addAllowedPath(buildingId, path, listEl) {
+    if (!window.overlordSocket?.socket) return;
+    try {
+      const result = await new Promise((resolve) => {
+        window.overlordSocket.socket.emit('folder:add-path', { buildingId, path }, resolve);
+      });
+      if (result?.ok) {
+        Toast.success(`Added folder: ${path}`);
+        this._loadAllowedPaths(buildingId, listEl);
+      } else {
+        Toast.error(result?.error?.message || 'Failed to add folder');
+      }
+    } catch (err) {
+      Toast.error('Failed to add folder');
+    }
+  }
+
+  async _removeAllowedPath(buildingId, path, listEl) {
+    if (!window.overlordSocket?.socket) return;
+    try {
+      const result = await new Promise((resolve) => {
+        window.overlordSocket.socket.emit('folder:remove-path', { buildingId, path }, resolve);
+      });
+      if (result?.ok) {
+        Toast.success(`Removed folder: ${path}`);
+        this._loadAllowedPaths(buildingId, listEl);
+      } else {
+        Toast.error(result?.error?.message || 'Failed to remove folder');
+      }
+    } catch (err) {
+      Toast.error('Failed to remove folder');
+    }
   }
 
   // ── AI Providers Tab ────────────────────────────────────

@@ -156,6 +156,7 @@ export interface BuildingRow {
   name: string;
   working_directory: string | null;
   repo_url: string | null;
+  allowed_paths: string;
   config: string;
   active_phase: string;
   created_at: string;
@@ -264,6 +265,8 @@ export interface ToolContext {
   fileScope: string;
   /** Building's project working directory — tools use this as cwd */
   workingDirectory?: string;
+  /** Additional paths the building has been granted access to */
+  allowedPaths?: string[];
 }
 
 // ─── AI Types ───
@@ -295,10 +298,12 @@ export interface RoomManagerAPI {
 }
 
 export interface BuildingManagerAPI {
-  createBuilding: (params: { name: string; projectId?: string; workingDirectory?: string; repoUrl?: string; config?: Record<string, unknown>; provisionFloors?: boolean }) => Result;
+  createBuilding: (params: { name: string; projectId?: string; workingDirectory?: string; repoUrl?: string; allowedPaths?: string[]; config?: Record<string, unknown>; provisionFloors?: boolean }) => Result;
   getBuilding: (buildingId: string) => Result;
   listBuildings: (projectId?: string) => Result;
-  updateBuilding: (buildingId: string, updates: { name?: string; workingDirectory?: string; repoUrl?: string; config?: Record<string, unknown> }) => Result;
+  updateBuilding: (buildingId: string, updates: { name?: string; workingDirectory?: string; repoUrl?: string; allowedPaths?: string[]; config?: Record<string, unknown> }) => Result;
+  addAllowedPath: (buildingId: string, path: string) => Result;
+  removeAllowedPath: (buildingId: string, path: string) => Result;
   createFloor: (params: { buildingId: string; type: string; name: string; sortOrder?: number; config?: Record<string, unknown> }) => Result;
   getFloor: (floorId: string) => Result;
   listFloors: (buildingId: string) => Result;

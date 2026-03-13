@@ -92,7 +92,37 @@ export const BuildingUpdateSchema = z.object({
   name: optionalName(),
   workingDirectory: z.string().max(1000).optional(),
   repoUrl: z.string().max(1000).optional(),
+  allowedPaths: z.array(z.string().max(2000)).optional(),
   config: z.record(z.unknown()).optional(),
+});
+
+// ─── Folder / Path Permission Schemas ───
+
+export const FolderAddPathSchema = z.object({
+  buildingId: id(),
+  path: z.string().min(1).max(2000),
+});
+
+export const FolderRemovePathSchema = z.object({
+  buildingId: id(),
+  path: z.string().min(1).max(2000),
+});
+
+export const FolderListPathsSchema = z.object({
+  buildingId: id(),
+});
+
+export const GitDetectSchema = z.object({
+  path: z.string().min(1).max(2000),
+});
+
+export const GitInitSchema = z.object({
+  path: z.string().min(1).max(2000),
+});
+
+export const GitCloneSchema = z.object({
+  url: z.string().min(1).max(2000),
+  targetDir: z.string().min(1).max(2000),
 });
 
 // ─── Floor Schemas ───

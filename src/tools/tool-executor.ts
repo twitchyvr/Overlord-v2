@@ -30,6 +30,8 @@ export async function executeTool(params: {
   bus: Bus;
   /** Building's project working directory — scopes file/shell tools */
   workingDirectory?: string;
+  /** Additional paths the building has been granted access to */
+  allowedPaths?: string[];
 }): Promise<Result> {
   const { name, input } = params.toolCall;
   const allowedTools = params.room.getAllowedTools();
@@ -46,6 +48,7 @@ export async function executeTool(params: {
       agentId: params.agent.id,
       fileScope: params.room.fileScope,
       workingDirectory: params.workingDirectory,
+      allowedPaths: params.allowedPaths,
     },
   });
 
