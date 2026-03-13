@@ -2227,3 +2227,27 @@ describe('RaidLogView — edit form', () => {
     Modal.closeAll();
   });
 });
+
+// ─── ActivityView ──────────────────────────────────────────────
+
+describe('ActivityView', () => {
+  it('exports the ActivityView class', async () => {
+    const mod = await import('../../../public/ui/views/activity-view.js');
+    expect(mod.ActivityView).toBeDefined();
+  });
+
+  it('shows "Select a project" when no building is active', async () => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', null, { silent: true });
+    store.set('activity.items', [], { silent: true });
+
+    const { ActivityView } = await import('../../../public/ui/views/activity-view.js');
+    const el = document.createElement('div');
+    const view = new ActivityView(el);
+    view.mount();
+
+    const emptyState = el.querySelector('.activity-view-empty');
+    expect(emptyState).not.toBeNull();
+    expect(emptyState!.textContent).toContain('Select a project');
+  });
+});

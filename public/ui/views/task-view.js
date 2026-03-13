@@ -286,17 +286,18 @@ export class TaskView extends Component {
 
     container.textContent = '';
 
-    if (this._viewMode === 'kanban') {
-      this._renderKanbanBoard(container);
-      return;
-    }
-
     // Show "select a building" message when no building is active
+    // (applies to both list and kanban modes)
     if (!this._buildingId) {
       container.appendChild(h('div', { class: 'empty-state' },
         h('p', { class: 'empty-state-title' }, 'Select a project'),
         h('p', { class: 'empty-state-description' }, 'Choose a project from the Dashboard to view its tasks.')
       ));
+      return;
+    }
+
+    if (this._viewMode === 'kanban') {
+      this._renderKanbanBoard(container);
       return;
     }
 
