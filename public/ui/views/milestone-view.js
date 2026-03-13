@@ -82,7 +82,9 @@ export class MilestoneView extends Component {
             this._openDrawerMilestoneId = null;
           }
         }
-      })
+      }),
+      // Quick Actions FAB dispatches this to open the create modal from any view
+      OverlordUI.subscribe('milestone:request-create', () => this._openCreateModal())
     );
 
     // Initial data

@@ -48,6 +48,7 @@ export function initRouter({ centerPanel, buildingPanel }) {
   OverlordUI.subscribe('navigate:agents', () => navigateTo('agents'));
   OverlordUI.subscribe('navigate:activity', () => navigateTo('activity'));
   OverlordUI.subscribe('navigate:email', () => navigateTo('email'));
+  OverlordUI.subscribe('navigate:milestones', () => navigateTo('milestones'));
   OverlordUI.subscribe('navigate:phase', () => navigateTo('phase'));
 
   // Mobile bottom nav

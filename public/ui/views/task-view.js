@@ -98,6 +98,11 @@ export class TaskView extends Component {
     // broadcasts, so the store subscription above handles re-rendering. No need for
     // additional engine event listeners that would trigger redundant fetch + render cycles.
 
+    // Quick Actions FAB dispatches this to open the create form from any view
+    this._listeners.push(
+      OverlordUI.subscribe('task:request-create', () => this._openCreateForm())
+    );
+
     // Listen for todo updates to re-render detail view
     this.subscribe(store, 'todos.list', (todos) => {
       this._todos = todos || [];
