@@ -186,6 +186,9 @@
   font-weight: var(--font-medium);
   color: var(--text-primary);
   margin-bottom: var(--sp-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .room-card-meta {
   display: flex;
