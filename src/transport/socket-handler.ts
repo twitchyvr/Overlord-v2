@@ -62,10 +62,13 @@ import {
   SessionNoteWriteSchema, SessionNoteReadSchema, SessionNoteListSchema,
   SessionNoteDeleteSchema, SessionNoteClearSchema,
   SearchGlobalSchema,
+  PluginListSchema, PluginGetSchema, PluginToggleSchema,
+  PluginConfigGetSchema, PluginConfigSetSchema, PluginActivitySchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
 import { globalSearch } from '../storage/global-search.js';
+import { listPlugins, getPlugin, loadPlugin, unloadPlugin } from '../plugins/plugin-loader.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
@@ -1134,6 +1137,109 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         limit: parsed.limit,
       });
       if (ack) ack(result);
+    });
+
+    // ─── Plugin Management Events ───
+
+    handle(socket, 'plugin:list', PluginListSchema, (_parsed, ack) => {
+      const all = listPlugins();
+      const items = all.map(p => ({
+        id: p.manifest.id,
+        name: p.manifest.name,
+        version: p.manifest.version,
+        description: p.manifest.description,
+        author: p.manifest.author || 'Unknown',
+        status: p.status,
+        permissions: p.manifest.permissions,
+        hooks: Object.keys(p.hooks),
+        provides: p.manifest.provides || {},
+        loadedAt: p.loadedAt,
+        error: p.error || null,
+      }));
+      if (ack) ack({ ok: true, data: { plugins: items, total: items.length } });
+    });
+
+    handle(socket, 'plugin:get', PluginGetSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+      const data = {
+        id: plugin.manifest.id,
+        name: plugin.manifest.name,
+        version: plugin.manifest.version,
+        description: plugin.manifest.description,
+        author: plugin.manifest.author || 'Unknown',
+        engine: plugin.manifest.engine,
+        entrypoint: plugin.manifest.entrypoint,
+        status: plugin.status,
+        permissions: plugin.manifest.permissions,
+        hooks: Object.keys(plugin.hooks),
+        provides: plugin.manifest.provides || {},
+        loadedAt: plugin.loadedAt,
+        error: plugin.error || null,
+      };
+      if (ack) ack({ ok: true, data });
+    });
+
+    handle(socket, 'plugin:toggle', PluginToggleSchema, async (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+
+      if (parsed.enabled && plugin.status !== 'active') {
+        // Re-load plugin
+        const result = await loadPlugin(plugin.manifest, '');
+        if (ack) ack(result.ok ? { ok: true, data: { pluginId: parsed.pluginId, status: 'active' } } : result);
+        if (result.ok) {
+          io.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'active' });
+          bus.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'active' });
+        }
+      } else if (!parsed.enabled && plugin.status === 'active') {
+        // Unload plugin
+        const result = unloadPlugin(parsed.pluginId);
+        if (ack) ack(result.ok ? { ok: true, data: { pluginId: parsed.pluginId, status: 'unloaded' } } : result);
+        if (result.ok) {
+          io.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'unloaded' });
+          bus.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'unloaded' });
+        }
+      } else {
+        if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId, status: plugin.status } });
+      }
+    });
+
+    handle(socket, 'plugin:config:get', PluginConfigGetSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+      // Read config from plugin's storage namespace
+      const config = plugin.context.storage.get('__config__') || {};
+      if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId, config } });
+    });
+
+    handle(socket, 'plugin:config:set', PluginConfigSetSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+      // Store config in plugin's storage namespace
+      const config = (plugin.context.storage.get('__config__') || {}) as Record<string, unknown>;
+      config[parsed.key] = parsed.value;
+      plugin.context.storage.set('__config__', config);
+      if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId, key: parsed.key } });
+      io.emit('plugin:config-changed', { pluginId: parsed.pluginId, key: parsed.key, value: parsed.value });
+    });
+
+    handle(socket, 'plugin:activity', PluginActivitySchema, (_parsed, ack) => {
+      // Activity is tracked via bus events — return recent plugin-related events from memory
+      // For now, return empty list (activity tracking will be wired via bus listener)
+      if (ack) ack({ ok: true, data: { events: [], total: 0 } });
     });
 
     // ─── Command List ───
@@ -2316,6 +2422,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('plan:submitted');
   forward('plan:reviewed');
   forward('email:dispatched');
+  forward('plugin:status-changed');
+  forward('plugin:config-changed');
 
   // ─── Stats: record every agent status change ───
   bus.on('agent:status-changed', (data: Record<string, unknown>) => {
