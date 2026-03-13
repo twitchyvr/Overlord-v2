@@ -24,6 +24,7 @@ import { initEntityNav } from './engine/entity-nav.js';
 import { GlobalSearch } from './components/global-search.js';
 import { QuickActions } from './components/quick-actions.js';
 import { NotificationCenter } from './components/notification-center.js';
+import { AgentActivityTracker } from './components/agent-activity-tracker.js';
 
 // ═══════════════════════════════════════════════════════════
 //  THEME MANAGEMENT
@@ -136,6 +137,10 @@ if (socket) {
     const notifCenter = new NotificationCenter(bellEl);
     notifCenter.mount();
   }
+
+  // ── Mount agent activity tracker (visual animation states) ──
+  const activityTracker = new AgentActivityTracker(document.createElement('div'));
+  activityTracker.mount();
 
   // Wire settings button
   const settingsBtn = document.getElementById('settings-btn');
