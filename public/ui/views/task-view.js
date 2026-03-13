@@ -31,6 +31,9 @@ import { Toast } from '../components/toast.js';
 
 const STATUS_ORDER = ['pending', 'in-progress', 'done', 'blocked'];
 
+/** Sort weight for statuses: active/blocked items appear before pending/done */
+const STATUS_SORT_WEIGHT = { 'in-progress': 0, 'blocked': 1, 'pending': 2, 'done': 3 };
+
 const STATUS_LABELS = {
   'pending':     'Pending',
   'in-progress': 'In Progress',
@@ -251,11 +254,14 @@ export class TaskView extends Component {
       );
     }
 
-    // Sort: critical/high first, then by creation date
+    // Sort: priority first, then status (active/blocked before pending/done), then newest
     tasks.sort((a, b) => {
       const pa = PRIORITY_ORDER.indexOf(a.priority || 'normal');
       const pb = PRIORITY_ORDER.indexOf(b.priority || 'normal');
       if (pa !== pb) return pa - pb;
+      const sa = STATUS_SORT_WEIGHT[a.status] ?? 2;
+      const sb = STATUS_SORT_WEIGHT[b.status] ?? 2;
+      if (sa !== sb) return sa - sb;
       return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });
 
@@ -576,16 +582,30 @@ export class TaskView extends Component {
         class: 'todo-delete-btn',
         title: 'Delete todo'
       }, '\u00D7');
-      deleteBtn.addEventListener('click', async (e) => {
+      deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        try {
-          if (window.overlordSocket) {
-            await window.overlordSocket.deleteTodo(todo.id);
-            Toast.success('Todo deleted');
+        const confirmContent = h('div', null,
+          h('p', null, `Delete this checklist item?`),
+          h('p', { class: 'text-muted', style: { marginTop: 'var(--sp-2)' } },
+            (todo.title || todo.text || '').slice(0, 80) || 'This item will be permanently removed.')
+        );
+        const confirmBtn = Button.create('Delete', {
+          variant: 'danger',
+          onClick: async () => {
+            Modal.close('confirm-delete-todo');
+            try {
+              if (window.overlordSocket) {
+                await window.overlordSocket.deleteTodo(todo.id);
+                Toast.success('Todo deleted');
+              }
+            } catch (err) {
+              Toast.error('Failed to delete todo');
+            }
           }
-        } catch (err) {
-          Toast.error('Failed to delete todo');
-        }
+        });
+        const cancelBtn = Button.create('Cancel', { variant: 'ghost', onClick: () => Modal.close('confirm-delete-todo') });
+        confirmContent.appendChild(h('div', { style: { marginTop: 'var(--sp-3)', display: 'flex', gap: 'var(--sp-2)', justifyContent: 'flex-end' } }, cancelBtn, confirmBtn));
+        Modal.open('confirm-delete-todo', { title: 'Delete Item', content: confirmContent, size: 'sm', position: 'center' });
       });
       rowChildren.push(deleteBtn);
 

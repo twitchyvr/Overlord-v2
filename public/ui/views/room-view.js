@@ -653,7 +653,7 @@ export class RoomView extends Component {
         h('span', { class: 'rv-tool-name' }, tool)
       );
       const removeBtn = h('button', { class: 'rv-tool-remove', title: `Remove ${tool}` }, '\u2715');
-      removeBtn.addEventListener('click', () => this._removeTool(room, tool));
+      removeBtn.addEventListener('click', () => this._confirmRemoveTool(room, tool));
       tag.appendChild(removeBtn);
       grid.appendChild(tag);
     }
@@ -714,6 +714,25 @@ export class RoomView extends Component {
       size: 'sm',
       position: window.innerWidth < 768 ? 'fullscreen' : 'center',
     });
+  }
+
+  /** Confirm before removing a tool from the room. */
+  _confirmRemoveTool(room, toolName) {
+    const content = h('div', null,
+      h('p', null, `Remove "${toolName}" from this room?`),
+      h('p', { class: 'text-muted', style: { marginTop: 'var(--sp-2)' } },
+        'Agents in this room will no longer have access to this tool.')
+    );
+    const removeBtn = Button.create('Remove Tool', {
+      variant: 'danger',
+      onClick: () => { Modal.close('confirm-remove-tool'); this._removeTool(room, toolName); }
+    });
+    const cancelBtn = Button.create('Cancel', {
+      variant: 'ghost',
+      onClick: () => Modal.close('confirm-remove-tool')
+    });
+    content.appendChild(h('div', { style: { marginTop: 'var(--sp-3)', display: 'flex', gap: 'var(--sp-2)', justifyContent: 'flex-end' } }, cancelBtn, removeBtn));
+    Modal.open('confirm-remove-tool', { title: 'Remove Tool', content, size: 'sm', position: 'center' });
   }
 
   /** Remove a tool from the room's allowed list. */
@@ -1863,20 +1882,34 @@ export class RoomView extends Component {
               class: 'btn btn-ghost btn-xs rv-table-action-danger',
               title: 'Unassign from table'
             }, '\u2715');
-            unassignBtn.addEventListener('click', async (e) => {
+            unassignBtn.addEventListener('click', (e) => {
               e.stopPropagation();
-              if (!window.overlordSocket) return;
-              try {
-                const res = await window.overlordSocket.unassignTaskFromTable(task.id);
-                if (res && res.ok) {
-                  Toast.success('Task unassigned from table');
-                  Modal.close(`table-tasks-${table.id}`);
-                } else {
-                  Toast.error(res?.error?.message || 'Failed to unassign task');
+              const confirmContent = h('div', null,
+                h('p', null, `Unassign "${task.title || 'this task'}" from the table?`),
+                h('p', { class: 'text-muted', style: { marginTop: 'var(--sp-2)' } },
+                  'The task will remain in the backlog but will no longer be assigned to this table.')
+              );
+              const confirmBtn = Button.create('Unassign', {
+                variant: 'danger',
+                onClick: async () => {
+                  Modal.close('confirm-unassign-task');
+                  if (!window.overlordSocket) return;
+                  try {
+                    const res = await window.overlordSocket.unassignTaskFromTable(task.id);
+                    if (res && res.ok) {
+                      Toast.success('Task unassigned from table');
+                      Modal.close(`table-tasks-${table.id}`);
+                    } else {
+                      Toast.error(res?.error?.message || 'Failed to unassign task');
+                    }
+                  } catch {
+                    Toast.error('Failed to unassign task');
+                  }
                 }
-              } catch {
-                Toast.error('Failed to unassign task');
-              }
+              });
+              const cancelBtn = Button.create('Cancel', { variant: 'ghost', onClick: () => Modal.close('confirm-unassign-task') });
+              confirmContent.appendChild(h('div', { style: { marginTop: 'var(--sp-3)', display: 'flex', gap: 'var(--sp-2)', justifyContent: 'flex-end' } }, cancelBtn, confirmBtn));
+              Modal.open('confirm-unassign-task', { title: 'Unassign Task', content: confirmContent, size: 'sm', position: 'center' });
             });
             return unassignBtn;
           })()
