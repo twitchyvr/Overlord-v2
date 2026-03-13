@@ -27,11 +27,11 @@ vi.mock('../../src/core/config.js', () => ({
 }));
 
 vi.mock('../../src/core/bus.js', () => {
-  const handlers = new Map<string, Function>();
+  const handlers = new Map<string, (...args: unknown[]) => unknown>();
   return {
     bus: {
       emit: vi.fn(),
-      on: vi.fn((event: string, fn: Function) => {
+      on: vi.fn((event: string, fn: (...args: unknown[]) => unknown) => {
         handlers.set(event, fn);
       }),
       onNamespace: vi.fn(),
@@ -96,7 +96,7 @@ vi.mock('../../src/rooms/room-manager.js', () => ({
 }));
 
 vi.mock('../../src/rooms/room-types/index.js', () => ({
-  registerBuiltInRoomTypes: vi.fn((registerFn: Function) => {
+  registerBuiltInRoomTypes: vi.fn((_registerFn: (...args: unknown[]) => unknown) => {
     initOrder.push('room-types');
   }),
 }));
@@ -157,16 +157,16 @@ vi.mock('../../src/tools/mcp-manager.js', () => ({
 }));
 
 // Mock HTTP/Express/Socket.IO
-const mockRoutes: Record<string, Function> = {};
+const mockRoutes: Record<string, (...args: unknown[]) => unknown> = {};
 const mockApp = {
   use: vi.fn(),
-  get: vi.fn((path: string, handler: Function) => {
+  get: vi.fn((path: string, handler: (...args: unknown[]) => unknown) => {
     mockRoutes[path] = handler;
   }),
 };
 
 const mockHttpServer = {
-  listen: vi.fn((_port: number, cb: Function) => cb()),
+  listen: vi.fn((_port: number, cb: (...args: unknown[]) => unknown) => cb()),
   close: vi.fn(),
 };
 
