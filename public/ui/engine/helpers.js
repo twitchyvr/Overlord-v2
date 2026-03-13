@@ -195,6 +195,84 @@ export function tip(term, override) {
   }, term);
 }
 
+/**
+ * Convert @agentName mentions to clickable spans and #123 to issue-style links.
+ * Returns a DocumentFragment with mixed text nodes and clickable spans.
+ *
+ * @param {string} text — raw message text
+ * @returns {DocumentFragment}
+ */
+export function linkEntities(text) {
+  const frag = document.createDocumentFragment();
+  if (!text) return frag;
+
+  // Match @word (agent mention) or #digits (issue/task ref)
+  const pattern = /(@[\w.-]+|#\d+)/g;
+  let lastIdx = 0;
+  let match;
+
+  while ((match = pattern.exec(text)) !== null) {
+    // Append preceding plain text
+    if (match.index > lastIdx) {
+      frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+    }
+
+    const token = match[0];
+    if (token.startsWith('@')) {
+      const agentName = token.slice(1);
+      const span = h('span', {
+        class: 'entity-link entity-link-agent',
+        dataset: { agentName },
+        tabindex: '0',
+        role: 'button',
+        title: `View agent: ${agentName}`
+      }, token);
+      span.addEventListener('click', () => {
+        // Attempt to find the agent in the store and navigate
+        const store = window.overlordUI?.getStore?.() || null;
+        const agents = store?.get?.('agents.list') || [];
+        const agent = agents.find(a =>
+          (a.name || '').toLowerCase() === agentName.toLowerCase() ||
+          (a.display_name || '').toLowerCase() === agentName.toLowerCase()
+        );
+        if (agent) {
+          const OUI = window.OverlordUI;
+          if (typeof OUI?.dispatch === 'function') {
+            OUI.dispatch('navigate:entity', { type: 'agent', id: agent.id });
+          }
+        }
+      });
+      frag.appendChild(span);
+    } else {
+      // #123 — task/issue reference
+      const refNum = token.slice(1);
+      const span = h('span', {
+        class: 'entity-link entity-link-ref',
+        dataset: { refNumber: refNum },
+        tabindex: '0',
+        role: 'button',
+        title: `Task/Issue #${refNum}`
+      }, token);
+      span.addEventListener('click', () => {
+        const OUI = window.OverlordUI;
+        if (typeof OUI?.dispatch === 'function') {
+          OUI.dispatch('navigate:entity', { type: 'task', id: refNum });
+        }
+      });
+      frag.appendChild(span);
+    }
+
+    lastIdx = pattern.lastIndex;
+  }
+
+  // Append trailing plain text
+  if (lastIdx < text.length) {
+    frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+  }
+
+  return frag;
+}
+
 /** Scoped querySelector */
 export function $(selector, scope = document) {
   return scope.querySelector(selector);

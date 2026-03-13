@@ -4611,3 +4611,39 @@
     width: 100%;
   }
 }
+
+
+/* ═══════════════════════════════════════════════════
+   ENTITY LINKS — @agent and #issue references (#351)
+   ═══════════════════════════════════════════════════ */
+
+.entity-link {
+  display: inline;
+  cursor: pointer;
+  font-weight: var(--font-medium);
+  border-radius: 2px;
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+
+.entity-link:hover,
+.entity-link:focus {
+  outline: none;
+}
+
+.entity-link-agent {
+  color: var(--accent-blue, #38bdf8);
+}
+
+.entity-link-agent:hover {
+  color: #60ccff;
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.entity-link-ref {
+  color: var(--accent-purple, #a78bfa);
+}
+
+.entity-link-ref:hover {
+  color: #c4b5fd;
+  background: rgba(167, 139, 250, 0.1);
+}

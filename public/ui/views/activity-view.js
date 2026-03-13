@@ -98,6 +98,9 @@ const FILTER_PREDICATES = {
 
 /* ── ActivityView ──────────────────────────────────────────── */
 
+/** localStorage key for activity filter persistence (#348) */
+const ACTIVITY_STORAGE_KEY = 'overlord:view:activity:filters';
+
 export class ActivityView extends Component {
 
   /**
@@ -129,6 +132,31 @@ export class ActivityView extends Component {
 
     /** @type {number} Number of items visible (for load-more). */
     this._visibleCount = 50;
+
+    // Restore persisted filter (#348)
+    this._restoreActivityFilters();
+  }
+
+  /** Restore filter state from localStorage (#348). */
+  _restoreActivityFilters() {
+    try {
+      const saved = localStorage.getItem(ACTIVITY_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.pillFilter) this._pillFilter = parsed.pillFilter;
+        if (parsed.filter) this._filter = parsed.filter;
+      }
+    } catch { /* ignore */ }
+  }
+
+  /** Save filter state to localStorage (#348). */
+  _persistActivityFilters() {
+    try {
+      localStorage.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify({
+        pillFilter: this._pillFilter,
+        filter: this._filter,
+      }));
+    } catch { /* ignore */ }
   }
 
   /* ── Lifecycle ─────────────────────────────────────────── */
@@ -203,6 +231,7 @@ export class ActivityView extends Component {
         this._pillFilter = def.id;
         this._filter = def.id === 'rooms' ? 'building' : def.id;
         this._visibleCount = 50;
+        this._persistActivityFilters();
         this._render();
       });
       pillsContainer.appendChild(pill);

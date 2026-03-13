@@ -43,6 +43,23 @@ const CAPABILITIES = [
   'testing', 'deployment', 'documentation', 'planning'
 ];
 
+/** Personality traits derived from agent name hash. */
+const PERSONALITY_TRAITS = [
+  'analytical', 'creative', 'methodical', 'empathetic',
+  'pragmatic', 'visionary', 'detail-oriented', 'collaborative'
+];
+
+/** Hash an agent name to deterministically pick a personality trait. */
+function derivePersonality(name) {
+  if (!name) return PERSONALITY_TRAITS[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i);
+    hash |= 0; // 32-bit int
+  }
+  return PERSONALITY_TRAITS[Math.abs(hash) % PERSONALITY_TRAITS.length];
+}
+
 const ROOM_TYPES = [
   'strategist', 'building-architect', 'discovery', 'architecture',
   'code-lab', 'testing-lab', 'review', 'deploy', 'war-room',
@@ -496,7 +513,94 @@ export class AgentsView extends Component {
       }
     });
 
+    // ── Right-click context menu ──
+    card.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this._showAgentContextMenu(e, agent);
+    });
+
     return card;
+  }
+
+  /** Show a context menu at the cursor position for an agent card. */
+  _showAgentContextMenu(event, agent) {
+    // Remove any existing context menu
+    const existing = document.querySelector('.agent-context-menu');
+    if (existing) existing.remove();
+
+    const roomId = this._resolveRoomId(agent);
+    const displayName = this._resolveDisplayName(agent);
+
+    const menuItems = [
+      { label: 'View Profile', icon: '\uD83D\uDC64', action: () => this._openAgentDetail(agent) },
+      { label: 'Send Email', icon: '\u2709', action: () => {
+        const firstName = agent.first_name || displayName.split(' ')[0] || '';
+        const lastName = agent.last_name || '';
+        const email = firstName && lastName
+          ? `${firstName.toLowerCase()}.${lastName.toLowerCase()}@overlord.ai`
+          : `${(agent.name || agent.id).toLowerCase().replace(/\s+/g, '.')}@overlord.ai`;
+        OverlordUI.dispatch('navigate:entity', { type: 'email', id: email, agentId: agent.id });
+        Toast.info(`Email: ${email}`);
+      }},
+      { label: 'Assign to Room', icon: '\uD83C\uDFE0', action: () => this._openQuickAssignModal(agent) },
+      { label: 'View Activity', icon: '\uD83D\uDCCA', action: () => {
+        OverlordUI.dispatch('navigate:view', { view: 'activity', filter: 'agents', agentId: agent.id });
+      }},
+    ];
+
+    const menu = h('div', { class: 'agent-context-menu', style: {
+      position: 'fixed',
+      top: `${event.clientY}px`,
+      left: `${event.clientX}px`,
+      zIndex: '10000'
+    }});
+
+    for (const item of menuItems) {
+      const menuItem = h('div', { class: 'agent-context-menu-item' },
+        h('span', { class: 'agent-context-menu-icon' }, item.icon),
+        h('span', null, item.label)
+      );
+      menuItem.addEventListener('click', () => {
+        menu.remove();
+        item.action();
+      });
+      menu.appendChild(menuItem);
+    }
+
+    document.body.appendChild(menu);
+
+    // Adjust position if menu overflows viewport
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      menu.style.left = `${window.innerWidth - rect.width - 8}px`;
+    }
+    if (rect.bottom > window.innerHeight) {
+      menu.style.top = `${window.innerHeight - rect.height - 8}px`;
+    }
+
+    // Close menu on click outside or Escape
+    const closeMenu = (e) => {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+        document.removeEventListener('contextmenu', closeMenu);
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+        document.removeEventListener('contextmenu', closeMenu);
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    // Delay adding listeners to avoid immediate close
+    setTimeout(() => {
+      document.addEventListener('click', closeMenu);
+      document.addEventListener('contextmenu', closeMenu);
+      document.addEventListener('keydown', escHandler);
+    }, 0);
   }
 
   /** Parse capabilities/room_access which may be string or array. */
@@ -688,6 +792,7 @@ export class AgentsView extends Component {
     }
     profileRows.push(['Status', statusCfg.label]);
     profileRows.push(['Role', agent.role || 'agent']);
+    profileRows.push(['Personality', derivePersonality(agent.name || agent.id)]);
     profileRows.push(['Profile Generated', agent.profile_generated ? 'Yes' : 'No']);
 
     for (const [label, value] of profileRows) {

@@ -4145,3 +4145,215 @@
   width: 100%;
   box-sizing: border-box;
 }
+
+
+/* ═══════════════════════════════════════════════
+   BULK ACTIONS — Task View (#345)
+   ═══════════════════════════════════════════════ */
+
+.task-select-all-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--sp-2);
+}
+
+.task-select-all-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
+}
+
+.task-bulk-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent-blue);
+  flex-shrink: 0;
+}
+
+.card-task .task-bulk-checkbox {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  z-index: 2;
+}
+
+.card-task {
+  position: relative;
+}
+
+.task-bulk-action-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-5);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 9000;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-default),
+              transform var(--duration-fast) var(--ease-default);
+}
+
+.task-bulk-action-bar.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.task-bulk-count {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.task-bulk-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+
+/* ═══════════════════════════════════════════════
+   EXPORT DROPDOWN — Task View (#347)
+   ═══════════════════════════════════════════════ */
+
+.task-export-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.task-export-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: var(--sp-1);
+  min-width: 140px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.task-export-option {
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.task-export-option:hover {
+  background: var(--bg-hover);
+}
+
+
+/* ═══════════════════════════════════════════════
+   SCOPE CHANGE BADGE — Task View (#350)
+   ═══════════════════════════════════════════════ */
+
+.task-scope-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-2);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--accent-amber, #f59e0b);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  cursor: help;
+}
+
+
+/* ═══════════════════════════════════════════════
+   SAVED FILTER PRESETS — Task View (#352)
+   ═══════════════════════════════════════════════ */
+
+.task-preset-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.task-preset-save-btn {
+  white-space: nowrap;
+}
+
+.task-preset-select {
+  max-width: 160px;
+  font-size: var(--text-xs);
+  padding: var(--sp-1) var(--sp-2);
+}
+
+
+/* ═══════════════════════════════════════════════
+   AGENT CONTEXT MENU (#353)
+   ═══════════════════════════════════════════════ */
+
+.agent-context-menu {
+  min-width: 180px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: contextMenuIn 0.12s var(--ease-default);
+}
+
+@keyframes contextMenuIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.agent-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.agent-context-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.agent-context-menu-icon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+}
+
+
+/* ═══════════════════════════════════════════════
+   AGENT PERSONALITY BADGE (#339)
+   ═══════════════════════════════════════════════ */
+
+.agents-view-detail-row .agents-view-personality-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--sp-2);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent-blue);
+  border-radius: var(--radius-full);
+  text-transform: capitalize;
+}
