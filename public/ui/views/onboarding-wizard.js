@@ -30,12 +30,14 @@ const PROJECT_TYPES = [
     icon: '\u{1F310}',
     tagline: 'A website, dashboard, or online tool',
     examples: 'Marketing site, SaaS platform, admin panel, e-commerce store',
-    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations', 'integration'],
     roomConfig: [
       { floor: 'strategy', rooms: ['strategist'] },
       { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
-      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
-      { floor: 'integration', rooms: ['deploy', 'monitoring'] }
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+      { floor: 'integration', rooms: ['monitoring'] }
     ],
     agentRoster: [
       { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
@@ -52,12 +54,13 @@ const PROJECT_TYPES = [
     icon: '\u{1F4F1}',
     tagline: 'An app for phones or tablets',
     examples: 'iOS app, Android app, cross-platform app',
-    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
     roomConfig: [
       { floor: 'strategy', rooms: ['strategist'] },
       { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
-      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
-      { floor: 'integration', rooms: ['deploy'] }
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
     ],
     agentRoster: [
       { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
@@ -74,12 +77,14 @@ const PROJECT_TYPES = [
     icon: '\u{1F517}',
     tagline: 'A service that powers other apps',
     examples: 'REST API, GraphQL service, webhook handler, integration layer',
-    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations', 'integration'],
     roomConfig: [
       { floor: 'strategy', rooms: ['strategist'] },
       { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
-      { floor: 'execution', rooms: ['code-lab', 'review'] },
-      { floor: 'integration', rooms: ['deploy', 'monitoring'] }
+      { floor: 'execution', rooms: ['code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+      { floor: 'integration', rooms: ['monitoring'] }
     ],
     agentRoster: [
       { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
@@ -95,12 +100,13 @@ const PROJECT_TYPES = [
     icon: '\u{1F4CA}',
     tagline: 'Data processing, reports, or dashboards',
     examples: 'Data pipeline, analytics dashboard, ML model, reporting tool',
-    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
     roomConfig: [
       { floor: 'strategy', rooms: ['strategist'] },
       { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
-      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
-      { floor: 'integration', rooms: ['deploy'] }
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
     ],
     agentRoster: [
       { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
@@ -117,11 +123,12 @@ const PROJECT_TYPES = [
     icon: '\u{1F4A1}',
     tagline: 'CLI tool, game, library, or anything custom',
     examples: 'Command-line tool, desktop app, game, open-source library',
-    floorsNeeded: ['strategy', 'collaboration', 'execution'],
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance'],
     roomConfig: [
       { floor: 'strategy', rooms: ['strategist'] },
       { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
-      { floor: 'execution', rooms: ['code-lab', 'review'] }
+      { floor: 'execution', rooms: ['code-lab'] },
+      { floor: 'governance', rooms: ['review'] }
     ],
     agentRoster: [
       { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
@@ -264,6 +271,43 @@ export class OnboardingWizard extends Component {
     return bar;
   }
 
+  // ─── Project Name Extraction (for one-shot) ───
+
+  /**
+   * Parse a user's free-text description to extract a project name.
+   * Tries several heuristics in order:
+   *   1. "called X" / "named X" pattern
+   *   2. "X app" / "X tool" / "X platform" / "X site" / "X dashboard" pattern
+   *   3. First capitalized multi-word phrase (2+ words starting uppercase)
+   *   4. Fallback: first 3 words of the description
+   */
+  _extractProjectName(description) {
+    const text = (description || '').trim();
+    if (!text) return 'My Project';
+
+    // 1. "called X" or "named X" — capture until punctuation or end
+    const calledMatch = text.match(/(?:called|named)\s+["']?([A-Z][A-Za-z0-9]+(?: [A-Za-z0-9]+){0,4})/);
+    if (calledMatch) return calledMatch[1].trim();
+
+    // 2. "X app/tool/platform/site/dashboard/service/system" pattern
+    const productMatch = text.match(/([A-Z][A-Za-z0-9]+(?: [A-Za-z0-9]+){0,3})\s+(?:app|tool|platform|site|website|dashboard|service|system|portal|manager)/i);
+    if (productMatch) {
+      const candidate = productMatch[1].trim();
+      // Only use if the first word is capitalized (proper noun feel)
+      if (/^[A-Z]/.test(candidate)) return candidate;
+    }
+
+    // 3. First capitalized multi-word phrase (at least 2 words starting with uppercase)
+    const capsMatch = text.match(/\b([A-Z][A-Za-z0-9]+(?: [A-Z][A-Za-z0-9]+)+)/);
+    if (capsMatch) return capsMatch[1].trim();
+
+    // 4. Fallback: first 3 meaningful words
+    const words = text.replace(/^(I want|I need|Build me|Create|Make)\s+/i, '').split(/\s+/).slice(0, 3);
+    const fallback = words.join(' ');
+    // Capitalize first letter
+    return fallback.charAt(0).toUpperCase() + fallback.slice(1);
+  }
+
   // ─── Step 1: Welcome ───
 
   _renderWelcome() {
@@ -280,6 +324,44 @@ export class OnboardingWizard extends Component {
       )
     );
 
+    // ─── "Just Build It" one-shot section ───
+    const oneShotSection = h('div', { class: 'wizard-oneshot' },
+      h('div', { class: 'wizard-oneshot-divider' },
+        h('span', null, 'or just tell me what you want')
+      )
+    );
+
+    const oneShotInput = h('textarea', {
+      class: 'wizard-textarea wizard-oneshot-input',
+      placeholder: 'e.g. "Build me a customer portal called ClientHub" or "I need a mobile app for tracking fitness goals"...',
+      rows: '3',
+      maxlength: '500'
+    });
+    oneShotSection.appendChild(oneShotInput);
+
+    const oneShotBtn = h('button', {
+      class: 'wizard-btn wizard-btn-accent wizard-btn-lg'
+    }, '\u26A1 Just Build It');
+    oneShotBtn.addEventListener('click', () => {
+      const description = oneShotInput.value.trim();
+      if (!description) {
+        Toast.error('Please describe what you want to build.');
+        oneShotInput.focus();
+        return;
+      }
+      this._handleOneShot(description);
+    });
+    oneShotInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const description = oneShotInput.value.trim();
+        if (description) this._handleOneShot(description);
+      }
+    });
+    oneShotSection.appendChild(oneShotBtn);
+    content.appendChild(oneShotSection);
+
+    // ─── Standard wizard actions ───
     const actions = h('div', { class: 'wizard-actions' });
     const startBtn = h('button', {
       class: 'wizard-btn wizard-btn-primary wizard-btn-lg'
@@ -625,6 +707,97 @@ export class OnboardingWizard extends Component {
     }
 
     return base; // medium = base roster
+  }
+
+  // ─── One-Shot "Just Build It" Handler ───
+
+  async _handleOneShot(description) {
+    // Extract a project name from the user's description
+    const projectName = this._extractProjectName(description);
+
+    // Default to web-app template, medium scale
+    const type = PROJECT_TYPES[0]; // web-app
+    const scale = SCALE_OPTIONS[1]; // medium
+
+    this._projectName = projectName;
+    this._projectDescription = description;
+    this._selectedType = type;
+    this._selectedScale = scale;
+    this._selectedEffort = EFFORT_LEVELS[0]; // easy (hands-off)
+    this._creating = true;
+    this.render();
+
+    try {
+      if (!window.overlordSocket) {
+        throw new Error('Not connected to server');
+      }
+
+      // Create building with the extracted name
+      const buildResult = await window.overlordSocket.createBuilding({
+        name: projectName,
+        config: {
+          projectDescription: description,
+          template: type.id,
+          effortLevel: 'easy'
+        }
+      });
+
+      if (!buildResult || !buildResult.ok) {
+        throw new Error(buildResult?.error?.message || 'Failed to create project');
+      }
+
+      const buildingId = buildResult.data.id;
+
+      // Apply blueprint with default roster
+      const roster = this._getAdjustedRoster();
+      const blueprintResult = await window.overlordSocket.applyBlueprint({
+        buildingId,
+        blueprint: {
+          mode: 'quickStart',
+          floorsNeeded: type.floorsNeeded,
+          roomConfig: type.roomConfig,
+          agentRoster: roster,
+          projectGoals: description,
+          successCriteria: ''
+        },
+        agentId: 'user'
+      });
+
+      if (!blueprintResult || !blueprintResult.ok) {
+        throw new Error(blueprintResult?.error?.message || 'Failed to set up project');
+      }
+
+      Toast.success(`"${projectName}" is ready! Your AI team is standing by.`);
+
+      await window.overlordSocket.selectBuilding(buildingId);
+
+      // Navigate to chat view so the user can immediately start talking
+      OverlordUI.dispatch('building:selected', { buildingId });
+      OverlordUI.dispatch('navigate:chat');
+
+      // Forward the user's description as the first chat message
+      // Use a short delay to let the chat view mount and the room activate
+      setTimeout(() => {
+        if (window.overlordSocket) {
+          const store = OverlordUI.getStore();
+          const roomId = store?.get('rooms.active') || '';
+          window.overlordSocket.sendMessage({
+            text: description,
+            buildingId,
+            roomId,
+            tokens: [],
+            attachments: []
+          });
+        }
+      }, 500);
+
+    } catch (err) {
+      console.error('[OnboardingWizard] One-shot creation failed:', err);
+      Toast.error(`Something went wrong: ${err.message}`);
+      this._creating = false;
+      this._step = 1;
+      this.render();
+    }
   }
 
   // ─── Project Creation ───

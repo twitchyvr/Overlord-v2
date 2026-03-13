@@ -1402,7 +1402,20 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     async selectBuilding(buildingId) {
-      store.set('building.active', buildingId);
+      // Clear stale data from the previous building so views don't
+      // show cached lists while the new building's data loads.
+      store.batch(() => {
+        store.set('building.active', buildingId);
+        store.set('building.floors', []);
+        store.set('rooms.list', []);
+        store.set('rooms.active', null);
+        store.set('agents.list', []);
+        store.set('building.agentPositions', {});
+        store.set('tasks.list', []);
+        store.set('raid.entries', []);
+        store.set('chat.messages', []);
+        store.set('building.activePhase', 'strategy');
+      });
       const results = await Promise.all([
         this.fetchBuilding(buildingId),
         this.fetchFloors(buildingId),

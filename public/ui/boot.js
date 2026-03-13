@@ -22,7 +22,7 @@ import { ExitDocForm } from './views/exit-doc-form.js';
 import { SettingsView } from './views/settings-view.js';
 import { initEntityNav } from './engine/entity-nav.js';
 import { GlobalSearch } from './components/global-search.js';
-import { QuickActions } from './components/quick-actions.js';
+
 import { NotificationCenter } from './components/notification-center.js';
 import { AgentActivityTracker } from './components/agent-activity-tracker.js';
 import { BreadcrumbNav } from './components/breadcrumb-nav.js';
@@ -125,12 +125,6 @@ if (socket) {
   }
   const globalSearch = new GlobalSearch(searchContainer);
   globalSearch.mount();
-
-  // ── Mount Quick Actions FAB (floating action button, bottom-right) ──
-  const qaContainer = document.createElement('div');
-  document.body.appendChild(qaContainer);
-  const quickActions = new QuickActions(qaContainer);
-  quickActions.mount();
 
   // ── Mount Notification Center (bell icon in toolbar) ──
   const bellEl = document.getElementById('notification-bell');

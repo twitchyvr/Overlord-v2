@@ -215,17 +215,28 @@ export class ScriptsView extends Component {
     // Grid
     this._gridEl = h('div', { class: 'scripts-grid', role: 'list', 'aria-label': 'Script list' });
 
-    // Detail drawer
-    const drawerContainer = h('div', { class: 'scripts-drawer-container' });
-    this._drawer = new Drawer(drawerContainer, {
-      position: 'right',
-      width: '420px',
-      onClose: () => { this._selectedId = null; this._highlightCard(null); },
-    });
+    // Detail drawer — uses singleton Drawer API
+    this._drawer = {
+      open: () => Drawer.open('scripts-detail', {
+        title: 'Script Details',
+        width: '420px',
+        content: this._drawerContent || h('div', null, 'Loading...'),
+        onClose: () => { this._selectedId = null; this._highlightCard(null); },
+      }),
+      setContent: (content) => {
+        this._drawerContent = content;
+        if (Drawer.isOpen() && Drawer.getActiveId() === 'scripts-detail') {
+          Drawer.updateBody(content);
+        }
+      },
+      close: () => Drawer.close(),
+      unmount: () => Drawer.close(),
+    };
+    this._drawerContent = null;
 
     this.el.appendChild(header);
     this.el.appendChild(toolbar);
-    this.el.appendChild(h('div', { class: 'scripts-body' }, this._gridEl, drawerContainer));
+    this.el.appendChild(h('div', { class: 'scripts-body' }, this._gridEl));
   }
 
   /* ── Data ─────────────────────────────── */
