@@ -258,6 +258,28 @@ const SCHEMA_SQL = `
     UNIQUE(agent_id, metric, period)
   );
 
+  CREATE TABLE IF NOT EXISTS agent_emails (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL,
+    from_id TEXT NOT NULL REFERENCES agents(id),
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    priority TEXT DEFAULT 'normal',
+    status TEXT DEFAULT 'unread',
+    building_id TEXT REFERENCES buildings(id),
+    parent_id TEXT REFERENCES agent_emails(id),
+    created_at TEXT DEFAULT (datetime('now')),
+    read_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_email_recipients (
+    id TEXT PRIMARY KEY,
+    email_id TEXT NOT NULL REFERENCES agent_emails(id),
+    agent_id TEXT NOT NULL REFERENCES agents(id),
+    type TEXT DEFAULT 'to',
+    read_at TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS migrations (
     version INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
@@ -298,6 +320,14 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_plans_agent ON plans(agent_id);
   CREATE INDEX IF NOT EXISTS idx_plans_thread ON plans(thread_id);
   CREATE INDEX IF NOT EXISTS idx_plans_status ON plans(status);
+  CREATE INDEX IF NOT EXISTS idx_emails_thread ON agent_emails(thread_id);
+  CREATE INDEX IF NOT EXISTS idx_emails_from ON agent_emails(from_id);
+  CREATE INDEX IF NOT EXISTS idx_emails_building ON agent_emails(building_id);
+  CREATE INDEX IF NOT EXISTS idx_emails_status ON agent_emails(status);
+  CREATE INDEX IF NOT EXISTS idx_emails_priority ON agent_emails(priority);
+  CREATE INDEX IF NOT EXISTS idx_email_recipients_email ON agent_email_recipients(email_id);
+  CREATE INDEX IF NOT EXISTS idx_email_recipients_agent ON agent_email_recipients(agent_id);
+  CREATE INDEX IF NOT EXISTS idx_email_recipients_unread ON agent_email_recipients(agent_id, read_at);
 `;
 
 /**

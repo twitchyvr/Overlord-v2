@@ -643,3 +643,61 @@ export const PlanListSchema = z.object({
   status: z.enum(['pending', 'approved', 'rejected', 'changes-requested']).optional(),
   threadId: z.string().max(MAX_ID).optional(),
 });
+
+// ─── Agent Email Schemas ───
+
+export const EmailSendSchema = z.object({
+  fromId: id(),
+  to: z.array(id()).min(1).max(50),
+  cc: z.array(id()).max(50).optional().default([]),
+  subject: z.string().min(1).max(MAX_NAME),
+  body: z.string().min(1).max(MAX_TEXT),
+  priority: z.enum(['normal', 'urgent', 'low']).optional().default('normal'),
+  buildingId: optionalId(),
+});
+
+export const EmailReplySchema = z.object({
+  emailId: id(),
+  fromId: id(),
+  body: z.string().min(1).max(MAX_TEXT),
+  replyAll: z.boolean().optional().default(false),
+  priority: z.enum(['normal', 'urgent', 'low']).optional(),
+});
+
+export const EmailForwardSchema = z.object({
+  emailId: id(),
+  fromId: id(),
+  to: z.array(id()).min(1).max(50),
+  body: z.string().max(MAX_TEXT).optional().default(''),
+});
+
+export const EmailInboxSchema = z.object({
+  agentId: id(),
+  status: z.string().max(MAX_NAME).optional(),
+  priority: z.string().max(MAX_NAME).optional(),
+  limit: z.number().int().min(1).max(100).optional().default(50),
+  offset: z.number().int().min(0).optional().default(0),
+});
+
+export const EmailGetSchema = z.object({
+  emailId: id(),
+});
+
+export const EmailThreadSchema = z.object({
+  threadId: id(),
+});
+
+export const EmailMarkReadSchema = z.object({
+  emailId: id(),
+  agentId: id(),
+});
+
+export const EmailUnreadCountSchema = z.object({
+  agentId: id(),
+});
+
+export const EmailSentSchema = z.object({
+  agentId: id(),
+  limit: z.number().int().min(1).max(100).optional().default(50),
+  offset: z.number().int().min(0).optional().default(0),
+});

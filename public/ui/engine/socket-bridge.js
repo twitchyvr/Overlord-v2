@@ -1507,7 +1507,108 @@ export function initSocketBridge(socket, store, engine) {
         socket.emit('agent:leaderboard', { metric, ...opts }, (res) => resolve(res));
       });
     },
+
+    // ── Email methods ──
+
+    async sendAgentEmail(params) {
+      const res = await _emitWithFeedback('email:send', params);
+      if (res && res.ok) {
+        store.update('email.sent', (list) => [res.data, ...(list || [])]);
+      }
+      return res;
+    },
+
+    async replyToEmail(emailId, fromId, body, opts = {}) {
+      return _emitWithFeedback('email:reply', { emailId, fromId, body, ...opts });
+    },
+
+    async forwardEmail(emailId, fromId, to, body) {
+      return _emitWithFeedback('email:forward', { emailId, fromId, to, body });
+    },
+
+    fetchInbox(agentId, opts = {}) {
+      return new Promise((resolve) => {
+        socket.emit('email:inbox', { agentId, ...opts }, (res) => {
+          if (res && res.ok) {
+            store.set('email.inbox', res.data);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    fetchSentEmails(agentId, opts = {}) {
+      return new Promise((resolve) => {
+        socket.emit('email:sent', { agentId, ...opts }, (res) => {
+          if (res && res.ok) {
+            store.set('email.sent', res.data);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    fetchEmail(emailId) {
+      return new Promise((resolve) => {
+        socket.emit('email:get', { emailId }, (res) => resolve(res));
+      });
+    },
+
+    fetchEmailThread(threadId) {
+      return new Promise((resolve) => {
+        socket.emit('email:thread', { threadId }, (res) => {
+          if (res && res.ok) {
+            store.set('email.thread', res.data);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    markEmailRead(emailId, agentId) {
+      return _emitWithFeedback('email:mark-read', { emailId, agentId });
+    },
+
+    fetchUnreadCount(agentId) {
+      return new Promise((resolve) => {
+        socket.emit('email:unread-count', { agentId }, (res) => {
+          if (res && res.ok) {
+            store.set('email.unreadCount', res.data?.count ?? 0);
+          }
+          resolve(res);
+        });
+      });
+    },
   };
+
+  // ── Email event listeners ──
+
+  socket.on('email:received', (data) => {
+    log.info('Email received:', data);
+    store.update('email.inbox', (inbox) => {
+      const list = inbox || [];
+      if (data.email && !list.find((e) => e.id === data.email.id)) {
+        return [data.email, ...list];
+      }
+      return list;
+    });
+    store.update('email.unreadCount', (count) => (count || 0) + 1);
+    engine.dispatch('email:received', data);
+  });
+
+  socket.on('email:dispatched', (data) => {
+    log.info('Email dispatched broadcast:', data);
+    engine.dispatch('email:dispatched', data);
+  });
+
+  socket.on('email:read', (data) => {
+    log.info('Email read:', data);
+    store.update('email.inbox', (inbox) => (inbox || []).map((e) =>
+      e.id === data.emailId ? { ...e, status: 'read', read_at: new Date().toISOString() } : e
+    ));
+    store.update('email.unreadCount', (c) => Math.max(0, (c || 0) - 1));
+    engine.dispatch('email:read', data);
+  });
 
   log.info('v2 bridge initialized');
   return window.overlordSocket;
