@@ -392,6 +392,9 @@ export class TaskView extends Component {
   _buildDetailContent(task) {
     const container = h('div', { class: 'task-detail-view' });
 
+    // Status progression bar
+    container.appendChild(this._buildStatusProgression(task.status));
+
     // Status and priority row
     const metaRow = h('div', { class: 'task-detail-meta' },
       h('div', { class: 'task-detail-meta-item' },
@@ -407,6 +410,12 @@ export class TaskView extends Component {
     );
     container.appendChild(metaRow);
 
+    // Assignee display
+    container.appendChild(this._buildAssigneeSection(task));
+
+    // Milestone / phase info
+    container.appendChild(this._buildMilestoneSection(task));
+
     // Description
     if (task.description) {
       container.appendChild(h('div', { class: 'task-detail-section' },
@@ -417,18 +426,6 @@ export class TaskView extends Component {
 
     // Metadata
     const infoSection = h('div', { class: 'task-detail-section task-detail-info' });
-    if (task.phase) {
-      infoSection.appendChild(h('div', { class: 'task-detail-info-row' },
-        h('span', { class: 'task-detail-label' }, 'Phase'),
-        h('span', null, task.phase)
-      ));
-    }
-    if (task.assignee_id) {
-      infoSection.appendChild(h('div', { class: 'task-detail-info-row' },
-        h('span', { class: 'task-detail-label' }, 'Assignee'),
-        EntityLink.agent(task.assignee_id, this._getAgentName(task.assignee_id))
-      ));
-    }
     if (task.created_at) {
       infoSection.appendChild(h('div', { class: 'task-detail-info-row' },
         h('span', { class: 'task-detail-label' }, 'Created'),
@@ -485,6 +482,67 @@ export class TaskView extends Component {
     container.appendChild(actions);
 
     return container;
+  }
+
+  /** Build a horizontal status progression bar. */
+  _buildStatusProgression(currentStatus) {
+    const steps = [
+      { key: 'pending', label: 'Not Started' },
+      { key: 'in-progress', label: 'In Progress' },
+      { key: 'blocked', label: 'Review' },
+      { key: 'done', label: 'Done' },
+    ];
+    const currentIdx = steps.findIndex(s => s.key === currentStatus);
+    const bar = h('div', { class: 'task-status-progression' });
+    for (let i = 0; i < steps.length; i++) {
+      const cls = i === currentIdx ? 'active' : i < currentIdx ? 'completed' : '';
+      bar.appendChild(h('div', { class: `task-status-step ${cls}` }, steps[i].label));
+    }
+    return bar;
+  }
+
+  /** Build the assignee display section. */
+  _buildAssigneeSection(task) {
+    const section = h('div', { class: 'task-detail-assignee' });
+    if (task.assignee_id) {
+      const agentName = this._getAgentName(task.assignee_id);
+      const agent = this._agents.find(a => a.id === task.assignee_id);
+      section.appendChild(h('span', { class: 'task-detail-label' }, 'Assignee: '));
+      section.appendChild(EntityLink.agent(task.assignee_id, agentName));
+      if (agent && agent.role) {
+        section.appendChild(h('span', { class: 'task-detail-label', style: 'margin-left: var(--sp-2)' },
+          '(' + agent.role + ')'));
+      }
+    } else {
+      section.appendChild(h('span', { class: 'task-detail-label' }, 'Assignee: '));
+      section.appendChild(h('span', { style: 'color: var(--text-muted)' }, 'Unassigned'));
+    }
+    return section;
+  }
+
+  /** Build the milestone / phase info section. */
+  _buildMilestoneSection(task) {
+    const section = h('div', { class: 'task-detail-milestone' });
+    const parts = [];
+    if (task.milestone_id || task.milestone) {
+      parts.push(h('span', null,
+        h('span', { class: 'task-detail-label' }, 'Milestone: '),
+        h('span', null, task.milestone || task.milestone_id)
+      ));
+    }
+    if (task.phase) {
+      parts.push(h('span', null,
+        h('span', { class: 'task-detail-label' }, 'Phase: '),
+        h('span', null, task.phase)
+      ));
+    }
+    if (parts.length === 0) {
+      section.appendChild(h('span', { class: 'task-detail-label' }, 'Milestone: '));
+      section.appendChild(h('span', { style: 'color: var(--text-muted)' }, 'None'));
+    } else {
+      for (const part of parts) section.appendChild(part);
+    }
+    return section;
   }
 
   _renderDetailTodos() {
