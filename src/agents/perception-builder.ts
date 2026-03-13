@@ -127,7 +127,7 @@ export function extractToolResults(
   toolCalls: Array<{ name: string; input: Record<string, unknown>; result: unknown }>,
 ): ToolResultEntry[] {
   return toolCalls.map((call) => {
-    const isError = call.result != null
+    const isError = call.result !== null && call.result !== undefined
       && typeof call.result === 'object'
       && 'error' in call.result;
 
