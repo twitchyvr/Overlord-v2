@@ -172,7 +172,7 @@ describe('socket "connect" event', () => {
     expect(mockSocket.emit).toHaveBeenCalledWith('system:health', {}, expect.any(Function));
   });
 
-  it('hydrates store when system:status ack returns ok', () => {
+  it('hydrates store when system:status ack returns ok', async () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
 
     // Override emit to invoke the ack callback immediately for system:status
@@ -183,6 +183,7 @@ describe('socket "connect" event', () => {
     });
 
     mockSocket._trigger('connect');
+    await Promise.resolve(); // flush microtask from _emitWithTimeout .then()
 
     expect(mockStore.batch).toHaveBeenCalledTimes(1);
     // batch calls set inside it
@@ -190,7 +191,7 @@ describe('socket "connect" event', () => {
     expect(mockStore.set).toHaveBeenCalledWith('building.list', [{ id: 'b1' }]);
   });
 
-  it('dispatches system:status event to engine on ok response', () => {
+  it('dispatches system:status event to engine on ok response', async () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
 
     const statusData = { isNewUser: false, buildings: [] };
@@ -201,6 +202,7 @@ describe('socket "connect" event', () => {
     });
 
     mockSocket._trigger('connect');
+    await Promise.resolve(); // flush microtask from _emitWithTimeout .then()
     expect(mockEngine.dispatch).toHaveBeenCalledWith('system:status', statusData);
   });
 
@@ -230,7 +232,7 @@ describe('socket "connect" event', () => {
     expect(mockStore.batch).not.toHaveBeenCalled();
   });
 
-  it('hydrates system.health when system:health ack returns ok', () => {
+  it('hydrates system.health when system:health ack returns ok', async () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
 
     const healthData = { cpu: 50, memory: 70 };
@@ -241,10 +243,11 @@ describe('socket "connect" event', () => {
     });
 
     mockSocket._trigger('connect');
+    await Promise.resolve(); // flush microtask from _emitWithTimeout .then()
     expect(mockStore.set).toHaveBeenCalledWith('system.health', healthData);
   });
 
-  it('defaults buildings to empty array when not provided in status', () => {
+  it('defaults buildings to empty array when not provided in status', async () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
 
     mockSocket.emit.mockImplementation((event: string, data: any, ack?: (...args: unknown[]) => void) => {
@@ -254,6 +257,7 @@ describe('socket "connect" event', () => {
     });
 
     mockSocket._trigger('connect');
+    await Promise.resolve(); // flush microtask from _emitWithTimeout .then()
     expect(mockStore.set).toHaveBeenCalledWith('building.list', []);
   });
 });

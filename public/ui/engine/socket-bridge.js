@@ -26,7 +26,7 @@ export function initSocketBridge(socket, store, engine) {
     store.set('ui.connectionState', 'connected');
 
     // Hydrate initial state
-    socket.emit('system:status', {}, (res) => {
+    _emitWithTimeout('system:status', {}).then((res) => {
       if (res && res.ok) {
         store.batch(() => {
           store.set('system.isNewUser', res.data.isNewUser);
@@ -36,7 +36,7 @@ export function initSocketBridge(socket, store, engine) {
       }
     });
 
-    socket.emit('system:health', {}, (res) => {
+    _emitWithTimeout('system:health', {}).then((res) => {
       if (res && res.ok) {
         store.set('system.health', res.data);
       }
@@ -709,8 +709,8 @@ export function initSocketBridge(socket, store, engine) {
    * On error responses (res.ok === false), dispatches an engine event
    * so the UI can show error feedback (toast, banner, etc).
    */
-  function _emitWithFeedback(event, data) {
-    return _emitWithTimeout(event, data).then((res) => {
+  function _emitWithFeedback(event, data, timeoutMs) {
+    return _emitWithTimeout(event, data, timeoutMs).then((res) => {
       if (res && !res.ok) {
         const errorMsg = res.error?.message || res.error || 'Operation failed';
         const errorCode = res.error?.code || 'UNKNOWN';
@@ -877,7 +877,7 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     applyBlueprint(params) {
-      return _emitWithFeedback('building:apply-blueprint', params);
+      return _emitWithFeedback('building:apply-blueprint', params, 60000);
     },
 
     async registerAgent(params) {
@@ -1013,11 +1013,11 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     async generateAgentPhoto(agentId) {
-      return _emitWithFeedback('agent:generate-photo', { agentId });
+      return _emitWithFeedback('agent:generate-photo', { agentId }, 45000);
     },
 
     async generateAgentProfile(agentId) {
-      return _emitWithFeedback('agent:generate-profile', { agentId });
+      return _emitWithFeedback('agent:generate-profile', { agentId }, 45000);
     },
 
     sendMessage(params) {
