@@ -2,6 +2,39 @@
    OVERLORD v2 — Component Styles
    ═══════════════════════════════════════════════════ */
 
+/* ── Tooltips (jargon helper for non-technical users) ── */
+.has-tooltip {
+  border-bottom: 1px dotted var(--text-muted);
+  cursor: help;
+  position: relative;
+}
+.has-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: normal;
+  white-space: nowrap;
+  max-width: 300px;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-default);
+  z-index: 1000;
+  box-shadow: var(--shadow-md);
+  line-height: 1.4;
+}
+.has-tooltip:hover::after {
+  opacity: 1;
+}
+
 /* ── Buttons ── */
 .btn {
   display: inline-flex;

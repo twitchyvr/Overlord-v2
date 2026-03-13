@@ -14,6 +14,7 @@ const helpersPath = '../../../public/ui/engine/helpers.js';
 let h: any, setContent: any, setTrustedContent: any;
 let debounce: any, throttle: any, escapeHtml: any;
 let uid: any, formatTime: any, clamp: any, $: any, $$: any;
+let tip: any;
 
 beforeEach(async () => {
   const mod = await import(helpersPath);
@@ -28,6 +29,7 @@ beforeEach(async () => {
   clamp = mod.clamp;
   $ = mod.$;
   $$ = mod.$$;
+  tip = mod.tip;
 });
 
 // ─── h() ────────────────────────────────────────────────────
@@ -377,5 +379,39 @@ describe('throttle()', () => {
     vi.advanceTimersByTime(100);
     expect(fn).toHaveBeenCalledTimes(2);
     expect(fn).toHaveBeenLastCalledWith('b');
+  });
+});
+
+// ─── tip() ────────────────────────────────────────────────────
+
+describe('tip() — jargon tooltips', () => {
+  it('returns a span with tooltip for known glossary terms', () => {
+    const el = tip('File Scope');
+    expect(el.tagName).toBe('SPAN');
+    expect(el.className).toBe('has-tooltip');
+    expect(el.dataset.tooltip).toBe('Controls which project files agents in this room can access');
+    expect(el.textContent).toBe('File Scope');
+  });
+
+  it('returns a text node for unknown terms', () => {
+    const node = tip('Some Unknown Term');
+    expect(node.nodeType).toBe(Node.TEXT_NODE);
+    expect(node.textContent).toBe('Some Unknown Term');
+  });
+
+  it('uses override text when provided', () => {
+    const el = tip('Custom Label', 'My custom explanation');
+    expect(el.tagName).toBe('SPAN');
+    expect(el.dataset.tooltip).toBe('My custom explanation');
+    expect(el.textContent).toBe('Custom Label');
+  });
+
+  it('handles all major glossary terms', () => {
+    const terms = ['Exit Document', 'AI Provider', 'RAID Log', 'Cross-Room Citations', 'Phase Gate'];
+    for (const term of terms) {
+      const el = tip(term);
+      expect(el.tagName).toBe('SPAN');
+      expect(el.dataset.tooltip).toBeTruthy();
+    }
   });
 });

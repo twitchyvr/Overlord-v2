@@ -10,7 +10,7 @@
 
 import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
-import { h, formatTime } from '../engine/helpers.js';
+import { h, formatTime, tip } from '../engine/helpers.js';
 import { Modal } from '../components/modal.js';
 import { Toast } from '../components/toast.js';
 
@@ -318,8 +318,9 @@ export class BuildingView extends Component {
     roomCard.appendChild(header);
 
     // Meta row: room type + agent count
+    const typeInfo = ROOM_TYPE_INFO[room.type] || {};
     const meta = h('div', { class: 'room-card-meta' },
-      h('span', { class: 'room-card-type-tag' }, room.type),
+      h('span', { class: 'room-card-type-tag has-tooltip', dataset: { tooltip: typeInfo.desc || room.type } }, typeInfo.label || room.type),
       h('span', { class: 'room-card-agent-count' },
         `${agentsInRoom.length} agent${agentsInRoom.length !== 1 ? 's' : ''}`
       )
@@ -810,7 +811,7 @@ export class BuildingView extends Component {
 
     // File scope selector
     const scopeGroup = h('div', { class: 'add-room-field' });
-    scopeGroup.appendChild(h('label', { class: 'form-label' }, 'File Scope'));
+    scopeGroup.appendChild(h('label', { class: 'form-label' }, tip('File Scope')));
     const scopeSelect = h('select', { class: 'form-input settings-select' });
     for (const scope of ['assigned', 'read-only', 'full', 'none']) {
       const opt = h('option', { value: scope }, scope.charAt(0).toUpperCase() + scope.slice(1).replace('-', ' '));
@@ -824,7 +825,7 @@ export class BuildingView extends Component {
 
     // Provider selector
     const providerGroup = h('div', { class: 'add-room-field' });
-    providerGroup.appendChild(h('label', { class: 'form-label' }, 'AI Provider'));
+    providerGroup.appendChild(h('label', { class: 'form-label' }, tip('AI Provider')));
     const providerSelect = h('select', { class: 'form-input settings-select' });
     for (const prov of ['configurable', 'anthropic', 'minimax', 'openai', 'ollama']) {
       const opt = h('option', { value: prov }, prov.charAt(0).toUpperCase() + prov.slice(1));

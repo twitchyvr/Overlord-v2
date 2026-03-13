@@ -432,7 +432,7 @@ describe('BuildingView', () => {
 
     const typeTag = el.querySelector('.room-card-type-tag');
     expect(typeTag).not.toBeNull();
-    expect(typeTag!.textContent).toBe('code-lab');
+    expect(typeTag!.textContent).toBe('Code Lab');
   });
 
   it('room card shows last activity when available', async () => {
