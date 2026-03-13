@@ -202,10 +202,27 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     // ─── Building Events ───
 
     handle(socket, 'building:create', BuildingCreateSchema, (parsed, ack) => {
+      // Default working directory if none specified (#540)
+      // Ensures Code Lab has a directory to write files from the start
+      let workingDirectory = parsed.workingDirectory;
+      if (!workingDirectory) {
+        const kebabName = parsed.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+        workingDirectory = `/tmp/overlord-projects/${kebabName}`;
+      }
+      // Ensure the directory exists
+      try {
+        fs.mkdirSync(workingDirectory, { recursive: true });
+      } catch (e) {
+        log.warn({ err: e, dir: workingDirectory }, 'Failed to create default working directory');
+      }
+
       const result = createBuilding({
         name: parsed.name,
         projectId: parsed.projectId,
-        workingDirectory: parsed.workingDirectory,
+        workingDirectory,
         repoUrl: parsed.repoUrl,
         config: {
           ...(parsed.effortLevel ? { effortLevel: parsed.effortLevel } : {}),
@@ -2719,6 +2736,83 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('plugin:status-changed');
   forward('plugin:config-changed');
   forward('plugin:source-changed');
+
+  // ─── Exit Doc Auto-Submit (#524) ───
+  // When the conversation loop detects an exit document in AI prose,
+  // it emits exit-doc:auto-submit. We handle it here to call the real
+  // submitExitDocument() flow and trigger the phase gate pipeline.
+  bus.on('exit-doc:auto-submit', async (data: Record<string, unknown>) => {
+    const roomId = data.roomId as string;
+    const agentId = data.agentId as string;
+    const document = data.document as Record<string, unknown>;
+    const exitDocType = data.exitDocType as string;
+
+    if (!roomId || !agentId || !document) {
+      log.warn({ data }, 'exit-doc:auto-submit missing required fields');
+      return;
+    }
+
+    // Look up buildingId and active phase from the room's floor
+    let buildingId: string | undefined;
+    let phase: string | undefined;
+    try {
+      const db = getDb();
+      const roomRow = db.prepare('SELECT floor_id, type FROM rooms WHERE id = ?').get(roomId) as { floor_id: string; type: string } | undefined;
+      if (roomRow) {
+        const floorRow = db.prepare('SELECT building_id FROM floors WHERE id = ?').get(roomRow.floor_id) as { building_id: string } | undefined;
+        if (floorRow) {
+          buildingId = floorRow.building_id;
+          const building = db.prepare('SELECT active_phase FROM buildings WHERE id = ?').get(buildingId) as { active_phase: string } | undefined;
+          phase = building?.active_phase || undefined;
+        }
+      }
+    } catch (e) {
+      log.warn({ err: e, roomId }, 'Failed to look up building context for auto-submitted exit doc');
+    }
+
+    log.info(
+      { roomId, agentId, exitDocType, buildingId, phase },
+      'Processing auto-detected exit document',
+    );
+
+    const result = await submitExitDocument({
+      roomId,
+      agentId,
+      document,
+      buildingId,
+      phase,
+    });
+
+    if (result.ok) {
+      const exitDocData = result.data as Record<string, unknown>;
+      bus.emit('exit-doc:submitted', {
+        roomId,
+        roomType: exitDocType,
+        buildingId,
+        agentId,
+        document,
+        ...exitDocData,
+      });
+
+      // Auto-create a pending phase gate when exit doc is submitted
+      if (buildingId && phase) {
+        const gateResult = createGate({ buildingId, phase });
+        if (gateResult.ok) {
+          const gateData = gateResult.data as { id: string; phase: string; status: string };
+          const exitDocId = exitDocData.id as string | undefined;
+          if (exitDocId) {
+            getDb().prepare('UPDATE phase_gates SET exit_doc_id = ? WHERE id = ?').run(exitDocId, gateData.id);
+          }
+          broadcastLog('info', `Phase gate created for ${phase} (exit doc auto-submitted)`, 'phase');
+          bus.emit('phase:gate:created', { buildingId, ...gateData });
+        }
+      }
+
+      broadcastLog('info', `Exit document auto-submitted for ${exitDocType} in room ${roomId}`, 'exit-doc');
+    } else {
+      log.warn({ roomId, agentId, error: result.error }, 'Auto-submitted exit document failed validation');
+    }
+  });
 
   // ─── Stats: record every agent status change ───
   bus.on('agent:status-changed', (data: Record<string, unknown>) => {

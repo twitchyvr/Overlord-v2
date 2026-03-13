@@ -28,6 +28,139 @@ import type {
 
 const log = logger.child({ module: 'conversation-loop' });
 
+// ─── Exit Document Auto-Detection (#524) ───
+
+/**
+ * Known exit document field sets by room type.
+ * If an AI response contains a JSON object with fields matching one of these
+ * sets, it's treated as an exit document and auto-submitted.
+ */
+const EXIT_DOC_FIELD_SETS: Record<string, string[]> = {
+  'building-blueprint': ['effortLevel', 'projectGoals', 'successCriteria', 'floorsNeeded', 'roomConfig', 'agentRoster', 'estimatedPhases'],
+  'requirements-document': ['businessOutcomes', 'constraints', 'unknowns', 'gapAnalysis', 'riskAssessment', 'acceptanceCriteria'],
+  'architecture-document': ['milestones', 'taskBreakdown', 'dependencyGraph', 'techDecisions', 'fileAssignments'],
+  'implementation-report': ['filesModified', 'testsAdded', 'changesDescription', 'riskAssessment'],
+  'test-report': ['testsPassed', 'testsFailed', 'coverage', 'blockers'],
+  'gate-review': ['verdict', 'evidence', 'conditions', 'riskQuestionnaire'],
+  'deployment-report': ['environment', 'version', 'deployedAt', 'healthCheck', 'rollbackPlan'],
+  'incident-report': ['incidentSummary', 'rootCause', 'resolution', 'preventionPlan', 'timeToResolve'],
+  'research-report': ['findings', 'sources', 'recommendations', 'gaps'],
+  'security-report': ['vulnerabilities', 'riskLevel', 'recommendations', 'dependencyAudit', 'complianceChecks'],
+  'documentation-report': ['documentsWritten', 'documentsUpdated', 'coverageAreas', 'remainingGaps'],
+  'monitoring-report': ['metricsConfigured', 'alertsCreated', 'dashboardsSetup', 'recommendations'],
+};
+
+/**
+ * Extract JSON blocks from AI response text.
+ * Looks for ```json ... ``` fenced blocks and bare JSON objects.
+ */
+function extractJsonBlocks(text: string): unknown[] {
+  const results: unknown[] = [];
+
+  // Match ```json ... ``` fenced code blocks
+  const fencedPattern = /```(?:json)?\s*\n?([\s\S]*?)```/g;
+  let match: RegExpExecArray | null;
+  while ((match = fencedPattern.exec(text)) !== null) {
+    try {
+      results.push(JSON.parse(match[1].trim()));
+    } catch {
+      // Not valid JSON — skip
+    }
+  }
+
+  // If no fenced blocks found, try to find bare JSON objects
+  if (results.length === 0) {
+    // Look for top-level { ... } that span substantial content
+    const barePattern = /\{[\s\S]{20,}\}/g;
+    while ((match = barePattern.exec(text)) !== null) {
+      try {
+        results.push(JSON.parse(match[0]));
+      } catch {
+        // Not valid JSON — skip
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Check if a parsed object matches any known exit document field set,
+ * optionally narrowed to a specific room's exit template.
+ *
+ * Returns the matching field set type or null.
+ */
+function matchesExitDocFields(
+  obj: Record<string, unknown>,
+  roomExitTemplate?: { type: string; fields: string[] },
+): string | null {
+  // If room has a specific exit template, check that first
+  if (roomExitTemplate && roomExitTemplate.fields.length > 0) {
+    const matchCount = roomExitTemplate.fields.filter((f) => f in obj).length;
+    // Require at least half the fields to match (AI may not fill every field)
+    if (matchCount >= Math.ceil(roomExitTemplate.fields.length / 2)) {
+      return roomExitTemplate.type;
+    }
+  }
+
+  // Fallback: check against all known field sets
+  for (const [type, fields] of Object.entries(EXIT_DOC_FIELD_SETS)) {
+    const matchCount = fields.filter((f) => f in obj).length;
+    if (matchCount >= Math.ceil(fields.length / 2)) {
+      return type;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Detect if an AI response contains an exit document and auto-submit it.
+ *
+ * The Strategist (and other rooms) often generate the exit document as JSON
+ * in their text response but never call the submission tool. This function
+ * catches that case and emits `exit-doc:auto-submit` on the bus.
+ *
+ * @returns true if an exit doc was detected and submitted
+ */
+export function detectAndSubmitExitDoc(
+  responseText: string,
+  roomId: string,
+  agentId: string,
+  bus: Bus,
+  roomExitTemplate?: { type: string; fields: string[] },
+): boolean {
+  if (!responseText || responseText.length < 30) return false;
+
+  const jsonBlocks = extractJsonBlocks(responseText);
+  if (jsonBlocks.length === 0) return false;
+
+  for (const block of jsonBlocks) {
+    if (!block || typeof block !== 'object' || Array.isArray(block)) continue;
+
+    const obj = block as Record<string, unknown>;
+    const matchedType = matchesExitDocFields(obj, roomExitTemplate);
+
+    if (matchedType) {
+      log.info(
+        { roomId, agentId, exitDocType: matchedType, fieldCount: Object.keys(obj).length },
+        'Auto-detected exit document in AI response',
+      );
+
+      bus.emit('exit-doc:auto-submit', {
+        roomId,
+        agentId,
+        document: obj,
+        exitDocType: matchedType,
+      });
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /** All limits are user-configurable via environment variables / config */
 const MAX_TOOL_ITERATIONS = config.get('MAX_TOOL_ITERATIONS');
 const TOOL_TIMEOUT_MS = config.get('TOOL_TIMEOUT_MS');
@@ -270,6 +403,13 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       allTextParts.push(assistantText); // Accumulate across iterations (#532)
       session.addMessage({ role: 'assistant', content: assistantText });
       room.onMessage(agentId, assistantText, 'assistant');
+
+      // Auto-detect exit documents embedded in AI text responses (#524)
+      // The AI sometimes generates exit doc JSON in prose instead of calling the tool
+      const exitTemplate = room.exitRequired;
+      if (exitTemplate && exitTemplate.fields.length > 0) {
+        detectAndSubmitExitDoc(assistantText, room.id, agentId, bus, exitTemplate);
+      }
     }
 
     // Forward thinking blocks explicitly for the UI to display AI reasoning
