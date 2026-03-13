@@ -23,6 +23,7 @@ import { SettingsView } from './views/settings-view.js';
 import { initEntityNav } from './engine/entity-nav.js';
 import { GlobalSearch } from './components/global-search.js';
 import { QuickActions } from './components/quick-actions.js';
+import { NotificationCenter } from './components/notification-center.js';
 
 // ═══════════════════════════════════════════════════════════
 //  THEME MANAGEMENT
@@ -128,6 +129,13 @@ if (socket) {
   document.body.appendChild(qaContainer);
   const quickActions = new QuickActions(qaContainer);
   quickActions.mount();
+
+  // ── Mount Notification Center (bell icon in toolbar) ──
+  const bellEl = document.getElementById('notification-bell');
+  if (bellEl) {
+    const notifCenter = new NotificationCenter(bellEl);
+    notifCenter.mount();
+  }
 
   // Wire settings button
   const settingsBtn = document.getElementById('settings-btn');
