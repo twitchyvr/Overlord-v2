@@ -1,0 +1,16 @@
+{
+  "id": "deadline-tracker",
+  "name": "Deadline Tracker",
+  "version": "1.0.0",
+  "description": "Tracks project milestones and deadlines, alerting when they are approaching or have been missed so nothing falls through the cracks.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

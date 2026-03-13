@@ -1,0 +1,15 @@
+{
+  "id": "agent-mood-system",
+  "name": "Agent Mood System",
+  "version": "1.0.0",
+  "description": "Gives agents personality-driven morale that rises on successes (tool completions, phase advances) and dips on failures. Emits mood events so the UI can reflect agent sentiment.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

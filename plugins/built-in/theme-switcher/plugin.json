@@ -1,0 +1,15 @@
+{
+  "id": "theme-switcher",
+  "name": "Theme Switcher",
+  "version": "1.0.0",
+  "description": "Dynamic theme switching with custom color schemes. Create, store, and switch between personalized themes for the Overlord interface.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "bus:emit",
+    "storage:read",
+    "storage:write",
+    "tool:execute"
+  ]
+}

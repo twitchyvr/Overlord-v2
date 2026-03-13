@@ -1,0 +1,15 @@
+{
+  "id": "todo-scanner",
+  "name": "TODO Scanner",
+  "version": "1.0.0",
+  "description": "Scans for TODO, FIXME, and HACK patterns in code-lab tool execution results. Tracks found items in storage and emits todo:found events for downstream consumers.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

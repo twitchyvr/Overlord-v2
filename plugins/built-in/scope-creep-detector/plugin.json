@@ -1,0 +1,16 @@
+{
+  "id": "scope-creep-detector",
+  "name": "Scope Creep Detector",
+  "version": "1.0.0",
+  "description": "Monitors the number of rooms and tasks over time, alerting when scope grows beyond the original plan baseline to help keep projects on track.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

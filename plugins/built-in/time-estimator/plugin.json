@@ -1,0 +1,16 @@
+{
+  "id": "time-estimator",
+  "name": "Time Estimator",
+  "version": "1.0.0",
+  "description": "Estimates remaining project time based on historical task completion velocity, tracking how fast work gets done and projecting when the project will finish.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

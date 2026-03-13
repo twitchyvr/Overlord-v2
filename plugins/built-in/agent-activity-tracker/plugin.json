@@ -1,0 +1,16 @@
+{
+  "id": "agent-activity-tracker",
+  "name": "Agent Activity Tracker",
+  "version": "1.0.0",
+  "description": "Tracks agent actions across rooms and tools, maintaining hourly counters and generating periodic activity summary reports via the event bus.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

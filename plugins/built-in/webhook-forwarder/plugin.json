@@ -1,0 +1,18 @@
+{
+  "id": "webhook-forwarder",
+  "name": "Webhook Forwarder",
+  "version": "1.0.0",
+  "description": "Collects Overlord events from all lifecycle hooks, formats them as webhook payloads, queues them for delivery, and emits webhook:queued events. Full forwarding requires net:http (not yet available). Supports configurable event filters.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit",
+    "tool:execute",
+    "net:http"
+  ]
+}

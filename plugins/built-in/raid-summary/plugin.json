@@ -1,0 +1,17 @@
+{
+  "id": "raid-summary",
+  "name": "RAID Summary",
+  "version": "1.0.0",
+  "description": "Generates periodic RAID log summaries with trend analysis, tracking Risks, Assumptions, Issues, and Dependencies by count and direction (growing, stable, declining).",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit",
+    "tool:execute"
+  ]
+}

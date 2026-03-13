@@ -1,0 +1,16 @@
+{
+  "id": "custom-dashboard-widget",
+  "name": "Custom Dashboard Widget",
+  "version": "1.0.0",
+  "description": "Template for adding custom widgets to the Overlord dashboard. Displays live agent counts, active rooms, and recent activity. Customize it to show the data that matters most to your team.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "bus:emit",
+    "storage:read",
+    "storage:write"
+  ]
+}

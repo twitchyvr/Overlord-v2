@@ -1,0 +1,16 @@
+{
+  "id": "daily-standup",
+  "name": "Daily Standup",
+  "version": "1.0.0",
+  "description": "Generates a daily standup summary report by aggregating completed work, upcoming tasks, and blockers from room activity and agent data.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

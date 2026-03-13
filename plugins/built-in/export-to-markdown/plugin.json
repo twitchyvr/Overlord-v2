@@ -1,0 +1,17 @@
+{
+  "id": "export-to-markdown",
+  "name": "Export to Markdown",
+  "version": "1.0.0",
+  "description": "Exports project state, exit documents, and RAID log to comprehensive markdown format on phase advances, storing exports and emitting export:ready events with the markdown content.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit",
+    "tool:execute"
+  ]
+}
