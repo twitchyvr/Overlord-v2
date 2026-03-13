@@ -1281,7 +1281,7 @@ export class TaskView extends Component {
     });
 
     // Click to open detail — guarded to prevent spurious click after drag-drop
-    card.addEventListener('click', (e) => {
+    card.addEventListener('click', () => {
       if (this._dragJustEnded) return;
       this._openTaskDetail(task.id);
     });

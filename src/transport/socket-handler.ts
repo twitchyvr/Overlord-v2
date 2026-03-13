@@ -390,7 +390,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         if (session) {
           session.end();
           session.save();
-          const durationMs = (session.endedAt ?? Date.now()) - session.startedAt;
+          const durationMs = session.endedAt! - session.startedAt;
           onSessionEnd(parsed.agentId, parsed.roomId, durationMs, buildingId);
         }
       }
@@ -2029,6 +2029,15 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         if (assoc) {
           for (const [agentId, roomId] of assoc.roomMemberships) {
             try {
+              // End active session and record duration before exiting room
+              const session = AgentSession.findActive(agentId, roomId);
+              if (session) {
+                session.end();
+                session.save();
+                const agent = agents.getAgent(agentId);
+                const durationMs = (session.endedAt ?? Date.now()) - session.startedAt;
+                onSessionEnd(agentId, roomId, durationMs, agent?.building_id ?? undefined);
+              }
               rooms.exitRoom({ roomId, agentId });
               bus.emit('room:agent:exited', { roomId, agentId, reason: 'disconnect' });
               cleanedRooms++;
