@@ -263,9 +263,14 @@ async function handleChatMessage(
       }
     }
 
-    // 9. Persist user message (with attachments if any) and load conversation history
+    // 9. Build effective content — for attachment-only messages, synthesize a description
+    const userContent = text || (attachments.length > 0
+      ? `[Attached ${attachments.length} file(s): ${attachments.map(a => a.fileName).join(', ')}]`
+      : '');
+
+    // 9b. Persist user message (with attachments if any) and load conversation history
     try {
-      persistMessage(room.id, null, 'user', text, threadId, undefined, attachments);
+      persistMessage(room.id, null, 'user', userContent, threadId, undefined, attachments);
     } catch (persistErr) {
       log.warn({ persistErr }, 'Failed to persist user message — continuing without history');
     }
@@ -275,15 +280,10 @@ async function handleChatMessage(
       historyMessages = loadConversationHistory(threadId);
     } catch (histErr) {
       log.warn({ histErr }, 'Failed to load conversation history — using single message');
-      historyMessages = [{ role: 'user' as const, content: text }];
+      historyMessages = [{ role: 'user' as const, content: userContent }];
     }
 
-    // 10. Build user content — include attachment descriptions for attachment-only messages
-    const userContent = text || (attachments.length > 0
-      ? `[Attached ${attachments.length} file(s): ${attachments.map(a => a.fileName).join(', ')}]`
-      : '');
-
-    // 10b. Run the conversation loop with full history
+    // 10. Run the conversation loop with full history
     const result = await runConversationLoop({
       provider,
       room,
