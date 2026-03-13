@@ -1409,11 +1409,25 @@ export function initSocketBridge(socket, store, engine) {
       if (buildingRes && buildingRes.ok && buildingRes.data) {
         store.set('building.activePhase', buildingRes.data.active_phase || 'strategy');
       }
-      // Auto-select first available room if none active
+      // Auto-select a room on the floor matching the current phase
       if (!store.get('rooms.active')) {
-        const rooms = store.get('rooms.list') || [];
-        if (rooms.length > 0) {
-          store.set('rooms.active', rooms[0].id);
+        const PHASE_TO_FLOOR = {
+          strategy: 'strategy', discovery: 'collaboration',
+          architecture: 'collaboration', execution: 'execution',
+          review: 'governance', deploy: 'operations',
+        };
+        const activePhase = store.get('building.activePhase') || 'strategy';
+        const floors = store.get('building.floors') || [];
+        const floorType = PHASE_TO_FLOOR[activePhase] || activePhase;
+        const matchingFloor = floors.find(f => f.type === floorType);
+
+        if (matchingFloor && matchingFloor.rooms && matchingFloor.rooms.length > 0) {
+          const room = matchingFloor.rooms.find(r => r.status === 'active') || matchingFloor.rooms[0];
+          store.set('rooms.active', room.id);
+        } else {
+          // Fallback: first room in the building
+          const rooms = store.get('rooms.list') || [];
+          if (rooms.length > 0) store.set('rooms.active', rooms[0].id);
         }
       }
     },
