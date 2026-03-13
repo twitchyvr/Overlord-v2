@@ -28,13 +28,14 @@ describe('BuildingArchitect', () => {
       expect(contract.fileScope).toBe('read-only');
     });
 
-    it('has 5 tools including read_file for code inspection', () => {
+    it('has 6 tools including read_file for code inspection', () => {
       expect(contract.tools).toContain('web_search');
       expect(contract.tools).toContain('record_note');
       expect(contract.tools).toContain('recall_notes');
+      expect(contract.tools).toContain('session_note');
       expect(contract.tools).toContain('list_dir');
       expect(contract.tools).toContain('read_file');
-      expect(contract.tools).toHaveLength(5);
+      expect(contract.tools).toHaveLength(6);
       expect(contract.tools).not.toContain('write_file');
       expect(contract.tools).not.toContain('bash');
     });
@@ -62,9 +63,9 @@ describe('BuildingArchitect', () => {
       expect(room.type).toBe('building-architect');
     });
 
-    it('getAllowedTools returns 5 tools', () => {
+    it('getAllowedTools returns 6 tools', () => {
       const room = new BuildingArchitect('room_1');
-      expect(room.getAllowedTools()).toHaveLength(5);
+      expect(room.getAllowedTools()).toHaveLength(6);
     });
 
     it('getRules guides custom building layout design', () => {

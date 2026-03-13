@@ -37,6 +37,7 @@ describe('CodeLab', () => {
       expect(contract.tools).toContain('bash');
       expect(contract.tools).toContain('web_search');
       expect(contract.tools).toContain('fetch_webpage');
+      expect(contract.tools).toContain('session_note');
     });
 
     it('does NOT have QA tools — those belong in TestingLab', () => {
@@ -76,10 +77,10 @@ describe('CodeLab', () => {
       expect(room.type).toBe('code-lab');
     });
 
-    it('getAllowedTools returns all 7 implementation tools', () => {
+    it('getAllowedTools returns all 8 implementation tools', () => {
       const room = new CodeLab('room_1');
       const tools = room.getAllowedTools();
-      expect(tools).toHaveLength(7);
+      expect(tools).toHaveLength(8);
     });
 
     it('hasTool returns true for write tools', () => {

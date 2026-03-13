@@ -12,6 +12,7 @@ import { ok, err } from '../core/contracts.js';
 import { executeShell } from './providers/shell.js';
 import { readFileImpl, writeFileImpl, patchFileImpl, listDirImpl } from './providers/filesystem.js';
 import { recordNote, recallNotes } from './providers/notes.js';
+import { writeNote, readNote, listNotes, deleteNote, clearNotes } from './providers/session-notes.js';
 import { webSearch, fetchWebpage } from './providers/web.js';
 import { fetchUrl, transformData, exportData, validateSchema } from './providers/data-exchange.js';
 import { switchProvider, compareModels, configureFallback, testProvider } from './providers/provider-hub.js';
@@ -347,6 +348,61 @@ function registerBuiltinTools(): void {
       }
       const formatted = notes.map((n) => `[${n.id}] (${n.created_at}) ${n.content}`).join('\n');
       return { output: formatted, notes, count: notes.length };
+    },
+  });
+
+  // ─── Session Notes (Agent Scratchpad) ───
+  registerTool({
+    name: 'session_note',
+    description: 'Manage persistent agent notes (scratchpad). Notes survive context pruning and are injected into system prompt.',
+    category: 'notes',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', description: 'Action: write, read, list, delete, clear' },
+        key: { type: 'string', description: 'Note key (required for write, read, delete)' },
+        value: { type: 'string', description: 'Note value (required for write)' },
+        targetAgentId: { type: 'string', description: 'Read another agent\'s notes (for cross-agent visibility)' },
+      },
+      required: ['action'],
+    },
+    execute: async (p, ctx) => {
+      const action = p.action as string;
+      const agentId = (p.targetAgentId as string) || ctx?.agentId || 'unknown';
+      const key = p.key as string;
+      // ToolContext doesn't declare buildingId; extract from ctx if the room injected it
+      const buildingId = (ctx as unknown as Record<string, unknown>)?.buildingId as string | undefined;
+
+      switch (action) {
+        case 'write': {
+          if (!key || !p.value) return { output: 'Error: "key" and "value" required for write' };
+          const result = writeNote(agentId, key, p.value as string, buildingId);
+          return { output: result.message, ok: result.ok };
+        }
+        case 'read': {
+          if (!key) return { output: 'Error: "key" required for read' };
+          const note = readNote(agentId, key);
+          if (!note) return { output: `Note "${key}" not found`, found: false };
+          return { output: `[${note.key}] (updated: ${note.updatedAt})\n${note.value}`, found: true, note };
+        }
+        case 'list': {
+          const notes = listNotes(agentId);
+          if (notes.length === 0) return { output: 'No session notes', notes: [], count: 0 };
+          const lines = notes.map(n => `- ${n.key}: ${n.value.slice(0, 100)}${n.value.length > 100 ? '...' : ''}`);
+          return { output: `${notes.length} notes:\n${lines.join('\n')}`, notes, count: notes.length };
+        }
+        case 'delete': {
+          if (!key) return { output: 'Error: "key" required for delete' };
+          const result = deleteNote(agentId, key);
+          return { output: result.message, ok: result.ok };
+        }
+        case 'clear': {
+          const result = clearNotes(agentId);
+          return { output: `Cleared ${result.count} notes`, ok: result.ok, count: result.count };
+        }
+        default:
+          return { output: `Unknown action "${action}". Use: write, read, list, delete, clear` };
+      }
     },
   });
 

@@ -14,6 +14,8 @@
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { AgentSession } from './agent-session.js';
+import { estimateTokens, allocateBudget, pruneMessages, getContextMetrics } from './context-manager.js';
+import { buildScratchpadInjection } from '../tools/providers/session-notes.js';
 import type { Bus } from '../core/bus.js';
 import type {
   Result,
@@ -141,14 +143,38 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   const allowedToolNames = room.getAllowedTools();
   const roomTools = tools.getToolsForRoom(allowedToolNames);
 
-  // Build system prompt from room context
+  // Build system prompt from room context + agent scratchpad
   const roomContext = room.buildContextInjection();
-  const systemPrompt = buildSystemPrompt(roomContext, room);
+  const baseSystemPrompt = buildSystemPrompt(roomContext, room);
+  let scratchpad = '';
+  try { scratchpad = buildScratchpadInjection(agentId); } catch { /* DB not ready yet — scratchpad is optional */ }
+  const systemPrompt = scratchpad
+    ? `${baseSystemPrompt}\n\n${scratchpad}`
+    : baseSystemPrompt;
+
+  // Pre-compute context budget for pruning
+  const systemPromptTokens = estimateTokens(systemPrompt);
+  const contextBudget = allocateBudget(provider, systemPromptTokens);
 
   let iteration = 0;
 
   while (iteration < MAX_TOOL_ITERATIONS) {
     iteration++;
+
+    // Prune messages if history exceeds budget
+    const pruneResult = pruneMessages(messages, contextBudget);
+    if (pruneResult.prunedCount > 0) {
+      log.info(
+        { prunedCount: pruneResult.prunedCount, totalTokens: pruneResult.totalTokens, budgetUsed: pruneResult.budgetUsed },
+        'Context pruning applied',
+      );
+      messages.length = 0;
+      messages.push(...pruneResult.messages);
+
+      // Emit context metrics for UI
+      const metrics = getContextMetrics(provider, systemPrompt, messages, pruneResult);
+      bus.emit('context:metrics', { agentId, roomId: room.id, ...metrics });
+    }
 
     log.info(
       { iteration, provider, agentId, roomId: room.id, messageCount: messages.length },

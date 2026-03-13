@@ -38,6 +38,7 @@ describe('WarRoom', () => {
       expect(contract.tools).toContain('github');
       expect(contract.tools).toContain('qa_run_tests');
       expect(contract.tools).toContain('qa_check_lint');
+      expect(contract.tools).toContain('session_note');
     });
 
     it('requires incident-report exit template with 5 fields', () => {
@@ -63,9 +64,9 @@ describe('WarRoom', () => {
       expect(room.type).toBe('war-room');
     });
 
-    it('getAllowedTools returns full set of 10 tools', () => {
+    it('getAllowedTools returns full set of 11 tools', () => {
       const room = new WarRoom('room_1');
-      expect(room.getAllowedTools()).toHaveLength(10);
+      expect(room.getAllowedTools()).toHaveLength(11);
     });
 
     it('getRules emphasizes incident response and root cause', () => {

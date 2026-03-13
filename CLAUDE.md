@@ -31,6 +31,41 @@ The process of exercising every feature, dialog, modal form, and interaction thr
 
 ---
 
+## 0.5. Autonomous Work Loop
+
+When Claude completes any task — a bug fix, a feature, a review, a dogfooding cycle — Claude does NOT stop and wait. Claude continues working by cycling through this priority queue:
+
+### Priority Order
+
+1. **Failing tests** — Run `npm test`. If anything fails, fix it immediately.
+2. **Open PRs awaiting review** — Check for PRs that need code review. Launch subagent reviewers per Section 5 (Git Workflow). Approve or request changes.
+3. **PRs with approved reviews** — Merge approved PRs that have passing CI. Update CHANGELOG.md.
+4. **E2E / Runtime verification** — Run the runtime verification checklist (Section 10). Any bug found is immediately triaged as a new Issue and fixed.
+5. **Open GitHub Issues** — Check the current Milestone for unstarted or in-progress Issues, sorted by priority labels. Pick the highest priority Issue, create a feature branch, and begin the Git Workflow.
+6. **Dogfooding** — If no Issues remain, exercise every Overlord feature through the UI. Bugs found become new Issues filed on GitHub, then fixed immediately.
+
+### Rules
+
+- **Never stop after one task.** Completing work on one Issue means starting the next loop iteration, not waiting for instructions.
+- **Always start from Priority 1.** Every loop iteration begins with `npm test` to catch regressions before moving on.
+- **Report progress, don't ask permission.** Summarize what was completed and what's next. Don't ask "should I continue?" — the answer is always yes.
+- **The only exit conditions are:**
+  - The user explicitly redirects Claude to a different task.
+  - All Issues in the current Milestone are closed, all PRs are merged, all tests pass, and runtime verification is clean. (Then file a status report and ask the user for the next Milestone.)
+- **Subagent fleet usage applies.** Parallel agents for research, coding, and review — don't serialize work that can be parallelized.
+
+### Health Check Command
+
+At any point, the user can say **"status"** and Claude will report:
+
+- Test suite result (pass/fail count)
+- Open PRs and their review state
+- Current Milestone progress (Issues open/closed)
+- What Claude is currently working on
+- What's next in the queue
+
+---
+
 ## 1. Architecture — STRICT LAYER ORDERING
 
 ```

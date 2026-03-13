@@ -36,6 +36,7 @@ describe('ReviewRoom', () => {
       expect(contract.tools).toContain('recall_notes');
       expect(contract.tools).toContain('qa_run_tests');
       expect(contract.tools).toContain('qa_check_lint');
+      expect(contract.tools).toContain('session_note');
       expect(contract.tools).not.toContain('write_file');
       expect(contract.tools).not.toContain('patch_file');
       expect(contract.tools).not.toContain('bash');
@@ -81,9 +82,9 @@ describe('ReviewRoom', () => {
       expect(room.type).toBe('review');
     });
 
-    it('getAllowedTools returns 6 review tools', () => {
+    it('getAllowedTools returns 7 review tools', () => {
       const room = new ReviewRoom('room_1');
-      expect(room.getAllowedTools()).toHaveLength(6);
+      expect(room.getAllowedTools()).toHaveLength(7);
     });
 
     it('getRules emphasizes evidence-based review', () => {

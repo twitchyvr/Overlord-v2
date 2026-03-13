@@ -31,6 +31,7 @@ export class CodeLab extends BaseRoom {
       'bash',
       'web_search',
       'fetch_webpage',
+      'session_note',
     ],
     fileScope: 'assigned',
     exitRequired: {

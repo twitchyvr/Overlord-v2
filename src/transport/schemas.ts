@@ -737,3 +737,30 @@ export const EmailSentSchema = z.object({
   limit: z.number().int().min(1).max(100).optional().default(50),
   offset: z.number().int().min(0).optional().default(0),
 });
+
+// ─── Session Notes Schemas ───
+
+export const SessionNoteWriteSchema = z.object({
+  agentId: id(),
+  key: z.string().min(1).max(MAX_NAME),
+  value: z.string().min(1).max(MAX_DESCRIPTION),
+  buildingId: optionalId(),
+});
+
+export const SessionNoteReadSchema = z.object({
+  agentId: id(),
+  key: z.string().min(1).max(MAX_NAME),
+});
+
+export const SessionNoteListSchema = z.object({
+  agentId: id(),
+});
+
+export const SessionNoteDeleteSchema = z.object({
+  agentId: id(),
+  key: z.string().min(1).max(MAX_NAME),
+});
+
+export const SessionNoteClearSchema = z.object({
+  agentId: id(),
+});

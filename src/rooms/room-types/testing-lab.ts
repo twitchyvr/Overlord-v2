@@ -32,6 +32,7 @@ export class TestingLab extends BaseRoom {
       'qa_check_types',
       'qa_check_coverage',
       'qa_audit_deps',
+      'session_note',
     ],
     fileScope: 'read-only',
     exitRequired: {
