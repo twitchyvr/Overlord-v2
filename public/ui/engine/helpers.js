@@ -103,10 +103,45 @@ export function uid(prefix = '') {
   return prefix + Math.random().toString(36).slice(2, 9);
 }
 
-/** Format a timestamp for display */
+/**
+ * Format a timestamp with relative context.
+ *   Same day, < 1 min:   "Just now"
+ *   Same day, < 1 hour:  "12m ago"
+ *   Same day, older:     "3h ago"
+ *   Yesterday:           "Yesterday, 2:30 PM"
+ *   This year:           "Mar 10, 2:30 PM"
+ *   Older:               "Mar 10, 2025"
+ */
 export function formatTime(date) {
+  if (!date) return '';
   const d = date instanceof Date ? date : new Date(date);
-  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (isNaN(d.getTime())) return '';
+
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+
+  if (isToday) {
+    const diffMin = Math.floor((now - d) / 60000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    return `${Math.floor(diffMin / 60)}h ago`;
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  if (d.toDateString() === yesterday.toDateString()) {
+    return `Yesterday, ${timeStr}`;
+  }
+
+  const month = d.toLocaleString('default', { month: 'short' });
+  const day = d.getDate();
+
+  if (d.getFullYear() === now.getFullYear()) {
+    return `${month} ${day}, ${timeStr}`;
+  }
+  return `${month} ${day}, ${d.getFullYear()}`;
 }
 
 /** Clamp a number between min and max */
