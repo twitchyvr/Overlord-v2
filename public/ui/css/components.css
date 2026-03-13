@@ -35,6 +35,37 @@
   opacity: 1;
 }
 
+/* Programmatic tooltip popup (from tooltip.js) */
+.tooltip-popup {
+  position: fixed;
+  z-index: 10000;
+  max-width: 280px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-primary, var(--bg-secondary));
+  color: var(--text-primary);
+  border: 1px solid var(--border-secondary, var(--border-default));
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  box-shadow: var(--shadow-lg, 0 10px 30px rgba(0,0,0,0.3));
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%) translateY(-100%);
+  transition: opacity var(--duration-fast) var(--ease-default);
+}
+.tooltip-popup.visible { opacity: 1; }
+
+/* Jargon terms — auto-annotated technical words */
+.jargon-term {
+  border-bottom: 1px dotted var(--accent-blue, #3b82f6);
+  cursor: help;
+  color: inherit;
+}
+.jargon-term:hover, .jargon-term:focus {
+  color: var(--accent-blue, #3b82f6);
+  outline: none;
+}
+
 /* ── Buttons ── */
 .btn {
   display: inline-flex;
