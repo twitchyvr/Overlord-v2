@@ -48,7 +48,7 @@ export class DashboardView extends Component {
     this.subscribe(store, 'building.active', (id) => {
       this._activeBuilding = id;
       if (id && window.overlordSocket) {
-        window.overlordSocket.fetchAgents({});
+        window.overlordSocket.fetchAgents({ buildingId: id });
         window.overlordSocket.fetchRaidEntries(id);
       }
       this.render();
@@ -61,9 +61,10 @@ export class DashboardView extends Component {
     this._raidEntries = store.get('raid.entries') || [];
     this._activeBuilding = store.get('building.active');
 
-    // Agents are global — fetch on mount regardless of building selection
+    // Fetch agents — scoped to active building when one is selected
     if (window.overlordSocket && this._agents.length === 0) {
-      window.overlordSocket.fetchAgents({});
+      const agentFilter = this._activeBuilding ? { buildingId: this._activeBuilding } : {};
+      window.overlordSocket.fetchAgents(agentFilter);
     }
     // RAID entries are building-specific — fetch only when a building is active
     if (this._activeBuilding && window.overlordSocket && this._raidEntries.length === 0) {
@@ -307,7 +308,15 @@ export class DashboardView extends Component {
   }
 
   _getAgentCount() {
-    // Use fetched agent list when available; fall back to building-level counts
+    // When a building is selected, show agents for that building only
+    if (this._activeBuilding) {
+      // Use the fetched (building-filtered) agent list when available
+      if (this._agents.length > 0) return this._agents.length;
+      // Fall back to building-level metadata
+      const b = this._buildings.find(b => b.id === this._activeBuilding);
+      return b ? (b.agentCount ?? b.agent_count ?? 0) : 0;
+    }
+    // No building selected — aggregate across all buildings
     if (this._agents.length > 0) return this._agents.length;
     return this._buildings.reduce((sum, b) => sum + (b.agentCount ?? b.agent_count ?? 0), 0);
   }
