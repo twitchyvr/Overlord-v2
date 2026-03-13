@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Context management and session notes** — token estimation, per-provider budget allocation, message pruning with anchor preservation, persistent agent scratchpad surviving context pruning (#385, PR #415)
+- **Multi-folder permissions with git detection** — multi-folder workspace support, automatic git repo detection, per-folder settings UI (#410, #411, #412, PR #413)
 - **Agent-to-agent interoffice email system** — agents can send structured messages to each other across rooms (#307)
 - **File attachment and plan approval in chat** — attach files to chat messages, approve/reject agent plans inline (#306)
 - **Agent stats tracking and enriched profiles** — activity log, task completion stats, performance metrics per agent (#305)
@@ -25,6 +27,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Agent status changes in Activity feed** — Agents tab in activity view shows real-time status updates (#287)
 
 ### Fixed
+- **Chat room routing on room switch** — chat messages now route to the correct room when switching between rooms (PR #414)
+- **Token-input history test timeout** — resolved jsdom getComputedStyle bottleneck in 50-entry history test (PR #416)
 - **Systemic socket timeout protection** — all 40+ socket.emit methods now use `_emitWithTimeout` with 15s default; prevents stuck spinners and hanging promises on server disconnect (#341)
 - **Agent Mail loading spinner stuck forever** — `_fetchData` now handles fetch failure and late agent hydration (#331, PR #332)
 - **90 test failures across 10 test files** — DB schema counts, missing agent profile columns, config default, transport schema evolution, socket handler disconnect behavior, UI view CSS selectors and store subscriptions (#329, PR #330)
