@@ -87,6 +87,7 @@ const SCHEMA_SQL = `
     bio TEXT,
     photo_url TEXT,
     specialization TEXT,
+    gender TEXT,
     profile_generated INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
@@ -345,6 +346,7 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['agents', 'photo_url', 'TEXT'],
   ['agents', 'specialization', 'TEXT'],
   ['agents', 'nickname', 'TEXT'],
+  ['agents', 'gender', 'TEXT'],
   ['agents', 'profile_generated', 'INTEGER DEFAULT 0'],
   ['tasks', 'table_id', 'TEXT REFERENCES tables_v2(id)'],
   ['tables_v2', 'config', "TEXT DEFAULT '{}'"],

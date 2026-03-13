@@ -114,8 +114,8 @@ export function registerAgent({
 
   db.prepare(`
     INSERT INTO agents (id, name, role, building_id, capabilities, room_access, badge, config,
-      first_name, last_name, display_name, nickname, bio, photo_url, specialization, profile_generated)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      first_name, last_name, display_name, nickname, bio, photo_url, specialization, gender, profile_generated)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name,
@@ -132,6 +132,7 @@ export function registerAgent({
     bio || null,
     photoUrl || null,
     specialization || null,
+    gender || null,
     0,
   );
 
@@ -242,6 +243,7 @@ export function updateAgentProfile(agentId: string, profile: AgentProfileFields)
   if (profile.photoUrl !== undefined) { fields.push('photo_url = ?'); params.push(profile.photoUrl ?? null); }
   if (profile.nickname !== undefined) { fields.push('nickname = ?'); params.push(profile.nickname ?? null); }
   if (profile.specialization !== undefined) { fields.push('specialization = ?'); params.push(profile.specialization ?? null); }
+  if (profile.gender !== undefined) { fields.push('gender = ?'); params.push(profile.gender ?? null); }
   if (profile.profileGenerated !== undefined) { fields.push('profile_generated = ?'); params.push(profile.profileGenerated ? 1 : 0); }
 
   // Compute display_name: explicit value > "First Last" > keep existing

@@ -15,6 +15,7 @@ import { logger, broadcastLog } from '../core/logger.js';
 import type { Bus } from '../core/bus.js';
 import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
+import { AgentSession } from '../agents/agent-session.js';
 import { createBuilding, getBuilding, listBuildings, updateBuilding, listFloors, getFloor, createFloor, updateFloor, deleteFloor, sortFloors } from '../rooms/building-manager.js';
 import { getGates, canAdvance, signoffGate, createGate, getPendingGates, resolveConditions, getStalePendingGates, getPhaseOrder } from '../rooms/phase-gate.js';
 import { searchRaid, addRaidEntry, updateRaidEntry, updateRaidStatus } from '../rooms/raid-log.js';
@@ -381,7 +382,17 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         const room = rooms.getRoom(parsed.roomId);
         const roomType = room?.type ?? 'unknown';
         const agent = agents.getAgent(parsed.agentId);
-        onRoomLeave(parsed.agentId, parsed.roomId, roomType, agent?.building_id ?? undefined);
+        const buildingId = agent?.building_id ?? undefined;
+        onRoomLeave(parsed.agentId, parsed.roomId, roomType, buildingId);
+
+        // End active session and record duration
+        const session = AgentSession.findActive(parsed.agentId, parsed.roomId);
+        if (session) {
+          session.end();
+          session.save();
+          const durationMs = session.endedAt! - session.startedAt;
+          onSessionEnd(parsed.agentId, parsed.roomId, durationMs, buildingId);
+        }
       }
       if (ack) ack(result);
     });
@@ -2018,6 +2029,15 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         if (assoc) {
           for (const [agentId, roomId] of assoc.roomMemberships) {
             try {
+              // End active session and record duration before exiting room
+              const session = AgentSession.findActive(agentId, roomId);
+              if (session) {
+                session.end();
+                session.save();
+                const agent = agents.getAgent(agentId);
+                const durationMs = (session.endedAt ?? Date.now()) - session.startedAt;
+                onSessionEnd(agentId, roomId, durationMs, agent?.building_id ?? undefined);
+              }
               rooms.exitRoom({ roomId, agentId });
               bus.emit('room:agent:exited', { roomId, agentId, reason: 'disconnect' });
               cleanedRooms++;
@@ -2031,10 +2051,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
           // They should only be removed via explicit 'agent:remove' events.
           for (const agentId of assoc.agentIds) {
             try {
-              const agentBefore = agents.getAgent(agentId);
-              const oldStatus = agentBefore?.status ?? 'unknown';
+              // bus.emit triggers the bus listener that calls onStatusChange()
               bus.emit('agent:status-changed', { agentId, status: 'idle', reason: 'disconnect' });
-              onStatusChange(agentId, oldStatus, 'idle');
               cleanedAgents++;
             } catch (e) {
               log.warn({ agentId, err: e, socketId: socket.id }, 'Failed to update agent status on disconnect');
@@ -2112,6 +2130,19 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('plan:submitted');
   forward('plan:reviewed');
   forward('email:dispatched');
+
+  // ─── Stats: record every agent status change ───
+  bus.on('agent:status-changed', (data: Record<string, unknown>) => {
+    const agentId = data.agentId as string;
+    const newStatus = data.status as string;
+    if (!agentId || !newStatus) return;
+    // Look up previous status from DB for the activity log
+    const agent = agents.getAgent(agentId);
+    const oldStatus = agent?.status ?? 'unknown';
+    if (oldStatus !== newStatus) {
+      onStatusChange(agentId, oldStatus, newStatus);
+    }
+  });
 
   log.info('Transport layer initialized');
   broadcastLog('info', 'Transport layer initialized', 'transport');

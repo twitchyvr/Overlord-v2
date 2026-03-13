@@ -316,6 +316,7 @@ export interface AgentProfileFields {
   bio?: string | null;
   photoUrl?: string | null;
   specialization?: string | null;
+  gender?: string | null;
   profileGenerated?: boolean;
 }
 
