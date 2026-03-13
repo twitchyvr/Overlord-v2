@@ -397,6 +397,47 @@ export async function submitExitDocument({ roomId, agentId, document, buildingId
   }
 }
 
+/**
+ * Delegate a task from one room to another.
+ * The agent exits the source room and enters the target room,
+ * carrying context about what task to work on.
+ */
+export function delegateTask({
+  fromRoomId, toRoomId, agentId, taskContext,
+}: {
+  fromRoomId: string;
+  toRoomId: string;
+  agentId: string;
+  taskContext: Record<string, unknown>;
+}): Result {
+  const fromRoom = activeRooms.get(fromRoomId);
+  const toRoom = activeRooms.get(toRoomId);
+
+  if (!fromRoom) return err('ROOM_NOT_FOUND', `Source room ${fromRoomId} not found`);
+  if (!toRoom) return err('ROOM_NOT_FOUND', `Target room ${toRoomId} not found`);
+
+  // Exit source room
+  const exitResult = exitRoom({ roomId: fromRoomId, agentId, reason: 'task-delegation' });
+  if (!exitResult.ok) return exitResult;
+
+  // Enter target room
+  const enterResult = enterRoom({ roomId: toRoomId, agentId });
+  if (!enterResult.ok) return enterResult;
+
+  // Emit delegation event
+  if (moduleBus) {
+    moduleBus.emit('room:task:delegated', {
+      fromRoomId, toRoomId, agentId,
+      fromRoomType: fromRoom.type,
+      toRoomType: toRoom.type,
+      taskContext,
+    });
+  }
+
+  log.info({ fromRoomId, toRoomId, agentId }, 'Task delegated across rooms');
+  return ok({ fromRoomId, toRoomId, agentId });
+}
+
 export function getRoom(roomId: string): BaseRoom | null {
   return activeRooms.get(roomId) || null;
 }
