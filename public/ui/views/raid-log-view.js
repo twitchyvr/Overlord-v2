@@ -346,7 +346,13 @@ export class RaidLogView extends Component {
     if (entry.phase) {
       infoSection.appendChild(h('div', { class: 'raid-detail-info-row' },
         h('span', { class: 'raid-detail-label' }, 'Phase'),
-        h('span', null, entry.phase)
+        h('span', null, entry.phase.charAt(0).toUpperCase() + entry.phase.slice(1))
+      ));
+    }
+    if (entry.room_name || entry.room_id) {
+      infoSection.appendChild(h('div', { class: 'raid-detail-info-row' },
+        h('span', { class: 'raid-detail-label' }, 'Room'),
+        h('span', null, entry.room_name || entry.room_id)
       ));
     }
     if (entry.decided_by) {

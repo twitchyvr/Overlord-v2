@@ -39,8 +39,13 @@ export function addRaidEntry({ buildingId, type, phase, roomId, summary, rationa
 
   log.info({ id, type, phase, summary }, 'RAID entry added');
 
-  // Return the full entry so consumers (socket-bridge) can push it into the store directly
-  const inserted = db.prepare('SELECT * FROM raid_entries WHERE id = ?').get(id) as RaidEntryRow;
+  // Return the full entry with room name so consumers (socket-bridge) can push it into the store directly
+  const inserted = db.prepare(`
+    SELECT raid_entries.*, rooms.name AS room_name
+    FROM raid_entries
+    LEFT JOIN rooms ON raid_entries.room_id = rooms.id
+    WHERE raid_entries.id = ?
+  `).get(id) as RaidEntryRow & { room_name?: string };
   return ok({ ...inserted, affected_areas: safeJsonParse<string[]>(inserted.affected_areas, []) });
 }
 
@@ -57,17 +62,20 @@ interface SearchRaidParams {
  */
 export function searchRaid({ buildingId, type, phase, status, query }: SearchRaidParams): Result {
   const db = getDb();
-  let sql = 'SELECT * FROM raid_entries WHERE building_id = ?';
+  let sql = `SELECT raid_entries.*, rooms.name AS room_name
+    FROM raid_entries
+    LEFT JOIN rooms ON raid_entries.room_id = rooms.id
+    WHERE raid_entries.building_id = ?`;
   const params: string[] = [buildingId];
 
-  if (type) { sql += ' AND type = ?'; params.push(type); }
-  if (phase) { sql += ' AND phase = ?'; params.push(phase); }
-  if (status) { sql += ' AND status = ?'; params.push(status); }
-  if (query) { sql += ' AND (summary LIKE ? OR rationale LIKE ?)'; params.push(`%${query}%`, `%${query}%`); }
+  if (type) { sql += ' AND raid_entries.type = ?'; params.push(type); }
+  if (phase) { sql += ' AND raid_entries.phase = ?'; params.push(phase); }
+  if (status) { sql += ' AND raid_entries.status = ?'; params.push(status); }
+  if (query) { sql += ' AND (raid_entries.summary LIKE ? OR raid_entries.rationale LIKE ?)'; params.push(`%${query}%`, `%${query}%`); }
 
-  sql += ' ORDER BY created_at DESC';
+  sql += ' ORDER BY raid_entries.created_at DESC';
 
-  const entries = db.prepare(sql).all(...params) as RaidEntryRow[];
+  const entries = db.prepare(sql).all(...params) as (RaidEntryRow & { room_name?: string })[];
   return ok(entries.map((e) => ({ ...e, affected_areas: safeJsonParse<string[]>(e.affected_areas, []) })));
 }
 
@@ -107,7 +115,7 @@ interface UpdateRaidEntryParams {
 export function updateRaidEntry({ id, summary, rationale, decidedBy, affectedAreas }: UpdateRaidEntryParams): Result {
   const db = getDb();
   const existing = db.prepare('SELECT * FROM raid_entries WHERE id = ?').get(id) as RaidEntryRow | undefined;
-  if (!existing) return err('RAID_NOT_FOUND', `RAID entry ${id} does not exist`);
+  if (!existing) return err('RAID_NOT_FOUND', 'This entry no longer exists. It may have been deleted.');
 
   const updates: string[] = [];
   const params: unknown[] = [];
@@ -117,7 +125,7 @@ export function updateRaidEntry({ id, summary, rationale, decidedBy, affectedAre
   if (decidedBy !== undefined) { updates.push('decided_by = ?'); params.push(decidedBy); }
   if (affectedAreas !== undefined) { updates.push('affected_areas = ?'); params.push(JSON.stringify(affectedAreas)); }
 
-  if (updates.length === 0) return err('NO_CHANGES', 'No fields to update');
+  if (updates.length === 0) return err('NO_CHANGES', 'No changes were made. Edit a field and try again.');
 
   updates.push("updated_at = datetime('now')");
   params.push(id);
@@ -136,10 +144,10 @@ export function updateRaidStatus({ id, status }: { id: string; status: string })
   const db = getDb();
   const VALID_STATUSES = ['active', 'superseded', 'closed'];
   if (!VALID_STATUSES.includes(status)) {
-    return err('INVALID_STATUS', `Status must be one of: ${VALID_STATUSES.join(', ')}`);
+    return err('INVALID_STATUS', `Please choose a valid status: ${VALID_STATUSES.join(', ')}`);
   }
   const existing = db.prepare('SELECT id FROM raid_entries WHERE id = ?').get(id);
-  if (!existing) return err('RAID_NOT_FOUND', `RAID entry ${id} does not exist`);
+  if (!existing) return err('RAID_NOT_FOUND', 'This entry no longer exists. It may have been deleted.');
   db.prepare("UPDATE raid_entries SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, id);
   const updated = db.prepare('SELECT * FROM raid_entries WHERE id = ?').get(id) as Record<string, unknown>;
   return ok(updated);
