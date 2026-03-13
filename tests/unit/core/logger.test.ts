@@ -49,7 +49,7 @@ describe('broadcastLog', () => {
     const handler = vi.fn();
     bus.on('system:log', handler);
 
-    // Fire 30 logs in quick succession — only 20 should get through
+    // Fire 30 logs in quick succession — only MAX_LOGS_PER_WINDOW should get through
     for (let i = 0; i < 30; i++) {
       broadcastLog('info', `Log ${i}`, 'test');
     }

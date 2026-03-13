@@ -114,16 +114,17 @@ class Config {
 
   get<K extends ConfigKey>(key: K): ConfigValues[K] {
     if (!this.#values) {
-      throw new Error('Config not validated. Call config.validate() first.');
+      // Auto-validate on first access — all fields have defaults so this is safe
+      this.validate();
     }
-    return this.#values[key];
+    return this.#values![key];
   }
 
   getAll(): ConfigValues {
     if (!this.#values) {
-      throw new Error('Config not validated. Call config.validate() first.');
+      this.validate();
     }
-    return { ...this.#values };
+    return { ...this.#values! };
   }
 }
 

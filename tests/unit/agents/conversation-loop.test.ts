@@ -320,7 +320,7 @@ describe('Conversation Loop', () => {
       registerAdapter: () => {},
       sendMessage: async () => {
         callCount++;
-        // Fail first 3 calls (1 initial + 2 retries), never succeed
+        // Always fail — never succeed
         return {
           ok: false as const,
           error: { code: 'RATE_LIMIT', message: 'rate limit exceeded', retryable: true },
@@ -339,7 +339,7 @@ describe('Conversation Loop', () => {
     });
 
     expect(result.ok).toBe(false);
-    // Should have been called 3 times: 1 initial + 2 retries
+    // Should have been called 3 times: 1 initial + 2 retries (AI_MAX_RETRIES=2 in test env)
     expect(callCount).toBe(3);
   });
 

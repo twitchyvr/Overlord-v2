@@ -361,14 +361,14 @@ export class BuildingView extends Component {
     roomCard.appendChild(roomActions);
 
     roomCard.addEventListener('click', (e) => {
-      // Only set chat target — don't dispatch building:room-selected which opens the detail modal.
-      // The edit button handles opening the detail modal separately.
       if (e.target.closest('.room-card-actions')) return; // let action buttons handle their own clicks
       e.stopPropagation();
       const st = OverlordUI.getStore();
       if (st) {
         st.set('rooms.active', room.id);
       }
+      // Dispatch room-selected so chat view switches target room
+      OverlordUI.dispatch('building:room-selected', { roomId: room.id, floorId });
       // Re-render to update active highlight
       this.render();
     });

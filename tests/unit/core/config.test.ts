@@ -49,6 +49,14 @@ describe('Config Service', () => {
       delete process.env.MINIMAX_MODEL;
       delete process.env.OPENAI_MODEL;
       delete process.env.OLLAMA_MODEL;
+      // Also delete agent config env vars set by vitest env
+      delete process.env.MAX_TOOL_ITERATIONS;
+      delete process.env.AI_MAX_RETRIES;
+      delete process.env.AI_RETRY_DELAY_MS;
+      delete process.env.TOOL_TIMEOUT_MS;
+      delete process.env.SHELL_TIMEOUT_MS;
+      delete process.env.ENABLE_LUA_SCRIPTING;
+      delete process.env.MAX_LOGS_PER_WINDOW;
 
       const { config } = await import('../../../src/core/config.js');
       config.validate();
@@ -161,17 +169,27 @@ describe('Config Service', () => {
   });
 
   describe('get() before validate()', () => {
-    it('throws when get() called before validate()', async () => {
-      // Reset module cache to get a fresh Config singleton that hasn't been validated
+    it('auto-validates on first get() call and returns default values', async () => {
       vi.resetModules();
       const { config: freshConfig } = await import('../../../src/core/config.js');
-      expect(() => freshConfig.get('PORT')).toThrow('Config not validated');
+      // Should not throw — auto-validates with defaults
+      expect(freshConfig.get('PORT')).toBe(4000);
     });
 
-    it('throws when getAll() called before validate()', async () => {
+    it('auto-validates on first getAll() call and returns all defaults', async () => {
       vi.resetModules();
+      // Delete vitest env overrides so defaults apply
+      delete process.env.MAX_TOOL_ITERATIONS;
+      delete process.env.AI_MAX_RETRIES;
+      delete process.env.AI_RETRY_DELAY_MS;
+      delete process.env.TOOL_TIMEOUT_MS;
+      delete process.env.SHELL_TIMEOUT_MS;
+      delete process.env.ENABLE_LUA_SCRIPTING;
+      delete process.env.MAX_LOGS_PER_WINDOW;
       const { config: freshConfig } = await import('../../../src/core/config.js');
-      expect(() => freshConfig.getAll()).toThrow('Config not validated');
+      const all = freshConfig.getAll();
+      expect(all.PORT).toBe(4000);
+      expect(all.MAX_TOOL_ITERATIONS).toBe(200);
     });
   });
 
