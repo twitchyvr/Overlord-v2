@@ -42,6 +42,7 @@ export interface MinimaxResponse {
   model: string;
   stop_reason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | null;
   usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number };
+  thinking?: string;
 }
 
 export function createMinimaxAdapter(cfg: Config): AIAdapter {
@@ -53,9 +54,11 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
       if (!apiKey) throw new Error('MINIMAX_API_KEY is not configured');
 
       const baseURL = cfg.get('MINIMAX_BASE_URL');
+      const timeoutMs = cfg.get('AI_REQUEST_TIMEOUT_MS');
 
       client = new Anthropic({
         apiKey,
+        timeout: timeoutMs,
         baseURL,
       });
     }
@@ -80,6 +83,14 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
         input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
       }));
 
+      // Clamp temperature for MiniMax: must be strictly (0.0, 1.0]
+      // Anthropic allows 0.0, but MiniMax rejects it.
+      let temperature = options.temperature as number | undefined;
+      if (temperature !== undefined) {
+        if (temperature <= 0) temperature = 0.01;
+        if (temperature > 1) temperature = 1.0;
+      }
+
       // Build request — identical to Anthropic adapter since MiniMax is Anthropic-compatible
       const requestParams: Anthropic.MessageCreateParams = {
         model,
@@ -87,7 +98,7 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
         messages: messages as Anthropic.MessageParam[],
         ...(anthropicTools.length > 0 ? { tools: anthropicTools } : {}),
         ...(options.system ? { system: options.system as string } : {}),
-        ...(options.temperature !== undefined ? { temperature: options.temperature as number } : {}),
+        ...(temperature !== undefined ? { temperature } : {}),
       };
 
       log.info(
@@ -123,13 +134,36 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
         'MiniMax response received',
       );
 
+      // Normalize content: separate thinking blocks from text/tool_use blocks.
+      // MiniMax may return { type: 'thinking' } blocks (extended thinking) which
+      // consumers don't expect in the content array.
+      const rawContent = response.content as AnthropicContentBlock[];
+      const thinkingBlocks = rawContent.filter((b) => b.type === 'thinking');
+      const normalizedContent = rawContent.filter((b) => b.type !== 'thinking');
+
+      // Combine thinking text for consumers that want it
+      const thinkingText = thinkingBlocks
+        .map((b) => b.thinking || b.text || '')
+        .filter(Boolean)
+        .join('\n\n');
+
+      // If only thinking blocks remain (max_tokens exhausted on thinking),
+      // synthesize a text block from the thinking content
+      let finalContent = normalizedContent;
+      if (finalContent.length === 0 && thinkingText) {
+        finalContent = [{ type: 'text' as const, text: thinkingText }];
+      } else if (finalContent.length === 0) {
+        finalContent = rawContent;
+      }
+
       return {
         id: response.id,
         role: response.role,
-        content: response.content as AnthropicContentBlock[],
+        content: finalContent,
         model: response.model,
         stop_reason: response.stop_reason,
         usage,
+        ...(thinkingText ? { thinking: thinkingText } : {}),
       };
     },
 

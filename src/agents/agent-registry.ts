@@ -8,12 +8,34 @@
  */
 
 import { getDb } from '../storage/db.js';
-import { logger } from '../core/logger.js';
+import { logger, broadcastLog } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
-import type { Result, AgentRow, ParsedAgent, AgentRegistryAPI, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
+import type { Result, AgentRow, ParsedAgent, AgentRegistryAPI, AgentProfileFields, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Bus } from '../core/bus.js';
+import { parseBadge, serializeBadge, validateBadge } from './security-badge.js';
+import type { SecurityBadge } from './security-badge.js';
+import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
+import { isImageGenerationAvailable } from '../ai/minimax-image.js';
+import { writeAgentPhoto } from '../ai/agent-photo-store.js';
 
 const log = logger.child({ module: 'agent-registry' });
+
+/** Bus reference for emitting events from async operations (e.g., photo generation) */
+let _bus: Bus | null = null;
+
+/**
+ * Safely parse a JSON string from the database.
+ * Returns the fallback value if parsing fails (corrupted DB data).
+ */
+function safeJsonParse<T>(raw: string | null | undefined, fallback: T, context: string): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    log.warn({ raw: raw.slice(0, 100), context }, 'Malformed JSON in database — using fallback');
+    return fallback;
+  }
+}
 
 interface InitAgentsParams {
   bus: Bus;
@@ -26,8 +48,17 @@ interface RegisterAgentParams {
   role: string;
   capabilities?: string[];
   roomAccess?: string[];
-  badge?: string | null;
+  badge?: string | SecurityBadge | null;
   config?: Record<string, unknown>;
+  buildingId?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null;
+  nickname?: string | null;
+  bio?: string | null;
+  photoUrl?: string | null;
+  specialization?: string | null;
+  gender?: string;
 }
 
 interface AgentUpdates {
@@ -35,39 +66,84 @@ interface AgentUpdates {
   role?: string;
   capabilities?: string[];
   roomAccess?: string[];
-  badge?: string | null;
+  badge?: string | SecurityBadge | null;
   config?: Record<string, unknown>;
 }
 
 export function initAgents({ bus }: InitAgentsParams): AgentRegistryAPI {
+  _bus = bus;
+
   bus.on('agent:register', (data: Record<string, unknown>) => registerAgent(data as unknown as RegisterAgentParams));
   bus.on('agent:remove', (data: Record<string, unknown>) => removeAgent(data.agentId as string));
 
+  bus.on('agent:update-profile', (data: Record<string, unknown>) => {
+    const agentId = data.agentId as string;
+    const profile = data as unknown as AgentProfileFields;
+    updateAgentProfile(agentId, profile);
+  });
+
   log.info('Agent registry initialized');
-  return { registerAgent, removeAgent, getAgent, listAgents, updateAgent };
+  return { registerAgent, removeAgent, getAgent, listAgents, updateAgent, updateAgentProfile };
 }
 
 /**
  * Register a new agent (10-line identity card)
  */
-export function registerAgent({ name, role, capabilities = [], roomAccess = [], badge = null, config = {} }: RegisterAgentParams): Result {
+export function registerAgent({
+  name, role, capabilities = [], roomAccess = [], badge = null, config = {}, buildingId = null,
+  firstName = null, lastName = null, displayName = null, nickname = null, bio = null, photoUrl = null, specialization = null,
+  gender,
+}: RegisterAgentParams): Result {
   const db = getDb();
   const id = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+  // Serialize badge: accept structured object or raw string
+  let badgeStr: string | null = null;
+  if (badge && typeof badge === 'object') {
+    const validation = validateBadge(badge);
+    if (!validation.ok) return validation;
+    badgeStr = serializeBadge(badge as SecurityBadge);
+  } else if (typeof badge === 'string') {
+    badgeStr = badge;
+  }
+
+  // Compute display_name: explicit value > "First Last" > fallback to name
+  const computedDisplayName = displayName
+    || (firstName && lastName ? `${firstName} ${lastName}` : null)
+    || (firstName || null);
+
   db.prepare(`
-    INSERT INTO agents (id, name, role, capabilities, room_access, badge, config)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO agents (id, name, role, building_id, capabilities, room_access, badge, config,
+      first_name, last_name, display_name, nickname, bio, photo_url, specialization, gender, profile_generated)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name,
     role,
+    buildingId || null,
     JSON.stringify(capabilities),
     JSON.stringify(roomAccess),
-    badge,
+    badgeStr,
     JSON.stringify(config),
+    firstName || null,
+    lastName || null,
+    computedDisplayName,
+    nickname || null,
+    bio || null,
+    photoUrl || null,
+    specialization || null,
+    gender || null,
+    0,
   );
 
-  log.info({ id, name, role, roomAccess }, 'Agent registered');
+  log.info({ id, name, role, buildingId, roomAccess, hasBadge: !!badgeStr }, 'Agent registered');
+
+  // Auto-generate profile photo if MiniMax API is configured and no photo was provided.
+  // Runs asynchronously — does not block registration.
+  if (!photoUrl && isImageGenerationAvailable()) {
+    scheduleProfilePhotoGeneration(id, name, role, specialization ?? undefined, gender);
+  }
+
   return ok({ id, name, role });
 }
 
@@ -81,30 +157,33 @@ export function getAgent(agentId: string): ParsedAgent | null {
 
   return {
     ...agent,
-    capabilities: JSON.parse(agent.capabilities || '[]') as string[],
-    room_access: JSON.parse(agent.room_access || '[]') as string[],
-    config: JSON.parse(agent.config || '{}') as Record<string, unknown>,
+    capabilities: safeJsonParse<string[]>(agent.capabilities, [], `agent.capabilities[${agentId}]`),
+    room_access: safeJsonParse<string[]>(agent.room_access, [], `agent.room_access[${agentId}]`),
+    config: safeJsonParse<Record<string, unknown>>(agent.config, {}, `agent.config[${agentId}]`),
+    profile_generated: !!(agent.profile_generated),
   };
 }
 
 /**
- * List all agents, optionally filtered by status or room
+ * List all agents, optionally filtered by status, room, or building
  */
-export function listAgents({ status, roomId }: { status?: string; roomId?: string } = {}): ParsedAgent[] {
+export function listAgents({ status, roomId, buildingId }: { status?: string; roomId?: string; buildingId?: string } = {}): ParsedAgent[] {
   const db = getDb();
   let sql = 'SELECT * FROM agents WHERE 1=1';
   const params: string[] = [];
 
   if (status) { sql += ' AND status = ?'; params.push(status); }
   if (roomId) { sql += ' AND current_room_id = ?'; params.push(roomId); }
+  if (buildingId) { sql += ' AND building_id = ?'; params.push(buildingId); }
 
   sql += ' ORDER BY name';
 
   return (db.prepare(sql).all(...params) as AgentRow[]).map((a) => ({
     ...a,
-    capabilities: JSON.parse(a.capabilities || '[]') as string[],
-    room_access: JSON.parse(a.room_access || '[]') as string[],
-    config: JSON.parse(a.config || '{}') as Record<string, unknown>,
+    capabilities: safeJsonParse<string[]>(a.capabilities, [], `agent.capabilities[${a.id}]`),
+    room_access: safeJsonParse<string[]>(a.room_access, [], `agent.room_access[${a.id}]`),
+    config: safeJsonParse<Record<string, unknown>>(a.config, {}, `agent.config[${a.id}]`),
+    profile_generated: !!(a.profile_generated),
   }));
 }
 
@@ -123,7 +202,15 @@ export function updateAgent(agentId: string, updates: AgentUpdates): Result {
   if (updates.role) { fields.push('role = ?'); params.push(updates.role); }
   if (updates.capabilities) { fields.push('capabilities = ?'); params.push(JSON.stringify(updates.capabilities)); }
   if (updates.roomAccess) { fields.push('room_access = ?'); params.push(JSON.stringify(updates.roomAccess)); }
-  if (updates.badge !== undefined) { fields.push('badge = ?'); params.push(updates.badge ?? null); }
+  if (updates.badge !== undefined) {
+    if (updates.badge && typeof updates.badge === 'object') {
+      const validation = validateBadge(updates.badge);
+      if (!validation.ok) return validation;
+      fields.push('badge = ?'); params.push(serializeBadge(updates.badge as SecurityBadge));
+    } else {
+      fields.push('badge = ?'); params.push((updates.badge as string) ?? null);
+    }
+  }
   if (updates.config) { fields.push('config = ?'); params.push(JSON.stringify(updates.config)); }
 
   if (fields.length === 0) return ok({ id: agentId, message: 'No updates provided' });
@@ -138,6 +225,51 @@ export function updateAgent(agentId: string, updates: AgentUpdates): Result {
 }
 
 /**
+ * Update an agent's profile fields (first/last name, bio, photo_url, specialization).
+ * Separate from updateAgent to allow targeted profile updates without affecting
+ * identity card fields (name, role, capabilities, etc.).
+ */
+export function updateAgentProfile(agentId: string, profile: AgentProfileFields): Result {
+  const db = getDb();
+  const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as AgentRow | undefined;
+  if (!agent) return err('AGENT_NOT_FOUND', `Agent ${agentId} does not exist`);
+
+  const fields: string[] = [];
+  const params: (string | number | null)[] = [];
+
+  if (profile.firstName !== undefined) { fields.push('first_name = ?'); params.push(profile.firstName ?? null); }
+  if (profile.lastName !== undefined) { fields.push('last_name = ?'); params.push(profile.lastName ?? null); }
+  if (profile.bio !== undefined) { fields.push('bio = ?'); params.push(profile.bio ?? null); }
+  if (profile.photoUrl !== undefined) { fields.push('photo_url = ?'); params.push(profile.photoUrl ?? null); }
+  if (profile.nickname !== undefined) { fields.push('nickname = ?'); params.push(profile.nickname ?? null); }
+  if (profile.specialization !== undefined) { fields.push('specialization = ?'); params.push(profile.specialization ?? null); }
+  if (profile.gender !== undefined) { fields.push('gender = ?'); params.push(profile.gender ?? null); }
+  if (profile.profileGenerated !== undefined) { fields.push('profile_generated = ?'); params.push(profile.profileGenerated ? 1 : 0); }
+
+  // Compute display_name: explicit value > "First Last" > keep existing
+  if (profile.displayName !== undefined) {
+    fields.push('display_name = ?');
+    params.push(profile.displayName ?? null);
+  } else if (profile.firstName !== undefined || profile.lastName !== undefined) {
+    const first = profile.firstName !== undefined ? profile.firstName : agent.first_name;
+    const last = profile.lastName !== undefined ? profile.lastName : agent.last_name;
+    const computed = first && last ? `${first} ${last}` : (first || null);
+    fields.push('display_name = ?');
+    params.push(computed);
+  }
+
+  if (fields.length === 0) return ok({ id: agentId, message: 'No profile updates provided' });
+
+  fields.push('updated_at = datetime(?)');
+  params.push(new Date().toISOString());
+  params.push(agentId);
+
+  db.prepare(`UPDATE agents SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+  log.info({ agentId, profileFields: fields.length - 1 }, 'Agent profile updated');
+  return ok({ id: agentId });
+}
+
+/**
  * Remove an agent
  */
 export function removeAgent(agentId: string): Result {
@@ -145,4 +277,77 @@ export function removeAgent(agentId: string): Result {
   db.prepare('DELETE FROM agents WHERE id = ?').run(agentId);
   log.info({ agentId }, 'Agent removed');
   return ok({ id: agentId });
+}
+
+// ─── Auto Profile Photo Generation ───
+
+/**
+ * Schedule asynchronous profile photo generation for a newly registered agent.
+ * Runs in the background — does not block the registration call.
+ * On success, updates the agent's photo_url and emits agent:profile-updated.
+ * On failure, logs a warning but does not affect agent registration.
+ */
+function scheduleProfilePhotoGeneration(
+  agentId: string,
+  agentName: string,
+  role: string,
+  specialization?: string,
+  gender?: string,
+): void {
+  // Use void to explicitly discard the promise (fire-and-forget)
+  void (async () => {
+    try {
+      log.info({ agentId, agentName, role }, 'Starting auto profile photo generation');
+
+      const result = await generateAgentProfilePhoto(agentName, role, specialization, gender);
+
+      if (!result.ok) {
+        log.warn(
+          { agentId, agentName, error: result.error },
+          'Auto profile photo generation failed — agent registered without photo',
+        );
+        return;
+      }
+
+      // Write the photo to disk and get the serving URL
+      const writeResult = writeAgentPhoto(agentId, result.data.base64);
+      if (!writeResult.ok) {
+        log.warn(
+          { agentId, error: writeResult.error },
+          'Failed to write agent photo to disk',
+        );
+        return;
+      }
+
+      const photoUrl = (writeResult.data as { photoUrl: string }).photoUrl;
+
+      // Update the agent's profile with the photo URL
+      const updateResult = updateAgentProfile(agentId, {
+        photoUrl,
+        profileGenerated: true,
+      });
+
+      if (updateResult.ok) {
+        log.info({ agentId, agentName, photoUrl }, 'Auto-generated profile photo saved');
+        broadcastLog('info', `Profile photo auto-generated for "${agentName}"`, 'agent-registry');
+
+        // Emit profile-updated event so connected clients update in real-time
+        if (_bus) {
+          const updatedAgent = getAgent(agentId);
+          _bus.emit('agent:profile-updated', { agentId, profile: updatedAgent });
+        }
+      } else {
+        log.warn(
+          { agentId, error: updateResult.error },
+          'Auto profile photo generated but failed to update agent profile',
+        );
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      log.error(
+        { agentId, agentName, error: message },
+        'Unexpected error during auto profile photo generation',
+      );
+    }
+  })();
 }

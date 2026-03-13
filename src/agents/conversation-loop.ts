@@ -12,6 +12,10 @@
  */
 
 import { logger } from '../core/logger.js';
+import { config } from '../core/config.js';
+import { AgentSession } from './agent-session.js';
+import { estimateTokens, allocateBudget, pruneMessages, getContextMetrics } from './context-manager.js';
+import { buildScratchpadInjection } from '../tools/providers/session-notes.js';
 import type { Bus } from '../core/bus.js';
 import type {
   Result,
@@ -22,7 +26,11 @@ import type {
 
 const log = logger.child({ module: 'conversation-loop' });
 
-const MAX_TOOL_ITERATIONS = 20;
+/** All limits are user-configurable via environment variables / config */
+const MAX_TOOL_ITERATIONS = config.get('MAX_TOOL_ITERATIONS');
+const TOOL_TIMEOUT_MS = config.get('TOOL_TIMEOUT_MS');
+const AI_MAX_RETRIES = config.get('AI_MAX_RETRIES');
+const AI_RETRY_DELAY_MS = config.get('AI_RETRY_DELAY_MS');
 
 interface ContentBlock {
   type: 'text' | 'thinking' | 'tool_use' | 'tool_result';
@@ -58,6 +66,8 @@ export interface ConversationResult {
   toolCalls: { name: string; input: Record<string, unknown>; result: unknown }[];
   totalTokens: { input: number; output: number };
   iterations: number;
+  sessionId: string;
+  maxIterationsReached?: boolean;
 }
 
 interface ConversationParams {
@@ -69,6 +79,34 @@ interface ConversationParams {
   tools: ToolRegistryAPI;
   bus: Bus;
   options?: Record<string, unknown>;
+  /** Building's project working directory — scopes file/shell tools */
+  workingDirectory?: string;
+  /** Additional paths the building has been granted access to */
+  allowedPaths?: string[];
+}
+
+/**
+ * Wrap a promise with a timeout — rejects with a descriptive error if the
+ * promise doesn't settle within `ms` milliseconds.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
+/**
+ * Determine if an AI error is likely transient (worth retrying).
+ */
+function isTransientError(error: { code?: string; message?: string; retryable?: boolean }): boolean {
+  if (error.retryable) return true;
+  const msg = (error.message || '').toLowerCase();
+  return msg.includes('rate limit') || msg.includes('timeout') || msg.includes('econnreset')
+    || msg.includes('econnrefused') || msg.includes('529') || msg.includes('overloaded');
 }
 
 /**
@@ -81,34 +119,95 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   const thinkingLog: string[] = [];
   const totalTokens = { input: 0, output: 0 };
 
+  // Create agent session for this conversation
+  const session = new AgentSession({
+    agentId,
+    roomId: room.id,
+    tableType: (options.tableType as string) || 'focus',
+    tools: room.getAllowedTools(),
+  });
+
+  // Record initial user messages in the session + fire onMessage hooks
+  for (const msg of params.messages) {
+    const content = typeof msg.content === 'string'
+      ? msg.content
+      : msg.content.filter((b) => b.type === 'text').map((b) => b.text || '').join('\n');
+    session.addMessage({ role: msg.role, content });
+    room.onMessage(agentId, content, msg.role);
+  }
+
+  // Persist session to DB (initial save)
+  try { session.save(); } catch (e) { log.warn({ err: e, sessionId: session.id }, 'Failed to save session'); }
+
   // Get room's allowed tools as ToolDefinitions for the AI
   const allowedToolNames = room.getAllowedTools();
   const roomTools = tools.getToolsForRoom(allowedToolNames);
 
-  // Build system prompt from room context
+  // Build system prompt from room context + agent scratchpad
   const roomContext = room.buildContextInjection();
-  const systemPrompt = buildSystemPrompt(roomContext, room);
+  const baseSystemPrompt = buildSystemPrompt(roomContext, room);
+  let scratchpad = '';
+  try { scratchpad = buildScratchpadInjection(agentId); } catch { /* DB not ready yet — scratchpad is optional */ }
+  const systemPrompt = scratchpad
+    ? `${baseSystemPrompt}\n\n${scratchpad}`
+    : baseSystemPrompt;
+
+  // Pre-compute context budget for pruning
+  const systemPromptTokens = estimateTokens(systemPrompt);
+  const contextBudget = allocateBudget(provider, systemPromptTokens);
 
   let iteration = 0;
 
   while (iteration < MAX_TOOL_ITERATIONS) {
     iteration++;
 
+    // Prune messages if history exceeds budget
+    const pruneResult = pruneMessages(messages, contextBudget);
+    if (pruneResult.prunedCount > 0) {
+      log.info(
+        { prunedCount: pruneResult.prunedCount, totalTokens: pruneResult.totalTokens, budgetUsed: pruneResult.budgetUsed },
+        'Context pruning applied',
+      );
+      messages.length = 0;
+      messages.push(...pruneResult.messages);
+
+      // Emit context metrics for UI
+      const metrics = getContextMetrics(provider, systemPrompt, messages, pruneResult);
+      bus.emit('context:metrics', { agentId, roomId: room.id, ...metrics });
+    }
+
     log.info(
       { iteration, provider, agentId, roomId: room.id, messageCount: messages.length },
       'Conversation loop iteration',
     );
 
-    // Send to AI
-    const aiResult = await ai.sendMessage({
-      provider,
-      messages,
-      tools: roomTools,
-      options: { ...options, system: systemPrompt },
-    });
+    // Send to AI with retry for transient failures
+    let aiResult: Result;
+    let retries = 0;
 
-    if (!aiResult.ok) {
-      log.error({ error: aiResult.error }, 'AI request failed');
+    while (true) {
+      aiResult = await ai.sendMessage({
+        provider,
+        messages,
+        tools: roomTools,
+        options: { ...options, system: systemPrompt },
+      });
+
+      if (aiResult.ok) break;
+
+      const aiError = aiResult.error;
+      if (retries < AI_MAX_RETRIES && isTransientError(aiError)) {
+        retries++;
+        const delay = AI_RETRY_DELAY_MS * Math.pow(2, retries - 1);
+        log.warn({ error: aiError, retry: retries, delayMs: delay, agentId, roomId: room.id }, 'Retrying AI request after transient failure');
+        bus.emit('chat:stream', { agentId, roomId: room.id, content: [{ type: 'text', text: `[Retrying AI request (attempt ${retries + 1})...]` }], iteration });
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+
+      log.error({ error: aiError, agentId, roomId: room.id, retries }, 'AI request failed');
+      // Don't emit chat:response here — the orchestrator handles error emission
+      // to avoid duplicate error messages reaching the frontend
       return aiResult as Result<ConversationResult>;
     }
 
@@ -127,6 +226,16 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
     // Add assistant response to message history (MUST include all blocks including thinking)
     messages.push({ role: 'assistant', content: response.content });
+
+    // Record assistant response in session + fire onMessage hook
+    const assistantText = response.content
+      .filter((b: ContentBlock) => b.type === 'text')
+      .map((b: ContentBlock) => b.text || '')
+      .join('\n');
+    if (assistantText) {
+      session.addMessage({ role: 'assistant', content: assistantText });
+      room.onMessage(agentId, assistantText, 'assistant');
+    }
 
     bus.emit('chat:stream', {
       agentId,
@@ -155,6 +264,49 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
       log.info({ tool: toolName, agentId, roomId: room.id }, 'Executing tool');
 
+      // Guard: reject tool names not in the room's allowed list
+      if (!allowedToolNames.includes(toolName)) {
+        log.warn({ tool: toolName, agentId, roomId: room.id, allowedTools: allowedToolNames }, 'AI requested unknown/disallowed tool');
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content: `Error: Tool "${toolName}" is not available in this room. Available tools: ${allowedToolNames.join(', ')}`,
+          is_error: true,
+        });
+        toolCallLog.push({
+          name: toolName,
+          input: toolInput,
+          result: { error: `Tool "${toolName}" is not available` },
+        });
+        bus.emit('tool:guardrail-violation', {
+          type: 'unknown_tool',
+          toolName,
+          agentId,
+          roomId: room.id,
+          allowedTools: allowedToolNames,
+        });
+        continue;
+      }
+
+      // Room-level guardrail: onBeforeToolCall can BLOCK execution
+      const beforeResult = room.onBeforeToolCall(toolName, agentId, toolInput);
+      if (!beforeResult.ok) {
+        log.warn({ tool: toolName, agentId, reason: beforeResult.error.message }, 'Tool blocked by room');
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content: `Blocked by room: ${beforeResult.error.message}`,
+          is_error: true,
+        });
+        toolCallLog.push({
+          name: toolName,
+          input: toolInput,
+          result: beforeResult.error,
+        });
+        bus.emit('tool:blocked', { toolName, agentId, roomId: room.id, reason: beforeResult.error.message });
+        continue;
+      }
+
       bus.emit('tool:executing', {
         toolName,
         agentId,
@@ -162,18 +314,43 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         input: toolInput,
       });
 
-      // Execute through the tool registry (which enforces room access)
-      const toolResult = await tools.executeInRoom({
-        toolName,
-        params: toolInput,
-        roomAllowedTools: allowedToolNames,
-        context: {
-          roomId: room.id,
-          roomType: room.type,
-          agentId,
-          fileScope: room.fileScope,
-        },
-      });
+      // Execute through the tool registry with timeout
+      let toolResult: Result;
+      try {
+        toolResult = await withTimeout(
+          tools.executeInRoom({
+            toolName,
+            params: toolInput,
+            roomAllowedTools: allowedToolNames,
+            context: {
+              roomId: room.id,
+              roomType: room.type,
+              agentId,
+              fileScope: room.fileScope,
+              workingDirectory: params.workingDirectory,
+              allowedPaths: params.allowedPaths,
+            },
+          }),
+          TOOL_TIMEOUT_MS,
+          `Tool "${toolName}"`,
+        );
+      } catch (toolError) {
+        const errorMsg = toolError instanceof Error ? toolError.message : String(toolError);
+        log.error({ tool: toolName, agentId, roomId: room.id, error: errorMsg }, 'Tool execution failed');
+        bus.emit('tool:executed', { toolName, roomId: room.id, agentId, success: false, error: errorMsg });
+
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content: `Error: ${errorMsg}`,
+          is_error: true,
+        });
+        toolCallLog.push({ name: toolName, input: toolInput, result: { error: errorMsg } });
+        continue;
+      }
+
+      // Room-level observation: onAfterToolCall can trigger escalation
+      room.onAfterToolCall(toolName, agentId, toolResult);
 
       const resultContent = toolResult.ok
         ? JSON.stringify(toolResult.data)
@@ -206,6 +383,8 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
   if (iteration >= MAX_TOOL_ITERATIONS) {
     log.warn({ iterations: iteration, agentId, roomId: room.id }, 'Max tool iterations reached');
+    // Don't emit chat:response here — the orchestrator handles all response emission
+    // to avoid double-sending messages to the frontend
   }
 
   // Extract final text from last assistant message
@@ -222,6 +401,10 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     }
   }
 
+  // End session and persist final state
+  session.end();
+  try { session.save(); } catch (e) { log.warn({ err: e, sessionId: session.id }, 'Failed to save session'); }
+
   return {
     ok: true,
     data: {
@@ -231,6 +414,8 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       toolCalls: toolCallLog,
       totalTokens,
       iterations: iteration,
+      sessionId: session.id,
+      maxIterationsReached: iteration >= MAX_TOOL_ITERATIONS,
     },
   };
 }
@@ -246,6 +431,8 @@ function buildSystemPrompt(
   const tools = context.tools as string[] || [];
   const fileScope = context.fileScope as string || 'read-only';
   const exitTemplate = context.exitTemplate as { type: string; fields: string[] } | undefined;
+  const outputFormat = context.outputFormat as Record<string, unknown> | null;
+  const escalation = context.escalation as Record<string, string> | undefined;
 
   const sections = [
     `You are an AI agent working in the ${room.type} room.`,
@@ -257,12 +444,30 @@ function buildSystemPrompt(
     '',
     '## Available Tools',
     ...tools.map((t) => `- ${t}`),
+    'Only these tools are available. Do not attempt to call any tool not in this list.',
   ];
 
   if (exitTemplate && exitTemplate.fields.length > 0) {
     sections.push('', '## Exit Document Required');
     sections.push(`Type: ${exitTemplate.type}`);
     sections.push(`Required fields: ${exitTemplate.fields.join(', ')}`);
+    sections.push('You MUST submit a valid exit document before leaving this room.');
+  }
+
+  if (outputFormat && typeof outputFormat === 'object') {
+    sections.push('', '## Expected Output Format');
+    sections.push('Your exit document should match this schema:');
+    sections.push('```json');
+    sections.push(JSON.stringify(outputFormat, null, 2));
+    sections.push('```');
+  }
+
+  if (escalation && Object.keys(escalation).length > 0) {
+    sections.push('', '## Escalation Rules');
+    for (const [condition, target] of Object.entries(escalation)) {
+      sections.push(`- ${condition}: escalate to **${target}** room`);
+    }
+    sections.push('When an escalation condition is met, report it clearly and request escalation.');
   }
 
   return sections.join('\n');

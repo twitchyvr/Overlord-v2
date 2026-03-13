@@ -19,7 +19,19 @@ import { initAI } from './ai/ai-provider.js';
 import { initTools } from './tools/tool-registry.js';
 import { initAgents } from './agents/agent-registry.js';
 import { initRooms } from './rooms/room-manager.js';
+import { registerBuiltInRoomTypes } from './rooms/room-types/index.js';
 import { initTransport } from './transport/socket-handler.js';
+import { initPhaseZeroHandler } from './rooms/phase-zero.js';
+import { initScopeChangeHandler } from './rooms/scope-change.js';
+import { initChatOrchestrator } from './rooms/chat-orchestrator.js';
+import { initBuildingOnboarding } from './rooms/building-onboarding.js';
+import { initEscalationHandler } from './rooms/escalation-handler.js';
+import { listBuildings } from './rooms/building-manager.js';
+import { initCommands } from './commands/index.js';
+import { initPlugins } from './plugins/index.js';
+import type { InitPluginsParams } from './plugins/index.js';
+import { initMcp } from './tools/mcp-manager.js';
+import { getPhotosDirectory, getPhotosUrlPrefix } from './ai/agent-photo-store.js';
 
 import type { Request, Response } from 'express';
 
@@ -36,7 +48,7 @@ async function start(): Promise<void> {
   await initStorage(config);
   log.info('Storage initialized');
 
-  const ai = initAI(config);
+  const ai = initAI(config, bus);
   log.info('AI layer initialized');
 
   const tools = initTools(config);
@@ -46,12 +58,49 @@ async function start(): Promise<void> {
   log.info('Agent registry initialized');
 
   const rooms = initRooms({ bus, agents, tools, ai });
-  log.info('Room manager initialized');
+  registerBuiltInRoomTypes(rooms.registerRoomType);
+  log.info('Room manager initialized (12 built-in room types registered)');
+
+  // Hydrate any rooms that already exist in the database from previous sessions.
+  // This turns DB records (from blueprint apply, custom plans, or prior runs)
+  // into active BaseRoom instances so getRoom() works and room details are available.
+  const hydration = rooms.hydrateRoomsFromDb();
+  log.info(hydration, 'Room hydration from database complete');
+
+  // Wire bus handlers for Phase Zero and Scope Change protocols
+  initPhaseZeroHandler(bus);
+  initScopeChangeHandler(bus);
+  log.info('Phase Zero + Scope Change bus handlers initialized');
+
+  // Chat orchestrator — THE critical bridge: chat:message → AI → chat:response
+  initChatOrchestrator({ bus, rooms, agents, tools, ai });
+  log.info('Chat orchestrator initialized');
+
+  // Building onboarding — auto-provisions Strategist room + agent on building creation
+  initBuildingOnboarding({ bus, rooms, agents });
+  log.info('Building onboarding initialized');
+
+  // Escalation handler — periodic check for stale pending gates
+  initEscalationHandler({ bus });
+  log.info('Escalation handler initialized');
+
+  // 2b. Init commands + plugins (after rooms/agents/tools, before transport)
+  initCommands({ bus, rooms, agents, tools });
+  log.info('Command system initialized');
+
+  await initPlugins({ bus, rooms, agents, tools } as InitPluginsParams);
+  log.info('Plugin system initialized');
+
+  await initMcp({ bus, tools });
+  log.info('MCP system initialized');
 
   // 3. HTTP + Socket.IO
   const app = express();
   app.use(express.json());
   app.use(express.static('public'));
+
+  // Serve agent profile photos from data/agent-photos/
+  app.use(getPhotosUrlPrefix(), express.static(getPhotosDirectory()));
 
   const http = createServer(app);
   const io = new SocketServer(http, {
@@ -59,12 +108,22 @@ async function start(): Promise<void> {
   });
 
   // 4. Wire transport
-  initTransport({ io, bus, rooms, agents, tools });
+  initTransport({ io, bus, rooms, agents, tools, ai });
   log.info('Transport layer initialized');
 
-  // 5. Health check
+  // 5. Health check + system status
   app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok', version: '0.1.0', uptime: process.uptime() });
+  });
+
+  // Returning-user check: if buildings exist → dashboard, else → Strategist
+  app.get('/api/status', (_req: Request, res: Response) => {
+    const result = listBuildings();
+    const buildings = result.ok ? (result.data as Array<{ id: string; name: string; active_phase: string }>) : [];
+    res.json({
+      isNewUser: buildings.length === 0,
+      buildings: buildings.map((b) => ({ id: b.id, name: b.name, activePhase: b.active_phase })),
+    });
   });
 
   // 6. Start listening

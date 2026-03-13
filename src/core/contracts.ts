@@ -60,6 +60,12 @@ export interface RoomContract {
   provider: string;
 }
 
+export interface SecurityBadge {
+  rooms: string[];
+  clearance: 'standard' | 'elevated' | 'admin';
+  canExport: boolean;
+}
+
 export interface AgentIdentity {
   id: string;
   name: string;
@@ -67,6 +73,7 @@ export interface AgentIdentity {
   capabilities: string[];
   roomAccess: string[];
   badge?: string;
+  parsedBadge?: SecurityBadge | null;
 }
 
 export type RaidType = 'risk' | 'assumption' | 'issue' | 'decision';
@@ -123,6 +130,7 @@ export interface AgentRow {
   id: string;
   name: string;
   role: string;
+  building_id: string | null;
   capabilities: string;
   room_access: string;
   badge: string | null;
@@ -130,6 +138,14 @@ export interface AgentRow {
   current_room_id: string | null;
   current_table_id: string | null;
   config: string;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string | null;
+  nickname: string | null;
+  bio: string | null;
+  photo_url: string | null;
+  specialization: string | null;
+  profile_generated: number;
   created_at: string;
   updated_at: string;
 }
@@ -138,10 +154,24 @@ export interface BuildingRow {
   id: string;
   project_id: string | null;
   name: string;
+  working_directory: string | null;
+  repo_url: string | null;
+  allowed_paths: string;
   config: string;
   active_phase: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface FloorRow {
+  id: string;
+  building_id: string;
+  type: string;
+  name: string;
+  sort_order: number;
+  is_active: number;
+  config: string;
+  created_at: string;
 }
 
 export interface PhaseGateRow {
@@ -189,6 +219,35 @@ export interface RoomRow {
   created_at: string;
 }
 
+export interface TaskRow {
+  id: string;
+  building_id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  parent_id: string | null;
+  milestone_id: string | null;
+  assignee_id: string | null;
+  room_id: string | null;
+  table_id: string | null;
+  phase: string | null;
+  priority: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TodoRow {
+  id: string;
+  task_id: string;
+  agent_id: string | null;
+  room_id: string | null;
+  description: string;
+  status: string;
+  exit_doc_ref: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
 // ─── Tool Types ───
 
 export interface ToolDefinition {
@@ -204,6 +263,10 @@ export interface ToolContext {
   roomType: string;
   agentId: string;
   fileScope: string;
+  /** Building's project working directory — tools use this as cwd */
+  workingDirectory?: string;
+  /** Additional paths the building has been granted access to */
+  allowedPaths?: string[];
 }
 
 // ─── AI Types ───
@@ -223,21 +286,59 @@ export interface AIAdapter {
 export interface RoomManagerAPI {
   createRoom: (params: { type: string; floorId: string; name: string; config?: Record<string, unknown> }) => Result;
   enterRoom: (params: { roomId: string; agentId: string; tableType?: string }) => Result;
-  exitRoom: (params: { roomId: string; agentId: string }) => Result;
+  exitRoom: (params: { roomId: string; agentId: string; reason?: 'disconnect' | 'normal' }) => Result;
   getRoom: (roomId: string) => import('./contracts.js').BaseRoomLike | null;
   listRooms: () => RoomRow[];
   registerRoomType: (type: string, factory: BaseRoomConstructor) => void;
+  hydrateRoomsFromDb: () => { activated: number; skipped: number; failed: number };
+  updateRoom: (roomId: string, updates: { name?: string; config?: Record<string, unknown>; allowedTools?: string[]; fileScope?: string; exitTemplate?: Record<string, unknown>; provider?: string }) => Result;
+  deleteRoom: (roomId: string) => Result;
+  updateTable: (tableId: string, updates: { type?: string; chairs?: number; description?: string }) => Result;
+  deleteTable: (tableId: string) => Result;
+}
+
+export interface BuildingManagerAPI {
+  createBuilding: (params: { name: string; projectId?: string; workingDirectory?: string; repoUrl?: string; allowedPaths?: string[]; config?: Record<string, unknown>; provisionFloors?: boolean }) => Result;
+  getBuilding: (buildingId: string) => Result;
+  listBuildings: (projectId?: string) => Result;
+  updateBuilding: (buildingId: string, updates: { name?: string; workingDirectory?: string; repoUrl?: string; allowedPaths?: string[]; config?: Record<string, unknown> }) => Result;
+  addAllowedPath: (buildingId: string, path: string) => Result;
+  removeAllowedPath: (buildingId: string, path: string) => Result;
+  createFloor: (params: { buildingId: string; type: string; name: string; sortOrder?: number; config?: Record<string, unknown> }) => Result;
+  getFloor: (floorId: string) => Result;
+  listFloors: (buildingId: string) => Result;
+  getFloorByType: (buildingId: string, floorType: string) => Result;
+  updateFloor: (floorId: string, updates: { name?: string; sortOrder?: number; config?: Record<string, unknown>; isActive?: boolean }) => Result;
+  deleteFloor: (floorId: string) => Result;
+  sortFloors: (buildingId: string, floorIds: string[]) => Result;
+}
+
+export interface AgentProfileFields {
+  firstName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null;
+  nickname?: string | null;
+  bio?: string | null;
+  photoUrl?: string | null;
+  specialization?: string | null;
+  gender?: string | null;
+  profileGenerated?: boolean;
 }
 
 export interface AgentRegistryAPI {
   registerAgent: (params: {
     name: string; role: string; capabilities?: string[];
     roomAccess?: string[]; badge?: string | null; config?: Record<string, unknown>;
+    buildingId?: string | null;
+    firstName?: string | null; lastName?: string | null; displayName?: string | null;
+    nickname?: string | null; bio?: string | null; photoUrl?: string | null; specialization?: string | null;
+    gender?: string;
   }) => Result;
   removeAgent: (agentId: string) => Result;
   getAgent: (agentId: string) => ParsedAgent | null;
-  listAgents: (filters?: { status?: string; roomId?: string }) => ParsedAgent[];
+  listAgents: (filters?: { status?: string; roomId?: string; buildingId?: string }) => ParsedAgent[];
   updateAgent: (agentId: string, updates: Record<string, unknown>) => Result;
+  updateAgentProfile: (agentId: string, profile: AgentProfileFields) => Result;
 }
 
 export interface ToolRegistryAPI {
@@ -263,6 +364,7 @@ export interface ParsedAgent {
   id: string;
   name: string;
   role: string;
+  building_id: string | null;
   capabilities: string[];
   room_access: string[];
   badge: string | null;
@@ -270,6 +372,14 @@ export interface ParsedAgent {
   current_room_id: string | null;
   current_table_id: string | null;
   config: Record<string, unknown>;
+  first_name: string | null;
+  last_name: string | null;
+  display_name: string | null;
+  nickname: string | null;
+  bio: string | null;
+  photo_url: string | null;
+  specialization: string | null;
+  profile_generated: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -282,10 +392,22 @@ export interface BaseRoomLike {
   hasTool(toolName: string): boolean;
   readonly fileScope: FileScope;
   readonly exitRequired: ExitTemplate;
+  readonly escalation: Record<string, string>;
   validateExitDocument(document: Record<string, unknown>): Result;
+  validateExitDocumentValues(document: Record<string, unknown>): Result;
   buildContextInjection(): Record<string, unknown>;
   getRules(): string[];
   getOutputFormat(): unknown;
+
+  // Lifecycle hooks — rooms actively participate in agent work
+  onAgentEnter(agentId: string, tableType: string): Result;
+  onAgentExit(agentId: string): Result;
+  onBeforeToolCall(toolName: string, agentId: string, input: Record<string, unknown>): Result;
+  onAfterToolCall(toolName: string, agentId: string, result: Result): void;
+  onMessage(agentId: string, content: string, role: 'user' | 'assistant'): void;
+
+  // Bus injection for event emission
+  setBus(bus: import('../core/bus.js').Bus): void;
 }
 
 export type BaseRoomConstructor = new (id: string, config?: Partial<RoomContract>) => BaseRoomLike;
@@ -325,6 +447,20 @@ export function err(
   return { ok: false, error: { code, message, retryable, context } };
 }
 
+/**
+ * Safely parse a JSON string, returning a fallback value if parsing fails.
+ * Use this for all database fields that store serialized JSON to prevent
+ * crashes from corrupted data.
+ */
+export function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 // ─── Zod Schemas (for runtime validation at system boundaries) ───
 
 export const RoomContractSchema = z.object({
@@ -346,6 +482,12 @@ export const RoomContractSchema = z.object({
   provider: z.string().default('configurable'),
 });
 
+export const SecurityBadgeSchema = z.object({
+  rooms: z.array(z.string()),
+  clearance: z.enum(['standard', 'elevated', 'admin']),
+  canExport: z.boolean(),
+});
+
 export const AgentIdentitySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -353,6 +495,7 @@ export const AgentIdentitySchema = z.object({
   capabilities: z.array(z.string()),
   roomAccess: z.array(z.string()),
   badge: z.string().optional(),
+  parsedBadge: SecurityBadgeSchema.nullable().optional(),
 });
 
 export const RaidEntrySchema = z.object({

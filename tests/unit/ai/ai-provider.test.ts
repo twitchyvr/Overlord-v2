@@ -2,13 +2,48 @@
  * AI Provider Tests
  *
  * Tests the provider-agnostic layer (not individual adapters, which need API keys).
+ * Includes timeout detection and bus event emission tests.
  */
 
-import { describe, it, expect } from 'vitest';
-import { registerAdapter, getAdapter, sendMessage } from '../../../src/ai/ai-provider.js';
-import type { AIAdapter } from '../../../src/core/contracts.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { registerAdapter, getAdapter, sendMessage, initAI } from '../../../src/ai/ai-provider.js';
+import type { AIAdapter, Config } from '../../../src/core/contracts.js';
+import type { Bus } from '../../../src/core/bus.js';
+
+function makeConfig(): Config {
+  const values: Record<string, unknown> = {
+    ANTHROPIC_API_KEY: undefined,
+    ANTHROPIC_BASE_URL: undefined,
+    ANTHROPIC_MODEL: 'claude-sonnet-4-20250514',
+    MINIMAX_API_KEY: undefined,
+    MINIMAX_BASE_URL: 'https://api.minimax.io/anthropic',
+    MINIMAX_MODEL: 'MiniMax-M2.5',
+    OPENAI_API_KEY: undefined,
+    OPENAI_MODEL: 'gpt-4o',
+    OLLAMA_BASE_URL: 'http://localhost:11434',
+    OLLAMA_MODEL: 'llama3',
+    AI_REQUEST_TIMEOUT_MS: 60_000,
+  };
+  return {
+    get: (key: string) => values[key],
+    validate: () => ({ get: (k: string) => values[k] }),
+    getAll: () => values,
+  } as unknown as Config;
+}
+
+function makeBus(): Bus {
+  return {
+    emit: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
+  } as unknown as Bus;
+}
 
 describe('AI Provider', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   const mockAdapter: AIAdapter = {
     name: 'mock',
     async sendMessage(messages, _tools, _options) {
@@ -77,5 +112,87 @@ describe('AI Provider', () => {
       expect(result.error.code).toBe('AI_ERROR');
       expect(result.error.retryable).toBe(true);
     }
+  });
+
+  describe('timeout handling', () => {
+    it('returns AI_TIMEOUT error when adapter throws timeout error', async () => {
+      const timeoutError = new Error('Request timed out');
+      timeoutError.name = 'APIConnectionTimeoutError';
+
+      registerAdapter('timeout-test', {
+        name: 'timeout-test',
+        async sendMessage() { throw timeoutError; },
+        validateConfig: () => true,
+      });
+
+      const result = await sendMessage({
+        provider: 'timeout-test',
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('AI_TIMEOUT');
+        expect(result.error.retryable).toBe(true);
+        expect(result.error.message).toContain('timed out');
+      }
+    });
+
+    it('emits ai:timeout bus event when timeout occurs', async () => {
+      const mockBus = makeBus();
+      initAI(makeConfig(), mockBus);
+
+      const timeoutError = new Error('Connection timed out');
+      timeoutError.name = 'APIConnectionTimeoutError';
+
+      registerAdapter('timeout-bus', {
+        name: 'timeout-bus',
+        async sendMessage() { throw timeoutError; },
+        validateConfig: () => true,
+      });
+
+      await sendMessage({
+        provider: 'timeout-bus',
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+
+      expect(mockBus.emit).toHaveBeenCalledWith('ai:timeout', { provider: 'timeout-bus' });
+    });
+
+    it('detects timeout from error message (not just name)', async () => {
+      registerAdapter('msg-timeout', {
+        name: 'msg-timeout',
+        async sendMessage() { throw new Error('Request timed out after 60000ms'); },
+        validateConfig: () => true,
+      });
+
+      const result = await sendMessage({
+        provider: 'msg-timeout',
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('AI_TIMEOUT');
+      }
+    });
+
+    it('does not treat non-timeout errors as timeouts', async () => {
+      registerAdapter('normal-error', {
+        name: 'normal-error',
+        async sendMessage() { throw new Error('Rate limit exceeded'); },
+        validateConfig: () => true,
+      });
+
+      const result = await sendMessage({
+        provider: 'normal-error',
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('AI_ERROR');
+      }
+    });
   });
 });

@@ -1,5 +1,7 @@
 /**
  * Filesystem Tool Provider Tests
+ *
+ * Includes path traversal protection tests.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -102,7 +104,105 @@ describe('Filesystem Provider', () => {
     });
 
     it('throws for nonexistent directory', async () => {
-      await expect(listDirImpl({ path: '/nonexistent-dir-xyz' })).rejects.toThrow();
+      const dir = makeTempDir();
+      await expect(listDirImpl({ path: 'nonexistent-sub', cwd: dir })).rejects.toThrow();
+    });
+  });
+
+  describe('path traversal protection', () => {
+    // Use a non-temp cwd so paths outside it aren't auto-allowed by tmpdir logic
+    const NON_TEMP_CWD = '/usr/local/overlord-test-fake';
+
+    it('blocks absolute paths outside cwd', async () => {
+      await expect(
+        readFileImpl({ path: '/etc/passwd', cwd: NON_TEMP_CWD }),
+      ).rejects.toThrow('Access denied');
+    });
+
+    it('blocks ../ traversal in readFileImpl', async () => {
+      await expect(
+        readFileImpl({ path: '../../../etc/passwd', cwd: NON_TEMP_CWD }),
+      ).rejects.toThrow('Access denied');
+    });
+
+    it('blocks ../ traversal in writeFileImpl', async () => {
+      await expect(
+        writeFileImpl({ path: '../../evil.txt', content: 'pwned', cwd: NON_TEMP_CWD }),
+      ).rejects.toThrow('Access denied');
+    });
+
+    it('blocks ../ traversal in patchFileImpl', async () => {
+      await expect(
+        patchFileImpl({ path: '../outside.txt', search: 'a', replace: 'b', cwd: NON_TEMP_CWD }),
+      ).rejects.toThrow('Access denied');
+    });
+
+    it('blocks ../ traversal in listDirImpl', async () => {
+      await expect(
+        listDirImpl({ path: '../../', cwd: NON_TEMP_CWD }),
+      ).rejects.toThrow('Access denied');
+    });
+
+    it('blocks sneaky traversal (subdir/../../..)', async () => {
+      await expect(
+        readFileImpl({ path: 'sub/../../..', cwd: NON_TEMP_CWD }),
+      ).rejects.toThrow('Access denied');
+    });
+
+    it('blocks traversal disguised in nested path', async () => {
+      await expect(
+        readFileImpl({ path: 'a/b/c/../../../../etc/shadow', cwd: NON_TEMP_CWD }),
+      ).rejects.toThrow('Access denied');
+    });
+
+    it('allows valid relative paths within cwd', async () => {
+      const dir = makeTempDir();
+      mkdirSync(join(dir, 'sub'));
+      writeFileSync(join(dir, 'sub', 'ok.txt'), 'safe');
+
+      const result = await readFileImpl({ path: 'sub/ok.txt', cwd: dir });
+      expect(result.content).toBe('safe');
+    });
+
+    it('allows path that resolves to cwd itself', async () => {
+      const dir = makeTempDir();
+      writeFileSync(join(dir, 'file.txt'), 'data');
+      mkdirSync(join(dir, 'sub'));
+
+      // "sub/.." resolves back to cwd — listing cwd itself is fine
+      const result = await listDirImpl({ path: 'sub/..', cwd: dir });
+      expect(result.entries.length).toBeGreaterThan(0);
+    });
+
+    it('allows . path (current directory)', async () => {
+      const dir = makeTempDir();
+      writeFileSync(join(dir, 'test.txt'), 'hi');
+
+      const result = await listDirImpl({ path: '.', cwd: dir });
+      const names = result.entries.map((e) => e.name);
+      expect(names).toContain('test.txt');
+    });
+
+    it('allows explicitly allowed paths outside cwd', async () => {
+      const dir = makeTempDir();
+      const extraDir = makeTempDir();
+      writeFileSync(join(extraDir, 'shared.txt'), 'shared data');
+
+      const result = await readFileImpl({
+        path: join(extraDir, 'shared.txt'),
+        cwd: dir,
+        allowedPaths: [extraDir],
+      });
+      expect(result.content).toBe('shared data');
+    });
+
+    it('blocks .env files even within cwd', async () => {
+      const dir = makeTempDir();
+      writeFileSync(join(dir, '.env'), 'SECRET=123');
+
+      await expect(
+        readFileImpl({ path: '.env', cwd: dir }),
+      ).rejects.toThrow('protected path');
     });
   });
 });

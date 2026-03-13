@@ -15,26 +15,47 @@ export interface BusEventData {
 }
 
 class Bus extends EventEmitter {
+  #namespaceHandlers: Array<{ prefix: string; handler: (data: BusEventData) => void }> = [];
+
   /**
-   * Emit with structured event envelope
+   * Emit with structured event envelope.
+   * Also invokes any matching namespace handlers.
    */
   override emit(event: string | symbol, data?: Record<string, unknown>): boolean {
-    return super.emit(event, {
-      event,
+    const envelope: BusEventData = {
+      event: String(event),
       timestamp: Date.now(),
       ...data,
-    });
+    };
+
+    const result = super.emit(event, envelope);
+
+    // Invoke namespace handlers whose prefix matches this event
+    const eventStr = String(event);
+    for (const ns of this.#namespaceHandlers) {
+      if (eventStr.startsWith(ns.prefix)) {
+        ns.handler(envelope);
+      }
+    }
+
+    return result;
   }
 
   /**
-   * Subscribe to events matching a namespace prefix
+   * Subscribe to all events matching a namespace prefix.
+   * e.g., onNamespace('room:', handler) fires for 'room:create', 'room:enter', etc.
    */
   onNamespace(prefix: string, handler: (data: BusEventData) => void): void {
-    this.on('*', (data: BusEventData) => {
-      if (data?.event?.startsWith(prefix)) {
-        handler(data);
-      }
-    });
+    this.#namespaceHandlers.push({ prefix, handler });
+  }
+
+  /**
+   * Remove a namespace handler
+   */
+  offNamespace(prefix: string, handler: (data: BusEventData) => void): void {
+    this.#namespaceHandlers = this.#namespaceHandlers.filter(
+      (ns) => !(ns.prefix === prefix && ns.handler === handler),
+    );
   }
 }
 

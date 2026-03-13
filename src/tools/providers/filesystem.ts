@@ -2,21 +2,25 @@
  * Filesystem Tool Provider
  *
  * read_file, write_file, patch_file, list_dir implementations.
- * All paths are resolved relative to a working directory.
+ * All paths are resolved relative to a working directory and
+ * validated to stay within the cwd boundary (path traversal protection).
  */
 
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { logger } from '../../core/logger.js';
+import { guardPathWithPermissions } from '../path-permissions.js';
 
 const log = logger.child({ module: 'tool:filesystem' });
 
 export async function readFileImpl(params: {
   path: string;
   cwd?: string;
+  allowedPaths?: string[];
 }): Promise<{ content: string; path: string; size: number }> {
-  const fullPath = resolve(params.cwd || process.cwd(), params.path);
+  const cwd = params.cwd || process.cwd();
+  const fullPath = guardPathWithPermissions(params.path, cwd, params.allowedPaths || []);
   log.debug({ path: fullPath }, 'Reading file');
 
   const content = await readFile(fullPath, 'utf-8');
@@ -27,8 +31,10 @@ export async function writeFileImpl(params: {
   path: string;
   content: string;
   cwd?: string;
+  allowedPaths?: string[];
 }): Promise<{ path: string; bytesWritten: number }> {
-  const fullPath = resolve(params.cwd || process.cwd(), params.path);
+  const cwd = params.cwd || process.cwd();
+  const fullPath = guardPathWithPermissions(params.path, cwd, params.allowedPaths || []);
   log.debug({ path: fullPath }, 'Writing file');
 
   await writeFile(fullPath, params.content, 'utf-8');
@@ -40,8 +46,10 @@ export async function patchFileImpl(params: {
   search: string;
   replace: string;
   cwd?: string;
+  allowedPaths?: string[];
 }): Promise<{ path: string; matched: boolean; occurrences: number }> {
-  const fullPath = resolve(params.cwd || process.cwd(), params.path);
+  const cwd = params.cwd || process.cwd();
+  const fullPath = guardPathWithPermissions(params.path, cwd, params.allowedPaths || []);
   log.debug({ path: fullPath }, 'Patching file');
 
   const content = await readFile(fullPath, 'utf-8');
@@ -51,7 +59,7 @@ export async function patchFileImpl(params: {
     return { path: fullPath, matched: false, occurrences: 0 };
   }
 
-  const patched = content.replace(params.search, params.replace);
+  const patched = content.replaceAll(params.search, params.replace);
   await writeFile(fullPath, patched, 'utf-8');
   return { path: fullPath, matched: true, occurrences };
 }
@@ -65,8 +73,10 @@ interface DirEntry {
 export async function listDirImpl(params: {
   path: string;
   cwd?: string;
+  allowedPaths?: string[];
 }): Promise<{ path: string; entries: DirEntry[] }> {
-  const fullPath = resolve(params.cwd || process.cwd(), params.path);
+  const cwd = params.cwd || process.cwd();
+  const fullPath = guardPathWithPermissions(params.path, cwd, params.allowedPaths || []);
   log.debug({ path: fullPath }, 'Listing directory');
 
   if (!existsSync(fullPath)) {

@@ -4,10 +4,17 @@
  * Governance Floor — Go/no-go decisions.
  * Risk questionnaire with independent analysis.
  * Produces gate review exit document with citations.
+ *
+ * Active behavior:
+ * - validateExitDocumentValues: verdict must be GO/NO-GO/CONDITIONAL, evidence required
+ * - gateProtocol: enforces exit doc, RAID entry, and signoff requirements
  */
 
 import { BaseRoom } from './base-room.js';
-import type { RoomContract } from '../../core/contracts.js';
+import { ok, err } from '../../core/contracts.js';
+import type { Result, RoomContract } from '../../core/contracts.js';
+
+const VALID_VERDICTS = ['GO', 'NO-GO', 'CONDITIONAL'];
 
 export class ReviewRoom extends BaseRoom {
   static override contract: RoomContract = {
@@ -23,6 +30,7 @@ export class ReviewRoom extends BaseRoom {
       'recall_notes',
       'qa_run_tests',
       'qa_check_lint',
+      'session_note',
     ],
     fileScope: 'read-only',
     exitRequired: {
@@ -60,5 +68,83 @@ export class ReviewRoom extends BaseRoom {
       conditions: ['string'],
       riskQuestionnaire: [{ question: 'string', answer: 'string', risk: 'low | medium | high' }],
     };
+  }
+
+  override validateExitDocumentValues(document: Record<string, unknown>): Result {
+    const verdict = document.verdict as string;
+    const evidence = document.evidence as unknown[];
+    const riskQuestionnaire = document.riskQuestionnaire as unknown[];
+
+    if (typeof verdict !== 'string' || !VALID_VERDICTS.includes(verdict)) {
+      return err('EXIT_DOC_INVALID', `verdict must be one of: ${VALID_VERDICTS.join(', ')}`);
+    }
+    if (!Array.isArray(evidence) || evidence.length === 0) {
+      return err('EXIT_DOC_INVALID', 'evidence must be a non-empty array with citations');
+    }
+    if (!Array.isArray(riskQuestionnaire) || riskQuestionnaire.length === 0) {
+      return err('EXIT_DOC_INVALID', 'riskQuestionnaire must be a non-empty array');
+    }
+
+    // CONDITIONAL verdicts must have non-empty conditions
+    if (verdict === 'CONDITIONAL') {
+      const conditions = document.conditions as unknown[];
+      if (!Array.isArray(conditions) || conditions.length === 0) {
+        return err('EXIT_DOC_INVALID', 'CONDITIONAL verdict requires a non-empty conditions array');
+      }
+    }
+
+    return ok(document);
+  }
+
+  /**
+   * After exit document is validated, route based on verdict.
+   * NO-GO → code-lab, CONDITIONAL → emit conditions for tracking.
+   */
+  routeVerdict(document: Record<string, unknown>, agentId: string): void {
+    const verdict = document.verdict as string;
+
+    if (verdict === 'NO-GO') {
+      this.bus?.emit('room:escalation:suggested', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+        condition: 'onNoGo',
+        targetRoom: this.escalation.onNoGo || 'code-lab',
+        reason: 'Gate review verdict: NO-GO',
+      });
+    }
+
+    if (verdict === 'CONDITIONAL') {
+      this.bus?.emit('room:gate:conditional', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+        conditions: document.conditions,
+      });
+    }
+
+    if (verdict === 'GO') {
+      this.bus?.emit('room:gate:passed', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+      });
+    }
+  }
+
+  /**
+   * After tool call: if QA tools show failures, suggest escalation.
+   */
+  override onAfterToolCall(toolName: string, agentId: string, result: Result): void {
+    if ((toolName === 'qa_run_tests' || toolName === 'qa_check_lint') && !result.ok) {
+      this.bus?.emit('room:escalation:suggested', {
+        roomId: this.id,
+        roomType: this.type,
+        agentId,
+        condition: 'onNoGo',
+        targetRoom: this.escalation.onNoGo || 'code-lab',
+        reason: `QA check failed during review: ${result.error.message}`,
+      });
+    }
   }
 }

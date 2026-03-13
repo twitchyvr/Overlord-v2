@@ -1,53 +1,249 @@
-# Overlord v2
+<div align="center">
 
-A scriptable, scalable agentic framework built on the **Building / Room / Table** paradigm.
+# 🏢 Overlord v2
 
-## Core Concept
+### AI Agent Orchestration Framework
 
-> **Don't change the agent — change the framework.**
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101?style=for-the-badge&logo=socket.io&logoColor=white)](https://socket.io/)
+[![SQLite](https://img.shields.io/badge/SQLite-3-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
-Rooms define behavior, not agents. When an agent enters a room, the room's rules, tools, and output templates merge into their context. Change the testing room rules once — every agent that enters inherits them.
+*A scriptable, scalable, provider-agnostic framework for orchestrating AI agents through structured project phases.*
 
-## Architecture
+**Built on the Building / Floor / Room / Table / Chair spatial model,<br>where rooms define behavior — not agents.**
 
+[📖 Wiki](https://github.com/twitchyvr/Overlord-v2/wiki) · [🐛 Issues](https://github.com/twitchyvr/Overlord-v2/issues) · [📋 Project Board](https://github.com/twitchyvr/Overlord-v2/projects) · [📝 Changelog](CHANGELOG.md)
+
+</div>
+
+---
+
+> **💡 The Core Insight:** *"Don't change the agent — change the framework."*
+>
+> When an agent enters a room, the room's rules, tools, and output templates merge into their context. Change the testing room rules once and every agent that enters inherits them. Agents are 10-line identity cards. Rooms are the brains.
+
+---
+
+## ✨ Key Features
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🏢 Spatial Model
+Every project is a **Building**. Work flows through purpose-built **Rooms** on categorized **Floors**. Agents sit at **Tables** in **Chairs**.
+
+</td>
+<td width="33%" valign="top">
+
+### 🔧 Structural Tool Access
+If a tool isn't in the room's allowed list, it **doesn't exist**. Not "please don't use it" — it's simply absent. Security by architecture.
+
+</td>
+<td width="33%" valign="top">
+
+### 🚪 Phase Gates
+GO / NO-GO / CONDITIONAL checkpoints between phases. Every transition requires an exit document, RAID entry, and reviewer sign-off.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+### 🤖 10-Line Agents
+Agents are lightweight identity cards — name, role, capabilities, room access. The room injects everything else on entry.
+
+</td>
+<td width="33%" valign="top">
+
+### 🧠 Provider-Agnostic AI
+Swap AI providers per room. **Anthropic Claude** for reasoning. **MiniMax M2.5** for coding. **OpenAI GPT-4o** or local **Ollama**. One adapter interface.
+
+</td>
+<td width="33%" valign="top">
+
+### 🔌 Extensible Plugins
+Custom room types, tools, and commands via **JavaScript** or **Lua** scripting. MCP (Model Context Protocol) for external tool integration.
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+graph TD
+    T["🌐 Transport<br/><small>Socket.IO · Express</small>"]
+    R["🏢 Rooms<br/><small>12 types · Phase Gates · RAID</small>"]
+    A["🤖 Agents<br/><small>Registry · Email · Profiles</small>"]
+    TL["🔧 Tools<br/><small>Registry · MCP · Providers</small>"]
+    AI["🧠 AI<br/><small>Anthropic · MiniMax · OpenAI · Ollama</small>"]
+    S["💾 Storage<br/><small>SQLite · WAL mode</small>"]
+    C["⚙️ Core<br/><small>Event Bus · Config · Contracts</small>"]
+
+    T --> R --> A --> TL --> AI --> S --> C
+
+    style T fill:#4A90D9,color:#fff,stroke:#357ABD
+    style R fill:#7B68EE,color:#fff,stroke:#6A5ACD
+    style A fill:#E67E22,color:#fff,stroke:#D35400
+    style TL fill:#27AE60,color:#fff,stroke:#229954
+    style AI fill:#E74C3C,color:#fff,stroke:#C0392B
+    style S fill:#F39C12,color:#fff,stroke:#E67E22
+    style C fill:#95A5A6,color:#fff,stroke:#7F8C8D
 ```
-Building
-  └── Floor (category of rooms)
-       └── Room (bounded workspace with rules + tools)
-            └── Table (work mode: focus, collab, boardroom)
-                 └── Chair (agent slot)
-```
 
-### Spatial Model
+> **⬇️ Strict Layer Ordering** — Each layer can **only** import from layers below it. No circular dependencies. Enforced by `npm run validate` and CI.
+
+<details>
+<summary>📊 <b>Layer Details</b> (click to expand)</summary>
+
+| Layer | Directory | Files | Depends On |
+|:------|:----------|:------|:-----------|
+| 🌐 **Transport** | `src/transport/` | Socket handlers, Zod schemas | Rooms, Agents, Tools, Core |
+| 🏢 **Rooms** | `src/rooms/` | 25 files — room manager, 12 room types, phase gates, RAID, chat orchestrator | Agents, Tools, AI, Storage, Core |
+| 🤖 **Agents** | `src/agents/` | 7 files — registry, email, sessions, conversation loop, stats, routing, badges | Tools, AI, Storage, Core |
+| 🔧 **Tools** | `src/tools/` | 12 files — registry, MCP manager/client, 7 tool providers | AI, Storage, Core |
+| 🧠 **AI** | `src/ai/` | 11 files — 4 adapters, profile generation, image service | Storage, Core |
+| 💾 **Storage** | `src/storage/` | SQLite with WAL, 15+ tables, 30+ indexes | Core |
+| ⚙️ **Core** | `src/core/` | Event bus, config, logger, contracts | Nothing (foundation) |
+
+</details>
+
+---
+
+## 🏢 The Spatial Model
+
+```mermaid
+graph TD
+    B["🏢 Building<br/><small>Project Container</small>"]
+    F1["🏗️ Strategy Floor"]
+    F2["🏗️ Collaboration Floor"]
+    F3["🏗️ Execution Floor"]
+    F4["🏗️ Governance Floor"]
+    F5["🏗️ Operations Floor"]
+    F6["🏗️ Integration Floor"]
+
+    R1["🚪 Strategist Office"]
+    R2["🚪 Building Architect"]
+    R3["🚪 Discovery"]
+    R4["🚪 Architecture"]
+    R5["🚪 War Room"]
+    R6["🚪 Code Lab"]
+    R7["🚪 Testing Lab"]
+    R8["🚪 Review"]
+    R9["🚪 Deploy"]
+    R10["🚪 Data Exchange"]
+    R11["🚪 Provider Hub"]
+    R12["🚪 Plugin Bay"]
+
+    B --> F1 & F2 & F3 & F4 & F5 & F6
+    F1 --> R1 & R2
+    F2 --> R3 & R4 & R5
+    F3 --> R6 & R7
+    F4 --> R8
+    F5 --> R9
+    F6 --> R10 & R11 & R12
+
+    style B fill:#2C3E50,color:#fff
+    style F1 fill:#8E44AD,color:#fff
+    style F2 fill:#2980B9,color:#fff
+    style F3 fill:#27AE60,color:#fff
+    style F4 fill:#E67E22,color:#fff
+    style F5 fill:#E74C3C,color:#fff
+    style F6 fill:#1ABC9C,color:#fff
+```
 
 | Floor | Purpose | Rooms |
-|-------|---------|-------|
-| Strategy | Phase Zero setup | Strategist Office, Building Architect |
-| Collaboration | Planning | Discovery, Architecture, War Room |
-| Execution | Building | Code Lab, Testing Lab, Integration Room |
-| Operations | Deployment | Deploy Room, Monitoring Room |
-| Governance | Sign-off | Review Room, Audit Room, Release Lounge |
-| Integration | External I/O | Plugin Bay, Data Exchange, Provider Hub |
-| Lobby | Dashboard | Main Chat, Dashboard, Project Gallery, Security Desk |
+|:------|:--------|:------|
+| 🟣 **Strategy** | Phase Zero — goals, building layout | Strategist Office, Building Architect |
+| 🔵 **Collaboration** | Planning, requirements, design, incidents | Discovery, Architecture, War Room |
+| 🟢 **Execution** | Implementation and verification | Code Lab, Testing Lab |
+| 🟠 **Governance** | Quality gates and sign-off | Review |
+| 🔴 **Operations** | Deployment and release | Deploy |
+| 🩵 **Integration** | External I/O, plugins, providers | Data Exchange, Provider Hub, Plugin Bay |
 
-### Layer Stack (strict ordering — no circular deps)
+---
+
+## 🚪 Room Types
+
+Overlord ships with **12 built-in room types**. Custom rooms can be added via the plugin system.
+
+| Room | Floor | Scope | Key Constraint |
+|:-----|:------|:------|:---------------|
+| `strategist` | Strategy | 📖 Read-only | Consultation only — no code tools |
+| `building-architect` | Strategy | 📖 Read-only | Custom floor/room layout design |
+| `discovery` | Collaboration | 📖 Read-only | Requirements gathering — produce specs |
+| `architecture` | Collaboration | 📖 Read-only | System design — produce task breakdown |
+| `code-lab` | Execution | ✏️ **Read-write** | Full write access, scoped to assigned files |
+| `testing-lab` | Execution | 📖 Read-only | **NO `write_file`** — structurally enforced |
+| `review` | Governance | 📖 Read-only | GO/NO-GO decisions with evidence |
+| `deploy` | Operations | 📖 Read-only | Git/CI tools — requires release sign-off |
+| `war-room` | Collaboration | ✏️ **Read-write** | Elevated access — incident response |
+| `data-exchange` | Integration | ↔️ Varies | External data import/export |
+| `provider-hub` | Integration | 📖 Read-only | AI provider configuration |
+| `plugin-bay` | Integration | 📖 Read-only | Plugin lifecycle management |
+
+> **🔒 Security:** The Testing Lab **cannot** access `write_file` — not because of a prompt instruction, but because the tool literally doesn't exist in its room contract. This is **structural enforcement**.
+
+---
+
+## 🔄 Phase System
 
 ```
-Transport → Rooms → Agents → Tools → AI → Storage → Core
+strategy ──► discovery ──► architecture ──► execution ──► review ──► deploy
+                                                │                    │
+                                                ▼                    ▼
+                                           war-room            war-room
+                                          (on error)          (on failure)
 ```
 
-## Tech Stack
+| Phase | What Happens | Gate Requirement |
+|:------|:-------------|:-----------------|
+| 🟣 **Strategy** | Strategist asks consultative questions, produces building blueprint | Blueprint exit document |
+| 📋 **Discovery** | Requirements gathering, gap analysis, risk assessment | Requirements document |
+| 📐 **Architecture** | Task breakdown, dependency graph, tech decisions | Architecture document |
+| ⚡ **Execution** | Code Lab writes code (scoped), Testing Lab verifies (no write) | Working code + passing tests |
+| 🔍 **Review** | Reviewer provides GO / NO-GO / CONDITIONAL verdict | Reviewer sign-off with evidence |
+| 🚀 **Deploy** | Release management, health checks, rollback plans | Deployment confirmation |
 
-- **Language**: TypeScript (strict mode)
-- **Runtime**: Node.js 20+
-- **Database**: SQLite (local) / PostgreSQL via Supabase (production)
-- **AI Providers**: Anthropic, MiniMax, OpenAI, Ollama (provider-agnostic adapter)
-- **Transport**: Socket.IO + Express
-- **Validation**: Zod schemas
-- **Testing**: Vitest
-- **CI/CD**: GitHub Actions
+<details>
+<summary>🚦 <b>Gate Verdicts</b></summary>
 
-## Quick Start
+| Verdict | Meaning | Result |
+|:--------|:--------|:-------|
+| ✅ **GO** | Phase passes | Building advances automatically |
+| ❌ **NO-GO** | Phase fails | Returns to current phase for remediation |
+| ⚠️ **CONDITIONAL** | Passes with conditions | Conditions must be resolved before auto-advance |
+
+</details>
+
+---
+
+## 🧠 AI Providers
+
+| Provider | Status | Model | Speed | Context |
+|:---------|:-------|:------|:------|:--------|
+| **Anthropic** | ✅ Full | Claude Sonnet 4 | — | 200K |
+| **MiniMax** | ✅ Full | M2.5 / M2.5-highspeed | ~60 / ~100 tps | 204K |
+| **OpenAI** | ✅ Full | GPT-4o | — | 128K |
+| **Ollama** | ✅ Full | Llama 3 (local) | Varies | Varies |
+
+> **💡 Provider-per-Room:** Anthropic powers reasoning-heavy rooms (Discovery, Architecture, Review). MiniMax M2.5 powers coding rooms (Code Lab, Testing Lab). Configure per room via environment variables.
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Node.js** ≥ 20.0.0
+- At least one AI provider API key (or a running Ollama instance)
+
+### Install & Run
 
 ```bash
 # Clone
@@ -57,70 +253,372 @@ cd Overlord-v2
 # Install
 npm install
 
-# Configure
+# Configure — add at least one AI provider key
 cp .env.example .env
-# Edit .env with your API keys
 
 # Initialize database
-npm run db:migrate
-npm run db:seed
+npm run db:migrate && npm run db:seed
 
-# Start development server
+# Launch
 npm run dev
 ```
 
-## Scripts
+**→ Open `http://localhost:4000`** to access the Overlord UI.
+
+<details>
+<summary>🐳 <b>Docker Setup</b> (click to expand)</summary>
+
+#### Dev Container (VS Code)
+
+1. Open project in VS Code
+2. Click **"Reopen in Container"** when prompted
+3. Container auto-installs dependencies, builds native modules, forwards port 4000
+
+#### Production Docker
+
+```bash
+# Build multi-stage production image
+docker build -t overlord-v2 .
+
+# Run
+docker run -d \
+  --name overlord-v2 \
+  -p 4000:4000 \
+  -v overlord_data:/app/data \
+  -e ANTHROPIC_API_KEY=your-key \
+  -e SESSION_SECRET=your-secret \
+  overlord-v2
+```
+
+</details>
+
+<details>
+<summary>⚙️ <b>Environment Variables</b> (click to expand)</summary>
+
+#### Server
+
+| Variable | Default | Description |
+|:---------|:--------|:------------|
+| `PORT` | `4000` | HTTP server port |
+| `NODE_ENV` | `development` | Environment mode |
+| `LOG_LEVEL` | `info` | Pino log level |
+
+#### AI Providers
+
+| Variable | Default | Description |
+|:---------|:--------|:------------|
+| `ANTHROPIC_API_KEY` | — | Anthropic API key |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-20250514` | Model ID |
+| `MINIMAX_API_KEY` | — | MiniMax API key |
+| `MINIMAX_BASE_URL` | `https://api.minimax.io/anthropic` | MiniMax endpoint |
+| `MINIMAX_MODEL` | `MiniMax-M2.5` | Model ID |
+| `OPENAI_API_KEY` | — | OpenAI API key |
+| `OPENAI_MODEL` | `gpt-4o` | Model ID |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
+| `OLLAMA_MODEL` | `llama3` | Model ID |
+
+#### Room Provider Assignments
+
+| Variable | Default | Description |
+|:---------|:--------|:------------|
+| `PROVIDER_DISCOVERY` | `anthropic` | Discovery rooms |
+| `PROVIDER_ARCHITECTURE` | `anthropic` | Architecture rooms |
+| `PROVIDER_CODE_LAB` | `minimax` | Code Lab rooms |
+| `PROVIDER_TESTING_LAB` | `minimax` | Testing Lab rooms |
+| `PROVIDER_REVIEW` | `anthropic` | Review rooms |
+| `PROVIDER_DEPLOY` | `anthropic` | Deploy rooms |
+
+#### Features & Security
+
+| Variable | Default | Description |
+|:---------|:--------|:------------|
+| `DB_PATH` | `./data/overlord.db` | SQLite database path |
+| `SESSION_SECRET` | `dev-secret-change-in-production` | Session signing secret |
+| `CORS_ORIGIN` | `http://localhost:4000` | Allowed CORS origin |
+| `MCP_SERVERS_CONFIG` | `./mcp-servers.json` | MCP servers config path |
+| `ENABLE_PLUGINS` | `false` | Enable plugin system |
+| `ENABLE_LUA_SCRIPTING` | `false` | Enable Lua scripting |
+
+</details>
+
+---
+
+## 🧪 Testing
+
+```bash
+npm test                # Run all tests (Vitest)
+npm run test:watch      # Watch mode
+npm run test:coverage   # V8 coverage report
+npm run validate        # Full CI pipeline: typecheck + lint + test
+```
+
+**89 test files** across unit, integration, and E2E — organized by layer:
+
+<details>
+<summary>📁 <b>Test Structure</b></summary>
+
+```
+tests/
+├── unit/
+│   ├── core/           # Bus, config, contracts, logger
+│   ├── storage/        # Database operations
+│   ├── ai/             # Provider adapters
+│   ├── tools/          # Registry, executor, providers
+│   ├── agents/         # Registry, router, session, conversation loop
+│   ├── rooms/          # Manager, all 12 room types, phase gates, RAID
+│   ├── commands/       # Registry, builtins, mentions, references
+│   ├── plugins/        # Loader, sandbox
+│   ├── transport/      # Socket handler, schemas
+│   └── ui/             # Components, engine, store, router
+├── integration/
+│   ├── ai-providers.test.ts       # Cross-provider integration
+│   ├── full-lifecycle.test.ts     # End-to-end project lifecycle
+│   └── room-tool-scoping.test.ts  # Structural tool enforcement
+└── e2e/                # Playwright browser automation
+```
+
+</details>
+
+---
+
+## 🖥️ Frontend
+
+The Overlord UI is a custom single-page application with **14 views**, **13 reusable components**, and a reactive store architecture.
+
+| View | Purpose |
+|:-----|:--------|
+| 📊 **Dashboard** | Building cards, KPIs, room overview |
+| 🏢 **Building** | Floor management, room editor |
+| 🔄 **Phase** | Phase progression, gate visualization |
+| 🚪 **Room** | Room details, agent roster, stats |
+| 💬 **Chat** | Live chat with streaming, message history |
+| 📋 **Tasks** | Task CRUD, detail drawer, assignment |
+| ⚠️ **RAID Log** | Risk/Assumption/Issue/Decision management |
+| 🤖 **Agents** | Agent profiles, stats, quick-assign |
+| 📧 **Email** | Agent inbox, threading, priority |
+| 🎯 **Milestones** | Milestone tracking, task assignment |
+| 📡 **Activity** | Event feed, agent status updates |
+| 🟣 **Strategist** | Phase Zero consultation interface |
+| ⚙️ **Settings** | AI provider routing, display config |
+| 📄 **Exit Doc** | Structured exit document creation |
+
+<!--
+## 📸 Screenshots
+
+Screenshots will be added as the UI stabilizes.
+
+| Dashboard | Chat | Building |
+|:---------:|:----:|:--------:|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Chat](docs/screenshots/chat.png) | ![Building](docs/screenshots/building.png) |
+-->
+
+---
+
+## 📁 Project Structure
+
+<details>
+<summary>🗂️ <b>Full directory tree</b> (click to expand)</summary>
+
+```
+Overlord-v2/
+│
+├── src/
+│   ├── core/                      # ⚙️ Foundation (no dependencies)
+│   │   ├── bus.ts                 #    EventEmitter3 event bus
+│   │   ├── config.ts              #    Zod-validated configuration
+│   │   ├── contracts.ts           #    Types, Result pattern, Zod schemas
+│   │   └── logger.ts              #    Pino structured logger
+│   │
+│   ├── storage/                   # 💾 Database
+│   │   └── db.ts                  #    SQLite, migrations, 15+ tables
+│   │
+│   ├── ai/                        # 🧠 AI Providers
+│   │   ├── ai-provider.ts         #    Adapter registry & dispatcher
+│   │   ├── adapters/
+│   │   │   ├── anthropic.ts       #    Anthropic Claude
+│   │   │   ├── minimax.ts         #    MiniMax M2.5
+│   │   │   ├── openai.ts          #    OpenAI GPT-4o
+│   │   │   └── ollama.ts          #    Ollama (local)
+│   │   ├── profile-generator.ts   #    AI-generated agent bios
+│   │   ├── profile-name-generator.ts # Agent name generation
+│   │   ├── minimax-image.ts       #    MiniMax headshot generation
+│   │   └── agent-photo-store.ts   #    Photo file management
+│   │
+│   ├── tools/                     # 🔧 Tools
+│   │   ├── tool-registry.ts       #    Registration & lookup
+│   │   ├── tool-executor.ts       #    Room-scoped execution
+│   │   ├── mcp-manager.ts         #    MCP server lifecycle
+│   │   ├── mcp-client.ts          #    JSON-RPC MCP client
+│   │   └── providers/
+│   │       ├── filesystem.ts      #    read/write/patch/list
+│   │       ├── shell.ts           #    bash execution
+│   │       ├── web.ts             #    web_search
+│   │       ├── notes.ts           #    record/recall notes
+│   │       ├── data-exchange.ts   #    External data I/O
+│   │       ├── provider-hub.ts    #    AI provider management
+│   │       └── plugin-bay.ts      #    Plugin lifecycle
+│   │
+│   ├── agents/                    # 🤖 Agents
+│   │   ├── agent-registry.ts      #    CRUD, profiles, room access
+│   │   ├── agent-email.ts         #    Agent-to-agent messaging
+│   │   ├── agent-session.ts       #    Conversation state
+│   │   ├── conversation-loop.ts   #    AI → tool → response loop
+│   │   ├── agent-router.ts        #    Message routing
+│   │   ├── agent-stats.ts         #    Activity metrics
+│   │   └── security-badge.ts      #    Role-based access
+│   │
+│   ├── rooms/                     # 🏢 Rooms
+│   │   ├── room-manager.ts        #    Room lifecycle
+│   │   ├── building-manager.ts    #    Building + Floor CRUD
+│   │   ├── building-onboarding.ts #    Auto-provision on create
+│   │   ├── chat-orchestrator.ts   #    chat:message → AI → response
+│   │   ├── phase-gate.ts          #    GO/NO-GO checkpoints
+│   │   ├── phase-zero.ts          #    Strategist handlers
+│   │   ├── raid-log.ts            #    RAID entry management
+│   │   ├── scope-change.ts        #    Scope change protocol
+│   │   ├── escalation-handler.ts  #    Stale gate detection
+│   │   ├── citation-tracker.ts    #    Cross-room references
+│   │   └── room-types/            #    12 built-in room types
+│   │       ├── base-room.ts
+│   │       ├── strategist.ts
+│   │       ├── building-architect.ts
+│   │       ├── discovery.ts
+│   │       ├── architecture.ts
+│   │       ├── code-lab.ts
+│   │       ├── testing-lab.ts
+│   │       ├── review.ts
+│   │       ├── deploy.ts
+│   │       ├── war-room.ts
+│   │       ├── data-exchange.ts
+│   │       ├── provider-hub.ts
+│   │       └── plugin-bay.ts
+│   │
+│   ├── commands/                  # 💬 Commands
+│   │   ├── command-registry.ts    #    Slash command registration
+│   │   ├── builtin-commands.ts    #    /help /status /phase etc.
+│   │   ├── mention-handler.ts     #    @mention fuzzy matching
+│   │   └── reference-resolver.ts  #    #issue #task resolution
+│   │
+│   ├── plugins/                   # 🔌 Plugins
+│   │   ├── plugin-loader.ts       #    Discovery & loading
+│   │   ├── plugin-sandbox.ts      #    Sandboxed execution
+│   │   ├── lua-sandbox.ts         #    Lua via wasmoon
+│   │   └── contracts.ts           #    Plugin manifest schema
+│   │
+│   ├── transport/                 # 🌐 Transport
+│   │   ├── socket-handler.ts      #    40+ Socket.IO event handlers
+│   │   └── schemas.ts             #    98 Zod message schemas
+│   │
+│   └── server.ts                  #    Entry point
+│
+├── public/ui/                     # 🖥️ Frontend
+│   ├── engine/                    #    Core framework (store, router, socket bridge)
+│   ├── components/                #    13 reusable UI components
+│   ├── views/                     #    14 full-page views
+│   └── css/                       #    8 stylesheets (tokens, responsive, etc.)
+│
+├── tests/                         #    89 test files (unit + integration + e2e)
+├── .devcontainer/                 #    VS Code Dev Container config
+├── .github/                       #    Actions, issue templates, PR template
+├── Dockerfile                     #    Multi-stage Alpine build
+└── docker-compose.prod.yml        #    Production Compose config
+```
+
+</details>
+
+---
+
+## 🛠️ Tech Stack
+
+| Component | Technology |
+|:----------|:-----------|
+| 🟦 Language | **TypeScript 5.7+** (strict mode) |
+| 🟩 Runtime | **Node.js 20+** |
+| 💾 Database | **SQLite** via better-sqlite3 (WAL mode) |
+| 🧠 AI Providers | **Anthropic**, **MiniMax M2.5**, **OpenAI**, **Ollama** |
+| 🌐 Transport | **Socket.IO 4** + **Express 5** |
+| ✅ Validation | **Zod 3** |
+| 📡 Events | **EventEmitter3** |
+| 📋 Logging | **Pino** |
+| 🧪 Testing | **Vitest 3** + V8 coverage |
+| 🔍 Linting | **ESLint 9** + typescript-eslint |
+| 🔄 CI/CD | **GitHub Actions** |
+| 🐳 Container | **Docker** (multi-stage Alpine) |
+| 🔌 Plugins | **wasmoon** (Lua runtime) |
+
+---
+
+## 📋 Available Scripts
 
 | Command | Description |
-|---------|-------------|
-| `npm run dev` | Start dev server with hot reload |
-| `npm run build` | Compile TypeScript to dist/ |
-| `npm start` | Run compiled production server |
-| `npm test` | Run test suite |
-| `npm run test:coverage` | Run tests with coverage |
-| `npm run typecheck` | TypeScript type checking |
-| `npm run lint` | ESLint |
-| `npm run validate` | Full validation (typecheck + lint + test) |
-| `npm run db:migrate` | Run database migrations |
-| `npm run db:seed` | Seed development data |
+|:--------|:------------|
+| `npm run dev` | 🔄 Start dev server with hot reload (tsx watch) |
+| `npm run build` | 🏗️ Compile TypeScript to `dist/` |
+| `npm start` | 🚀 Run compiled production server |
+| `npm test` | 🧪 Run all tests (Vitest) |
+| `npm run test:watch` | 👀 Tests in watch mode |
+| `npm run test:coverage` | 📊 Tests with V8 coverage |
+| `npm run lint` | 🔍 ESLint check |
+| `npm run lint:fix` | 🔧 ESLint auto-fix |
+| `npm run typecheck` | 🟦 TypeScript type checking |
+| `npm run validate` | ✅ **Full CI pipeline:** typecheck + lint + test |
+| `npm run db:migrate` | 💾 Run database migrations |
+| `npm run db:seed` | 🌱 Seed development data |
 
-## Project Structure
+---
 
-```
-src/
-  core/          # Event bus, config, logger, contracts (foundation)
-  storage/       # Database, models (SQLite/Postgres)
-  ai/            # Provider-agnostic AI adapters
-  tools/         # Tool registry + room-scoped executor
-  agents/        # Agent registry, sessions, router
-  rooms/         # Room manager, room types, phase gates, RAID log
-    room-types/  # Built-in room implementations
-  transport/     # Socket.IO + API handlers
-  plugins/       # Plugin loader + sandbox
+## 🤝 Contributing
 
-tests/
-  unit/          # Unit tests per layer
-  integration/   # Cross-layer integration tests
-  e2e/           # End-to-end tests
+| Branch | Purpose |
+|:-------|:--------|
+| `main` | 🔒 Stable, protected — PRs required |
+| `develop` | 🔄 Integration branch |
+| `feat/*` | ✨ New features |
+| `fix/*` | 🐛 Bug fixes |
+| `docs/*` | 📖 Documentation |
+| `refactor/*` | ♻️ Code restructuring |
+| `release/*` | 🚀 Release candidates |
+| `hotfix/*` | 🚨 Emergency fixes |
 
-scripts/         # Migration, seeding, architecture check
-.github/         # Actions, issue templates, PR template
-docs/            # Architecture docs, API docs, guides
-```
+### Workflow
 
-## Implementation Phases
+1. **Branch** from `develop` → `feat/my-feature`
+2. **Create a GitHub Issue** for the work
+3. **Commit** using [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): subject`
+4. **Open a PR** with summary, test plan, and `Closes #N`
+5. **Pass validation**: `npm run validate` (typecheck + lint + test)
+6. **Never push directly to `main`**
 
-| Phase | Focus | Status |
-|-------|-------|--------|
-| 0 | Stabilize v1, tag baseline | Planned |
-| 1 | Foundation (Bus + Storage + Config) | **Current** |
-| 2 | Rooms (Room Manager + Testing Lab + Exit Protocol) | Planned |
-| 3 | Agents + AI (Registry + Providers + Tool Executor) | Planned |
-| 4 | All Rooms + RAID (Remaining Rooms + Phase Gates) | Planned |
-| 5 | Phase Zero (Strategist + Building Architect) | Planned |
-| 6 | UI (Building-Themed Frontend) | Planned |
-| 7 | Plugins + Polish (Scripting + Integration) | Planned |
+### Code Standards
 
-## License
+- All source: TypeScript with `strict: true`
+- Validation: Zod schemas for runtime checks
+- I/O: `ok(data)` / `err(code, message)` Result pattern
+- Imports: `.js` extension (Node16 resolution)
+- No `any` without justification comment
 
-MIT
+> 📖 **See the [Wiki Contributing page](https://github.com/twitchyvr/Overlord-v2/wiki/Contributing) for full guidelines.**
+
+---
+
+## 📝 Changelog
+
+See **[CHANGELOG.md](CHANGELOG.md)** for detailed version history.
+
+Overlord v2 follows [Semantic Versioning](https://semver.org/) — `vMAJOR.MINOR.PATCH`.
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) — Copyright © 2026 Matt Rogers
+
+---
+
+<div align="center">
+
+**🏢 Overlord v2** — *Where rooms define behavior, not agents.*
+
+[📖 Wiki](https://github.com/twitchyvr/Overlord-v2/wiki) · [🐛 Report Bug](https://github.com/twitchyvr/Overlord-v2/issues/new?template=bug_report.md) · [✨ Request Feature](https://github.com/twitchyvr/Overlord-v2/issues/new?template=feature_request.md)
+
+</div>

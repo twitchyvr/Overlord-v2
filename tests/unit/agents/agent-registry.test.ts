@@ -25,6 +25,7 @@ describe('Agent Registry', () => {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         role TEXT NOT NULL,
+        building_id TEXT,
         capabilities TEXT DEFAULT '[]',
         room_access TEXT DEFAULT '[]',
         badge TEXT,
@@ -32,6 +33,15 @@ describe('Agent Registry', () => {
         current_room_id TEXT,
         current_table_id TEXT,
         config TEXT DEFAULT '{}',
+        first_name TEXT,
+        last_name TEXT,
+        display_name TEXT,
+        nickname TEXT,
+        bio TEXT,
+        photo_url TEXT,
+        specialization TEXT,
+        gender TEXT,
+        profile_generated INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       );
@@ -148,6 +158,82 @@ describe('Agent Registry', () => {
 
       removeAgent(agents[0].id);
       expect(listAgents().length).toBe(0);
+    });
+  });
+
+  describe('malformed JSON resilience', () => {
+    it('getAgent handles corrupted capabilities JSON gracefully', () => {
+      // Insert agent with malformed JSON directly via SQL
+      mockDb.prepare(`
+        INSERT INTO agents (id, name, role, capabilities, room_access, config)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('agent_corrupt_1', 'Corrupt', 'dev', '{not valid json', '["testing-lab"]', '{}');
+
+      const agent = getAgent('agent_corrupt_1');
+      expect(agent).not.toBeNull();
+      expect(agent!.capabilities).toEqual([]); // fallback
+      expect(agent!.room_access).toEqual(['testing-lab']); // valid JSON still parsed
+    });
+
+    it('getAgent handles corrupted room_access JSON gracefully', () => {
+      mockDb.prepare(`
+        INSERT INTO agents (id, name, role, capabilities, room_access, config)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('agent_corrupt_2', 'Corrupt2', 'dev', '["code"]', 'broken!!!', '{}');
+
+      const agent = getAgent('agent_corrupt_2');
+      expect(agent).not.toBeNull();
+      expect(agent!.capabilities).toEqual(['code']); // valid
+      expect(agent!.room_access).toEqual([]); // fallback
+    });
+
+    it('getAgent handles corrupted config JSON gracefully', () => {
+      mockDb.prepare(`
+        INSERT INTO agents (id, name, role, capabilities, room_access, config)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('agent_corrupt_3', 'Corrupt3', 'dev', '[]', '[]', '{{{{');
+
+      const agent = getAgent('agent_corrupt_3');
+      expect(agent).not.toBeNull();
+      expect(agent!.config).toEqual({}); // fallback
+    });
+
+    it('listAgents handles corrupted JSON across multiple agents', () => {
+      mockDb.prepare(`
+        INSERT INTO agents (id, name, role, capabilities, room_access, config)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('agent_ok', 'Good', 'dev', '["code"]', '["code-lab"]', '{"key":"val"}');
+
+      mockDb.prepare(`
+        INSERT INTO agents (id, name, role, capabilities, room_access, config)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('agent_bad', 'Bad', 'dev', 'not json', 'also broken', '???');
+
+      const agents = listAgents();
+      expect(agents.length).toBe(2);
+
+      const good = agents.find(a => a.id === 'agent_ok')!;
+      expect(good.capabilities).toEqual(['code']);
+      expect(good.room_access).toEqual(['code-lab']);
+      expect(good.config).toEqual({ key: 'val' });
+
+      const bad = agents.find(a => a.id === 'agent_bad')!;
+      expect(bad.capabilities).toEqual([]);
+      expect(bad.room_access).toEqual([]);
+      expect(bad.config).toEqual({});
+    });
+
+    it('getAgent handles null/empty JSON fields gracefully', () => {
+      mockDb.prepare(`
+        INSERT INTO agents (id, name, role, capabilities, room_access, config)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run('agent_null', 'Null', 'dev', null, '', null);
+
+      const agent = getAgent('agent_null');
+      expect(agent).not.toBeNull();
+      expect(agent!.capabilities).toEqual([]);
+      expect(agent!.room_access).toEqual([]);
+      expect(agent!.config).toEqual({});
     });
   });
 });

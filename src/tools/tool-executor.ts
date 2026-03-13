@@ -28,11 +28,15 @@ export async function executeTool(params: {
   room: BaseRoomLike;
   agent: AgentRef;
   bus: Bus;
+  /** Building's project working directory — scopes file/shell tools */
+  workingDirectory?: string;
+  /** Additional paths the building has been granted access to */
+  allowedPaths?: string[];
 }): Promise<Result> {
   const { name, input } = params.toolCall;
   const allowedTools = params.room.getAllowedTools();
 
-  log.info({ tool: name, agent: params.agent.id, room: params.room.id }, 'Executing tool');
+  log.info({ tool: name, agent: params.agent.id, room: params.room.id, cwd: params.workingDirectory }, 'Executing tool');
 
   const result = await executeInRoom({
     toolName: name,
@@ -43,6 +47,8 @@ export async function executeTool(params: {
       roomType: params.room.type,
       agentId: params.agent.id,
       fileScope: params.room.fileScope,
+      workingDirectory: params.workingDirectory,
+      allowedPaths: params.allowedPaths,
     },
   });
 

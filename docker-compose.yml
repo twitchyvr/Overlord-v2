@@ -1,0 +1,67 @@
+# ═══════════════════════════════════════════════════════
+# Overlord v2 — Development Compose
+#
+# Quick start:
+#   docker compose up        (foreground with logs)
+#   docker compose up -d     (detached)
+#   docker compose down      (stop and remove containers)
+#   docker compose logs -f   (tail logs)
+#
+# This mounts your local source and runs the dev server
+# with tsx watch (auto-restart on file changes).
+# ═══════════════════════════════════════════════════════
+
+version: '3.8'
+
+services:
+  overlord-dev:
+    image: mcr.microsoft.com/devcontainers/javascript-node:20
+    container_name: overlord-v2-dev
+    working_dir: /workspace
+
+    volumes:
+      # Mount the project into the container
+      - .:/workspace:cached
+
+      # Named volume for node_modules — compiled for Linux,
+      # never pollutes the host Mac filesystem
+      - node_modules:/workspace/node_modules
+
+      # Persist SQLite database across container restarts
+      - overlord_data:/workspace/data
+
+    ports:
+      # Express + Socket.IO server
+      - "4000:4000"
+      # Vite dev server (if used)
+      - "5173:5173"
+
+    # Pull environment variables from .env file on host
+    env_file:
+      - .env
+
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - DB_PATH=/workspace/data/overlord.db
+
+    # Install deps (if needed) then start the dev server with hot-reload
+    command: >
+      bash -c "
+        npm install &&
+        echo '── Overlord v2 dev server starting ──' &&
+        npx tsx watch src/server.ts
+      "
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4000/health || exit 0"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+    restart: unless-stopped
+
+volumes:
+  node_modules:
+  overlord_data:
