@@ -54,6 +54,7 @@ export class TaskView extends Component {
     this._searchQuery = '';
     this._viewMode = 'list';    // 'list' | 'kanban'
     this._dragTaskId = null;    // task id being dragged
+    this._dragJustEnded = false; // suppress click after drag-drop
     this._selectedTask = null;
     this._tabs = null;
     this._todos = [];
@@ -90,11 +91,9 @@ export class TaskView extends Component {
       this._agentPositions = positions || {};
     });
 
-    // Listen for real-time task events
-    this._listeners.push(
-      OverlordUI.subscribe('task:created', () => this._fetchTasks()),
-      OverlordUI.subscribe('task:updated', () => this._fetchTasks())
-    );
+    // Note: socket-bridge already updates store('tasks.list') on task:created/task:updated
+    // broadcasts, so the store subscription above handles re-rendering. No need for
+    // additional engine event listeners that would trigger redundant fetch + render cycles.
 
     // Listen for todo updates to re-render detail view
     this.subscribe(store, 'todos.list', (todos) => {
@@ -1276,10 +1275,16 @@ export class TaskView extends Component {
       card.classList.remove('kanban-card-dragging');
       // Remove all drop-active highlights
       this.el.querySelectorAll('.kanban-drop-active').forEach(el => el.classList.remove('kanban-drop-active'));
+      // Suppress the spurious click that fires after dragend
+      this._dragJustEnded = true;
+      requestAnimationFrame(() => { this._dragJustEnded = false; });
     });
 
-    // Click to open detail
-    card.addEventListener('click', () => this._openTaskDetail(task.id));
+    // Click to open detail — guarded to prevent spurious click after drag-drop
+    card.addEventListener('click', (e) => {
+      if (this._dragJustEnded) return;
+      this._openTaskDetail(task.id);
+    });
 
     // Priority indicator bar
     card.appendChild(h('div', { class: `kanban-card-priority-bar priority-bar-${task.priority || 'normal'}` }));
