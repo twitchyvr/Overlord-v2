@@ -25,6 +25,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Agent status changes in Activity feed** — Agents tab in activity view shows real-time status updates (#287)
 
 ### Fixed
+- **11 UI modal/form/toast bugs** — invalid modal sizes, misused Toast API, missing try/catch on async socket calls, shared modal IDs causing conflicts, missing null guards, silent error swallowing (#327, PR #328)
 - **7 transport-layer data integrity bugs** — RAID duplicate entries, scope-change store corruption, duplicate forward, exit-doc JSON parsing, gate signoff data shape, RAID edit broadcast, drawer onClose (#323, PR #324)
 - **14 bugs from system code reviews** — phase gate, RAID log, and exit document systems hardened (#316, #317, #318, PR #319)
 - **7 room entry/exit validation bugs** — governance bypass, data-exchange JSON parse, room type enforcement (#320, #321, PR #322)
