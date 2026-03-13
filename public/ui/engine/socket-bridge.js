@@ -1442,6 +1442,11 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithFeedback('phase:gate:signoff', params);
     },
 
+    // Alias for signoffGate — some callers use capital-O spelling
+    signOffGate(params) {
+      return this.signoffGate(params);
+    },
+
     async advancePhase(buildingId, reviewer) {
       const res = await _emitWithFeedback('phase:advance', { buildingId, reviewer });
       if (res && res.ok) {
