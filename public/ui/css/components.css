@@ -2882,6 +2882,7 @@
 .raid-severity-high { background: color-mix(in srgb, var(--accent-orange) 15%, transparent); color: var(--accent-orange); }
 .raid-severity-medium { background: color-mix(in srgb, var(--accent-amber) 15%, transparent); color: var(--accent-amber); }
 .raid-severity-low { background: var(--surface-2); color: var(--text-muted); }
+.raid-severity-info { background: color-mix(in srgb, var(--accent-cyan) 15%, transparent); color: var(--accent-cyan); }
 
 /* ── Loading State ── */
 .loading-state {

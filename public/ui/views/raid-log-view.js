@@ -261,12 +261,15 @@ export class RaidLogView extends Component {
     const grid = h('div', { class: 'raid-entry-grid' });
 
     for (const entry of entries) {
+      // Auto-derive severity from type for visual impact indicators
+      const severityMap = { risk: 'high', issue: 'medium', assumption: 'low', decision: 'info' };
       const card = Card.create('raid', {
         type: entry.type,
         title: entry.summary,
         description: entry.rationale,
         status: entry.status || 'active',
-        owner: entry.decided_by
+        owner: entry.decided_by,
+        severity: entry.status === 'closed' ? null : severityMap[entry.type] || null
       });
 
       card.dataset.entryId = entry.id;
