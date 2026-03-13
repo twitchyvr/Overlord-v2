@@ -45,6 +45,19 @@ const TEMPLATE_KEYWORDS = {
     'api', 'rest', 'graphql', 'endpoint', 'webhook', 'integration',
     'authentication', 'auth', 'backend service', 'server',
   ],
+  'unity-game': [
+    'unity', 'c# game', 'csharp game', '3d game', 'mobile game',
+    'ar app', 'vr app', 'augmented reality', 'virtual reality',
+  ],
+  'js-game': [
+    'browser game', 'html5 game', 'phaser', 'three.js', 'threejs',
+    'pixijs', 'pixi', 'babylon', 'canvas game', 'webgl',
+    '2d game', 'html game', 'web game',
+  ],
+  'unreal-game': [
+    'unreal', 'ue5', 'ue4', 'c++ game', 'aaa game', 'fps game',
+    'first person', 'high fidelity', 'photorealistic',
+  ],
 };
 
 /**
@@ -211,6 +224,68 @@ const TEMPLATES = [
       { name: 'Backend Dev', role: 'developer', rooms: ['code-lab'] },
       { name: 'API Reviewer', role: 'reviewer', rooms: ['review'] },
       { name: 'DevOps', role: 'devops', rooms: ['deploy', 'monitoring'] }
+    ]
+  },
+  {
+    id: 'unity-game',
+    name: 'Unity Game',
+    icon: '\u{1F3AE}',
+    description: 'Unity game project with C# scripting, scene management, and asset pipeline.',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
+      { floor: 'integration', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Game Designer', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Gameplay Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Systems Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Tester', role: 'reviewer', rooms: ['review'] },
+      { name: 'Build Engineer', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
+    id: 'js-game',
+    name: 'JavaScript Game',
+    icon: '\u{1F579}\u{FE0F}',
+    description: 'Browser-based game using Phaser, Three.js, PixiJS, or Babylon.js with web deployment.',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'review'] },
+      { floor: 'integration', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Game Designer', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Game Developer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Deploy Engineer', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
+    id: 'unreal-game',
+    name: 'Unreal Engine Game',
+    icon: '\u{1F525}',
+    description: 'Unreal Engine project with C++ and Blueprints for high-fidelity 3D games.',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
+      { floor: 'integration', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Game Designer', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Gameplay Programmer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Engine Programmer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Tester', role: 'reviewer', rooms: ['review'] },
+      { name: 'Build Engineer', role: 'devops', rooms: ['deploy'] }
     ]
   }
 ];
