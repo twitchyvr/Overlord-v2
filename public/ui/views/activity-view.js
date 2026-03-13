@@ -136,6 +136,9 @@ export class ActivityView extends Component {
     this._items = (store.get('activity.items') || []).slice(-MAX_ITEMS);
     if (this._items.length > 0) this._loading = false;
 
+    // No building selected — nothing to load, clear loading state
+    if (!store.get('building.active')) this._loading = false;
+
     // Subscribe to bulk store updates
     this.subscribe(store, 'activity.items', (items) => {
       this._items = (items || []).slice(-MAX_ITEMS);
