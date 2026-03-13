@@ -52,8 +52,12 @@ import {
   TableGetAssignmentsSchema, TableDivideWorkSchema,
   AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema,
   PlanSubmitSchema, PlanReviewSchema, PlanGetSchema, PlanListSchema,
+  EmailSendSchema, EmailReplySchema, EmailForwardSchema,
+  EmailInboxSchema, EmailGetSchema, EmailThreadSchema,
+  EmailMarkReadSchema, EmailUnreadCountSchema, EmailSentSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
+import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
 import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
@@ -871,6 +875,110 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         buildingId: parsed.buildingId,
       });
       if (ack) ack({ ok: true, data: leaderboard });
+    });
+
+    // ─── Agent Email Events ───
+
+    handle(socket, 'email:send', EmailSendSchema, (parsed, ack) => {
+      const result = sendEmail({
+        fromId: parsed.fromId,
+        to: parsed.to,
+        cc: parsed.cc || [],
+        subject: parsed.subject,
+        body: parsed.body,
+        priority: parsed.priority,
+        buildingId: parsed.buildingId,
+      });
+
+      if (result.ok) {
+        const email = getEmail((result.data as { id: string }).id);
+        if (email) {
+          bus.emit('email:sent', email as unknown as Record<string, unknown>);
+          // Notify recipients
+          for (const agentId of [...parsed.to, ...(parsed.cc || [])]) {
+            io.emit('email:received', { agentId, email });
+          }
+        }
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'email:reply', EmailReplySchema, (parsed, ack) => {
+      const result = replyToEmail(parsed.emailId, parsed.fromId, parsed.body, {
+        replyAll: parsed.replyAll,
+        priority: parsed.priority,
+      });
+
+      if (result.ok) {
+        const email = getEmail((result.data as { id: string }).id);
+        if (email) {
+          bus.emit('email:sent', email as unknown as Record<string, unknown>);
+          for (const r of email.recipients) {
+            io.emit('email:received', { agentId: r.agent_id, email });
+          }
+        }
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'email:forward', EmailForwardSchema, (parsed, ack) => {
+      const result = forwardEmail(parsed.emailId, parsed.fromId, parsed.to, parsed.body || undefined);
+
+      if (result.ok) {
+        const email = getEmail((result.data as { id: string }).id);
+        if (email) {
+          bus.emit('email:sent', email as unknown as Record<string, unknown>);
+          for (const r of email.recipients) {
+            io.emit('email:received', { agentId: r.agent_id, email });
+          }
+        }
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'email:inbox', EmailInboxSchema, (parsed, ack) => {
+      const emails = getInbox(parsed.agentId, {
+        status: parsed.status,
+        priority: parsed.priority,
+        limit: parsed.limit,
+        offset: parsed.offset,
+      });
+      if (ack) ack({ ok: true, data: emails });
+    });
+
+    handle(socket, 'email:sent', EmailSentSchema, (parsed, ack) => {
+      const emails = getSentEmails(parsed.agentId, {
+        limit: parsed.limit,
+        offset: parsed.offset,
+      });
+      if (ack) ack({ ok: true, data: emails });
+    });
+
+    handle(socket, 'email:get', EmailGetSchema, (parsed, ack) => {
+      const email = getEmail(parsed.emailId);
+      if (!email) {
+        if (ack) ack({ ok: false, error: { code: 'EMAIL_NOT_FOUND', message: `Email ${parsed.emailId} not found`, retryable: false } });
+        return;
+      }
+      if (ack) ack({ ok: true, data: email });
+    });
+
+    handle(socket, 'email:thread', EmailThreadSchema, (parsed, ack) => {
+      const thread = getThread(parsed.threadId);
+      if (ack) ack({ ok: true, data: thread });
+    });
+
+    handle(socket, 'email:mark-read', EmailMarkReadSchema, (parsed, ack) => {
+      const result = markAsRead(parsed.emailId, parsed.agentId);
+      if (result.ok) {
+        io.emit('email:read', { emailId: parsed.emailId, agentId: parsed.agentId });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'email:unread-count', EmailUnreadCountSchema, (parsed, ack) => {
+      const count = getUnreadCount(parsed.agentId);
+      if (ack) ack({ ok: true, data: { agentId: parsed.agentId, count } });
     });
 
     // ─── Command List ───
@@ -2003,6 +2111,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('room:deleted');
   forward('plan:submitted');
   forward('plan:reviewed');
+  forward('email:sent');
 
   log.info('Transport layer initialized');
   broadcastLog('info', 'Transport layer initialized', 'transport');
