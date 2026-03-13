@@ -694,24 +694,13 @@ export class ChatView extends Component {
 
   _handleStreamEnd(data) {
     if (!this._streamingMessage) return;
-    this._streamingMessage.classList.remove('streaming');
 
-    // Remove cursor
-    const cursor = this._streamingMessage.querySelector('.stream-cursor');
-    if (cursor) cursor.remove();
-
-    // Final render
-    const content = this._streamingMessage.querySelector('.chat-message-content');
-    if (content && this._streamBuffer) {
-      if (typeof marked !== 'undefined') {
-        const parsed = marked.parse(this._streamBuffer, { breaks: true, gfm: true });
-        setTrustedContent(content, parsed);
-        Table.styleMarkdownTables(content);
-      } else {
-        content.textContent = this._streamBuffer;
-      }
-    }
-
+    // Remove the streaming element from the DOM entirely.
+    // The final message will be rendered by the store subscription
+    // when chat:response adds it to chat.messages.  Keeping this
+    // element around causes a duplicate because _renderMessages
+    // can't find it (the .streaming class would already be removed).
+    this._streamingMessage.remove();
     this._streamingMessage = null;
     this._streamBuffer = '';
   }
