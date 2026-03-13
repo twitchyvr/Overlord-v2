@@ -111,14 +111,16 @@ const SPECIALIZATION_MODIFIERS: Record<string, string> = {
  *
  * The prompt is constructed in layers:
  * 1. Base photography style and quality directives
- * 2. Role-specific archetype (appearance, expression, environment)
- * 3. Specialization modifier (optional visual accent)
- * 4. Technical photography constraints (lighting, composition, format)
+ * 2. Gender-appropriate appearance cues (if provided)
+ * 3. Role-specific archetype (appearance, expression, environment)
+ * 4. Specialization modifier (optional visual accent)
+ * 5. Technical photography constraints (lighting, composition, format)
  */
 export function buildProfilePrompt(
   agentName: string,
   role: string,
   specialization?: string,
+  gender?: string,
 ): string {
   const parts: string[] = [];
 
@@ -129,7 +131,20 @@ export function buildProfilePrompt(
     'single person, head and shoulders portrait, centered composition',
   );
 
-  // 2. Role archetype — normalize role to find best match
+  // 2. Gender-appropriate appearance cues
+  if (gender) {
+    const g = gender.toLowerCase().trim();
+    if (g === 'male' || g === 'm' || g === 'man') {
+      parts.push('male professional, masculine presenting');
+    } else if (g === 'female' || g === 'f' || g === 'woman') {
+      parts.push('female professional, feminine presenting');
+    } else if (g === 'nonbinary' || g === 'non-binary' || g === 'nb') {
+      parts.push('androgynous professional, gender-neutral presentation');
+    }
+    // If gender is unrecognized, skip — the model will choose freely
+  }
+
+  // 3. Role archetype — normalize role to find best match
   const normalizedRole = role.toLowerCase().replace(/[_\s]+/g, '-');
   const archetype = ROLE_ARCHETYPES[normalizedRole]
     || findClosestArchetype(normalizedRole)
@@ -137,7 +152,7 @@ export function buildProfilePrompt(
 
   parts.push(archetype);
 
-  // 3. Specialization modifier (if present and recognized)
+  // 4. Specialization modifier (if present and recognized)
   if (specialization) {
     const normalizedSpec = specialization.toLowerCase().replace(/[_\s]+/g, '-');
     const modifier = SPECIALIZATION_MODIFIERS[normalizedSpec]
@@ -147,7 +162,7 @@ export function buildProfilePrompt(
     }
   }
 
-  // 4. Technical photography constraints
+  // 5. Technical photography constraints
   parts.push(
     'soft professional studio lighting, shallow depth of field',
     'neutral to warm color grade, clean background',
@@ -208,12 +223,14 @@ function findClosestSpecialization(spec: string): string | null {
  * @param agentName - The agent's name (used for logging)
  * @param role - The agent's role (drives visual archetype selection)
  * @param specialization - Optional specialization for visual accents
+ * @param gender - Optional gender for appearance-appropriate photo generation
  * @returns Result containing the generated photo data
  */
 export async function generateAgentProfilePhoto(
   agentName: string,
   role: string,
   specialization?: string,
+  gender?: string,
 ): Promise<Result<ProfilePhotoResult>> {
   // Check availability first
   if (!isImageGenerationAvailable()) {
@@ -231,8 +248,8 @@ export async function generateAgentProfilePhoto(
   log.info({ agentName, role, specialization }, 'Generating agent profile photo');
   broadcastLog('info', `Generating profile photo for agent "${agentName}" (${role})`, 'ai:profile-generator');
 
-  // Build the prompt
-  const prompt = buildProfilePrompt(agentName, role, specialization);
+  // Build the prompt (includes gender cues when provided)
+  const prompt = buildProfilePrompt(agentName, role, specialization, gender);
   log.debug({ agentName, promptLength: prompt.length }, 'Profile photo prompt constructed');
 
   // Call the image generation API
