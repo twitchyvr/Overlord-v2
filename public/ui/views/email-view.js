@@ -80,7 +80,13 @@ export class EmailView extends Component {
     });
 
     this.subscribe(store, 'agents.list', (agents) => {
+      const hadNoAgents = this._agents.length === 0;
       this._agents = agents || [];
+      // If agents just became available, fetch email data
+      if (hadNoAgents && this._agents.length > 0) {
+        this._fetchData();
+        this._render();
+      }
     });
 
     // Listen for live email events
@@ -106,19 +112,31 @@ export class EmailView extends Component {
 
   _fetchData() {
     const api = window.overlordSocket;
-    if (!api) return;
+    if (!api) { this._loading = false; return; }
 
-    // For now, fetch inbox for all agents (or the first agent).
-    // In a real multi-agent UI, the user would pick which agent's mail to view.
     const agents = this._agents;
-    if (agents.length > 0) {
-      const agentId = this._selectedAgentForContext || agents[0].id;
-      api.fetchInbox(agentId).catch(() => {});
-      api.fetchSentEmails(agentId).catch(() => {});
-      api.fetchUnreadCount(agentId).catch(() => {});
-    } else {
-      this._loading = false;
-    }
+    if (agents.length === 0) { this._loading = false; return; }
+
+    const agentId = this._selectedAgentForContext || agents[0].id;
+    this._loading = true;
+
+    // Fetch inbox — always resolve loading state regardless of success/failure
+    api.fetchInbox(agentId)
+      .then((res) => {
+        // On success, store subscription already set _loading = false.
+        // On failure (ok: false), subscription never fires — handle it here.
+        if (!res || !res.ok) {
+          this._loading = false;
+          this._renderList();
+        }
+      })
+      .catch(() => {
+        this._loading = false;
+        this._renderList();
+      });
+
+    api.fetchSentEmails(agentId).catch(() => {});
+    api.fetchUnreadCount(agentId).catch(() => {});
   }
 
   // ── Full render ────────────────────────────────────────────
