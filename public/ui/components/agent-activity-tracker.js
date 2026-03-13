@@ -1,0 +1,232 @@
+/**
+ * Overlord v2 — Agent Activity Tracker
+ *
+ * Subscribes to real-time events and applies CSS animation classes
+ * to agent cards/avatars wherever they appear in the DOM.
+ *
+ * Animation states:
+ *   - thinking   — AI is generating a response (pulsing glow)
+ *   - working    — agent is executing a tool (spinning gear overlay)
+ *   - chatting   — agent is streaming text (typing indicator)
+ *   - waiting    — agent waiting for input (slow pulse)
+ *   - idle       — no activity (subtle breathing, optional)
+ *   - error      — agent encountered an error (red pulse)
+ *
+ * Uses data-agent-id attributes to target specific agent elements
+ * without requiring DOM rebuilds.
+ *
+ * Usage: Instantiate and mount() once at boot. No container needed.
+ */
+
+import { Component } from '../engine/component.js';
+import { OverlordUI } from '../engine/engine.js';
+
+const ACTIVITY_STATES = ['thinking', 'working', 'chatting', 'waiting', 'idle', 'error'];
+const ACTIVITY_CLASS_PREFIX = 'agent-activity-';
+
+// Auto-reset to idle after this many ms without new events
+const THINKING_TIMEOUT = 30000;
+const WORKING_TIMEOUT = 15000;
+const CHATTING_TIMEOUT = 5000;
+
+
+export class AgentActivityTracker extends Component {
+
+  constructor(el, opts = {}) {
+    super(el, opts);
+    // Map of agentId → { state, timer }
+    this._agentStates = new Map();
+  }
+
+  mount() {
+    this._mounted = true;
+
+    // ── Thinking: AI is generating ──
+    this._listeners.push(
+      OverlordUI.subscribe('chat:stream-start', (data) => {
+        if (data && data.agentId) {
+          this._setState(data.agentId, 'thinking', THINKING_TIMEOUT);
+        }
+      })
+    );
+
+    // ── Chatting: streaming response text ──
+    this._listeners.push(
+      OverlordUI.subscribe('chat:stream-chunk', (data) => {
+        if (data && data.agentId) {
+          this._setState(data.agentId, 'chatting', CHATTING_TIMEOUT);
+        }
+      })
+    );
+
+    // ── Response complete: back to idle ──
+    this._listeners.push(
+      OverlordUI.subscribe('chat:response', (data) => {
+        if (data && data.agentId) {
+          this._setState(data.agentId, 'idle');
+        }
+      })
+    );
+
+    // ── Working: tool execution ──
+    this._listeners.push(
+      OverlordUI.subscribe('tool:executed', (data) => {
+        if (data && data.agentId) {
+          this._setState(data.agentId, 'working', WORKING_TIMEOUT);
+        }
+      })
+    );
+
+    // ── Status change from server ──
+    this._listeners.push(
+      OverlordUI.subscribe('agent:status-changed', (data) => {
+        if (!data || !data.agentId) return;
+        const statusMap = {
+          active: 'idle',
+          working: 'working',
+          paused: 'waiting',
+          idle: 'idle',
+          error: 'error'
+        };
+        const animState = statusMap[data.status] || 'idle';
+        this._setState(data.agentId, animState);
+      })
+    );
+
+    // ── Room enter: active ──
+    this._listeners.push(
+      OverlordUI.subscribe('room:agent:entered', (data) => {
+        if (data && data.agentId) {
+          this._setState(data.agentId, 'idle');
+        }
+      })
+    );
+
+    // ── Room exit: clear state ──
+    this._listeners.push(
+      OverlordUI.subscribe('room:agent:exited', (data) => {
+        if (data && data.agentId) {
+          this._clearState(data.agentId);
+        }
+      })
+    );
+
+    // ── Error events ──
+    this._listeners.push(
+      OverlordUI.subscribe('agent:error', (data) => {
+        if (data && data.agentId) {
+          this._setState(data.agentId, 'error');
+        }
+      })
+    );
+  }
+
+  unmount() {
+    this._mounted = false;
+    // Clear all timers
+    for (const [, entry] of this._agentStates) {
+      if (entry.timer) clearTimeout(entry.timer);
+    }
+    this._agentStates.clear();
+    this._listeners.forEach(fn => fn());
+    this._listeners = [];
+  }
+
+  // ── State Management ──────────────────────────────────────
+
+  /**
+   * Set animation state for an agent.
+   * @param {string} agentId
+   * @param {string} state - One of ACTIVITY_STATES
+   * @param {number} [autoResetMs] - Auto-reset to idle after N ms
+   */
+  _setState(agentId, state, autoResetMs) {
+    const existing = this._agentStates.get(agentId);
+    if (existing && existing.timer) {
+      clearTimeout(existing.timer);
+    }
+
+    let timer = null;
+    if (autoResetMs && state !== 'idle') {
+      timer = setTimeout(() => {
+        this._setState(agentId, 'idle');
+      }, autoResetMs);
+    }
+
+    this._agentStates.set(agentId, { state, timer });
+    this._applyClasses(agentId, state);
+  }
+
+  _clearState(agentId) {
+    const existing = this._agentStates.get(agentId);
+    if (existing && existing.timer) {
+      clearTimeout(existing.timer);
+    }
+    this._agentStates.delete(agentId);
+    this._removeAllClasses(agentId);
+  }
+
+  /**
+   * Get current animation state for an agent.
+   * @param {string} agentId
+   * @returns {string|null}
+   */
+  getState(agentId) {
+    const entry = this._agentStates.get(agentId);
+    return entry ? entry.state : null;
+  }
+
+  // ── DOM Class Application ─────────────────────────────────
+
+  _applyClasses(agentId, state) {
+    // Find all elements with this agent's data attribute
+    const elements = document.querySelectorAll(`[data-agent-id="${agentId}"]`);
+    for (const el of elements) {
+      // Remove all activity classes
+      for (const s of ACTIVITY_STATES) {
+        el.classList.remove(`${ACTIVITY_CLASS_PREFIX}${s}`);
+      }
+      // Add the new state class
+      el.classList.add(`${ACTIVITY_CLASS_PREFIX}${state}`);
+
+      // Also apply to the avatar within the element (if it exists)
+      const avatar = el.querySelector('.agents-view-card-avatar');
+      if (avatar) {
+        for (const s of ACTIVITY_STATES) {
+          avatar.classList.remove(`${ACTIVITY_CLASS_PREFIX}${s}`);
+        }
+        avatar.classList.add(`${ACTIVITY_CLASS_PREFIX}${state}`);
+      }
+
+      // Apply to the status dot
+      const dot = el.querySelector('.agents-view-status-dot');
+      if (dot) {
+        for (const s of ACTIVITY_STATES) {
+          dot.classList.remove(`${ACTIVITY_CLASS_PREFIX}${s}`);
+        }
+        dot.classList.add(`${ACTIVITY_CLASS_PREFIX}${state}`);
+      }
+    }
+  }
+
+  _removeAllClasses(agentId) {
+    const elements = document.querySelectorAll(`[data-agent-id="${agentId}"]`);
+    for (const el of elements) {
+      for (const s of ACTIVITY_STATES) {
+        el.classList.remove(`${ACTIVITY_CLASS_PREFIX}${s}`);
+      }
+      const avatar = el.querySelector('.agents-view-card-avatar');
+      if (avatar) {
+        for (const s of ACTIVITY_STATES) {
+          avatar.classList.remove(`${ACTIVITY_CLASS_PREFIX}${s}`);
+        }
+      }
+      const dot = el.querySelector('.agents-view-status-dot');
+      if (dot) {
+        for (const s of ACTIVITY_STATES) {
+          dot.classList.remove(`${ACTIVITY_CLASS_PREFIX}${s}`);
+        }
+      }
+    }
+  }
+}
