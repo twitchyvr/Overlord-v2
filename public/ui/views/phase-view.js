@@ -51,9 +51,9 @@ const GATE_STATUS_CONFIG = {
 };
 
 const VERDICT_OPTIONS = [
-  { value: 'go',          label: 'GO -- Approved to advance' },
-  { value: 'no-go',       label: 'NO-GO -- Blocked, needs work' },
-  { value: 'conditional', label: 'CONDITIONAL -- Advance with caveats' },
+  { value: 'GO',          label: 'GO -- Approved to advance' },
+  { value: 'NO-GO',       label: 'NO-GO -- Blocked, needs work' },
+  { value: 'CONDITIONAL', label: 'CONDITIONAL -- Advance with caveats' },
 ];
 
 
@@ -416,7 +416,7 @@ export class PhaseView extends Component {
 
       const signoffsList = h('div', { class: 'phase-view-signoffs-list' });
       for (const signoff of gate.signoffs) {
-        const verdictCfg = GATE_STATUS_CONFIG[signoff.verdict] || GATE_STATUS_CONFIG.pending;
+        const verdictCfg = GATE_STATUS_CONFIG[(signoff.verdict || '').toLowerCase()] || GATE_STATUS_CONFIG.pending;
         const agent = signoff.agent_id ? resolveAgent(signoff.agent_id) : null;
 
         const signoffRow = h('div', { class: 'phase-view-signoff-row' },
@@ -478,12 +478,13 @@ export class PhaseView extends Component {
     verdictGroup.appendChild(h('label', { class: 'phase-view-form-label' }, 'Verdict'));
 
     const verdictRow = h('div', { class: 'phase-view-verdict-row' });
-    let selectedVerdict = 'go';
+    let selectedVerdict = 'GO';
 
     for (const opt of VERDICT_OPTIONS) {
-      const cfg = GATE_STATUS_CONFIG[opt.value] || GATE_STATUS_CONFIG.pending;
+      const statusKey = opt.value.toLowerCase();
+      const cfg = GATE_STATUS_CONFIG[statusKey] || GATE_STATUS_CONFIG.pending;
       const radio = h('label', {
-        class: `phase-view-verdict-option phase-view-verdict-${opt.value}${opt.value === selectedVerdict ? ' phase-view-verdict-selected' : ''}`,
+        class: `phase-view-verdict-option phase-view-verdict-${statusKey}${opt.value === selectedVerdict ? ' phase-view-verdict-selected' : ''}`,
         'data-verdict': opt.value
       },
         h('span', { class: 'phase-view-verdict-icon', style: { color: cfg.color } }, cfg.icon),
@@ -643,15 +644,16 @@ export class PhaseView extends Component {
     }
 
     try {
-      const result = await window.overlordSocket.signOffGate({
-        buildingId: this._buildingId,
+      const result = await window.overlordSocket.signoffGate({
         gateId,
+        reviewer: 'user',
         verdict,
-        reason
+        conditions: verdict === 'CONDITIONAL' && reason ? [reason] : [],
       });
 
       if (result && result.ok) {
-        const label = (GATE_STATUS_CONFIG[verdict] || {}).label || verdict;
+        const statusKey = verdict.toLowerCase();
+        const label = (GATE_STATUS_CONFIG[statusKey] || {}).label || verdict;
         Toast.success(`Gate signed off as ${label}`);
         this._expandedSignoffGateId = null;
         // The store subscription will trigger re-render when gates update
