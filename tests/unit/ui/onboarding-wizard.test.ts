@@ -176,18 +176,18 @@ describe('OnboardingWizard', () => {
       expect(container.textContent).toContain('Welcome to Overlord');
     });
 
-    it('advances to step 3 after entering name and clicking Next', () => {
+    it('advances to step 3 (effort level) after entering name and clicking Next', () => {
       const { container } = goToStep2();
       const input = container.querySelector('input[type="text"]') as HTMLInputElement;
       input.value = 'Test Project';
       input.dispatchEvent(new Event('input'));
 
       clickButton(container, 'Next');
-      expect(container.textContent).toContain('What kind of project');
+      expect(container.textContent).toContain('How much control do you want');
     });
   });
 
-  describe('Step 3: Type Selection', () => {
+  describe('Step 3: Effort Level', () => {
     function goToStep3() {
       const { container, wizard } = createWizard();
       clickButton(container, 'Get Started');
@@ -198,28 +198,17 @@ describe('OnboardingWizard', () => {
       return { container, wizard };
     }
 
-    it('shows project type options', () => {
+    it('shows effort level options', () => {
       const { container } = goToStep3();
-      expect(container.textContent).toContain('Website or Web App');
-      expect(container.textContent).toContain('Mobile App');
-      expect(container.textContent).toContain('Backend or API');
-      expect(container.textContent).toContain('Data or Analytics');
-      expect(container.textContent).toContain('Something Else');
+      expect(container.textContent).toContain('Hands-Off');
+      expect(container.textContent).toContain('Guided');
+      expect(container.textContent).toContain('Full Control');
     });
 
-    it('uses non-technical language', () => {
+    it('advances to type step on card click', () => {
       const { container } = goToStep3();
-      // Should NOT contain technical jargon
-      expect(container.textContent).not.toContain('floors');
-      expect(container.textContent).not.toContain('blueprint');
-      // Should use friendly terms
-      expect(container.textContent).toContain('team members');
-    });
-
-    it('advances to scale step on card click', () => {
-      const { container } = goToStep3();
-      clickCard(container, 'Website or Web App');
-      expect(container.textContent).toContain('How big is this project');
+      clickCard(container, 'Hands-Off');
+      expect(container.textContent).toContain('What kind of project');
     });
 
     it('navigates back to name step on Back click', () => {
@@ -229,7 +218,7 @@ describe('OnboardingWizard', () => {
     });
   });
 
-  describe('Step 4: Scale Selection', () => {
+  describe('Step 4: Type Selection', () => {
     function goToStep4() {
       const { container, wizard } = createWizard();
       clickButton(container, 'Get Started');
@@ -237,50 +226,95 @@ describe('OnboardingWizard', () => {
       input.value = 'My App';
       input.dispatchEvent(new Event('input'));
       clickButton(container, 'Next');
+      clickCard(container, 'Hands-Off'); // effort level
+      return { container, wizard };
+    }
+
+    it('shows project type options', () => {
+      const { container } = goToStep4();
+      expect(container.textContent).toContain('Website or Web App');
+      expect(container.textContent).toContain('Mobile App');
+      expect(container.textContent).toContain('Backend or API');
+      expect(container.textContent).toContain('Data or Analytics');
+      expect(container.textContent).toContain('Something Else');
+    });
+
+    it('uses non-technical language', () => {
+      const { container } = goToStep4();
+      // Should NOT contain technical jargon
+      expect(container.textContent).not.toContain('floors');
+      expect(container.textContent).not.toContain('blueprint');
+      // Should use friendly terms
+      expect(container.textContent).toContain('team members');
+    });
+
+    it('advances to scale step on card click', () => {
+      const { container } = goToStep4();
+      clickCard(container, 'Website or Web App');
+      expect(container.textContent).toContain('How big is this project');
+    });
+
+    it('navigates back to effort step on Back click', () => {
+      const { container } = goToStep4();
+      clickButton(container, 'Back');
+      expect(container.textContent).toContain('How much control do you want');
+    });
+  });
+
+  describe('Step 5: Scale Selection', () => {
+    function goToStep5() {
+      const { container, wizard } = createWizard();
+      clickButton(container, 'Get Started');
+      const input = container.querySelector('input[type="text"]') as HTMLInputElement;
+      input.value = 'My App';
+      input.dispatchEvent(new Event('input'));
+      clickButton(container, 'Next');
+      clickCard(container, 'Hands-Off'); // effort level
       clickCard(container, 'Website or Web App');
       return { container, wizard };
     }
 
     it('shows scale options', () => {
-      const { container } = goToStep4();
+      const { container } = goToStep5();
       expect(container.textContent).toContain('Small');
       expect(container.textContent).toContain('Medium');
       expect(container.textContent).toContain('Large');
     });
 
     it('shows team member counts', () => {
-      const { container } = goToStep4();
+      const { container } = goToStep5();
       expect(container.textContent).toContain('AI team members');
     });
 
     it('advances to review step on card click', () => {
-      const { container } = goToStep4();
+      const { container } = goToStep5();
       clickCard(container, 'Medium');
       expect(container.textContent).toContain('Ready to launch');
     });
   });
 
-  describe('Step 5: Review', () => {
-    function goToStep5(scale = 'Medium') {
+  describe('Step 6: Review', () => {
+    function goToStep6(scale = 'Medium') {
       const { container, wizard } = createWizard();
       clickButton(container, 'Get Started');
       const input = container.querySelector('input[type="text"]') as HTMLInputElement;
       input.value = 'Customer Portal';
       input.dispatchEvent(new Event('input'));
       clickButton(container, 'Next');
+      clickCard(container, 'Hands-Off'); // effort level
       clickCard(container, 'Website or Web App');
       clickCard(container, scale);
       return { container, wizard };
     }
 
     it('shows project summary', () => {
-      const { container } = goToStep5();
+      const { container } = goToStep6();
       expect(container.textContent).toContain('Customer Portal');
       expect(container.textContent).toContain('Website or Web App');
     });
 
     it('shows team preview with friendly roles', () => {
-      const { container } = goToStep5();
+      const { container } = goToStep6();
       expect(container.textContent).toContain('Your AI Team');
       // Should show friendly role names, not technical ones
       expect(container.textContent).toContain('Planner');
@@ -289,26 +323,31 @@ describe('OnboardingWizard', () => {
     });
 
     it('shows launch button', () => {
-      const { container } = goToStep5();
+      const { container } = goToStep6();
       const buttons = container.querySelectorAll('button');
       const launchBtn = Array.from(buttons).find(b => b.textContent?.includes('Launch'));
       expect(launchBtn).toBeTruthy();
     });
 
     it('shows fewer team members for small scale', () => {
-      const { container: smallContainer } = goToStep5('Small');
-      const { container: mediumContainer } = goToStep5('Medium');
+      const { container: smallContainer } = goToStep6('Small');
+      const { container: mediumContainer } = goToStep6('Medium');
       const smallMembers = smallContainer.querySelectorAll('.wizard-team-member');
       const mediumMembers = mediumContainer.querySelectorAll('.wizard-team-member');
       expect(smallMembers.length).toBeLessThan(mediumMembers.length);
     });
 
     it('shows more team members for large scale', () => {
-      const { container: largeContainer } = goToStep5('Large');
-      const { container: mediumContainer } = goToStep5('Medium');
+      const { container: largeContainer } = goToStep6('Large');
+      const { container: mediumContainer } = goToStep6('Medium');
       const largeMembers = largeContainer.querySelectorAll('.wizard-team-member');
       const mediumMembers = mediumContainer.querySelectorAll('.wizard-team-member');
       expect(largeMembers.length).toBeGreaterThan(mediumMembers.length);
+    });
+
+    it('shows effort level in summary', () => {
+      const { container } = goToStep6();
+      expect(container.textContent).toContain('Hands-Off');
     });
   });
 
@@ -320,6 +359,7 @@ describe('OnboardingWizard', () => {
       input.value = 'My Project';
       input.dispatchEvent(new Event('input'));
       clickButton(container, 'Next');
+      clickCard(container, 'Hands-Off'); // effort level
       clickCard(container, 'Website or Web App');
       clickCard(container, 'Medium');
       return { container, wizard };

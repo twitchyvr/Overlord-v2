@@ -77,20 +77,30 @@ export class DashboardView extends Component {
     this.el.textContent = '';
     this.el.className = 'dashboard-view';
 
-    // Header
+    // Header with project switcher
     const header = h('div', { class: 'dashboard-header' },
       h('h2', { class: 'dashboard-title' }, 'Dashboard'),
       h('div', { class: 'dashboard-actions' },
         Button.create('New Project', {
           variant: 'primary',
           icon: '+',
-          onClick: () => OverlordUI.dispatch('navigate:strategist')
+          onClick: () => OverlordUI.dispatch('navigate:onboarding')
         })
       )
     );
     this.el.appendChild(header);
 
-    // KPI Cards
+    // Project Switcher (multi-building selector)
+    if (this._buildings.length > 0) {
+      this.el.appendChild(this._buildProjectSwitcher());
+    }
+
+    // Cross-project KPIs (aggregate stats)
+    if (this._buildings.length > 1) {
+      this.el.appendChild(this._buildCrossProjectKPIs());
+    }
+
+    // Per-building KPI Cards
     this.el.appendChild(this._buildKPISection());
 
     // Phase Progress (if active building)
@@ -103,6 +113,65 @@ export class DashboardView extends Component {
 
     // Building List
     this.el.appendChild(this._buildBuildingList());
+  }
+
+  _buildProjectSwitcher() {
+    const switcher = h('div', { class: 'project-switcher' });
+
+    for (const building of this._buildings) {
+      const isActive = building.id === this._activeBuilding;
+      const pill = h('button', {
+        class: `project-pill${isActive ? ' active' : ''}`
+      },
+        h('span', { class: 'project-pill-icon' }, '\u{1F3D7}\uFE0F'),
+        h('span', { class: 'project-pill-name' }, building.name || 'Untitled')
+      );
+
+      pill.addEventListener('click', () => {
+        if (window.overlordSocket) {
+          window.overlordSocket.selectBuilding(building.id);
+        }
+        OverlordUI.dispatch('building:selected', { buildingId: building.id });
+      });
+
+      switcher.appendChild(pill);
+    }
+
+    // "New Project" mini-button at end of switcher
+    const addPill = h('button', { class: 'project-pill project-pill-add' },
+      h('span', { class: 'project-pill-icon' }, '+'),
+      h('span', { class: 'project-pill-name' }, 'New')
+    );
+    addPill.addEventListener('click', () => OverlordUI.dispatch('navigate:onboarding'));
+    switcher.appendChild(addPill);
+
+    return switcher;
+  }
+
+  _buildCrossProjectKPIs() {
+    const section = h('div', { class: 'cross-project-kpis' });
+
+    const totalBuildings = this._buildings.length;
+    const totalRooms = this._buildings.reduce((sum, b) => sum + (b.floorCount ?? b.floor_count ?? 0), 0);
+    const totalAgents = this._buildings.reduce((sum, b) => sum + (b.agentCount ?? b.agent_count ?? 0), 0);
+    // Use live agent list count when it exceeds building-level metadata
+    const liveAgentCount = this._agents.length > totalAgents ? this._agents.length : totalAgents;
+
+    const kpis = [
+      { label: 'Total Projects', value: totalBuildings, icon: '\u{1F4C1}', color: 'var(--accent-cyan)' },
+      { label: 'Total Floors', value: totalRooms, icon: '\u{1F3E2}', color: 'var(--accent-purple, #a855f7)' },
+      { label: 'Total Agents', value: liveAgentCount, icon: '\u{1F916}', color: 'var(--accent-green)' }
+    ];
+
+    for (const kpi of kpis) {
+      section.appendChild(h('div', { class: 'cross-kpi-card glass-card' },
+        h('div', { class: 'cross-kpi-icon', style: { color: kpi.color } }, kpi.icon),
+        h('div', { class: 'cross-kpi-value' }, String(kpi.value)),
+        h('div', { class: 'cross-kpi-label' }, kpi.label)
+      ));
+    }
+
+    return section;
   }
 
   _buildKPISection() {
