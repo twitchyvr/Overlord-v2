@@ -3109,6 +3109,414 @@
   display: flex;
   gap: var(--sp-2);
   margin-top: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ONBOARDING WIZARD
+   ═══════════════════════════════════════════════════════════════ */
+
+.onboarding-wizard {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--sp-8) var(--sp-6);
+  animation: wizard-fade-in 0.4s ease;
+}
+
+@keyframes wizard-fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Progress Bar ── */
+
+.wizard-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: var(--sp-8);
+}
+
+.wizard-progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 64px;
+}
+
+.wizard-progress-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  border: 2px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.wizard-progress-step.active .wizard-progress-dot {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: #fff;
+}
+
+.wizard-progress-step.completed .wizard-progress-dot {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+  color: #fff;
+}
+
+.wizard-progress-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.wizard-progress-step.active .wizard-progress-label {
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+.wizard-progress-line {
+  width: 48px;
+  height: 2px;
+  background: var(--border-primary);
+  margin: 0 var(--sp-1);
+  margin-bottom: var(--sp-5);
+  transition: background 0.2s ease;
+}
+
+.wizard-progress-line.completed {
+  background: var(--accent-green);
+}
+
+/* ── Welcome Step ── */
+
+.wizard-welcome {
+  text-align: center;
+}
+
+.wizard-welcome-icon {
+  font-size: 4rem;
+  margin-bottom: var(--sp-4);
+}
+
+.wizard-welcome-title {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 var(--sp-2);
+}
+
+.wizard-welcome-subtitle {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: 0 0 var(--sp-8);
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.wizard-welcome-features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  text-align: left;
+  max-width: 440px;
+  margin: 0 auto var(--sp-8);
+}
+
+.wizard-feature {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+}
+
+.wizard-feature-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  width: 40px;
+  text-align: center;
+}
+
+.wizard-feature strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  margin-bottom: 2px;
+}
+
+.wizard-feature p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+/* ── Generic Step Layout ── */
+
+.wizard-step {
+  animation: wizard-fade-in 0.3s ease;
+}
+
+.wizard-step-title {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 var(--sp-2);
+  text-align: center;
+}
+
+.wizard-step-subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0 0 var(--sp-6);
+  text-align: center;
+}
+
+/* ── Form Elements ── */
+
+.wizard-form {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.wizard-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-2);
+}
+
+.wizard-input,
+.wizard-textarea {
+  width: 100%;
+  padding: var(--sp-3);
+  background: var(--surface-1);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.wizard-input:focus,
+.wizard-textarea:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-blue) 20%, transparent);
+}
+
+.wizard-input::placeholder,
+.wizard-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.wizard-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ── Type Selection Grid ── */
+
+.wizard-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--sp-4);
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.wizard-type-card {
+  background: var(--surface-1);
+  border: 2px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.wizard-type-card:hover {
+  border-color: var(--accent-blue);
+  background: var(--surface-2);
+  transform: translateY(-2px);
+}
+
+.wizard-type-card.selected {
+  border-color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 8%, var(--surface-1));
+}
+
+.wizard-type-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--sp-2);
+}
+
+.wizard-type-label {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-1);
+}
+
+.wizard-type-tagline {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-2);
+}
+
+.wizard-type-examples {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ── Scale Selection Grid ── */
+
+.wizard-scale-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-4);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.wizard-scale-card {
+  background: var(--surface-1);
+  border: 2px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.wizard-scale-card:hover {
+  border-color: var(--accent-blue);
+  background: var(--surface-2);
+  transform: translateY(-2px);
+}
+
+.wizard-scale-card.selected {
+  border-color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 8%, var(--surface-1));
+}
+
+.wizard-scale-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--sp-2);
+}
+
+.wizard-scale-label {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-1);
+}
+
+.wizard-scale-desc {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-2);
+}
+
+.wizard-scale-detail {
+  font-size: var(--text-xs);
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+/* ── Review Step ── */
+
+.wizard-summary {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.wizard-summary-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.wizard-summary-icon {
+  font-size: 1.25rem;
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.wizard-summary-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 80px;
+}
+
+.wizard-summary-value {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+/* ── Team Preview ── */
+
+.wizard-team-preview {
+  margin-top: var(--sp-6);
+}
+
+.wizard-team-preview h3 {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--sp-3);
+}
+
+.wizard-team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--sp-3);
+}
+
+.wizard-team-member {
+  text-align: center;
+  padding: var(--sp-3);
+  background: var(--surface-1);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+}
+
+.wizard-team-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--accent-blue);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--text-base);
+  margin: 0 auto var(--sp-2);
+}
+
+.wizard-team-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.wizard-team-role {
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
@@ -3128,3 +3536,112 @@
 .search-badge.raid-issue { color: var(--accent-amber); }
 .search-badge.raid-assumption { color: var(--accent-cyan); }
 .search-badge.raid-decision { color: var(--accent-green); }
+
+/* ── Actions ── */
+
+.wizard-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-6);
+}
+
+.wizard-actions-row {
+  flex-direction: row;
+  justify-content: center;
+}
+
+.wizard-btn {
+  padding: var(--sp-2) var(--sp-5);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.wizard-btn-primary {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.wizard-btn-primary:hover {
+  background: color-mix(in srgb, var(--accent-blue) 85%, #fff);
+  transform: translateY(-1px);
+}
+
+.wizard-btn-primary:disabled,
+.wizard-btn-primary.wizard-btn-muted {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.wizard-btn-lg {
+  padding: var(--sp-3) var(--sp-8);
+  font-size: var(--text-base);
+}
+
+.wizard-btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.wizard-btn-ghost:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+/* ── Creating State ── */
+
+.wizard-creating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--sp-16) var(--sp-6);
+  animation: wizard-fade-in 0.3s ease;
+}
+
+.wizard-creating h2 {
+  margin: var(--sp-4) 0 var(--sp-2);
+  color: var(--text-primary);
+}
+
+.wizard-creating p {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.wizard-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--border-primary);
+  border-top-color: var(--accent-blue);
+  border-radius: var(--radius-full);
+  animation: loading-spin 0.8s linear infinite;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 600px) {
+  .wizard-type-grid {
+    grid-template-columns: 1fr;
+  }
+  .wizard-scale-grid {
+    grid-template-columns: 1fr;
+  }
+  .wizard-team-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .onboarding-wizard {
+    padding: var(--sp-4) var(--sp-3);
+  }
+  .wizard-progress-line {
+    width: 24px;
+  }
+}

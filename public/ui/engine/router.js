@@ -41,6 +41,7 @@ export function initRouter({ centerPanel, buildingPanel }) {
   // Listen for navigation events
   OverlordUI.subscribe('navigate:dashboard', () => navigateTo('dashboard'));
   OverlordUI.subscribe('navigate:strategist', () => navigateTo('strategist'));
+  OverlordUI.subscribe('navigate:onboarding', () => navigateTo('onboarding'));
   OverlordUI.subscribe('navigate:chat', () => navigateTo('chat'));
   OverlordUI.subscribe('navigate:tasks', () => navigateTo('tasks'));
   OverlordUI.subscribe('navigate:raid-log', () => navigateTo('raid-log'));
@@ -178,7 +179,7 @@ export function getActiveView() {
  * @returns {string}
  */
 export function getInitialRoute(isNewUser) {
-  return isNewUser ? 'strategist' : 'dashboard';
+  return isNewUser ? 'onboarding' : 'dashboard';
 }
 
 /**
@@ -203,6 +204,7 @@ async function _loadViewModules() {
   const [
     { DashboardView },
     { StrategistView },
+    { OnboardingWizard },
     { ChatView },
     { BuildingView },
     { TaskView },
@@ -215,6 +217,7 @@ async function _loadViewModules() {
   ] = await Promise.all([
     import('../views/dashboard-view.js'),
     import('../views/strategist-view.js'),
+    import('../views/onboarding-wizard.js'),
     import('../views/chat-view.js'),
     import('../views/building-view.js'),
     import('../views/task-view.js'),
@@ -229,6 +232,7 @@ async function _loadViewModules() {
   return {
     dashboard:  DashboardView,
     strategist: StrategistView,
+    onboarding: OnboardingWizard,
     chat:       ChatView,
     building:   BuildingView,
     tasks:      TaskView,
