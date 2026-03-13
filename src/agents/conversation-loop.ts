@@ -23,7 +23,7 @@ import type {
 
 const log = logger.child({ module: 'conversation-loop' });
 
-const MAX_TOOL_ITERATIONS = 20;
+const MAX_TOOL_ITERATIONS = 40;
 const TOOL_TIMEOUT_MS = 60_000; // 60 seconds per tool execution
 const AI_MAX_RETRIES = 2;
 const AI_RETRY_DELAY_MS = 1_000; // 1 second base delay (doubles each retry)
