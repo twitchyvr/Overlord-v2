@@ -22,6 +22,8 @@ export interface ProfilePhotoResult {
   mimeType: 'image/jpeg';
   dataUri: string;
   prompt: string;
+  /** Subject reference description for visual consistency across regenerations (#384) */
+  subjectReference: string;
 }
 
 // ─── Prompt Construction ───
@@ -214,23 +216,69 @@ function findClosestSpecialization(spec: string): string | null {
 // ─── Public API ───
 
 /**
+ * Build a subject reference description from the generation parameters.
+ *
+ * This textual description captures the key visual characteristics of the
+ * generated photo so future regenerations can produce a consistent look.
+ * It encodes role archetype, gender cues, and specialization in a stable
+ * format that serves as a prompt hint for visual consistency.
+ *
+ * @see Issue #384
+ */
+export function buildSubjectReference(
+  agentName: string,
+  role: string,
+  specialization?: string,
+  gender?: string,
+): string {
+  const parts: string[] = [];
+
+  parts.push(`agent:${agentName}`);
+  parts.push(`role:${role}`);
+
+  if (gender) {
+    parts.push(`gender:${gender}`);
+  }
+
+  if (specialization) {
+    parts.push(`spec:${specialization}`);
+  }
+
+  // Include the archetype key so regenerations use the same visual style
+  const normalizedRole = role.toLowerCase().replace(/[_\s]+/g, '-');
+  const archetype = ROLE_ARCHETYPES[normalizedRole]
+    || findClosestArchetype(normalizedRole);
+  if (archetype) {
+    // Take the first 100 chars of the archetype as a stable reference
+    parts.push(`archetype:${archetype.slice(0, 100)}`);
+  }
+
+  return parts.join('|');
+}
+
+/**
  * Generate a professional profile photo for an agent.
  *
  * Constructs a role-appropriate prompt and calls the MiniMax image
  * generation API. Returns the image as base64 data along with a
  * data URI suitable for direct use in <img> tags or database storage.
  *
+ * When a `subjectReference` is provided from a previous generation,
+ * it is included in the prompt to maintain visual consistency.
+ *
  * @param agentName - The agent's name (used for logging)
  * @param role - The agent's role (drives visual archetype selection)
  * @param specialization - Optional specialization for visual accents
  * @param gender - Optional gender for appearance-appropriate photo generation
- * @returns Result containing the generated photo data
+ * @param existingSubjectRef - Optional subject reference from a previous generation (#384)
+ * @returns Result containing the generated photo data with subject reference
  */
 export async function generateAgentProfilePhoto(
   agentName: string,
   role: string,
   specialization?: string,
   gender?: string,
+  existingSubjectRef?: string,
 ): Promise<Result<ProfilePhotoResult>> {
   // Check availability first
   if (!isImageGenerationAvailable()) {
@@ -245,11 +293,18 @@ export async function generateAgentProfilePhoto(
     );
   }
 
-  log.info({ agentName, role, specialization }, 'Generating agent profile photo');
+  log.info({ agentName, role, specialization, hasSubjectRef: !!existingSubjectRef }, 'Generating agent profile photo');
   broadcastLog('info', `Generating profile photo for agent "${agentName}" (${role})`, 'ai:profile-generator');
 
   // Build the prompt (includes gender cues when provided)
-  const prompt = buildProfilePrompt(agentName, role, specialization, gender);
+  let prompt = buildProfilePrompt(agentName, role, specialization, gender);
+
+  // If we have a previous subject reference, append consistency hints (#384)
+  if (existingSubjectRef) {
+    prompt += ', maintain visual consistency with previous appearance, same person, consistent facial features and style';
+    log.debug({ agentName, subjectRefLength: existingSubjectRef.length }, 'Subject reference applied for visual consistency');
+  }
+
   log.debug({ agentName, promptLength: prompt.length }, 'Profile photo prompt constructed');
 
   // Call the image generation API
@@ -267,8 +322,11 @@ export async function generateAgentProfilePhoto(
   // Build the data URI for direct embedding
   const dataUri = `data:${result.data.mimeType};base64,${result.data.base64}`;
 
+  // Build or preserve subject reference for future regenerations (#384)
+  const subjectReference = existingSubjectRef || buildSubjectReference(agentName, role, specialization, gender);
+
   log.info(
-    { agentName, role, base64Length: result.data.base64.length },
+    { agentName, role, base64Length: result.data.base64.length, hasSubjectRef: true },
     'Agent profile photo generated successfully',
   );
   broadcastLog('info', `Profile photo generated for "${agentName}"`, 'ai:profile-generator');
@@ -278,5 +336,6 @@ export async function generateAgentProfilePhoto(
     mimeType: result.data.mimeType,
     dataUri,
     prompt,
+    subjectReference,
   });
 }

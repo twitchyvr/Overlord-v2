@@ -63,6 +63,24 @@ export const SERVER_PRESETS: Record<string, McpServerConfig> = {
     enabled: false,
     builtin: true,
   },
+  minimax_coding: {
+    name: 'minimax_coding',
+    description: 'MiniMax Coding Plan MCP: web_search + understand_image for agent research',
+    command: 'npx',
+    args: ['-y', 'minimax-coding-plan-mcp'],
+    env: { MINIMAX_API_KEY: '', MINIMAX_GROUP_ID: '' },
+    enabled: false,
+    builtin: true,
+  },
+  minimax_multimodal: {
+    name: 'minimax_multimodal',
+    description: 'MiniMax Multimodal MCP: TTS, voice cloning, voice design, music, image, and video generation',
+    command: 'npx',
+    args: ['-y', 'minimax-mcp-js'],
+    env: { MINIMAX_API_KEY: '', MINIMAX_GROUP_ID: '' },
+    enabled: false,
+    builtin: true,
+  },
 };
 
 // ─── Module State ───

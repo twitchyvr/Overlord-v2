@@ -10,7 +10,7 @@
 
 import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
-import { h, setTrustedContent, escapeHtml, formatTime, debounce } from '../engine/helpers.js';
+import { h, setTrustedContent, escapeHtml, formatTime, debounce, linkEntities } from '../engine/helpers.js';
 import { TokenInput } from '../components/token-input.js';
 import { Table } from '../components/table.js';
 import { Toast } from '../components/toast.js';
@@ -403,7 +403,9 @@ export class ChatView extends Component {
         setTrustedContent(content, parsed);
         Table.styleMarkdownTables(content);
       } else {
-        content.textContent = msg.content;
+        // Use entity linking for plain text messages (@agent, #123)
+        const linked = linkEntities(msg.content);
+        content.appendChild(linked);
       }
     }
     contentWrap.appendChild(content);

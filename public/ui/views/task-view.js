@@ -44,6 +44,10 @@ const STATUS_LABELS = {
 
 const PRIORITY_ORDER = ['critical', 'high', 'normal', 'low'];
 
+/** localStorage key helpers for filter persistence (#348) */
+const STORAGE_KEY_FILTERS = 'overlord:view:tasks:filters';
+const STORAGE_KEY_PRESETS = 'overlord:view:tasks:presets';
+
 export class TaskView extends Component {
 
   constructor(el, opts = {}) {
@@ -63,6 +67,38 @@ export class TaskView extends Component {
     this._tabs = null;
     this._todos = [];
     this._loading = true;
+
+    // Bulk selection state (#345)
+    this._selectedTaskIds = new Set();
+
+    // Restore persisted filters (#348)
+    this._restoreFilters();
+  }
+
+  /** Restore filter state from localStorage (#348). */
+  _restoreFilters() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_FILTERS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.activeFilter) this._activeFilter = parsed.activeFilter;
+        if (parsed.tableFilter !== undefined) this._tableFilter = parsed.tableFilter;
+        if (parsed.searchQuery) this._searchQuery = parsed.searchQuery;
+        if (parsed.viewMode) this._viewMode = parsed.viewMode;
+      }
+    } catch { /* ignore corrupted data */ }
+  }
+
+  /** Save current filter state to localStorage (#348). */
+  _persistFilters() {
+    try {
+      localStorage.setItem(STORAGE_KEY_FILTERS, JSON.stringify({
+        activeFilter: this._activeFilter,
+        tableFilter: this._tableFilter,
+        searchQuery: this._searchQuery,
+        viewMode: this._viewMode,
+      }));
+    } catch { /* quota exceeded or private mode */ }
   }
 
   mount() {
@@ -141,6 +177,7 @@ export class TaskView extends Component {
               onClick: () => this._setViewMode('kanban')
             }, '\u25A6')
           ),
+          this._buildExportDropdown(),
           Button.create('New Task', {
             variant: 'primary',
             icon: '+',
@@ -151,18 +188,23 @@ export class TaskView extends Component {
     );
     this.el.appendChild(header);
 
-    // Search bar with table filter
+    // Search bar with table filter, presets, and scope badge
     const searchRow = h('div', { class: 'task-search-row' });
     const searchInput = h('input', {
       class: 'form-input task-search-input',
       type: 'text',
-      placeholder: 'Search tasks...'
+      placeholder: 'Search tasks...',
+      value: this._searchQuery || ''
     });
     searchInput.addEventListener('input', (e) => {
       this._searchQuery = e.target.value.toLowerCase();
+      this._persistFilters();
       this._updateTaskList();
     });
     searchRow.appendChild(searchInput);
+
+    // Saved filter presets (#352)
+    searchRow.appendChild(this._buildPresetControls());
 
     // Table filter dropdown
     const tableFilterSelect = h('select', {
@@ -172,6 +214,7 @@ export class TaskView extends Component {
     tableFilterSelect.appendChild(h('option', { value: '' }, 'All Tables'));
     tableFilterSelect.appendChild(h('option', { value: '__unassigned__' }, 'Unassigned'));
     this._populateTableFilterOptions(tableFilterSelect);
+    if (this._tableFilter) tableFilterSelect.value = this._tableFilter;
     tableFilterSelect.addEventListener('change', (e) => {
       const val = e.target.value;
       if (val === '') {
@@ -181,9 +224,15 @@ export class TaskView extends Component {
       } else {
         this._tableFilter = val;
       }
+      this._persistFilters();
       this._updateTaskList();
     });
     searchRow.appendChild(tableFilterSelect);
+
+    // Scope change detection badge (#350)
+    const scopeBadge = this._buildScopeChangeBadge();
+    if (scopeBadge) searchRow.appendChild(scopeBadge);
+
     this.el.appendChild(searchRow);
 
     // Filter tabs
@@ -198,10 +247,11 @@ export class TaskView extends Component {
         { id: 'done',        label: 'Done',          badge: this._countByStatus('done') },
         { id: 'blocked',     label: 'Blocked',       badge: this._countByStatus('blocked') }
       ],
-      activeId: 'all',
+      activeId: this._activeFilter,
       style: 'pills',
       onChange: (id) => {
         this._activeFilter = id;
+        this._persistFilters();
         this._updateTaskList();
       }
     });
@@ -326,6 +376,30 @@ export class TaskView extends Component {
 
     const grid = h('div', { class: 'task-card-grid' });
 
+    // Select All header row (#345)
+    const selectAllRow = h('div', { class: 'task-select-all-row' });
+    const selectAllCheckbox = h('input', {
+      type: 'checkbox',
+      class: 'task-bulk-checkbox task-select-all-checkbox',
+      title: 'Select all tasks'
+    });
+    selectAllCheckbox.addEventListener('change', () => {
+      const checked = selectAllCheckbox.checked;
+      this._selectedTaskIds.clear();
+      if (checked) {
+        for (const t of tasks) this._selectedTaskIds.add(t.id);
+      }
+      // Update all visible row checkboxes
+      container.querySelectorAll('.task-row-checkbox').forEach(cb => {
+        cb.checked = checked;
+      });
+      this._updateBulkActionBar();
+    });
+    selectAllRow.appendChild(selectAllCheckbox);
+    selectAllRow.appendChild(h('span', { class: 'task-select-all-label' },
+      `Select All (${tasks.length})`));
+    grid.appendChild(selectAllRow);
+
     for (const task of tasks) {
       const card = Card.create('task', {
         id: task.id,
@@ -337,6 +411,29 @@ export class TaskView extends Component {
         assignee: this._getAgentName(task.assignee_id),
         created: task.created_at ? formatTime(task.created_at) : null
       });
+
+      // Prepend a selection checkbox to the card (#345)
+      const rowCheckbox = h('input', {
+        type: 'checkbox',
+        class: 'task-bulk-checkbox task-row-checkbox',
+        'data-task-id': task.id,
+        title: 'Select this task'
+      });
+      if (this._selectedTaskIds.has(task.id)) rowCheckbox.checked = true;
+      rowCheckbox.addEventListener('click', (e) => e.stopPropagation());
+      rowCheckbox.addEventListener('change', () => {
+        if (rowCheckbox.checked) {
+          this._selectedTaskIds.add(task.id);
+        } else {
+          this._selectedTaskIds.delete(task.id);
+        }
+        // Update select-all checkbox state
+        const allCbs = container.querySelectorAll('.task-row-checkbox');
+        const allChecked = [...allCbs].every(cb => cb.checked);
+        if (selectAllCheckbox) selectAllCheckbox.checked = allChecked;
+        this._updateBulkActionBar();
+      });
+      card.insertBefore(rowCheckbox, card.firstChild);
 
       // Add table assignment row to the card
       const tableInfo = this._buildCardTableRow(task);
@@ -1233,6 +1330,7 @@ export class TaskView extends Component {
   _setViewMode(mode) {
     if (this._viewMode === mode) return;
     this._viewMode = mode;
+    this._persistFilters();
 
     // Update toggle button active states
     this.el.querySelectorAll('.task-mode-btn').forEach(btn => {
@@ -1417,6 +1515,293 @@ export class TaskView extends Component {
     }
 
     return card;
+  }
+
+  // ── Bulk Actions (#345) ──────────────────────────────────
+
+  /** Show or hide the floating bulk action bar based on selection. */
+  _updateBulkActionBar() {
+    // Remove existing bar
+    const existing = document.querySelector('.task-bulk-action-bar');
+    if (existing) existing.remove();
+
+    if (this._selectedTaskIds.size === 0) return;
+
+    const bar = h('div', { class: 'task-bulk-action-bar' },
+      h('span', { class: 'task-bulk-count' },
+        `${this._selectedTaskIds.size} task${this._selectedTaskIds.size > 1 ? 's' : ''} selected`),
+      h('div', { class: 'task-bulk-actions' },
+        h('button', { class: 'btn btn-primary btn-sm', onClick: () => this._bulkMarkDone() }, 'Mark Done'),
+        h('button', { class: 'btn btn-danger btn-sm', onClick: () => this._bulkDelete() }, 'Delete'),
+        h('button', { class: 'btn btn-secondary btn-sm', onClick: () => this._bulkAssign() }, 'Assign'),
+        h('button', { class: 'btn btn-ghost btn-sm', onClick: () => this._clearBulkSelection() }, 'Cancel')
+      )
+    );
+
+    document.body.appendChild(bar);
+    // Trigger reflow for animation
+    requestAnimationFrame(() => bar.classList.add('visible'));
+  }
+
+  _clearBulkSelection() {
+    this._selectedTaskIds.clear();
+    this.el.querySelectorAll('.task-row-checkbox').forEach(cb => { cb.checked = false; });
+    const selectAll = this.el.querySelector('.task-select-all-checkbox');
+    if (selectAll) selectAll.checked = false;
+    this._updateBulkActionBar();
+  }
+
+  _bulkMarkDone() {
+    if (!window.overlordSocket) return;
+    for (const id of this._selectedTaskIds) {
+      window.overlordSocket.updateTask({ id, status: 'done' });
+    }
+    Toast.success(`Marked ${this._selectedTaskIds.size} tasks as done`);
+    this._clearBulkSelection();
+  }
+
+  _bulkDelete() {
+    const count = this._selectedTaskIds.size;
+    if (!confirm(`Delete ${count} selected task${count > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    if (!window.overlordSocket) return;
+    for (const id of this._selectedTaskIds) {
+      window.overlordSocket.deleteTask(id);
+    }
+    Toast.success(`Deleted ${count} tasks`);
+    this._clearBulkSelection();
+  }
+
+  _bulkAssign() {
+    if (this._agents.length === 0) {
+      Toast.info('No agents available to assign');
+      return;
+    }
+    const select = h('select', { class: 'form-input' });
+    select.appendChild(h('option', { value: '' }, 'Select an agent...'));
+    for (const agent of this._agents) {
+      select.appendChild(h('option', { value: agent.id }, agent.name || agent.id));
+    }
+    const content = h('div', null,
+      h('p', null, `Assign ${this._selectedTaskIds.size} tasks to:`),
+      select
+    );
+    const assignBtn = Button.create('Assign', {
+      variant: 'primary',
+      onClick: () => {
+        const agentId = select.value;
+        if (!agentId) { Toast.info('Please select an agent'); return; }
+        if (!window.overlordSocket) return;
+        for (const id of this._selectedTaskIds) {
+          window.overlordSocket.updateTask({ id, assignee_id: agentId });
+        }
+        Toast.success(`Assigned ${this._selectedTaskIds.size} tasks`);
+        Modal.close('bulk-assign');
+        this._clearBulkSelection();
+      }
+    });
+    content.appendChild(h('div', { style: 'margin-top: var(--sp-3); display: flex; gap: var(--sp-2); justify-content: flex-end;' },
+      Button.create('Cancel', { variant: 'ghost', onClick: () => Modal.close('bulk-assign') }),
+      assignBtn
+    ));
+    Modal.open('bulk-assign', { title: 'Bulk Assign', content, size: 'sm', position: 'center' });
+  }
+
+  // ── Export (#347) ──────────────────────────────────────────
+
+  /** Build the Export dropdown button. */
+  _buildExportDropdown() {
+    const wrapper = h('div', { class: 'task-export-dropdown' });
+    const btn = h('button', { class: 'btn btn-ghost btn-sm' }, 'Export \u25BE');
+    const menu = h('div', { class: 'task-export-menu' },
+      h('div', { class: 'task-export-option', 'data-format': 'csv' }, 'Export CSV'),
+      h('div', { class: 'task-export-option', 'data-format': 'json' }, 'Export JSON')
+    );
+    menu.style.display = 'none';
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = menu.style.display !== 'none';
+      menu.style.display = isOpen ? 'none' : 'block';
+    });
+
+    menu.querySelectorAll('.task-export-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const format = opt.dataset.format;
+        this._exportTasks(format);
+        menu.style.display = 'none';
+      });
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => { menu.style.display = 'none'; });
+
+    wrapper.appendChild(btn);
+    wrapper.appendChild(menu);
+    return wrapper;
+  }
+
+  /** Export the current filtered task list as CSV or JSON. */
+  _exportTasks(format) {
+    const tasks = this._getFilteredTasks();
+    if (tasks.length === 0) {
+      Toast.info('No tasks to export');
+      return;
+    }
+
+    let content, mimeType, extension;
+
+    if (format === 'csv') {
+      const headers = ['Title', 'Status', 'Priority', 'Assignee', 'Phase', 'Created', 'Updated'];
+      const rows = tasks.map(t => [
+        `"${(t.title || '').replace(/"/g, '""')}"`,
+        t.status || '',
+        t.priority || 'normal',
+        `"${(this._getAgentName(t.assignee_id) || 'Unassigned').replace(/"/g, '""')}"`,
+        t.phase || '',
+        t.created_at || '',
+        t.updated_at || ''
+      ]);
+      content = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      mimeType = 'text/csv';
+      extension = 'csv';
+    } else {
+      const exportData = tasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        status: t.status,
+        priority: t.priority,
+        assignee: this._getAgentName(t.assignee_id) || null,
+        phase: t.phase,
+        created_at: t.created_at,
+        updated_at: t.updated_at
+      }));
+      content = JSON.stringify(exportData, null, 2);
+      mimeType = 'application/json';
+      extension = 'json';
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `overlord-tasks-${new Date().toISOString().slice(0, 10)}.${extension}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    Toast.success(`Exported ${tasks.length} tasks as ${format.toUpperCase()}`);
+  }
+
+  // ── Scope Change Detection (#350) ──────────────────────────
+
+  /** Build a scope change warning badge if tasks were added post-architecture. */
+  _buildScopeChangeBadge() {
+    // Find the earliest architecture-phase task timestamp as a baseline
+    const archTasks = this._tasks.filter(t => t.phase === 'architecture' || t.phase === 'planning');
+    if (archTasks.length === 0) return null;
+
+    // Find the latest architecture task creation time
+    const archEnd = Math.max(...archTasks.map(t => new Date(t.created_at || 0).getTime()));
+    if (!archEnd || archEnd <= 0) return null;
+
+    // Count tasks created after architecture phase ended
+    const scopeTasks = this._tasks.filter(t => {
+      const created = new Date(t.created_at || 0).getTime();
+      return created > archEnd && t.phase !== 'architecture' && t.phase !== 'planning';
+    });
+
+    if (scopeTasks.length === 0) return null;
+
+    const badge = h('span', {
+      class: 'task-scope-badge has-tooltip',
+      dataset: { tooltip: 'These tasks were added after the architecture/planning phase, which may indicate scope creep.' }
+    }, `${scopeTasks.length} task${scopeTasks.length > 1 ? 's' : ''} added since architecture`);
+
+    return badge;
+  }
+
+  // ── Saved Filter Presets (#352) ────────────────────────────
+
+  /** Build the preset save/load controls. */
+  _buildPresetControls() {
+    const wrapper = h('div', { class: 'task-preset-controls' });
+
+    // Save current filter button
+    const saveBtn = h('button', {
+      class: 'btn btn-ghost btn-sm task-preset-save-btn',
+      title: 'Save current filters as a preset'
+    }, 'Save Filter');
+    saveBtn.addEventListener('click', () => this._savePresetPrompt());
+    wrapper.appendChild(saveBtn);
+
+    // Load presets dropdown
+    const presets = this._loadPresets();
+    if (presets.length > 0) {
+      const select = h('select', { class: 'form-input task-preset-select' });
+      select.appendChild(h('option', { value: '' }, 'Load Preset...'));
+      for (const preset of presets) {
+        select.appendChild(h('option', { value: preset.name }, preset.name));
+      }
+      select.addEventListener('change', () => {
+        if (!select.value) return;
+        this._applyPreset(select.value);
+        select.value = '';
+      });
+      wrapper.appendChild(select);
+    }
+
+    return wrapper;
+  }
+
+  /** Prompt user for a preset name and save it. */
+  _savePresetPrompt() {
+    const name = prompt('Preset name:');
+    if (!name || !name.trim()) return;
+
+    const presets = this._loadPresets();
+    // Replace if same name exists
+    const existing = presets.findIndex(p => p.name === name.trim());
+    const preset = {
+      name: name.trim(),
+      activeFilter: this._activeFilter,
+      tableFilter: this._tableFilter,
+      searchQuery: this._searchQuery,
+      viewMode: this._viewMode,
+    };
+    if (existing >= 0) {
+      presets[existing] = preset;
+    } else {
+      presets.push(preset);
+    }
+
+    try {
+      localStorage.setItem(STORAGE_KEY_PRESETS, JSON.stringify(presets));
+    } catch { /* quota exceeded */ }
+
+    Toast.success(`Filter preset "${name.trim()}" saved`);
+    this.render(); // re-render to show new preset in dropdown
+  }
+
+  /** Load all saved presets from localStorage. */
+  _loadPresets() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_PRESETS);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  }
+
+  /** Apply a named preset by restoring its filter state. */
+  _applyPreset(name) {
+    const presets = this._loadPresets();
+    const preset = presets.find(p => p.name === name);
+    if (!preset) return;
+
+    this._activeFilter = preset.activeFilter || 'all';
+    this._tableFilter = preset.tableFilter || null;
+    this._searchQuery = preset.searchQuery || '';
+    this._viewMode = preset.viewMode || 'list';
+    this._persistFilters();
+    Toast.info(`Applied preset: ${name}`);
+    this.render();
   }
 
   // ── Helpers ────────────────────────────────────────────────

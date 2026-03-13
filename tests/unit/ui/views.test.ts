@@ -1677,12 +1677,15 @@ describe('TaskView', () => {
   });
 
   it('filters tasks by search query', async () => {
+    localStorage.clear();
     const { TaskView } = await import('../../../public/ui/views/task-view.js');
     const el = document.createElement('div');
     const view = new TaskView(el);
+    view._buildingId = 'bld_test';
     view.mount();
 
     const store = OverlordUI.getStore();
+    store.set('building.active', 'bld_test');
     store.set('tasks.list', [
       { id: 't1', title: 'Write tests', status: 'pending', priority: 'normal', created_at: new Date().toISOString() },
       { id: 't2', title: 'Fix auth bug', status: 'pending', priority: 'normal', created_at: new Date().toISOString() }
@@ -1698,12 +1701,15 @@ describe('TaskView', () => {
   });
 
   it('sorts tasks by priority (critical first)', async () => {
+    localStorage.clear();
     const { TaskView } = await import('../../../public/ui/views/task-view.js');
     const el = document.createElement('div');
     const view = new TaskView(el);
+    view._buildingId = 'bld_test';
     view.mount();
 
     const store = OverlordUI.getStore();
+    store.set('building.active', 'bld_test');
     store.set('tasks.list', [
       { id: 't1', title: 'Low task', status: 'pending', priority: 'low', created_at: new Date().toISOString() },
       { id: 't2', title: 'Critical task', status: 'pending', priority: 'critical', created_at: new Date().toISOString() },

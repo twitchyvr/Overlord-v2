@@ -331,6 +331,8 @@ export interface AgentProfileFields {
   specialization?: string | null;
   gender?: string | null;
   profileGenerated?: boolean;
+  /** Subject reference for visual consistency across profile photo regenerations (#384) */
+  subjectReference?: string | null;
 }
 
 export interface AgentRegistryAPI {
