@@ -88,6 +88,13 @@ const ConfigSchema = z.object({
   // Context Management
   CONTEXT_PRESERVE_RECENT: z.coerce.number().int().positive().default(10),
 
+  // Quality Defaults
+  QUALITY_AUTO_LINT: z.coerce.boolean().default(true),
+  QUALITY_AUTO_TYPECHECK: z.coerce.boolean().default(true),
+  QUALITY_AUTO_TEST: z.coerce.boolean().default(true),
+  QUALITY_AUTO_SECURITY_SCAN: z.coerce.boolean().default(false),
+  QUALITY_MIN_COVERAGE: z.coerce.number().nonnegative().default(0),
+
   // Log Broadcasting
   LOG_WINDOW_MS: z.coerce.number().positive().default(1_000),
   MAX_LOGS_PER_WINDOW: z.coerce.number().int().positive().default(50),
