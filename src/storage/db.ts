@@ -220,6 +220,26 @@ const SCHEMA_SQL = `
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS agent_activity_log (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL REFERENCES agents(id),
+    event_type TEXT NOT NULL,
+    event_data TEXT DEFAULT '{}',
+    building_id TEXT,
+    room_id TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_stats (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL REFERENCES agents(id),
+    metric TEXT NOT NULL,
+    value REAL DEFAULT 0,
+    period TEXT DEFAULT 'all-time',
+    recorded_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(agent_id, metric, period)
+  );
+
   CREATE TABLE IF NOT EXISTS migrations (
     version INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
@@ -250,6 +270,12 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_room_id);
   CREATE INDEX IF NOT EXISTS idx_citations_target ON citations(target_room_id);
   CREATE INDEX IF NOT EXISTS idx_citations_type ON citations(target_type);
+  CREATE INDEX IF NOT EXISTS idx_activity_agent ON agent_activity_log(agent_id);
+  CREATE INDEX IF NOT EXISTS idx_activity_type ON agent_activity_log(event_type);
+  CREATE INDEX IF NOT EXISTS idx_activity_created ON agent_activity_log(created_at);
+  CREATE INDEX IF NOT EXISTS idx_stats_agent ON agent_stats(agent_id);
+  CREATE INDEX IF NOT EXISTS idx_stats_metric ON agent_stats(metric);
+  CREATE INDEX IF NOT EXISTS idx_stats_compound ON agent_stats(agent_id, metric, period);
 `;
 
 /**

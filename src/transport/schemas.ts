@@ -575,3 +575,22 @@ export const TableDivideWorkSchema = z.object({
     description: z.string().min(1).max(MAX_DESCRIPTION),
   })).min(1).max(50),
 });
+
+// ─── Agent Stats Schemas ───
+
+export const AgentStatsGetSchema = z.object({
+  agentId: id(),
+});
+
+export const AgentActivityLogSchema = z.object({
+  agentId: id(),
+  limit: z.number().int().min(1).max(200).optional().default(50),
+  offset: z.number().int().min(0).optional().default(0),
+  eventType: z.string().max(MAX_NAME).optional(),
+});
+
+export const AgentLeaderboardSchema = z.object({
+  metric: z.string().max(MAX_NAME),
+  limit: z.number().int().min(1).max(50).optional().default(10),
+  buildingId: optionalId(),
+});

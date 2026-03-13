@@ -1427,6 +1427,31 @@ export function initSocketBridge(socket, store, engine) {
     async getServerConfig() {
       return _emitWithFeedback('settings:get-config', {});
     },
+
+    // ── Agent Stats methods ──
+
+    fetchAgentStats(agentId) {
+      return new Promise((resolve) => {
+        socket.emit('agent:stats', { agentId }, (res) => {
+          if (res && res.ok) {
+            store.set(`agentStats.${agentId}`, res.data);
+          }
+          resolve(res);
+        });
+      });
+    },
+
+    fetchAgentActivityLog(agentId, opts = {}) {
+      return new Promise((resolve) => {
+        socket.emit('agent:activity-log', { agentId, ...opts }, (res) => resolve(res));
+      });
+    },
+
+    fetchLeaderboard(metric, opts = {}) {
+      return new Promise((resolve) => {
+        socket.emit('agent:leaderboard', { metric, ...opts }, (res) => resolve(res));
+      });
+    },
   };
 
   log.info('v2 bridge initialized');
