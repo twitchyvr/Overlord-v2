@@ -65,7 +65,14 @@ Run `npm run validate` to verify. The CI pipeline enforces this.
 - **Launch parallel research agents** to understand requirements before coding
 - **Launch code review agents** after every PR — verify correctness, edge cases, integration
 - **Update README.md** with every significant change
+- **Update CHANGELOG.md** with every PR merge — document all Added/Fixed/Changed items
 - **Verify end-to-end functionality** — tests passing is necessary but NOT sufficient
+
+### Versioning — MANDATORY
+- Follow [Semantic Versioning](https://semver.org/) (SemVer): `vMAJOR.MINOR.PATCH`
+- Tag every release on `main`: `git tag vMAJOR.MINOR.PATCH`
+- PATCH: bug fixes only. MINOR: new features (backward compatible). MAJOR: breaking changes.
+- Every tag must have a corresponding CHANGELOG.md entry
 
 ### Branch Strategy
 - `main` — stable, protected

@@ -20,6 +20,7 @@ A scriptable, scalable, provider-agnostic framework for orchestrating AI agents 
 - [Production Deployment](#production-deployment)
 - [Testing](#testing)
 - [Project Structure](#project-structure)
+- [Changelog](#changelog)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -490,6 +491,14 @@ Overlord-v2/
 
 ---
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed history of all changes, organized by version.
+
+Overlord v2 follows [Semantic Versioning](https://semver.org/) (SemVer). Every release is tagged with `vMAJOR.MINOR.PATCH` (e.g., `v0.9.0`).
+
+---
+
 ## Contributing
 
 ### Branch Strategy
@@ -535,6 +544,8 @@ Overlord-v2/
 5. **Pass validation**: All PRs must pass `npm run validate` (typecheck + lint + test).
 
 6. **Never push directly to `main`.**
+
+7. **Tag releases** with SemVer: `git tag vMAJOR.MINOR.PATCH` after merging to `main`. Update `CHANGELOG.md` with every release.
 
 ### Code Standards
 
