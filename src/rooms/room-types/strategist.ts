@@ -139,6 +139,7 @@ export class StrategistOffice extends BaseRoom {
     exitRequired: {
       type: 'building-blueprint',
       fields: [
+        'effortLevel',
         'projectGoals',
         'successCriteria',
         'floorsNeeded',
@@ -183,12 +184,13 @@ export class StrategistOffice extends BaseRoom {
    */
   static buildBlueprintFromTemplate(
     templateId: string,
-    overrides: { projectGoals: string[]; successCriteria: string[] },
+    overrides: { projectGoals: string[]; successCriteria: string[]; effortLevel?: string },
   ): Record<string, unknown> | null {
     const template = StrategistOffice.getTemplate(templateId);
     if (!template) return null;
 
     return {
+      effortLevel: overrides.effortLevel || 'medium',
       projectGoals: overrides.projectGoals,
       successCriteria: overrides.successCriteria,
       floorsNeeded: template.floorsNeeded,
@@ -214,18 +216,21 @@ export class StrategistOffice extends BaseRoom {
   override getRules(): string[] {
     return [
       'You are the Strategist. Guide the user through project setup.',
-      'Ask consultative questions: goals, success criteria, constraints.',
-      'Suggest a building layout based on answers.',
+      'The building has an effortLevel setting (easy, medium, or advanced) that determines your interaction style.',
+      'EASY mode: Accept vague one-shot prompts. Make ALL technical decisions. Only ask when truly ambiguous. Pre-fill blueprint with sensible defaults. Use simple, non-technical language.',
+      'MEDIUM mode: Ask targeted questions in plain language. Suggest options with business-terms explanations. Walk through a simplified questionnaire.',
+      'ADVANCED mode: Full consultative experience. Ask detailed questions about goals, constraints, architecture. Technical terminology is acceptable.',
       'Offer Quick Start (template) or Advanced (custom) mode.',
       'Quick Start templates: web-app, microservices, data-pipeline, cli-tool, api-service.',
       'For Advanced mode, recommend routing to the Building Architect room.',
-      'Your exit document configures the entire building.',
+      'Your exit document configures the entire building. Include the effortLevel field.',
       'On completion, the system transitions to the Discovery phase.',
     ];
   }
 
   override getOutputFormat(): Record<string, unknown> {
     return {
+      effortLevel: 'easy | medium | advanced',
       projectGoals: ['string'],
       successCriteria: ['string'],
       floorsNeeded: ['string'],
@@ -238,12 +243,19 @@ export class StrategistOffice extends BaseRoom {
   }
 
   override validateExitDocumentValues(document: Record<string, unknown>): Result {
+    const effortLevel = document.effortLevel as string | undefined;
     const projectGoals = document.projectGoals as unknown[];
     const successCriteria = document.successCriteria as unknown[];
     const floorsNeeded = document.floorsNeeded as unknown[];
     const roomConfig = document.roomConfig as unknown[];
     const agentRoster = document.agentRoster as unknown[];
     const estimatedPhases = document.estimatedPhases as unknown[];
+
+    // ── effortLevel: valid enum value ──
+    const VALID_LEVELS = ['easy', 'medium', 'advanced'];
+    if (effortLevel && !VALID_LEVELS.includes(effortLevel)) {
+      return err('EXIT_DOC_INVALID', `effortLevel must be one of: ${VALID_LEVELS.join(', ')}`);
+    }
 
     // ── projectGoals: non-empty array of strings ──
     if (!Array.isArray(projectGoals) || projectGoals.length === 0) {

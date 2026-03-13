@@ -69,6 +69,7 @@ export const BuildingCreateSchema = z.object({
   description: optionalDescription(),
   workingDirectory: z.string().max(1000).optional(),
   repoUrl: z.string().max(1000).optional(),
+  effortLevel: z.enum(['easy', 'medium', 'advanced']).optional(),
 }).passthrough();
 
 export const BuildingGetSchema = z.object({

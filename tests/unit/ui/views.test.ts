@@ -1002,7 +1002,7 @@ describe('StrategistView', () => {
     expect(names).toContain('API Service');
   });
 
-  it('clicking a template card switches to configure step', async () => {
+  it('clicking a template card switches to effort selection step', async () => {
     const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
     const el = document.createElement('div');
     const view = new StrategistView(el);
@@ -1011,10 +1011,145 @@ describe('StrategistView', () => {
     const firstCard = el.querySelector('.template-card') as HTMLElement;
     firstCard.click();
 
+    // Should now show effort selection, not configuration directly
+    expect(el.querySelector('.effort-grid')).not.toBeNull();
+    expect(el.querySelectorAll('.effort-card').length).toBe(3);
+  });
+
+  it('effort selection shows 3 levels: Just Build It, Guide Me, Full Control', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    // Click a template to get to effort step
+    const firstCard = el.querySelector('.template-card') as HTMLElement;
+    firstCard.click();
+
+    const names = [...el.querySelectorAll('.effort-card-name')].map(
+      (n: Element) => n.textContent
+    );
+    expect(names).toContain('Just Build It');
+    expect(names).toContain('Guide Me');
+    expect(names).toContain('Full Control');
+  });
+
+  it('medium effort level is selected by default', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    const firstCard = el.querySelector('.template-card') as HTMLElement;
+    firstCard.click();
+
+    // Medium should be selected by default
+    const selectedCard = el.querySelector('.effort-card.selected') as HTMLElement;
+    expect(selectedCard).not.toBeNull();
+    expect(selectedCard.querySelector('.effort-card-name')!.textContent).toBe('Guide Me');
+  });
+
+  it('clicking an effort card selects it', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    const firstCard = el.querySelector('.template-card') as HTMLElement;
+    firstCard.click();
+
+    // Click the Easy card
+    const effortCards = el.querySelectorAll('.effort-card');
+    (effortCards[0] as HTMLElement).click();
+
+    // Easy should now be selected
+    const selected = el.querySelector('.effort-card.selected .effort-card-name') as HTMLElement;
+    expect(selected.textContent).toBe('Just Build It');
+    expect((view as any)._effortLevel).toBe('easy');
+  });
+
+  it('Continue button on effort step goes to configuration', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    const firstCard = el.querySelector('.template-card') as HTMLElement;
+    firstCard.click();
+
+    // Click Continue
+    const continueBtn = el.querySelector('.strategist-actions .btn') as HTMLElement;
+    continueBtn.click();
+
     // Should now show configuration form
     expect(el.querySelector('.strategist-form')).not.toBeNull();
     expect(el.querySelector('.form-group')).not.toBeNull();
     expect(el.querySelector('.blueprint-preview')).not.toBeNull();
+  });
+
+  it('configuration step shows effort level badge', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    const firstCard = el.querySelector('.template-card') as HTMLElement;
+    firstCard.click();
+
+    // Continue to config
+    const continueBtn = el.querySelector('.strategist-actions .btn') as HTMLElement;
+    continueBtn.click();
+
+    // Should have an effort level badge
+    const badge = el.querySelector('.effort-level-badge');
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toContain('Guide Me'); // default medium
+  });
+
+  it('configuration back button goes to effort step (not template select)', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    // Select template → effort → configure
+    const firstCard = el.querySelector('.template-card') as HTMLElement;
+    firstCard.click();
+    const continueBtn = el.querySelector('.strategist-actions .btn') as HTMLElement;
+    continueBtn.click();
+
+    // Click back
+    const backBtn = el.querySelector('.btn-ghost') as HTMLElement;
+    backBtn.click();
+
+    // Should be back on the effort step
+    expect(el.querySelector('.effort-grid')).not.toBeNull();
+    expect(el.querySelector('.strategist-form')).toBeNull();
+  });
+
+  it('stores effort level through the full flow', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    // Select template
+    const firstCard = el.querySelector('.template-card') as HTMLElement;
+    firstCard.click();
+
+    // Select Advanced effort
+    const effortCards = el.querySelectorAll('.effort-card');
+    (effortCards[2] as HTMLElement).click(); // Advanced is the 3rd card
+    expect((view as any)._effortLevel).toBe('advanced');
+
+    // Continue to config
+    const continueBtn = el.querySelector('.strategist-actions .btn') as HTMLElement;
+    continueBtn.click();
+
+    // Effort level should still be advanced
+    expect((view as any)._effortLevel).toBe('advanced');
+    const badge = el.querySelector('.effort-level-badge');
+    expect(badge!.textContent).toContain('Full Control');
   });
 });
 

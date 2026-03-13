@@ -393,6 +393,96 @@
   border-top: 1px solid var(--border-secondary);
 }
 
+/* Effort level selection grid */
+.effort-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--sp-4);
+}
+.effort-card {
+  padding: var(--sp-5);
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-default);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  position: relative;
+}
+.effort-card:hover {
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.effort-card.selected {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25), var(--shadow-md);
+}
+.effort-card:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+.effort-card-icon {
+  font-size: 2rem;
+}
+.effort-card-body {
+  flex: 1;
+}
+.effort-card-name {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--sp-1);
+}
+.effort-card-desc {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+  margin-bottom: var(--sp-2);
+}
+.effort-card-detail {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+  font-style: italic;
+}
+.effort-card-check {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+}
+
+/* Effort level badge (shown in configure step) */
+.effort-level-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-full, 9999px);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+}
+.effort-level-badge-dot {
+  font-size: var(--text-sm);
+  line-height: 1;
+}
+
 
 /* ═══════════════════════════════════════════════
    ROOM DETAIL VIEW (Modal)
@@ -2586,7 +2676,8 @@
   .kpi-card-row {
     grid-template-columns: repeat(2, 1fr);
   }
-  .template-grid {
+  .template-grid,
+  .effort-grid {
     grid-template-columns: 1fr;
   }
   .building-card-grid {
