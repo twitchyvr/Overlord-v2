@@ -297,7 +297,7 @@ function injectHookRegistration(
   context: PluginContext,
   hooks: Partial<Record<PluginHook, PluginHookHandler>>,
 ): void {
-  engine.global.set('registerHook', (hookName: string, handler: Function) => {
+  engine.global.set('registerHook', (hookName: string, handler: (...args: unknown[]) => unknown) => {
     if (!VALID_HOOKS.includes(hookName as PluginHook)) {
       context.log.warn(`Invalid hook name: "${hookName}". Valid hooks: ${VALID_HOOKS.join(', ')}`);
       return;
