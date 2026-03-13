@@ -676,22 +676,48 @@ export function initSocketBridge(socket, store, engine) {
 
   // ── Client emit wrappers (convenience for components) ──
 
+  /** Default timeout (ms) for socket ack responses */
+  const ACK_TIMEOUT = 15000;
+
+  /**
+   * Wrap a socket.emit with a timeout so the promise always settles.
+   * Returns { ok: false, error: { code: 'TIMEOUT', ... } } on timeout.
+   */
+  function _emitWithTimeout(event, data, timeoutMs = ACK_TIMEOUT) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          log.warn(`${event} timed out after ${timeoutMs}ms`);
+          resolve({ ok: false, error: { code: 'TIMEOUT', message: `Server did not respond within ${timeoutMs / 1000}s`, retryable: true } });
+        }
+      }, timeoutMs);
+
+      socket.emit(event, data, (res) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(res);
+        }
+      });
+    });
+  }
+
   /**
    * Emit a socket event with error feedback.
    * On error responses (res.ok === false), dispatches an engine event
    * so the UI can show error feedback (toast, banner, etc).
    */
   function _emitWithFeedback(event, data) {
-    return new Promise((resolve) => {
-      socket.emit(event, data, (res) => {
-        if (res && !res.ok) {
-          const errorMsg = res.error?.message || res.error || 'Operation failed';
-          const errorCode = res.error?.code || 'UNKNOWN';
-          log.warn(`${event} failed:`, errorMsg);
-          engine.dispatch('operation:error', { event, code: errorCode, message: errorMsg });
-        }
-        resolve(res);
-      });
+    return _emitWithTimeout(event, data).then((res) => {
+      if (res && !res.ok) {
+        const errorMsg = res.error?.message || res.error || 'Operation failed';
+        const errorCode = res.error?.code || 'UNKNOWN';
+        log.warn(`${event} failed:`, errorMsg);
+        engine.dispatch('operation:error', { event, code: errorCode, message: errorMsg });
+      }
+      return res;
     });
   }
 
@@ -709,172 +735,136 @@ export function initSocketBridge(socket, store, engine) {
      * Used when callers want to handle errors themselves (e.g., citations).
      */
     emitWithAck(event, data) {
-      return new Promise((resolve) => {
-        socket.emit(event, data, (res) => {
-          resolve(res);
-        });
-      });
+      return _emitWithTimeout(event, data);
     },
 
     fetchBuilding(buildingId) {
-      return new Promise((resolve) => {
-        socket.emit('building:get', { buildingId }, (res) => {
-          if (res && res.ok) {
-            store.set('building.data', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('building:get', { buildingId }).then((res) => {
+        if (res && res.ok) {
+          store.set('building.data', res.data);
+        }
+        return res;
       });
     },
 
     fetchFloors(buildingId) {
-      return new Promise((resolve) => {
-        socket.emit('floor:list', { buildingId }, (res) => {
-          if (res && res.ok) {
-            store.set('building.floors', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('floor:list', { buildingId }).then((res) => {
+        if (res && res.ok) {
+          store.set('building.floors', res.data);
+        }
+        return res;
       });
     },
 
     fetchFloor(floorId) {
-      return new Promise((resolve) => {
-        socket.emit('floor:get', { floorId }, (res) => resolve(res));
-      });
+      return _emitWithTimeout('floor:get', { floorId });
     },
 
     fetchRoom(roomId) {
-      return new Promise((resolve) => {
-        socket.emit('room:get', { roomId }, (res) => resolve(res));
-      });
+      return _emitWithTimeout('room:get', { roomId });
     },
 
     fetchRooms() {
-      return new Promise((resolve) => {
-        socket.emit('room:list', {}, (res) => {
-          if (res && res.ok) {
-            store.set('rooms.list', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('room:list', {}).then((res) => {
+        if (res && res.ok) {
+          store.set('rooms.list', res.data);
+        }
+        return res;
       });
     },
 
     fetchAgents(filters = {}) {
-      return new Promise((resolve) => {
-        socket.emit('agent:list', filters, (res) => {
-          if (res && res.ok) {
-            store.set('agents.list', res.data);
-            // Build agent positions map from current_room_id data
-            const positions = {};
-            for (const agent of res.data) {
-              if (agent.current_room_id) {
-                positions[agent.id] = {
-                  agentId: agent.id,
-                  name: agent.name,
-                  roomId: agent.current_room_id,
-                  tableId: agent.current_table_id,
-                  status: agent.status || 'idle',
-                  floorId: null, // Not available from agent data alone
-                };
-              }
+      return _emitWithTimeout('agent:list', filters).then((res) => {
+        if (res && res.ok) {
+          store.set('agents.list', res.data);
+          // Build agent positions map from current_room_id data
+          const positions = {};
+          for (const agent of res.data) {
+            if (agent.current_room_id) {
+              positions[agent.id] = {
+                agentId: agent.id,
+                name: agent.name,
+                roomId: agent.current_room_id,
+                tableId: agent.current_table_id,
+                status: agent.status || 'idle',
+                floorId: null, // Not available from agent data alone
+              };
             }
-            store.set('building.agentPositions', positions);
           }
-          resolve(res);
-        });
+          store.set('building.agentPositions', positions);
+        }
+        return res;
       });
     },
 
     fetchAgent(agentId) {
-      return new Promise((resolve) => {
-        socket.emit('agent:get', { agentId }, (res) => resolve(res));
-      });
+      return _emitWithTimeout('agent:get', { agentId });
     },
 
     fetchGates(buildingId) {
-      return new Promise((resolve) => {
-        socket.emit('phase:gates', { buildingId }, (res) => {
-          if (res && res.ok) {
-            store.set('phase.gates', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('phase:gates', { buildingId }).then((res) => {
+        if (res && res.ok) {
+          store.set('phase.gates', res.data);
+        }
+        return res;
       });
     },
 
     fetchCanAdvance(buildingId) {
-      return new Promise((resolve) => {
-        socket.emit('phase:can-advance', { buildingId }, (res) => {
-          if (res && res.ok) {
-            store.set('phase.canAdvance', res.data.canAdvance);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('phase:can-advance', { buildingId }).then((res) => {
+        if (res && res.ok) {
+          store.set('phase.canAdvance', res.data.canAdvance);
+        }
+        return res;
       });
     },
 
     fetchPendingGates(buildingId) {
-      return new Promise((resolve) => {
-        socket.emit('phase:pending-gates', { buildingId }, (res) => {
-          if (res && res.ok) {
-            store.set('phase.pendingGates', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('phase:pending-gates', { buildingId }).then((res) => {
+        if (res && res.ok) {
+          store.set('phase.pendingGates', res.data);
+        }
+        return res;
       });
     },
 
     resolveConditions(gateId, resolvedConditions, resolver) {
-      return new Promise((resolve) => {
-        socket.emit('phase:resolve-conditions', { gateId, resolvedConditions, resolver }, (res) => {
-          resolve(res);
-        });
-      });
+      return _emitWithTimeout('phase:resolve-conditions', { gateId, resolvedConditions, resolver });
     },
 
     fetchStaleGates(thresholdMs) {
-      return new Promise((resolve) => {
-        socket.emit('phase:stale-gates', { thresholdMs }, (res) => {
-          if (res && res.ok) {
-            store.set('phase.staleGates', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('phase:stale-gates', { thresholdMs }).then((res) => {
+        if (res && res.ok) {
+          store.set('phase.staleGates', res.data);
+        }
+        return res;
       });
     },
 
     fetchPhaseOrder() {
-      return new Promise((resolve) => {
-        socket.emit('phase:order', {}, (res) => {
-          if (res && res.ok) {
-            store.set('phase.order', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('phase:order', {}).then((res) => {
+        if (res && res.ok) {
+          store.set('phase.order', res.data);
+        }
+        return res;
       });
     },
 
     searchRaid(params) {
-      return new Promise((resolve) => {
-        socket.emit('raid:search', params, (res) => {
-          if (res && res.ok) {
-            store.set('raid.searchResults', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('raid:search', params).then((res) => {
+        if (res && res.ok) {
+          store.set('raid.searchResults', res.data);
+        }
+        return res;
       });
     },
 
     fetchRaidEntries(buildingId) {
-      return new Promise((resolve) => {
-        socket.emit('raid:list', { buildingId }, (res) => {
-          if (res && res.ok) {
-            store.set('raid.entries', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('raid:list', { buildingId }).then((res) => {
+        if (res && res.ok) {
+          store.set('raid.entries', res.data);
+        }
+        return res;
       });
     },
 
@@ -1009,9 +999,7 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     fetchTables(roomId) {
-      return new Promise((resolve) => {
-        socket.emit('table:list', { roomId }, (res) => resolve(res));
-      });
+      return _emitWithTimeout('table:list', { roomId });
     },
 
     // ── Agent profile methods ──
@@ -1047,70 +1035,58 @@ export function initSocketBridge(socket, store, engine) {
     // ── Conversation methods ──
 
     fetchConversations(buildingId) {
-      return new Promise((resolve) => {
-        socket.emit('conversation:list', { buildingId: buildingId || store.get('building.active') || '' }, (res) => {
-          if (res && res.ok) {
-            store.set('conversations.list', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('conversation:list', { buildingId: buildingId || store.get('building.active') || '' }).then((res) => {
+        if (res && res.ok) {
+          store.set('conversations.list', res.data);
+        }
+        return res;
       });
     },
 
     loadConversation(threadId) {
-      return new Promise((resolve) => {
-        socket.emit('conversation:load', { threadId }, (res) => {
-          if (res && res.ok) {
-            store.set('conversations.active', threadId);
-            // Convert loaded messages to chat format
-            const messages = (res.data || []).map((m) => ({
-              id: m.id,
-              role: m.role,
-              content: m.content,
-              agentId: m.agentId,
-              toolCalls: m.toolCalls,
-              attachments: m.attachments || [],
-              type: m.role === 'user' ? 'user' : 'response',
-              timestamp: m.timestamp,
-            }));
-            store.set('chat.messages', messages);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('conversation:load', { threadId }).then((res) => {
+        if (res && res.ok) {
+          store.set('conversations.active', threadId);
+          const messages = (res.data || []).map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            agentId: m.agentId,
+            toolCalls: m.toolCalls,
+            attachments: m.attachments || [],
+            type: m.role === 'user' ? 'user' : 'response',
+            timestamp: m.timestamp,
+          }));
+          store.set('chat.messages', messages);
+        }
+        return res;
       });
     },
 
     createConversation(title) {
-      return new Promise((resolve) => {
-        const roomId = store.get('rooms.active') || '';
-        const buildingId = store.get('building.active') || '';
-        socket.emit('conversation:create', { title, roomId, buildingId }, (res) => {
-          if (res && res.ok) {
-            store.set('conversations.active', res.data.threadId);
-            store.set('chat.messages', []);
-            // Refresh conversation list
-            this.fetchConversations(buildingId);
-          }
-          resolve(res);
-        });
+      const roomId = store.get('rooms.active') || '';
+      const buildingId = store.get('building.active') || '';
+      return _emitWithTimeout('conversation:create', { title, roomId, buildingId }).then((res) => {
+        if (res && res.ok) {
+          store.set('conversations.active', res.data.threadId);
+          store.set('chat.messages', []);
+          this.fetchConversations(buildingId);
+        }
+        return res;
       });
     },
 
     deleteConversation(threadId) {
-      return new Promise((resolve) => {
-        socket.emit('conversation:delete', { threadId }, (res) => {
-          if (res && res.ok) {
-            // If we deleted the active conversation, clear it
-            if (store.get('conversations.active') === threadId) {
-              store.set('conversations.active', '');
-              store.set('chat.messages', []);
-            }
-            // Refresh list
-            const buildingId = store.get('building.active') || '';
-            this.fetchConversations(buildingId);
+      return _emitWithTimeout('conversation:delete', { threadId }).then((res) => {
+        if (res && res.ok) {
+          if (store.get('conversations.active') === threadId) {
+            store.set('conversations.active', '');
+            store.set('chat.messages', []);
           }
-          resolve(res);
-        });
+          const buildingId = store.get('building.active') || '';
+          this.fetchConversations(buildingId);
+        }
+        return res;
       });
     },
 
@@ -1125,25 +1101,15 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     fetchPlan(planId) {
-      return new Promise((resolve) => {
-        const timeout = setTimeout(() => resolve({ ok: false, error: { code: 'TIMEOUT', message: 'Plan fetch timed out' } }), 15000);
-        socket.emit('plan:get', { planId }, (res) => {
-          clearTimeout(timeout);
-          resolve(res);
-        });
-      });
+      return _emitWithTimeout('plan:get', { planId });
     },
 
     fetchPlans(filters) {
-      return new Promise((resolve) => {
-        const timeout = setTimeout(() => resolve({ ok: false, error: { code: 'TIMEOUT', message: 'Plan list fetch timed out' } }), 15000);
-        socket.emit('plan:list', filters || {}, (res) => {
-          clearTimeout(timeout);
-          if (res && res.ok) {
-            store.set('plans.list', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('plan:list', filters || {}).then((res) => {
+        if (res && res.ok) {
+          store.set('plans.list', res.data);
+        }
+        return res;
       });
     },
 
@@ -1152,24 +1118,20 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     fetchExitDocs(roomId) {
-      return new Promise((resolve) => {
-        socket.emit('exit-doc:get', { roomId }, (res) => {
-          if (res && res.ok) {
-            store.set('exitDocs.byRoom', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('exit-doc:get', { roomId }).then((res) => {
+        if (res && res.ok) {
+          store.set('exitDocs.byRoom', res.data);
+        }
+        return res;
       });
     },
 
     fetchExitDocsByBuilding(buildingId) {
-      return new Promise((resolve) => {
-        socket.emit('exit-doc:list', { buildingId }, (res) => {
-          if (res && res.ok) {
-            store.set('exitDocs.list', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('exit-doc:list', { buildingId }).then((res) => {
+        if (res && res.ok) {
+          store.set('exitDocs.list', res.data);
+        }
+        return res;
       });
     },
 
@@ -1180,13 +1142,11 @@ export function initSocketBridge(socket, store, engine) {
     // ── Task methods ──
 
     fetchTasks(buildingId, filters = {}) {
-      return new Promise((resolve) => {
-        socket.emit('task:list', { buildingId, ...filters }, (res) => {
-          if (res && res.ok) {
-            store.set('tasks.list', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('task:list', { buildingId, ...filters }).then((res) => {
+        if (res && res.ok) {
+          store.set('tasks.list', res.data);
+        }
+        return res;
       });
     },
 
@@ -1216,21 +1176,17 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     getTask(taskId) {
-      return new Promise((resolve) => {
-        socket.emit('task:get', { id: taskId }, (res) => resolve(res));
-      });
+      return _emitWithTimeout('task:get', { id: taskId });
     },
 
     // ── Milestone methods ──
 
     fetchMilestones(buildingId, filters = {}) {
-      return new Promise((resolve) => {
-        socket.emit('milestone:list', { buildingId, ...filters }, (res) => {
-          if (res && res.ok) {
-            store.set('milestones.list', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('milestone:list', { buildingId, ...filters }).then((res) => {
+        if (res && res.ok) {
+          store.set('milestones.list', res.data);
+        }
+        return res;
       });
     },
 
@@ -1271,21 +1227,17 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     getMilestone(milestoneId) {
-      return new Promise((resolve) => {
-        socket.emit('milestone:get', { id: milestoneId }, (res) => resolve(res));
-      });
+      return _emitWithTimeout('milestone:get', { id: milestoneId });
     },
 
     // ── TODO methods ──
 
     fetchTodos(taskId) {
-      return new Promise((resolve) => {
-        socket.emit('todo:list', { taskId }, (res) => {
-          if (res && res.ok) {
-            store.set('todos.list', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('todo:list', { taskId }).then((res) => {
+        if (res && res.ok) {
+          store.set('todos.list', res.data);
+        }
+        return res;
       });
     },
 
@@ -1353,11 +1305,7 @@ export function initSocketBridge(socket, store, engine) {
      * the global tasks.list store key.
      */
     listTasksByTable(tableId) {
-      return new Promise((resolve) => {
-        socket.emit('task:list', { tableId }, (res) => {
-          resolve(res);
-        });
-      });
+      return _emitWithTimeout('task:list', { tableId });
     },
 
     async assignTodoToAgent(todoId, agentId) {
@@ -1393,13 +1341,11 @@ export function initSocketBridge(socket, store, engine) {
     // ── Command methods ──
 
     fetchCommands() {
-      return new Promise((resolve) => {
-        socket.emit('command:list', {}, (res) => {
-          if (res && res.ok) {
-            store.set('commands.list', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('command:list', {}).then((res) => {
+        if (res && res.ok) {
+          store.set('commands.list', res.data);
+        }
+        return res;
       });
     },
 
@@ -1480,26 +1426,20 @@ export function initSocketBridge(socket, store, engine) {
     // ── Agent Stats methods ──
 
     fetchAgentStats(agentId) {
-      return new Promise((resolve) => {
-        socket.emit('agent:stats', { agentId }, (res) => {
-          if (res && res.ok) {
-            store.set(`agentStats.${agentId}`, res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('agent:stats', { agentId }).then((res) => {
+        if (res && res.ok) {
+          store.set(`agentStats.${agentId}`, res.data);
+        }
+        return res;
       });
     },
 
     fetchAgentActivityLog(agentId, opts = {}) {
-      return new Promise((resolve) => {
-        socket.emit('agent:activity-log', { agentId, ...opts }, (res) => resolve(res));
-      });
+      return _emitWithTimeout('agent:activity-log', { agentId, ...opts });
     },
 
     fetchLeaderboard(metric, opts = {}) {
-      return new Promise((resolve) => {
-        socket.emit('agent:leaderboard', { metric, ...opts }, (res) => resolve(res));
-      });
+      return _emitWithTimeout('agent:leaderboard', { metric, ...opts });
     },
 
     // ── Email methods ──
@@ -1521,41 +1461,33 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     fetchInbox(agentId, opts = {}) {
-      return new Promise((resolve) => {
-        socket.emit('email:inbox', { agentId, ...opts }, (res) => {
-          if (res && res.ok) {
-            store.set('email.inbox', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('email:inbox', { agentId, ...opts }).then((res) => {
+        if (res && res.ok) {
+          store.set('email.inbox', res.data);
+        }
+        return res;
       });
     },
 
     fetchSentEmails(agentId, opts = {}) {
-      return new Promise((resolve) => {
-        socket.emit('email:sent', { agentId, ...opts }, (res) => {
-          if (res && res.ok) {
-            store.set('email.sent', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('email:sent', { agentId, ...opts }).then((res) => {
+        if (res && res.ok) {
+          store.set('email.sent', res.data);
+        }
+        return res;
       });
     },
 
     fetchEmail(emailId) {
-      return new Promise((resolve) => {
-        socket.emit('email:get', { emailId }, (res) => resolve(res));
-      });
+      return _emitWithTimeout('email:get', { emailId });
     },
 
     fetchEmailThread(threadId) {
-      return new Promise((resolve) => {
-        socket.emit('email:thread', { threadId }, (res) => {
-          if (res && res.ok) {
-            store.set('email.thread', res.data);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('email:thread', { threadId }).then((res) => {
+        if (res && res.ok) {
+          store.set('email.thread', res.data);
+        }
+        return res;
       });
     },
 
@@ -1564,13 +1496,11 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     fetchUnreadCount(agentId) {
-      return new Promise((resolve) => {
-        socket.emit('email:unread-count', { agentId }, (res) => {
-          if (res && res.ok) {
-            store.set('email.unreadCount', res.data?.count ?? 0);
-          }
-          resolve(res);
-        });
+      return _emitWithTimeout('email:unread-count', { agentId }).then((res) => {
+        if (res && res.ok) {
+          store.set('email.unreadCount', res.data?.count ?? 0);
+        }
+        return res;
       });
     },
   };

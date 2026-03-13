@@ -25,6 +25,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Agent status changes in Activity feed** — Agents tab in activity view shows real-time status updates (#287)
 
 ### Fixed
+- **Systemic socket timeout protection** — all 40+ socket.emit methods now use `_emitWithTimeout` with 15s default; prevents stuck spinners and hanging promises on server disconnect (#341)
 - **Agent Mail loading spinner stuck forever** — `_fetchData` now handles fetch failure and late agent hydration (#331, PR #332)
 - **90 test failures across 10 test files** — DB schema counts, missing agent profile columns, config default, transport schema evolution, socket handler disconnect behavior, UI view CSS selectors and store subscriptions (#329, PR #330)
 - **11 UI modal/form/toast bugs** — invalid modal sizes, misused Toast API, missing try/catch on async socket calls, shared modal IDs causing conflicts, missing null guards, silent error swallowing (#327, PR #328)
