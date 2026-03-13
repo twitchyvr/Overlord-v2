@@ -641,6 +641,18 @@ describe('ChatView', () => {
     expect(messages!.querySelector('.empty-state')).not.toBeNull();
   });
 
+  it('shows empty state on initial mount with no messages', async () => {
+    const { ChatView } = await import('../../../public/ui/views/chat-view.js');
+    const el = document.createElement('div');
+    const view = new ChatView(el);
+    view.mount();
+
+    // Empty state should appear immediately on mount, no store update needed
+    const messages = el.querySelector('.chat-messages');
+    expect(messages!.querySelector('.empty-state')).not.toBeNull();
+    expect(messages!.textContent).toContain('Start a Conversation');
+  });
+
   it('renders messages from store', async () => {
     const { ChatView } = await import('../../../public/ui/views/chat-view.js');
     const el = document.createElement('div');

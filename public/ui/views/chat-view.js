@@ -158,11 +158,10 @@ export class ChatView extends Component {
       })
     );
 
-    // Hydrate from store — messages may have arrived before this view mounted
-    const existingMessages = store.get('chat.messages');
-    if (existingMessages && existingMessages.length > 0) {
-      this._renderMessages(existingMessages);
-    }
+    // Hydrate from store — messages may have arrived before this view mounted.
+    // Always call _renderMessages so the empty state is shown when no messages exist.
+    const existingMessages = store.get('chat.messages') || [];
+    this._renderMessages(existingMessages);
   }
 
   _render() {
