@@ -6,6 +6,7 @@
  * Next phase receives previous phase's output as input template.
  */
 
+import { randomUUID } from 'crypto';
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
 import { ok, err, safeJsonParse } from '../core/contracts.js';
@@ -26,7 +27,7 @@ interface CreateGateParams {
  */
 export function createGate({ buildingId, phase }: CreateGateParams): Result {
   const db = getDb();
-  const id = `gate_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const id = `gate_${randomUUID()}`;
 
   db.prepare(`
     INSERT INTO phase_gates (id, building_id, phase, status)
@@ -57,6 +58,11 @@ export function signoffGate({ gateId, reviewer, verdict, conditions = [], exitDo
   const db = getDb();
   const gate = db.prepare('SELECT * FROM phase_gates WHERE id = ?').get(gateId) as PhaseGateRow | undefined;
   if (!gate) return err('GATE_NOT_FOUND', `Phase gate ${gateId} does not exist`);
+
+  // Prevent re-signing a gate that has already been signed off as GO or NO-GO
+  if (gate.status === 'go' || gate.status === 'no-go') {
+    return err('GATE_ALREADY_SIGNED', `Phase gate ${gateId} already signed off as ${gate.signoff_verdict}. Create a new gate to re-evaluate.`);
+  }
 
   const status = verdict === 'GO' ? 'go' : verdict === 'NO-GO' ? 'no-go' : 'conditional';
 

@@ -371,7 +371,7 @@ export class RaidLogView extends Component {
     // Affected areas
     const areas = Array.isArray(entry.affected_areas)
       ? entry.affected_areas
-      : (typeof entry.affected_areas === 'string' ? JSON.parse(entry.affected_areas || '[]') : []);
+      : (typeof entry.affected_areas === 'string' ? (() => { try { return JSON.parse(entry.affected_areas || '[]'); } catch { return []; } })() : []);
     if (areas.length > 0) {
       const areasRow = h('div', { class: 'raid-detail-info-row' },
         h('span', { class: 'raid-detail-label' }, 'Affected Areas')
@@ -595,7 +595,7 @@ export class RaidLogView extends Component {
     // Affected areas
     const areas = Array.isArray(entry.affected_areas)
       ? entry.affected_areas
-      : (typeof entry.affected_areas === 'string' ? JSON.parse(entry.affected_areas || '[]') : []);
+      : (typeof entry.affected_areas === 'string' ? (() => { try { return JSON.parse(entry.affected_areas || '[]'); } catch { return []; } })() : []);
     form.appendChild(h('div', { class: 'form-group' },
       h('label', { class: 'form-label' }, 'Affected Areas'),
       h('input', {

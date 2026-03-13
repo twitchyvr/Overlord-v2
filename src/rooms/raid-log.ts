@@ -38,7 +38,10 @@ export function addRaidEntry({ buildingId, type, phase, roomId, summary, rationa
   `).run(id, buildingId, type, phase, roomId || null, summary, rationale || null, decidedBy || null, approvedBy || null, JSON.stringify(affectedAreas));
 
   log.info({ id, type, phase, summary }, 'RAID entry added');
-  return ok({ id });
+
+  // Return the full entry so consumers (socket-bridge) can push it into the store directly
+  const inserted = db.prepare('SELECT * FROM raid_entries WHERE id = ?').get(id) as RaidEntryRow;
+  return ok({ ...inserted, affected_areas: safeJsonParse<string[]>(inserted.affected_areas, []) });
 }
 
 interface SearchRaidParams {
