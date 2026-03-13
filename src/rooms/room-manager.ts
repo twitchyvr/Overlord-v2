@@ -417,7 +417,7 @@ export function delegateTask({
   if (!toRoom) return err('ROOM_NOT_FOUND', `Target room ${toRoomId} not found`);
 
   // Exit source room
-  const exitResult = exitRoom({ roomId: fromRoomId, agentId, reason: 'task-delegation' });
+  const exitResult = exitRoom({ roomId: fromRoomId, agentId, reason: 'normal' });
   if (!exitResult.ok) return exitResult;
 
   // Enter target room
