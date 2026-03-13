@@ -18,6 +18,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../../core/logger.js';
+import { buildCachedSystemPrompt } from '../prompt-cache.js';
 import type { AIAdapter, ToolDefinition, Config } from '../../core/contracts.js';
 
 const log = logger.child({ module: 'ai:minimax' });
@@ -74,7 +75,9 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
       options: Record<string, unknown>,
     ): Promise<MinimaxResponse> {
       const anthropic = getClient();
-      const model = (options.model as string) || cfg.get('MINIMAX_MODEL');
+      const useHighspeed = cfg.get('MINIMAX_USE_HIGHSPEED');
+      const baseModel = (options.model as string) || cfg.get('MINIMAX_MODEL');
+      const model = useHighspeed ? `${baseModel}-highspeed` : baseModel;
 
       // Convert tool definitions to Anthropic format
       const anthropicTools: Anthropic.Tool[] = tools.map((t) => ({
@@ -91,13 +94,19 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
         if (temperature > 1) temperature = 1.0;
       }
 
+      // Build system prompt with cache_control if caching is available
+      const rawSystem = options.system as string | undefined;
+      const systemPayload = rawSystem
+        ? buildCachedSystemPrompt(rawSystem, 'minimax')
+        : undefined;
+
       // Build request — identical to Anthropic adapter since MiniMax is Anthropic-compatible
       const requestParams: Anthropic.MessageCreateParams = {
         model,
         max_tokens: (options.max_tokens as number) || 8192,
         messages: messages as Anthropic.MessageParam[],
         ...(anthropicTools.length > 0 ? { tools: anthropicTools } : {}),
-        ...(options.system ? { system: options.system as string } : {}),
+        ...(systemPayload ? { system: systemPayload as Anthropic.MessageCreateParams['system'] } : {}),
         ...(temperature !== undefined ? { temperature } : {}),
       };
 
