@@ -13,6 +13,7 @@ import { OverlordUI } from '../engine/engine.js';
 import { h, setTrustedContent, escapeHtml, formatTime, debounce } from '../engine/helpers.js';
 import { TokenInput } from '../components/token-input.js';
 import { Table } from '../components/table.js';
+import { Toast } from '../components/toast.js';
 
 
 /**
@@ -517,7 +518,7 @@ export class ChatView extends Component {
       if (res && res.ok) {
         // Plan will be updated via plan:reviewed socket event
       }
-    }).catch(() => {});
+    }).catch(() => { Toast.error('Failed to submit plan review'); });
   }
 
   /** Build a thinking bubble. */

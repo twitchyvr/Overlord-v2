@@ -454,7 +454,7 @@ export class EmailView extends Component {
     Modal.open('email-compose', {
       title: 'Compose Email',
       content,
-      size: 'medium',
+      size: 'md',
     });
   }
 
@@ -509,7 +509,7 @@ export class EmailView extends Component {
           if (replyRes && replyRes.ok) {
             Toast.success('Reply sent');
             // Close and refresh thread to avoid stacking
-            Drawer.close('email-thread');
+            Drawer.close();
             this._openThreadDrawer(threadId, emailId);
             this._fetchData();
           } else {

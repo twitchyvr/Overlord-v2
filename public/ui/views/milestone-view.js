@@ -456,7 +456,7 @@ export class MilestoneView extends Component {
 
   _openCreateModal() {
     if (!this._buildingId) {
-      Toast.show('Select a building first', 'warning');
+      Toast.warning('Select a building first');
       return;
     }
 
@@ -486,7 +486,8 @@ export class MilestoneView extends Component {
     const submitBtn = h('button', { class: 'btn btn-primary btn-md', style: { marginTop: 'var(--sp-4)' } }, 'Create Milestone');
     submitBtn.addEventListener('click', async () => {
       const title = titleInput.value.trim();
-      if (!title) { Toast.show('Title is required', 'error'); return; }
+      if (!title) { Toast.error('Title is required'); return; }
+      if (!window.overlordSocket || !this._buildingId) { Toast.error('Not connected'); return; }
       submitBtn.disabled = true;
       submitBtn.textContent = 'Creating...';
       try {
@@ -500,16 +501,16 @@ export class MilestoneView extends Component {
         };
         const res = await window.overlordSocket.createMilestone(params);
         if (res && res.ok) {
-          Toast.show(`Milestone "${title}" created`, 'success');
+          Toast.success(`Milestone "${title}" created`);
           Modal.close('milestone-create');
           this._fetchMilestones();
         } else {
-          Toast.show(res?.error?.message || 'Failed to create milestone', 'error');
+          Toast.error(res?.error?.message || 'Failed to create milestone');
           submitBtn.disabled = false;
           submitBtn.textContent = 'Create Milestone';
         }
       } catch (err) {
-        Toast.show('Error creating milestone', 'error');
+        Toast.error('Error creating milestone');
         submitBtn.disabled = false;
         submitBtn.textContent = 'Create Milestone';
       }
@@ -563,7 +564,8 @@ export class MilestoneView extends Component {
     const saveBtn = h('button', { class: 'btn btn-primary btn-md', style: { marginTop: 'var(--sp-4)' } }, 'Save Changes');
     saveBtn.addEventListener('click', async () => {
       const title = titleInput.value.trim();
-      if (!title) { Toast.show('Title is required', 'error'); return; }
+      if (!title) { Toast.error('Title is required'); return; }
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
       try {
@@ -578,16 +580,16 @@ export class MilestoneView extends Component {
         };
         const res = await window.overlordSocket.updateMilestone(params);
         if (res && res.ok) {
-          Toast.show('Milestone updated', 'success');
+          Toast.success('Milestone updated');
           Modal.close('milestone-edit');
           this._fetchMilestones();
         } else {
-          Toast.show(res?.error?.message || 'Failed to update', 'error');
+          Toast.error(res?.error?.message || 'Failed to update');
           saveBtn.disabled = false;
           saveBtn.textContent = 'Save Changes';
         }
       } catch (err) {
-        Toast.show('Error updating milestone', 'error');
+        Toast.error('Error updating milestone');
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save Changes';
       }
@@ -629,6 +631,7 @@ export class MilestoneView extends Component {
 
     const saveBtn = h('button', { class: 'btn btn-primary btn-md', style: { marginTop: 'var(--sp-4)' } }, 'Save Assignments');
     saveBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
       const checkboxes = content.querySelectorAll('input[type="checkbox"]');
@@ -646,7 +649,7 @@ export class MilestoneView extends Component {
         }
       }
       if (changed > 0) {
-        Toast.show(`${changed} task(s) updated`, 'success');
+        Toast.success(`${changed} task(s) updated`);
         // Refresh both milestones and tasks
         this._fetchMilestones();
         if (this._buildingId && window.overlordSocket) {
@@ -667,9 +670,10 @@ export class MilestoneView extends Component {
   // ── Actions ──
 
   async _updateMilestoneStatus(milestoneId, status) {
+    if (!window.overlordSocket) return;
     const res = await window.overlordSocket.updateMilestone({ id: milestoneId, status });
     if (res && res.ok) {
-      Toast.show(`Milestone ${status}`, 'success');
+      Toast.success(`Milestone ${status}`);
       this._fetchMilestones();
     }
   }
@@ -682,23 +686,24 @@ export class MilestoneView extends Component {
 
     const deleteBtn = h('button', { class: 'btn btn-danger btn-md', style: { marginTop: 'var(--sp-3)' } }, 'Delete Milestone');
     deleteBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
       deleteBtn.disabled = true;
       deleteBtn.textContent = 'Deleting...';
       try {
         const res = await window.overlordSocket.deleteMilestone(milestone.id);
         if (res && res.ok) {
-          Toast.show('Milestone deleted', 'success');
+          Toast.success('Milestone deleted');
           Modal.close('milestone-delete');
           this._openDrawerMilestoneId = null;
           Drawer.close();
           this._fetchMilestones();
         } else {
-          Toast.show(res?.error?.message || 'Failed to delete', 'error');
+          Toast.error(res?.error?.message || 'Failed to delete');
           deleteBtn.disabled = false;
           deleteBtn.textContent = 'Delete Milestone';
         }
       } catch (err) {
-        Toast.show('Error deleting milestone', 'error');
+        Toast.error('Error deleting milestone');
         deleteBtn.disabled = false;
         deleteBtn.textContent = 'Delete Milestone';
       }
@@ -713,9 +718,10 @@ export class MilestoneView extends Component {
   }
 
   async _unlinkTask(taskId, milestoneId) {
+    if (!window.overlordSocket) return;
     const res = await window.overlordSocket.updateTask({ id: taskId, milestoneId: null });
     if (res && res.ok) {
-      Toast.show('Task removed from milestone', 'success');
+      Toast.success('Task removed from milestone');
       this._fetchMilestones();
       // Refresh the drawer
       const updated = this._milestones.find(m => m.id === milestoneId);
