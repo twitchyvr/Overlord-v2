@@ -202,16 +202,56 @@ describe('uid()', () => {
 // ─── formatTime() ───────────────────────────────────────────
 
 describe('formatTime()', () => {
-  it('formats a Date object', () => {
-    const d = new Date(2024, 0, 1, 14, 30);
-    const result = formatTime(d);
-    expect(result).toMatch(/2:30/);
+  it('returns "Just now" for timestamps less than a minute old', () => {
+    const result = formatTime(new Date());
+    expect(result).toBe('Just now');
   });
 
-  it('formats an ISO string', () => {
+  it('returns relative minutes for timestamps under an hour', () => {
+    const d = new Date(Date.now() - 15 * 60000);
+    expect(formatTime(d)).toBe('15m ago');
+  });
+
+  it('returns relative hours for timestamps under 24 hours', () => {
+    const d = new Date(Date.now() - 5 * 3600000);
+    expect(formatTime(d)).toBe('5h ago');
+  });
+
+  it('returns "Yesterday" with time for yesterday timestamps', () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(14, 30, 0, 0);
+    const result = formatTime(yesterday);
+    expect(result).toMatch(/^Yesterday, .*2:30/);
+  });
+
+  it('returns month and day for older dates this year', () => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 2);
+    const result = formatTime(d);
+    // Should include month abbreviation and day
+    expect(result).toMatch(/\w{3} \d{1,2},/);
+  });
+
+  it('returns month, day, and year for dates from a prior year', () => {
+    const d = new Date(2024, 0, 15, 14, 30);
+    const result = formatTime(d);
+    expect(result).toMatch(/Jan 15, 2024/);
+  });
+
+  it('handles ISO strings', () => {
     const result = formatTime('2024-01-01T14:30:00Z');
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('returns empty string for null/undefined', () => {
+    expect(formatTime(null)).toBe('');
+    expect(formatTime(undefined)).toBe('');
+  });
+
+  it('returns empty string for invalid date', () => {
+    expect(formatTime('not-a-date')).toBe('');
   });
 });
 
