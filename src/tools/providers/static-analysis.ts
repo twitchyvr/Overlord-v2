@@ -87,7 +87,7 @@ async function runNodeAnalysis(projectDir: string, checks: string[]): Promise<St
 
 async function runRustAnalysis(projectDir: string, checks: string[]): Promise<StaticAnalysisResult> {
   let lintErrors = 0;
-  let typeErrors = 0;
+  const typeErrors = 0;
   let warnings = 0;
   const details: string[] = [];
 
@@ -131,7 +131,7 @@ async function runRustAnalysis(projectDir: string, checks: string[]): Promise<St
 
 async function runPythonAnalysis(projectDir: string, checks: string[]): Promise<StaticAnalysisResult> {
   let lintErrors = 0;
-  let typeErrors = 0;
+  const typeErrors = 0;
   let warnings = 0;
   const details: string[] = [];
 
@@ -173,8 +173,8 @@ async function runPythonAnalysis(projectDir: string, checks: string[]): Promise<
 
 async function runGoAnalysis(projectDir: string, checks: string[]): Promise<StaticAnalysisResult> {
   let lintErrors = 0;
-  let typeErrors = 0;
-  let warnings = 0;
+  const typeErrors = 0;
+  const warnings = 0;
   const details: string[] = [];
 
   if (checks.includes('lint') || checks.includes('typecheck')) {
