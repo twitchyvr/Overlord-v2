@@ -168,9 +168,12 @@ export class BuildingView extends Component {
       crossSection.appendChild(floorBar);
     }
 
-    // Ground/foundation
-    const foundation = h('div', { class: 'building-foundation' },
-      h('span', null, 'Foundation')
+    // Ground/foundation — visual anchor for the building metaphor
+    const foundation = h('div', {
+      class: 'building-foundation',
+      title: 'The base infrastructure that supports all floors and rooms above'
+    },
+      h('span', null, '\u{1F3D7}\uFE0F Foundation')
     );
     crossSection.appendChild(foundation);
 
