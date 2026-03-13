@@ -27,6 +27,7 @@ import {
   BuildingGetSchema,
   BuildingListSchema,
   BuildingApplyBlueprintSchema,
+  BuildingHealthScoreSchema,
   FloorListSchema,
   FloorGetSchema,
   RoomCreateSchema,
@@ -233,6 +234,18 @@ describe('Building Schemas', () => {
 
     it('rejects missing required fields', () => {
       const result = BuildingApplyBlueprintSchema.safeParse({});
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('BuildingHealthScoreSchema', () => {
+    it('accepts valid buildingId', () => {
+      const result = BuildingHealthScoreSchema.safeParse({ buildingId: 'bld_123' });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects empty payload', () => {
+      const result = BuildingHealthScoreSchema.safeParse({});
       expect(result.success).toBe(false);
     });
   });

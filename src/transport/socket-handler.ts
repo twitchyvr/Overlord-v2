@@ -16,7 +16,7 @@ import type { Bus } from '../core/bus.js';
 import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { AgentSession } from '../agents/agent-session.js';
-import { createBuilding, getBuilding, listBuildings, updateBuilding, addAllowedPath, removeAllowedPath, listFloors, getFloor, createFloor, updateFloor, deleteFloor, sortFloors } from '../rooms/building-manager.js';
+import { createBuilding, getBuilding, listBuildings, updateBuilding, addAllowedPath, removeAllowedPath, listFloors, getFloor, createFloor, updateFloor, deleteFloor, sortFloors, getHealthScore } from '../rooms/building-manager.js';
 import { getGitInfo, initGitRepo, cloneGitRepo } from '../tools/git-detector.js';
 import { getGates, canAdvance, signoffGate, createGate, getPendingGates, resolveConditions, getStalePendingGates, getPhaseOrder } from '../rooms/phase-gate.js';
 import { searchRaid, addRaidEntry, updateRaidEntry, updateRaidStatus } from '../rooms/raid-log.js';
@@ -30,7 +30,7 @@ import type { z } from 'zod';
 
 import {
   validate,
-  BuildingCreateSchema, BuildingGetSchema, BuildingListSchema, BuildingApplyBlueprintSchema, BuildingUpdateSchema,
+  BuildingCreateSchema, BuildingGetSchema, BuildingListSchema, BuildingApplyBlueprintSchema, BuildingUpdateSchema, BuildingHealthScoreSchema,
   FolderAddPathSchema, FolderRemovePathSchema, FolderListPathsSchema,
   GitDetectSchema, GitInitSchema, GitCloneSchema,
   FloorListSchema, FloorGetSchema, FloorCreateSchema, FloorUpdateSchema, FloorDeleteSchema, FloorSortSchema,
@@ -236,6 +236,10 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (ack) ack(result);
     });
 
+    handle(socket, 'building:health-score', BuildingHealthScoreSchema, (parsed, ack) => {
+      if (ack) ack(getHealthScore(parsed.buildingId));
+    });
+
     // ─── Folder / Path Permission Events ───
 
     handle(socket, 'folder:add-path', FolderAddPathSchema, (parsed, ack) => {
@@ -325,6 +329,15 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       ).all() as Array<{ building_id: string; count: number }>;
       const agentMap = new Map(agentCounts.map(r => [r.building_id, r.count]));
 
+      // Compute health scores for each building
+      const healthMap = new Map<string, { phaseProgress: number; taskCompletion: number; raidHealth: number; agentActivity: number; total: number }>();
+      for (const b of buildings) {
+        const hResult = getHealthScore(b.id);
+        if (hResult.ok) {
+          healthMap.set(b.id, (hResult.data as { score: { phaseProgress: number; taskCompletion: number; raidHealth: number; agentActivity: number; total: number } }).score);
+        }
+      }
+
       if (ack) ack({
         ok: true,
         data: {
@@ -337,6 +350,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
             repoUrl: b.repo_url || '',
             floorCount: floorMap.get(b.id) || 0,
             agentCount: agentMap.get(b.id) || 0,
+            healthScore: healthMap.get(b.id) || null,
           })),
         },
       });

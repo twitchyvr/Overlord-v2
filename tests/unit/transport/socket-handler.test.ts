@@ -17,9 +17,10 @@ vi.mock('../../../src/rooms/building-manager.js', () => ({
   listBuildings: vi.fn().mockReturnValue({ ok: true, data: [] }),
   listFloors: vi.fn().mockReturnValue({ ok: true, data: [] }),
   getFloor: vi.fn().mockReturnValue({ ok: true, data: { id: 'floor_1', type: 'collaboration', rooms: [] } }),
+  getHealthScore: vi.fn().mockReturnValue({ ok: true, data: { buildingId: 'bld_1', score: { phaseProgress: 8, taskCompletion: 12, raidHealth: 25, agentActivity: 5, total: 50 } } }),
 }));
 
-import { createBuilding, getBuilding, listBuildings, listFloors, getFloor } from '../../../src/rooms/building-manager.js';
+import { createBuilding, getBuilding, listBuildings, listFloors, getFloor, getHealthScore } from '../../../src/rooms/building-manager.js';
 
 // Mock phase-gate — imported directly by socket-handler
 vi.mock('../../../src/rooms/phase-gate.js', () => ({
@@ -556,6 +557,7 @@ describe('Socket Handler (Transport Layer)', () => {
             repoUrl: '',
             floorCount: 0,
             agentCount: 0,
+            healthScore: { phaseProgress: 8, taskCompletion: 12, raidHealth: 25, agentActivity: 5, total: 50 },
           }],
         },
       });
