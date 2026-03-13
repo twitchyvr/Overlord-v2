@@ -1638,11 +1638,12 @@ export class RoomView extends Component {
 
     const container = h('div', { class: 'rv-edit-config-modal' });
 
-    // Table ID (read-only)
+    // Table name (read-only, derived from type)
+    const tableLabel = table.description || table.type || 'Table';
     const idGroup = h('div', { class: 'rv-edit-field' });
-    idGroup.appendChild(h('label', { class: 'form-label' }, 'Table ID'));
+    idGroup.appendChild(h('label', { class: 'form-label' }, 'Table'));
     idGroup.appendChild(h('div', { class: 'rv-edit-readonly' },
-      h('span', { class: 'mono' }, table.id)
+      h('span', null, tableLabel)
     ));
     container.appendChild(idGroup);
 

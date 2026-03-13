@@ -376,9 +376,12 @@ export class PhaseView extends Component {
     );
     card.appendChild(header);
 
-    // ── Gate ID + created timestamp ──
+    // ── Gate phase label + created timestamp ──
+    const gateLabel = gate.phase
+      ? `${gate.phase.charAt(0).toUpperCase() + gate.phase.slice(1)} Gate`
+      : gate.type || 'Phase Gate';
     const metaRow = h('div', { class: 'phase-view-gate-meta' },
-      h('span', { class: 'phase-view-gate-id' }, `ID: ${this._shortId(gate.id)}`),
+      h('span', { class: 'phase-view-gate-id' }, gateLabel),
       gate.created_at
         ? h('span', { class: 'phase-view-gate-time' }, `Created ${this._formatDate(gate.created_at)}`)
         : null

@@ -408,9 +408,10 @@ export class AgentsView extends Component {
       card.appendChild(capRow);
     }
 
-    // ── Card footer with ID ──
+    // ── Card footer with role/specialization ──
+    const footerLabel = agent.specialization || agent.role || agent.type || '';
     const footer = h('div', { class: 'agents-view-card-footer' },
-      h('span', { class: 'agents-view-card-id' }, `ID: ${agent.id.slice(0, 12)}...`)
+      footerLabel ? h('span', { class: 'agents-view-card-id' }, footerLabel) : null
     );
     if (agent.created_at) {
       footer.appendChild(

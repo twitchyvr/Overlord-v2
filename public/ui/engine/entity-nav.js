@@ -149,9 +149,10 @@ async function _openAgentDetail(agentId) {
     assignmentSection.appendChild(roomLink);
 
     if (agent.current_table_id) {
+      const tableName = agent.current_table_name || agent.current_table_type || 'Assigned';
       assignmentSection.appendChild(h('div', { class: 'agent-detail-row' },
         h('span', { class: 'agent-detail-label' }, 'Table:'),
-        h('span', null, agent.current_table_id)
+        h('span', null, tableName)
       ));
     }
   } else {
@@ -249,7 +250,6 @@ async function _openAgentDetail(agentId) {
   const infoSection = h('div', { class: 'agent-detail-section' });
   infoSection.appendChild(h('h4', { class: 'agent-detail-section-title' }, 'Details'));
   const infoRows = [
-    ['ID', agent.id],
     ['Created', agent.created_at ? new Date(agent.created_at).toLocaleString() : '—'],
   ];
   for (const [label, value] of infoRows) {
