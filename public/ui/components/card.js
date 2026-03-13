@@ -246,10 +246,10 @@ export class Card {
     // Stats row: floors, agents, repo
     const stats = h('div', { class: 'building-stats' });
     if (data.floorCount !== undefined) {
-      stats.appendChild(h('span', { class: 'building-stat' }, `${data.floorCount} floors`));
+      stats.appendChild(h('span', { class: 'building-stat' }, `${data.floorCount} ${data.floorCount === 1 ? 'floor' : 'floors'}`));
     }
     if (data.agentCount !== undefined && data.agentCount > 0) {
-      stats.appendChild(h('span', { class: 'building-stat' }, `${data.agentCount} agents`));
+      stats.appendChild(h('span', { class: 'building-stat' }, `${data.agentCount} ${data.agentCount === 1 ? 'agent' : 'agents'}`));
     }
     if (data.repoUrl) {
       const repoName = data.repoUrl.split('/').slice(-2).join('/');
