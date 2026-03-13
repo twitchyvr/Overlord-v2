@@ -30,6 +30,18 @@ function setupDb(): Database.Database {
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
+    CREATE TABLE floors (
+      id TEXT PRIMARY KEY,
+      building_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      name TEXT NOT NULL
+    );
+    CREATE TABLE rooms (
+      id TEXT PRIMARY KEY,
+      floor_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      name TEXT NOT NULL
+    );
     CREATE TABLE raid_entries (
       id TEXT PRIMARY KEY,
       building_id TEXT NOT NULL,
@@ -170,6 +182,46 @@ describe('RAID Log', () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.data).toHaveLength(0);
+      }
+    });
+
+    it('includes room_name from rooms table via JOIN', () => {
+      // Seed a floor and room
+      db.prepare(`INSERT INTO floors (id, building_id, type, name) VALUES ('floor_1', 'bld_1', 'execution', 'Execution Floor')`).run();
+      db.prepare(`INSERT INTO rooms (id, floor_id, type, name) VALUES ('room_code_lab', 'floor_1', 'code-lab', 'Backend Workshop')`).run();
+
+      addRaidEntry({
+        buildingId: 'bld_1',
+        type: 'issue',
+        phase: 'execution',
+        roomId: 'room_code_lab',
+        summary: 'Memory leak found',
+      });
+
+      const result = searchRaid({ buildingId: 'bld_1', query: 'Memory leak' });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data).toHaveLength(1);
+        // Should include the human-readable room name from the JOIN
+        expect(result.data[0].room_name).toBe('Backend Workshop');
+      }
+    });
+
+    it('returns null room_name when room_id has no matching room', () => {
+      addRaidEntry({
+        buildingId: 'bld_1',
+        type: 'risk',
+        phase: 'strategy',
+        roomId: 'room_deleted',
+        summary: 'Orphaned room reference',
+      });
+
+      const result = searchRaid({ buildingId: 'bld_1', type: 'risk', phase: 'strategy' });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const orphaned = result.data.find((e: { summary: string }) => e.summary === 'Orphaned room reference');
+        expect(orphaned).toBeDefined();
+        expect(orphaned.room_name).toBeNull();
       }
     });
 
