@@ -21,6 +21,7 @@ import { RoomView } from './views/room-view.js';
 import { ExitDocForm } from './views/exit-doc-form.js';
 import { SettingsView } from './views/settings-view.js';
 import { initEntityNav } from './engine/entity-nav.js';
+import { GlobalSearch } from './components/global-search.js';
 
 // ═══════════════════════════════════════════════════════════
 //  THEME MANAGEMENT
@@ -110,6 +111,16 @@ if (socket) {
   // ── Mount settings view handler (listens for settings:open events) ──
   const settingsView = new SettingsView(document.createElement('div'));
   settingsView.mount();
+
+  // ── Mount global search (Cmd+K) ──
+  const searchContainer = document.createElement('div');
+  searchContainer.id = 'global-search-container';
+  const toolbarRight = document.querySelector('.toolbar-right');
+  if (toolbarRight) {
+    toolbarRight.insertBefore(searchContainer, toolbarRight.firstChild);
+  }
+  const globalSearch = new GlobalSearch(searchContainer);
+  globalSearch.mount();
 
   // Wire settings button
   const settingsBtn = document.getElementById('settings-btn');

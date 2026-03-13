@@ -65,6 +65,7 @@ import {
   ExitDocSubmitSchema,
   ExitDocGetSchema,
   ExitDocListSchema,
+  SearchGlobalSchema,
 } from '../../../src/transport/schemas.js';
 
 // ═══════════════════════════════════════════════════════════
@@ -1003,6 +1004,60 @@ describe('Field Length Limits', () => {
     const result = PhaseResolveConditionsSchema.safeParse({
       gateId: 'gate_1',
       resolvedConditions: Array.from({ length: 501 }, (_, i) => `cond_${i}`),
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ─── Global Search Schema ───
+
+describe('SearchGlobalSchema', () => {
+  it('accepts valid search payload', () => {
+    const result = SearchGlobalSchema.safeParse({
+      buildingId: 'b1',
+      query: 'API endpoints',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.filters).toEqual([]);
+      expect(result.data.limit).toBe(10);
+    }
+  });
+
+  it('accepts payload with filters and limit', () => {
+    const result = SearchGlobalSchema.safeParse({
+      buildingId: 'b1',
+      query: 'test',
+      filters: ['task', 'agent'],
+      limit: 20,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.filters).toEqual(['task', 'agent']);
+      expect(result.data.limit).toBe(20);
+    }
+  });
+
+  it('rejects empty query', () => {
+    const result = SearchGlobalSchema.safeParse({
+      buildingId: 'b1',
+      query: '',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects missing buildingId', () => {
+    const result = SearchGlobalSchema.safeParse({
+      query: 'test',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects limit over 50', () => {
+    const result = SearchGlobalSchema.safeParse({
+      buildingId: 'b1',
+      query: 'test',
+      limit: 100,
     });
     expect(result.success).toBe(false);
   });
