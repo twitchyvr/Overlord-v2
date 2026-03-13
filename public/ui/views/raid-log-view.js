@@ -82,6 +82,11 @@ export class RaidLogView extends Component {
       OverlordUI.subscribe('raid:entry:added', () => this._fetchEntries())
     );
 
+    // Quick Actions FAB dispatches this to open the create form from any view
+    this._listeners.push(
+      OverlordUI.subscribe('raid:request-create', () => this._openCreateForm())
+    );
+
     this._buildingId = store.get('building.active');
     this._entries = store.get('raid.entries') || [];
     if (this._entries.length > 0) this._loading = false;
