@@ -121,6 +121,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   const toolCallLog: ConversationResult['toolCalls'] = [];
   const thinkingLog: string[] = [];
   const totalTokens = { input: 0, output: 0 };
+  const allTextParts: string[] = []; // Accumulate text from ALL iterations (#532)
 
   // Create agent session for this conversation
   const session = new AgentSession({
@@ -266,6 +267,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       .map((b: ContentBlock) => b.text || '')
       .join('\n');
     if (assistantText) {
+      allTextParts.push(assistantText); // Accumulate across iterations (#532)
       session.addMessage({ role: 'assistant', content: assistantText });
       room.onMessage(agentId, assistantText, 'assistant');
     }
@@ -448,17 +450,21 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     // to avoid double-sending messages to the frontend
   }
 
-  // Extract final text from last assistant message
-  const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
-  let finalText = '';
-  if (lastAssistant) {
-    if (typeof lastAssistant.content === 'string') {
-      finalText = lastAssistant.content;
-    } else {
-      finalText = lastAssistant.content
-        .filter((b) => b.type === 'text')
-        .map((b) => b.text || '')
-        .join('\n');
+  // Use accumulated text from ALL iterations so intermediate text
+  // (e.g. explanation before tool calls) isn't lost (#532)
+  let finalText = allTextParts.join('\n\n');
+  if (!finalText) {
+    // Fallback: extract from last assistant message
+    const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
+    if (lastAssistant) {
+      if (typeof lastAssistant.content === 'string') {
+        finalText = lastAssistant.content;
+      } else {
+        finalText = lastAssistant.content
+          .filter((b) => b.type === 'text')
+          .map((b) => b.text || '')
+          .join('\n');
+      }
     }
   }
 
