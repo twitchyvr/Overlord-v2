@@ -67,6 +67,15 @@ const ConfigSchema = z.object({
   AI_MAX_RETRIES: z.coerce.number().int().nonnegative().default(5),
   AI_RETRY_DELAY_MS: z.coerce.number().positive().default(1_000),
 
+  // Parallel Tool Execution (#365)
+  PARALLEL_TOOL_EXECUTION: z.coerce.boolean().default(true),
+
+  // AI Rate Limiting (#381)
+  AI_RATE_LIMIT_RPM: z.coerce.number().default(60),
+
+  // MiniMax Highspeed (#382)
+  MINIMAX_USE_HIGHSPEED: z.coerce.boolean().default(false),
+
   // Shell Tool — 300s default supports native builds (Xcode, cargo, etc.)
   SHELL_TIMEOUT_MS: z.coerce.number().positive().default(300_000),
   SHELL_MAX_OUTPUT: z.coerce.number().positive().default(1_000_000),

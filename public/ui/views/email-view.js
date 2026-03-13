@@ -1,8 +1,10 @@
 /**
  * Overlord v2 — Email View (Agent Interoffice Mail)
  *
- * Full-page view for the agent-to-agent email system.
- * Shows inbox, sent mail, compose form, and threaded conversations.
+ * 3-pane mail client layout:
+ *   Left sidebar  — folder filters (Inbox, Sent, All)
+ *   Middle pane   — email list with sender, subject, date
+ *   Bottom pane   — email preview / thread view
  *
  * Store keys:
  *   email.inbox        — array of inbox emails
@@ -15,10 +17,8 @@
 import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
 import { h, formatTime } from '../engine/helpers.js';
-import { Tabs } from '../components/tabs.js';
 import { Toast } from '../components/toast.js';
 import { Modal } from '../components/modal.js';
-import { Drawer } from '../components/drawer.js';
 import { EntityLink, resolveAgent } from '../engine/entity-nav.js';
 
 
@@ -29,6 +29,12 @@ const PRIORITY_CONFIG = {
   normal: { class: 'email-priority--normal', label: 'Normal', icon: '' },
   low:    { class: 'email-priority--low',    label: 'Low',    icon: '' },
 };
+
+const FOLDERS = [
+  { id: 'inbox', label: 'Inbox',  icon: '\u{1F4E5}' },
+  { id: 'sent',  label: 'Sent',   icon: '\u{1F4E4}' },
+  { id: 'all',   label: 'All',    icon: '\u{1F4EC}' },
+];
 
 
 export class EmailView extends Component {
@@ -41,10 +47,13 @@ export class EmailView extends Component {
     this._unreadCount = 0;
     this._agents = [];
     this._filter = 'inbox';
-    this._tabs = null;
     this._listEl = null;
+    this._previewEl = null;
+    this._foldersEl = null;
     this._loading = true;
     this._selectedAgentForContext = null;
+    this._selectedEmailId = null;
+    this._selectedThreadId = null;
     this._fetchGen = 0;
   }
 
@@ -65,25 +74,24 @@ export class EmailView extends Component {
     this.subscribe(store, 'email.inbox', (inbox) => {
       this._inbox = inbox || [];
       this._loading = false;
-      if (this._filter === 'inbox') this._renderList();
-      this._updateTabBadges();
+      if (this._filter === 'inbox' || this._filter === 'all') this._renderList();
+      this._renderFolderBadges();
     });
 
     this.subscribe(store, 'email.sent', (sent) => {
       this._sent = sent || [];
-      if (this._filter === 'sent') this._renderList();
-      this._updateTabBadges();
+      if (this._filter === 'sent' || this._filter === 'all') this._renderList();
+      this._renderFolderBadges();
     });
 
     this.subscribe(store, 'email.unreadCount', (count) => {
       this._unreadCount = count || 0;
-      this._updateTabBadges();
+      this._renderFolderBadges();
     });
 
     this.subscribe(store, 'agents.list', (agents) => {
       const hadNoAgents = this._agents.length === 0;
       this._agents = agents || [];
-      // If agents just became available, fetch email data
       if (hadNoAgents && this._agents.length > 0) {
         this._fetchData();
         this._render();
@@ -93,8 +101,8 @@ export class EmailView extends Component {
     // Listen for live email events
     this._listeners.push(
       OverlordUI.subscribe('email:received', () => {
-        if (this._filter === 'inbox') this._renderList();
-        this._updateTabBadges();
+        if (this._filter === 'inbox' || this._filter === 'all') this._renderList();
+        this._renderFolderBadges();
       })
     );
 
@@ -104,8 +112,9 @@ export class EmailView extends Component {
   }
 
   destroy() {
-    this._tabs = null;
     this._listEl = null;
+    this._previewEl = null;
+    this._foldersEl = null;
     super.destroy();
   }
 
@@ -122,12 +131,9 @@ export class EmailView extends Component {
     this._loading = true;
     const gen = ++this._fetchGen;
 
-    // Fetch inbox — always resolve loading state regardless of success/failure
     api.fetchInbox(agentId)
       .then((res) => {
         if (!this._mounted || gen !== this._fetchGen) return;
-        // On success, store subscription already set _loading = false.
-        // On failure (ok: false), subscription never fires — handle it here.
         if (!res || !res.ok) {
           this._loading = false;
           this._renderList();
@@ -167,41 +173,95 @@ export class EmailView extends Component {
     );
     this.el.appendChild(header);
 
-    // ── Filter tabs ──
-    const tabWrapper = h('div', { class: 'email-view-tabs' });
-    const tabContainer = h('div');
-    tabWrapper.appendChild(tabContainer);
+    // ── 3-pane layout ──
+    const layout = h('div', { class: 'email-layout' });
 
-    this._tabs = new Tabs(tabContainer, {
-      items: [
-        { id: 'inbox', label: 'Inbox', badge: String(this._inbox.length) },
-        { id: 'sent',  label: 'Sent',  badge: String(this._sent.length) },
-      ],
-      activeId: this._filter,
-      style: 'pills',
-      onChange: (id) => {
-        this._filter = id;
-        this._renderList();
-        this._updateTabBadges();
-      }
-    });
-    this._tabs.mount();
-    this.el.appendChild(tabWrapper);
+    // Left sidebar — folders
+    this._foldersEl = h('div', { class: 'email-folders' });
+    this._renderFolders();
+    layout.appendChild(this._foldersEl);
 
-    // ── Email list container ──
-    this._listEl = h('div', { class: 'email-view-list' });
-    this.el.appendChild(this._listEl);
+    // Right side — list + preview stacked
+    const mainPane = h('div', { class: 'email-main-pane' });
+
+    // Email list
+    this._listEl = h('div', { class: 'email-list' });
+    mainPane.appendChild(this._listEl);
+
+    // Preview pane
+    this._previewEl = h('div', { class: 'email-preview' });
+    this._renderPreviewEmpty();
+    mainPane.appendChild(this._previewEl);
+
+    layout.appendChild(mainPane);
+    this.el.appendChild(layout);
 
     // ── Delegated click handlers ──
-    this.on('click', '.email-view-item', (e, target) => {
+    this.on('click', '.email-row', (e, target) => {
+      // Don't intercept clicks on entity links
+      if (e.target.closest('.entity-link')) return;
+
       const emailId = target.dataset.emailId;
       const threadId = target.dataset.threadId;
-      if (threadId) {
-        this._openThreadDrawer(threadId, emailId);
+      if (emailId) {
+        this._selectEmail(emailId, threadId);
+      }
+    });
+
+    this.on('click', '.email-folder-item', (e, target) => {
+      const folderId = target.dataset.folderId;
+      if (folderId && folderId !== this._filter) {
+        this._filter = folderId;
+        this._selectedEmailId = null;
+        this._selectedThreadId = null;
+        this._renderFolders();
+        this._renderList();
+        this._renderPreviewEmpty();
       }
     });
 
     this._renderList();
+  }
+
+  // ── Folder sidebar ────────────────────────────────────────
+
+  _renderFolders() {
+    if (!this._foldersEl) return;
+    this._foldersEl.textContent = '';
+
+    for (const folder of FOLDERS) {
+      const isActive = this._filter === folder.id;
+      const badge = this._getFolderBadge(folder.id);
+
+      const item = h('div', {
+        class: `email-folder-item${isActive ? ' email-folder-item--active' : ''}`,
+        dataset: { folderId: folder.id },
+      },
+        h('span', { class: 'email-folder-icon' }, folder.icon),
+        h('span', { class: 'email-folder-label' }, folder.label),
+        badge > 0
+          ? h('span', { class: 'email-folder-badge' }, String(badge))
+          : null
+      );
+      this._foldersEl.appendChild(item);
+    }
+  }
+
+  _getFolderBadge(folderId) {
+    if (folderId === 'inbox') return this._unreadCount || this._inbox.length;
+    if (folderId === 'sent') return this._sent.length;
+    if (folderId === 'all') return this._inbox.length + this._sent.length;
+    return 0;
+  }
+
+  _renderFolderBadges() {
+    this._renderFolders();
+
+    // Update header unread badge
+    const badge = this.el.querySelector('.email-view-unread-badge');
+    if (badge) {
+      badge.textContent = this._unreadCount > 0 ? `${this._unreadCount} unread` : '';
+    }
   }
 
   // ── List rendering ─────────────────────────────────────────
@@ -210,7 +270,7 @@ export class EmailView extends Component {
     if (!this._listEl) return;
     this._listEl.textContent = '';
 
-    const items = this._filter === 'inbox' ? this._inbox : this._sent;
+    const items = this._getFilteredItems();
 
     if (this._loading) {
       this._listEl.appendChild(
@@ -226,102 +286,387 @@ export class EmailView extends Component {
       this._listEl.appendChild(
         h('div', { class: 'email-view-empty' },
           h('div', { class: 'email-view-empty-icon' }, '\u{1F4EC}'),
-          h('p', { class: 'email-view-empty-title' },
-            this._filter === 'inbox' ? 'Inbox empty' : 'No sent emails'),
-          h('p', { class: 'email-view-empty-desc' },
-            this._filter === 'inbox'
-              ? 'Agent emails will appear here when agents communicate.'
-              : 'Sent emails will appear here after composing.')
+          h('p', { class: 'email-view-empty-title' }, this._getEmptyTitle()),
+          h('p', { class: 'email-view-empty-desc' }, this._getEmptyDesc())
         )
       );
       return;
     }
 
+    // Column headers
+    this._listEl.appendChild(
+      h('div', { class: 'email-row email-row--header' },
+        h('span', { class: 'email-row-sender' }, this._filter === 'sent' ? 'To' : 'From'),
+        h('span', { class: 'email-row-subject' }, 'Subject'),
+        h('span', { class: 'email-row-date' }, 'Date'),
+      )
+    );
+
     const frag = document.createDocumentFragment();
     for (const email of items) {
-      frag.appendChild(this._buildEmailItem(email));
+      frag.appendChild(this._buildEmailRow(email));
     }
     this._listEl.appendChild(frag);
   }
 
+  _getFilteredItems() {
+    if (this._filter === 'inbox') return this._inbox;
+    if (this._filter === 'sent') return this._sent;
+    // 'all' — merge and sort by date descending
+    const merged = [...this._inbox, ...this._sent];
+    // De-duplicate by id (an email can appear in both inbox and sent if self-CC'd somehow)
+    const seen = new Set();
+    const unique = merged.filter((e) => {
+      if (seen.has(e.id)) return false;
+      seen.add(e.id);
+      return true;
+    });
+    unique.sort((a, b) => {
+      const da = a.created_at || '';
+      const db = b.created_at || '';
+      return db.localeCompare(da);
+    });
+    return unique;
+  }
+
+  _getEmptyTitle() {
+    if (this._filter === 'inbox') return 'Inbox empty';
+    if (this._filter === 'sent') return 'No sent emails';
+    return 'No emails';
+  }
+
+  _getEmptyDesc() {
+    if (this._filter === 'inbox') return 'Agent emails will appear here when agents communicate.';
+    if (this._filter === 'sent') return 'Sent emails will appear here after composing.';
+    return 'No emails have been sent or received yet.';
+  }
+
   /**
-   * Build a single email row element.
+   * Build a single email row for the list.
    */
-  _buildEmailItem(email) {
-    const isUnread = email.status === 'unread' || (!email.read_at && this._filter === 'inbox');
-    const priorityCfg = PRIORITY_CONFIG[email.priority] || PRIORITY_CONFIG.normal;
+  _buildEmailRow(email) {
+    const isUnread = email.status === 'unread' || (!email.read_at && this._filter !== 'sent');
+    const isSelected = this._selectedEmailId === email.id;
     const fromAgent = resolveAgent(email.from_id);
     const fromName = email.from_name || fromAgent?.name || email.from_id;
     const ts = email.created_at;
-    const recipientCount = email.recipients ? email.recipients.length : 0;
+
+    let cls = 'email-row';
+    if (isUnread) cls += ' unread';
+    if (isSelected) cls += ' email-row--selected';
+    if (email.priority === 'urgent') cls += ' email-row--urgent';
 
     const row = h('div', {
-      class: `email-view-item${isUnread ? ' email-view-item--unread' : ''}`,
+      class: cls,
       dataset: {
         emailId: email.id,
         threadId: email.thread_id || email.id,
       }
     });
 
-    // Priority indicator
+    // From / To column
+    const senderText = this._filter === 'sent'
+      ? this._getSentRecipientNames(email)
+      : fromName;
+
+    row.appendChild(h('span', { class: 'email-row-sender' }, senderText));
+
+    // Subject column (with priority badge for urgent)
+    const subjectContent = h('span', { class: 'email-row-subject' });
     if (email.priority === 'urgent') {
-      row.appendChild(h('span', { class: 'email-view-priority email-priority--urgent' }, '!!'));
-    } else {
-      row.appendChild(h('span', { class: 'email-view-priority' }));
+      subjectContent.appendChild(
+        h('span', { class: 'email-priority-badge email-priority--urgent' }, 'URGENT')
+      );
     }
-
-    // Sender/recipient column
-    const senderCol = h('div', { class: 'email-view-sender' });
-    if (this._filter === 'inbox') {
-      const senderLink = email.from_id
-        ? EntityLink.agent(email.from_id, fromName)
-        : h('span', { class: 'email-view-sender-name' }, fromName);
-      if (senderLink.classList) senderLink.classList.add('email-view-sender-name');
-      senderCol.appendChild(senderLink);
-    } else {
-      // Sent view: show recipients
-      const toNames = (email.recipients || [])
-        .filter((r) => r.type === 'to')
-        .map((r) => {
-          const agent = resolveAgent(r.agent_id);
-          return agent?.name || r.agent_id;
-        })
-        .join(', ');
-      senderCol.appendChild(h('span', { class: 'email-view-sender-name' }, `To: ${toNames || 'unknown'}`));
-    }
-    if (recipientCount > 1) {
-      senderCol.appendChild(h('span', { class: 'email-view-recipient-count' }, `+${recipientCount - 1}`));
-    }
-    row.appendChild(senderCol);
-
-    // Subject + preview
-    const subjectCol = h('div', { class: 'email-view-subject-col' },
-      h('span', { class: 'email-view-subject' }, email.subject || '(no subject)'),
-      h('span', { class: 'email-view-preview' }, this._truncate(email.body, 80))
+    subjectContent.appendChild(
+      document.createTextNode(email.subject || '(no subject)')
     );
-    row.appendChild(subjectCol);
+    row.appendChild(subjectContent);
 
-    // Timestamp
-    if (ts) {
-      row.appendChild(h('span', { class: 'email-view-time' }, formatTime(ts)));
-    }
+    // Date column
+    row.appendChild(
+      h('span', { class: 'email-row-date' }, ts ? formatTime(ts) : '')
+    );
 
     return row;
   }
 
-  // ── Tab badges ─────────────────────────────────────────────
+  _getSentRecipientNames(email) {
+    const toRecipients = (email.recipients || [])
+      .filter((r) => r.type === 'to')
+      .map((r) => {
+        const agent = resolveAgent(r.agent_id);
+        return agent?.name || r.agent_id;
+      });
+    return toRecipients.join(', ') || 'unknown';
+  }
 
-  _updateTabBadges() {
-    if (!this._tabs) return;
-    const inboxBadge = this._unreadCount > 0 ? `${this._unreadCount}` : String(this._inbox.length);
-    this._tabs.setBadge('inbox', inboxBadge);
-    this._tabs.setBadge('sent', String(this._sent.length));
+  // ── Email selection & preview ─────────────────────────────
 
-    // Update header unread badge
-    const badge = this.el.querySelector('.email-view-unread-badge');
-    if (badge) {
-      badge.textContent = this._unreadCount > 0 ? `${this._unreadCount} unread` : '';
+  async _selectEmail(emailId, threadId) {
+    this._selectedEmailId = emailId;
+    this._selectedThreadId = threadId || emailId;
+
+    // Update row selection styling
+    if (this._listEl) {
+      this._listEl.querySelectorAll('.email-row--selected').forEach(
+        (el) => el.classList.remove('email-row--selected')
+      );
+      const selected = this._listEl.querySelector(`[data-email-id="${emailId}"]`);
+      if (selected) selected.classList.add('email-row--selected');
     }
+
+    // Mark as read
+    const api = window.overlordSocket;
+    if (api && this._selectedAgentForContext && this._filter !== 'sent') {
+      api.markEmailRead(emailId, this._selectedAgentForContext).catch(() => {});
+      // Remove unread styling from the row
+      const row = this._listEl?.querySelector(`[data-email-id="${emailId}"]`);
+      if (row) row.classList.remove('unread');
+    }
+
+    // Load thread into preview
+    await this._loadPreview(this._selectedThreadId, emailId);
+  }
+
+  async _loadPreview(threadId, emailId) {
+    if (!this._previewEl) return;
+    this._previewEl.textContent = '';
+
+    // Loading state
+    this._previewEl.appendChild(
+      h('div', { class: 'loading-state' },
+        h('div', { class: 'loading-spinner' }),
+        h('p', { class: 'loading-text' }, 'Loading thread...')
+      )
+    );
+
+    const api = window.overlordSocket;
+    if (!api) {
+      this._renderPreviewEmpty();
+      return;
+    }
+
+    let thread = [];
+    try {
+      const res = await api.fetchEmailThread(threadId);
+      thread = (res && res.ok) ? res.data : [];
+    } catch {
+      Toast.error('Error loading email thread');
+      this._renderPreviewEmpty();
+      return;
+    }
+
+    this._previewEl.textContent = '';
+
+    if (thread.length === 0) {
+      this._renderPreviewEmpty();
+      return;
+    }
+
+    // Subject header
+    const subject = thread[0]?.subject || 'No subject';
+    this._previewEl.appendChild(
+      h('div', { class: 'email-preview-header' },
+        h('h3', { class: 'email-preview-subject' }, subject),
+        h('span', { class: 'email-preview-count' },
+          thread.length > 1 ? `${thread.length} messages` : '1 message'
+        )
+      )
+    );
+
+    // Thread messages
+    const threadContainer = h('div', { class: 'email-preview-thread' });
+    for (const email of thread) {
+      threadContainer.appendChild(this._buildThreadMessage(email));
+    }
+    this._previewEl.appendChild(threadContainer);
+
+    // Action buttons
+    const lastEmailId = emailId || thread[thread.length - 1]?.id;
+    const actions = h('div', { class: 'email-preview-actions' },
+      h('button', {
+        class: 'email-action-btn',
+        type: 'button',
+        onClick: () => this._replyFromPreview(lastEmailId, threadId),
+      }, 'Reply'),
+      h('button', {
+        class: 'email-action-btn',
+        type: 'button',
+        onClick: () => this._replyAllFromPreview(lastEmailId, threadId),
+      }, 'Reply All'),
+      h('button', {
+        class: 'email-action-btn',
+        type: 'button',
+        onClick: () => this._forwardFromPreview(lastEmailId),
+      }, 'Forward'),
+    );
+    this._previewEl.appendChild(actions);
+
+    // Inline reply area
+    const replySection = this._buildInlineReply(lastEmailId, threadId);
+    this._previewEl.appendChild(replySection);
+  }
+
+  _renderPreviewEmpty() {
+    if (!this._previewEl) return;
+    this._previewEl.textContent = '';
+    this._previewEl.appendChild(
+      h('div', { class: 'email-preview-empty' },
+        h('p', { class: 'email-preview-empty-text' }, 'Select an email to view its contents')
+      )
+    );
+  }
+
+  /**
+   * Build a single message inside the preview thread.
+   */
+  _buildThreadMessage(email) {
+    const fromAgent = resolveAgent(email.from_id);
+    const fromName = email.from_name || fromAgent?.name || email.from_id;
+    const ts = email.created_at;
+
+    const msg = h('div', { class: 'email-thread-message' },
+      h('div', { class: 'email-thread-message-header' },
+        h('div', { class: 'email-thread-message-from-row' },
+          email.from_id
+            ? EntityLink.agent(email.from_id, fromName)
+            : h('span', { class: 'email-thread-message-from' }, fromName),
+          email.priority === 'urgent'
+            ? h('span', { class: 'email-priority--urgent email-thread-priority-badge' }, 'URGENT')
+            : null,
+        ),
+        ts ? h('span', { class: 'email-thread-message-time' }, formatTime(ts)) : null
+      ),
+      h('div', { class: 'email-thread-message-recipients' },
+        ...this._buildRecipientTags(email.recipients || [])
+      ),
+      h('div', { class: 'email-thread-message-body' }, email.body)
+    );
+
+    return msg;
+  }
+
+  _buildRecipientTags(recipients) {
+    if (recipients.length === 0) return [];
+
+    const tags = [];
+    for (const r of recipients) {
+      const agent = resolveAgent(r.agent_id);
+      const name = agent?.name || r.agent_id;
+      const typeLabel = r.type === 'cc' ? 'CC' : '';
+      tags.push(
+        h('span', { class: `email-recipient-tag ${r.type === 'cc' ? 'email-recipient-tag--cc' : ''}` },
+          typeLabel ? `${typeLabel}: ${name}` : name
+        )
+      );
+    }
+    return tags;
+  }
+
+  // ── Reply / Forward from preview ──────────────────────────
+
+  _buildInlineReply(emailId, threadId) {
+    const section = h('div', { class: 'email-preview-reply' });
+    const replyBody = h('textarea', {
+      class: 'email-compose-textarea',
+      placeholder: 'Write a reply...',
+      rows: 3,
+    });
+    section.appendChild(replyBody);
+
+    const replyBtn = h('button', {
+      class: 'email-action-btn email-action-btn--primary',
+      type: 'button',
+      onClick: async () => {
+        const body = replyBody.value.trim();
+        if (!body) return;
+        const fromId = this._selectedAgentForContext || this._agents[0]?.id;
+        if (!fromId) { Toast.warning('No agent selected'); return; }
+
+        replyBtn.disabled = true;
+        replyBtn.textContent = 'Sending...';
+
+        const api = window.overlordSocket;
+        if (!api) { Toast.error('Not connected'); return; }
+
+        try {
+          const res = await api.replyToEmail(emailId, fromId, body);
+          if (res && res.ok) {
+            Toast.success('Reply sent');
+            replyBody.value = '';
+            this._fetchData();
+            // Reload the preview to show the new message
+            await this._loadPreview(threadId, emailId);
+          } else {
+            replyBtn.disabled = false;
+            replyBtn.textContent = 'Send Reply';
+          }
+        } catch {
+          Toast.error('Error sending reply');
+          replyBtn.disabled = false;
+          replyBtn.textContent = 'Send Reply';
+        }
+      }
+    }, 'Send Reply');
+    section.appendChild(replyBtn);
+
+    return section;
+  }
+
+  _replyFromPreview(emailId, threadId) {
+    // Scroll to the inline reply textarea
+    const textarea = this._previewEl?.querySelector('.email-compose-textarea');
+    if (textarea) {
+      textarea.focus();
+      textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  _replyAllFromPreview(emailId, threadId) {
+    // For reply-all, open compose modal pre-filled
+    const api = window.overlordSocket;
+    if (!api) return;
+
+    api.fetchEmailThread(threadId)
+      .then((res) => {
+        if (!res || !res.ok) return;
+        const thread = res.data || [];
+        const lastEmail = thread[thread.length - 1];
+        if (!lastEmail) return;
+
+        const fromId = this._selectedAgentForContext || this._agents[0]?.id;
+        const allRecipients = (lastEmail.recipients || [])
+          .map((r) => r.agent_id)
+          .filter((id) => id !== fromId);
+        if (lastEmail.from_id !== fromId) allRecipients.push(lastEmail.from_id);
+
+        const uniqueTo = [...new Set(allRecipients)];
+
+        this._openComposeModal({
+          to: uniqueTo,
+          subject: lastEmail.subject?.startsWith('Re: ') ? lastEmail.subject : `Re: ${lastEmail.subject}`,
+        });
+      })
+      .catch(() => {});
+  }
+
+  _forwardFromPreview(emailId) {
+    const api = window.overlordSocket;
+    if (!api) return;
+
+    // Find the email in current data
+    const allEmails = [...this._inbox, ...this._sent];
+    const email = allEmails.find((e) => e.id === emailId);
+    if (!email) return;
+
+    const fromAgent = resolveAgent(email.from_id);
+    const fromName = email.from_name || fromAgent?.name || email.from_id;
+
+    this._openComposeModal({
+      subject: email.subject?.startsWith('Fwd: ') ? email.subject : `Fwd: ${email.subject}`,
+      body: `\n\n--- Forwarded ---\nFrom: ${fromName}\nSubject: ${email.subject}\n\n${email.body}`,
+    });
   }
 
   // ── Agent picker ───────────────────────────────────────────
@@ -331,8 +676,11 @@ export class EmailView extends Component {
       class: 'email-view-agent-picker',
       onChange: (e) => {
         this._selectedAgentForContext = e.target.value;
+        this._selectedEmailId = null;
+        this._selectedThreadId = null;
         this._loading = true;
         this._renderList();
+        this._renderPreviewEmpty();
         this._fetchData();
       }
     });
@@ -474,7 +822,7 @@ export class EmailView extends Component {
             sendBtn.disabled = false;
             sendBtn.textContent = 'Send';
           }
-        } catch (err) {
+        } catch {
           Toast.error('Error sending email');
           sendBtn.disabled = false;
           sendBtn.textContent = 'Send';
@@ -488,134 +836,6 @@ export class EmailView extends Component {
       content,
       size: 'md',
     });
-  }
-
-  // ── Thread drawer ──────────────────────────────────────────
-
-  async _openThreadDrawer(threadId, emailId) {
-    const api = window.overlordSocket;
-    if (!api) return;
-
-    // Mark as read
-    if (emailId && this._selectedAgentForContext) {
-      api.markEmailRead(emailId, this._selectedAgentForContext).catch(() => {});
-    }
-
-    let thread = [];
-    try {
-      const res = await api.fetchEmailThread(threadId);
-      thread = (res && res.ok) ? res.data : [];
-    } catch (err) {
-      Toast.error('Error loading email thread');
-    }
-
-    const content = h('div', { class: 'email-thread' });
-
-    if (thread.length === 0) {
-      content.appendChild(h('p', { class: 'email-thread-empty' }, 'No messages in this thread.'));
-    } else {
-      for (const email of thread) {
-        content.appendChild(this._buildThreadMessage(email));
-      }
-    }
-
-    // Reply form
-    const replySection = h('div', { class: 'email-thread-reply' });
-    const replyBody = h('textarea', {
-      class: 'email-compose-textarea',
-      placeholder: 'Write a reply...',
-      rows: 3,
-    });
-    replySection.appendChild(replyBody);
-
-    const replyActions = h('div', { class: 'email-thread-reply-actions' },
-      h('button', {
-        class: 'email-compose-send-btn email-compose-send-btn--small',
-        type: 'button',
-        onClick: async () => {
-          const body = replyBody.value.trim();
-          if (!body) return;
-          const fromId = this._selectedAgentForContext || this._agents[0]?.id;
-          if (!fromId) { Toast.warning('No agent selected'); return; }
-
-          const btn = replyActions.querySelector('button');
-          btn.disabled = true;
-          btn.textContent = 'Sending...';
-
-          try {
-            const replyRes = await api.replyToEmail(emailId || thread[thread.length - 1]?.id, fromId, body);
-            if (replyRes && replyRes.ok) {
-              Toast.success('Reply sent');
-              // Close and refresh thread to avoid stacking
-              Drawer.close();
-              this._openThreadDrawer(threadId, emailId);
-              this._fetchData();
-            } else {
-              btn.disabled = false;
-              btn.textContent = 'Reply';
-            }
-          } catch (err) {
-            Toast.error('Error sending reply');
-            btn.disabled = false;
-            btn.textContent = 'Reply';
-          }
-        }
-      }, 'Reply')
-    );
-    replySection.appendChild(replyActions);
-    content.appendChild(replySection);
-
-    const firstSubject = thread[0]?.subject || 'Thread';
-
-    Drawer.open('email-thread', {
-      title: firstSubject,
-      width: '520px',
-      content,
-    });
-  }
-
-  /**
-   * Build a single message in a thread view.
-   */
-  _buildThreadMessage(email) {
-    const fromAgent = resolveAgent(email.from_id);
-    const fromName = email.from_name || fromAgent?.name || email.from_id;
-    const ts = email.created_at;
-
-    const msg = h('div', { class: 'email-thread-message' },
-      h('div', { class: 'email-thread-message-header' },
-        email.from_id
-          ? EntityLink.agent(email.from_id, fromName)
-          : h('span', { class: 'email-thread-message-from' }, fromName),
-        email.priority === 'urgent'
-          ? h('span', { class: 'email-priority--urgent email-thread-priority-badge' }, 'URGENT')
-          : null,
-        ts ? h('span', { class: 'email-thread-message-time' }, formatTime(ts)) : null
-      ),
-      h('div', { class: 'email-thread-message-recipients' },
-        ...this._buildRecipientTags(email.recipients || [])
-      ),
-      h('div', { class: 'email-thread-message-body' }, email.body)
-    );
-
-    return msg;
-  }
-
-  _buildRecipientTags(recipients) {
-    if (recipients.length === 0) return [];
-
-    const tags = [];
-    for (const r of recipients) {
-      const agent = resolveAgent(r.agent_id);
-      const name = agent?.name || r.agent_id;
-      const typeLabel = r.type === 'cc' ? 'CC' : '';
-      tags.push(
-        h('span', { class: `email-recipient-tag ${r.type === 'cc' ? 'email-recipient-tag--cc' : ''}` },
-          typeLabel ? `${typeLabel}: ${name}` : name
-        )
-      );
-    }
-    return tags;
   }
 
   // ── Helpers ────────────────────────────────────────────────

@@ -924,14 +924,14 @@ describe('DashboardView', () => {
     expect(kpiValues[3].textContent).toBe('2');
   });
 
-  it('has a New Project button that dispatches navigate:strategist', async () => {
+  it('has a New Project button that dispatches navigate:onboarding', async () => {
     const { DashboardView } = await import('../../../public/ui/views/dashboard-view.js');
     const el = document.createElement('div');
     const view = new DashboardView(el);
     view.mount();
 
     const dispatched: any[] = [];
-    OverlordUI.subscribe('navigate:strategist', () => dispatched.push(true));
+    OverlordUI.subscribe('navigate:onboarding', () => dispatched.push(true));
 
     const btn = el.querySelector('.dashboard-actions .btn-primary') as HTMLElement;
     expect(btn).not.toBeNull();

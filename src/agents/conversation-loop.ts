@@ -16,6 +16,7 @@ import { config } from '../core/config.js';
 import { AgentSession } from './agent-session.js';
 import { estimateTokens, allocateBudget, pruneMessages, getContextMetrics } from './context-manager.js';
 import { buildScratchpadInjection } from '../tools/providers/session-notes.js';
+import { acquireSlot, releaseSlot } from '../ai/rate-limiter.js';
 import type { Bus } from '../core/bus.js';
 import type {
   Result,
@@ -31,6 +32,7 @@ const MAX_TOOL_ITERATIONS = config.get('MAX_TOOL_ITERATIONS');
 const TOOL_TIMEOUT_MS = config.get('TOOL_TIMEOUT_MS');
 const AI_MAX_RETRIES = config.get('AI_MAX_RETRIES');
 const AI_RETRY_DELAY_MS = config.get('AI_RETRY_DELAY_MS');
+const PARALLEL_TOOL_EXECUTION = config.get('PARALLEL_TOOL_EXECUTION');
 
 interface ContentBlock {
   type: 'text' | 'thinking' | 'tool_use' | 'tool_result';
@@ -186,12 +188,17 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     let retries = 0;
 
     while (true) {
+      // Rate limiting: acquire a slot before sending (#381)
+      await acquireSlot(provider);
+
       aiResult = await ai.sendMessage({
         provider,
         messages,
         tools: roomTools,
         options: { ...options, system: systemPrompt },
       });
+
+      releaseSlot(provider);
 
       if (aiResult.ok) break;
 
@@ -253,11 +260,18 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       break;
     }
 
-    // Extract tool_use blocks and execute each
+    // Extract tool_use blocks and execute (parallel or sequential per config #365)
     const toolUseBlocks = response.content.filter((b) => b.type === 'tool_use');
     const toolResults: ContentBlock[] = [];
 
-    for (const toolBlock of toolUseBlocks) {
+    /**
+     * Execute a single tool block and return its result.
+     * Extracted to enable both sequential and parallel execution paths.
+     */
+    const executeSingleTool = async (toolBlock: ContentBlock): Promise<{
+      result: ContentBlock;
+      logEntry: { name: string; input: Record<string, unknown>; result: unknown };
+    }> => {
       const toolName = toolBlock.name || '';
       const toolInput = toolBlock.input || {};
       const toolUseId = toolBlock.id || '';
@@ -267,17 +281,6 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       // Guard: reject tool names not in the room's allowed list
       if (!allowedToolNames.includes(toolName)) {
         log.warn({ tool: toolName, agentId, roomId: room.id, allowedTools: allowedToolNames }, 'AI requested unknown/disallowed tool');
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUseId,
-          content: `Error: Tool "${toolName}" is not available in this room. Available tools: ${allowedToolNames.join(', ')}`,
-          is_error: true,
-        });
-        toolCallLog.push({
-          name: toolName,
-          input: toolInput,
-          result: { error: `Tool "${toolName}" is not available` },
-        });
         bus.emit('tool:guardrail-violation', {
           type: 'unknown_tool',
           toolName,
@@ -285,26 +288,31 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
           roomId: room.id,
           allowedTools: allowedToolNames,
         });
-        continue;
+        return {
+          result: {
+            type: 'tool_result',
+            tool_use_id: toolUseId,
+            content: `Error: Tool "${toolName}" is not available in this room. Available tools: ${allowedToolNames.join(', ')}`,
+            is_error: true,
+          },
+          logEntry: { name: toolName, input: toolInput, result: { error: `Tool "${toolName}" is not available` } },
+        };
       }
 
       // Room-level guardrail: onBeforeToolCall can BLOCK execution
       const beforeResult = room.onBeforeToolCall(toolName, agentId, toolInput);
       if (!beforeResult.ok) {
         log.warn({ tool: toolName, agentId, reason: beforeResult.error.message }, 'Tool blocked by room');
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUseId,
-          content: `Blocked by room: ${beforeResult.error.message}`,
-          is_error: true,
-        });
-        toolCallLog.push({
-          name: toolName,
-          input: toolInput,
-          result: beforeResult.error,
-        });
         bus.emit('tool:blocked', { toolName, agentId, roomId: room.id, reason: beforeResult.error.message });
-        continue;
+        return {
+          result: {
+            type: 'tool_result',
+            tool_use_id: toolUseId,
+            content: `Blocked by room: ${beforeResult.error.message}`,
+            is_error: true,
+          },
+          logEntry: { name: toolName, input: toolInput, result: beforeResult.error },
+        };
       }
 
       bus.emit('tool:executing', {
@@ -339,14 +347,15 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         log.error({ tool: toolName, agentId, roomId: room.id, error: errorMsg }, 'Tool execution failed');
         bus.emit('tool:executed', { toolName, roomId: room.id, agentId, success: false, error: errorMsg });
 
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUseId,
-          content: `Error: ${errorMsg}`,
-          is_error: true,
-        });
-        toolCallLog.push({ name: toolName, input: toolInput, result: { error: errorMsg } });
-        continue;
+        return {
+          result: {
+            type: 'tool_result',
+            tool_use_id: toolUseId,
+            content: `Error: ${errorMsg}`,
+            is_error: true,
+          },
+          logEntry: { name: toolName, input: toolInput, result: { error: errorMsg } },
+        };
       }
 
       // Room-level observation: onAfterToolCall can trigger escalation
@@ -356,25 +365,45 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         ? JSON.stringify(toolResult.data)
         : `Error: ${toolResult.error.message}`;
 
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: toolUseId,
-        content: resultContent,
-        is_error: !toolResult.ok,
-      });
-
-      toolCallLog.push({
-        name: toolName,
-        input: toolInput,
-        result: toolResult.ok ? toolResult.data : toolResult.error,
-      });
-
       bus.emit('tool:executed', {
         toolName,
         roomId: room.id,
         agentId,
         success: toolResult.ok,
       });
+
+      return {
+        result: {
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content: resultContent,
+          is_error: !toolResult.ok,
+        },
+        logEntry: {
+          name: toolName,
+          input: toolInput,
+          result: toolResult.ok ? toolResult.data : toolResult.error,
+        },
+      };
+    };
+
+    // Execute tools: parallel if enabled and multiple tools, otherwise sequential (#365)
+    if (PARALLEL_TOOL_EXECUTION && toolUseBlocks.length > 1) {
+      log.info(
+        { toolCount: toolUseBlocks.length, agentId, roomId: room.id },
+        'Executing tools in parallel',
+      );
+      const outcomes = await Promise.all(toolUseBlocks.map(executeSingleTool));
+      for (const outcome of outcomes) {
+        toolResults.push(outcome.result);
+        toolCallLog.push(outcome.logEntry);
+      }
+    } else {
+      for (const toolBlock of toolUseBlocks) {
+        const outcome = await executeSingleTool(toolBlock);
+        toolResults.push(outcome.result);
+        toolCallLog.push(outcome.logEntry);
+      }
     }
 
     // Add tool results as user message

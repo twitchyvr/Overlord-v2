@@ -132,6 +132,32 @@ const PROJECT_TYPES = [
   }
 ];
 
+// ─── Effort Levels ───
+
+const EFFORT_LEVELS = [
+  {
+    id: 'easy',
+    label: 'Easy',
+    icon: '\u2728',
+    title: 'Hands-Off',
+    description: 'Just tell me what you want. I\u2019ll handle everything.'
+  },
+  {
+    id: 'medium',
+    label: 'Medium',
+    icon: '\u{1F4AC}',
+    title: 'Guided',
+    description: 'I\u2019ll ask a few questions to understand your needs.'
+  },
+  {
+    id: 'advanced',
+    label: 'Advanced',
+    icon: '\u2699\uFE0F',
+    title: 'Full Control',
+    description: 'Configure every detail yourself.'
+  }
+];
+
 // ─── Scale Options ───
 
 const SCALE_OPTIONS = [
@@ -161,7 +187,7 @@ const SCALE_OPTIONS = [
   }
 ];
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 
 export class OnboardingWizard extends Component {
@@ -171,6 +197,7 @@ export class OnboardingWizard extends Component {
     this._step = 1;
     this._projectName = '';
     this._projectDescription = '';
+    this._selectedEffort = null;
     this._selectedType = null;
     this._selectedScale = null;
     this._creating = false;
@@ -206,9 +233,10 @@ export class OnboardingWizard extends Component {
     switch (this._step) {
       case 1: this._renderWelcome(); break;
       case 2: this._renderNameStep(); break;
-      case 3: this._renderTypeStep(); break;
-      case 4: this._renderScaleStep(); break;
-      case 5: this._renderReviewStep(); break;
+      case 3: this._renderEffortStep(); break;
+      case 4: this._renderTypeStep(); break;
+      case 5: this._renderScaleStep(); break;
+      case 6: this._renderReviewStep(); break;
     }
   }
 
@@ -216,7 +244,7 @@ export class OnboardingWizard extends Component {
 
   _renderProgress() {
     const bar = h('div', { class: 'wizard-progress' });
-    const labels = ['Name', 'Type', 'Scale', 'Review'];
+    const labels = ['Name', 'Effort', 'Type', 'Scale', 'Review'];
     for (let i = 0; i < labels.length; i++) {
       const stepNum = i + 2; // Steps 2-5
       const dot = h('div', {
@@ -308,7 +336,7 @@ export class OnboardingWizard extends Component {
     });
     nameInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && this._projectName.trim()) {
-        this._step = 3;
+        this._step = 3; // Effort step
         this.render();
       }
     });
@@ -342,7 +370,7 @@ export class OnboardingWizard extends Component {
     }, 'Next \u2192');
     nextBtn.addEventListener('click', () => {
       if (this._projectName.trim()) {
-        this._step = 3;
+        this._step = 3; // Effort step
         this.render();
       }
     });
@@ -355,7 +383,47 @@ export class OnboardingWizard extends Component {
     requestAnimationFrame(() => nameInput.focus());
   }
 
-  // ─── Step 3: Project Type ───
+  // ─── Step 3: Effort Level ───
+
+  _renderEffortStep() {
+    const content = h('div', { class: 'wizard-step' },
+      h('h2', { class: 'wizard-step-title' }, 'How much control do you want?'),
+      h('p', { class: 'wizard-step-subtitle' }, 'Choose how involved you\u2019d like to be. You can change this later in project settings.')
+    );
+
+    const cards = h('div', { class: 'effort-level-choices' });
+
+    for (const level of EFFORT_LEVELS) {
+      const card = h('div', {
+        class: `effort-level-card${this._selectedEffort?.id === level.id ? ' selected' : ''}`
+      });
+
+      card.appendChild(h('div', { class: 'effort-level-icon' }, level.icon));
+      card.appendChild(h('div', { class: 'effort-level-title' }, level.title));
+      card.appendChild(h('div', { class: 'effort-level-desc' }, level.description));
+
+      card.addEventListener('click', () => {
+        this._selectedEffort = level;
+        this._step = 4; // Type step
+        this.render();
+      });
+
+      cards.appendChild(card);
+    }
+
+    content.appendChild(cards);
+
+    // Actions
+    const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
+    const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
+    backBtn.addEventListener('click', () => { this._step = 2; this.render(); }); // Back to Name
+    actions.appendChild(backBtn);
+    content.appendChild(actions);
+
+    this.el.appendChild(content);
+  }
+
+  // ─── Step 4: Project Type ───
 
   _renderTypeStep() {
     const content = h('div', { class: 'wizard-step' },
@@ -377,7 +445,7 @@ export class OnboardingWizard extends Component {
 
       card.addEventListener('click', () => {
         this._selectedType = type;
-        this._step = 4;
+        this._step = 5; // Scale step
         this.render();
       });
 
@@ -389,14 +457,14 @@ export class OnboardingWizard extends Component {
     // Actions
     const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
     const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
-    backBtn.addEventListener('click', () => { this._step = 2; this.render(); });
+    backBtn.addEventListener('click', () => { this._step = 3; this.render(); }); // Back to Effort
     actions.appendChild(backBtn);
     content.appendChild(actions);
 
     this.el.appendChild(content);
   }
 
-  // ─── Step 4: Scale ───
+  // ─── Step 5: Scale ───
 
   _renderScaleStep() {
     const content = h('div', { class: 'wizard-step' },
@@ -418,7 +486,7 @@ export class OnboardingWizard extends Component {
 
       card.addEventListener('click', () => {
         this._selectedScale = scale;
-        this._step = 5;
+        this._step = 6; // Review step
         this.render();
       });
 
@@ -430,14 +498,14 @@ export class OnboardingWizard extends Component {
     // Actions
     const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
     const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
-    backBtn.addEventListener('click', () => { this._step = 3; this.render(); });
+    backBtn.addEventListener('click', () => { this._step = 4; this.render(); }); // Back to Type
     actions.appendChild(backBtn);
     content.appendChild(actions);
 
     this.el.appendChild(content);
   }
 
-  // ─── Step 5: Review ───
+  // ─── Step 6: Review ───
 
   _renderReviewStep() {
     const type = this._selectedType;
@@ -454,7 +522,9 @@ export class OnboardingWizard extends Component {
     // Summary cards
     const summary = h('div', { class: 'wizard-summary' });
 
+    const effort = this._selectedEffort || EFFORT_LEVELS[0]; // default Easy
     summary.appendChild(this._summaryRow('\u{1F4DD}', 'Project', this._projectName));
+    summary.appendChild(this._summaryRow(effort.icon, 'Effort', `${effort.title} \u2014 ${effort.description}`));
     summary.appendChild(this._summaryRow(type.icon, 'Type', type.label));
     summary.appendChild(this._summaryRow(scale.icon, 'Scale', `${scale.label} \u2014 ${teamSize} AI team members`));
 
@@ -484,7 +554,7 @@ export class OnboardingWizard extends Component {
     // Actions
     const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
     const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
-    backBtn.addEventListener('click', () => { this._step = 4; this.render(); });
+    backBtn.addEventListener('click', () => { this._step = 5; this.render(); }); // Back to Scale
     actions.appendChild(backBtn);
 
     const launchBtn = h('button', {
@@ -575,11 +645,13 @@ export class OnboardingWizard extends Component {
       }
 
       // Create building
+      const effortLevel = (this._selectedEffort || EFFORT_LEVELS[0]).id; // default 'easy'
       const buildResult = await window.overlordSocket.createBuilding({
         name: projectName,
         config: {
           projectDescription: this._projectDescription || `${type.label} project`,
-          template: type.id
+          template: type.id,
+          effortLevel
         }
       });
 
@@ -619,7 +691,7 @@ export class OnboardingWizard extends Component {
       console.error('[OnboardingWizard] Project creation failed:', err);
       Toast.error(`Something went wrong: ${err.message}`);
       this._creating = false;
-      this._step = 5;
+      this._step = 6; // Back to Review
       this.render();
     }
   }
