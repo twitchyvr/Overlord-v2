@@ -128,6 +128,9 @@ export async function navigateTo(viewName) {
 
   _activeViewName = viewName;
 
+  // Notify breadcrumb and other listeners of view change
+  OverlordUI.dispatch('view:changed', { view: viewName });
+
   // Clear center panel
   _centerPanel.textContent = '';
 

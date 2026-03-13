@@ -27,6 +27,7 @@ import { Button } from '../components/button.js';
 import { Modal } from '../components/modal.js';
 import { Drawer } from '../components/drawer.js';
 import { Toast } from '../components/toast.js';
+import { EntityLink } from '../engine/entity-nav.js';
 
 
 const STATUS_ORDER = ['pending', 'in-progress', 'done', 'blocked'];
@@ -415,7 +416,7 @@ export class TaskView extends Component {
     if (task.assignee_id) {
       infoSection.appendChild(h('div', { class: 'task-detail-info-row' },
         h('span', { class: 'task-detail-label' }, 'Assignee'),
-        h('span', null, this._getAgentName(task.assignee_id))
+        EntityLink.agent(task.assignee_id, this._getAgentName(task.assignee_id))
       ));
     }
     if (task.created_at) {
@@ -976,7 +977,7 @@ export class TaskView extends Component {
         agentList.appendChild(h('span', { class: 'task-detail-team-agents-label' }, 'Team Members:'));
         for (const agent of info.agents) {
           const name = agent.name || this._getAgentName(agent.agentId) || agent.agentId;
-          agentList.appendChild(h('span', { class: 'task-detail-team-agent-chip' }, name));
+          agentList.appendChild(EntityLink.agent(agent.agentId, name));
         }
         tableCard.appendChild(agentList);
       }
@@ -1332,7 +1333,7 @@ export class TaskView extends Component {
       const agentName = this._getAgentName(task.assignee_id);
       footer.appendChild(h('span', { class: 'kanban-card-assignee' },
         h('span', { class: 'kanban-card-avatar' }, (agentName || '?')[0].toUpperCase()),
-        h('span', null, agentName || task.assignee_id)
+        EntityLink.agent(task.assignee_id, agentName || task.assignee_id)
       ));
     }
 

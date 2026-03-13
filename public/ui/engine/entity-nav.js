@@ -529,10 +529,134 @@ function _openRaidDetail(entryId) {
   });
 }
 
+// ── Entity Tooltip ────────────────────────────────────────────
+
+let _tooltipEl = null;
+let _tooltipTimer = null;
+
+function _initTooltip() {
+  if (_tooltipEl) return;
+  _tooltipEl = document.createElement('div');
+  _tooltipEl.className = 'entity-tooltip';
+  _tooltipEl.setAttribute('role', 'tooltip');
+  _tooltipEl.hidden = true;
+  document.body.appendChild(_tooltipEl);
+}
+
+function _showTooltip(targetEl, type, id) {
+  _initTooltip();
+  clearTimeout(_tooltipTimer);
+
+  _tooltipTimer = setTimeout(() => {
+    const content = _getTooltipContent(type, id);
+    if (!content) return;
+
+    _tooltipEl.textContent = '';
+    _tooltipEl.appendChild(content);
+    _tooltipEl.hidden = false;
+
+    // Position after content is visible so we can measure
+    requestAnimationFrame(() => _positionTooltip(targetEl));
+  }, 300);
+}
+
+function _hideTooltip() {
+  clearTimeout(_tooltipTimer);
+  if (_tooltipEl) {
+    _tooltipEl.hidden = true;
+  }
+}
+
+function _positionTooltip(targetEl) {
+  if (!_tooltipEl || _tooltipEl.hidden) return;
+
+  const rect = targetEl.getBoundingClientRect();
+  const tipRect = _tooltipEl.getBoundingClientRect();
+
+  // Default: above the element
+  let top = rect.top - tipRect.height - 8;
+  let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
+
+  // If above would go off screen, show below
+  if (top < 8) {
+    top = rect.bottom + 8;
+    _tooltipEl.classList.add('entity-tooltip-below');
+    _tooltipEl.classList.remove('entity-tooltip-above');
+  } else {
+    _tooltipEl.classList.add('entity-tooltip-above');
+    _tooltipEl.classList.remove('entity-tooltip-below');
+  }
+
+  // Keep within viewport horizontally
+  left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+
+  _tooltipEl.style.top = `${top}px`;
+  _tooltipEl.style.left = `${left}px`;
+}
+
+function _getTooltipContent(type, id) {
+  const container = h('div', { class: 'entity-tooltip-content' });
+
+  switch (type) {
+    case 'agent': {
+      const agent = resolveAgent(id);
+      if (!agent || agent.name === id) return null; // No extra info to show
+      container.appendChild(h('div', { class: 'entity-tooltip-name' }, agent.name));
+      if (agent.role) container.appendChild(h('div', { class: 'entity-tooltip-meta' }, agent.role));
+      if (agent.status) {
+        container.appendChild(h('span', {
+          class: `entity-tooltip-badge entity-tooltip-status-${agent.status}`
+        }, agent.status));
+      }
+      return container;
+    }
+    case 'room': {
+      const room = resolveRoom(id);
+      if (!room || room.name === id) return null;
+      container.appendChild(h('div', { class: 'entity-tooltip-name' }, room.name));
+      if (room.type) container.appendChild(h('div', { class: 'entity-tooltip-meta' }, _formatRoomType(room.type)));
+      return container;
+    }
+    case 'task': {
+      const store = OverlordUI.getStore();
+      const tasks = store?.get('tasks.list') || [];
+      const task = tasks.find(t => t.id === id);
+      if (!task) return null;
+      container.appendChild(h('div', { class: 'entity-tooltip-name' }, task.title || id));
+      if (task.status) {
+        container.appendChild(h('span', {
+          class: `entity-tooltip-badge entity-tooltip-task-${task.status}`
+        }, task.status));
+      }
+      if (task.assignee_id) {
+        const agent = resolveAgent(task.assignee_id);
+        container.appendChild(h('div', { class: 'entity-tooltip-meta' }, `Assigned to ${agent?.name || task.assignee_id}`));
+      }
+      return container;
+    }
+    case 'raid': {
+      const store = OverlordUI.getStore();
+      const entries = store?.get('raid.entries') || [];
+      const entry = entries.find(e => e.id === id);
+      if (!entry) return null;
+      container.appendChild(h('div', { class: 'entity-tooltip-name' }, entry.title || entry.summary || id));
+      if (entry.type) container.appendChild(h('div', { class: 'entity-tooltip-meta' }, entry.type));
+      if (entry.severity) {
+        container.appendChild(h('span', {
+          class: `entity-tooltip-badge entity-tooltip-severity-${entry.severity}`
+        }, entry.severity));
+      }
+      return container;
+    }
+    default:
+      return null;
+  }
+}
+
 // ── Shared Helpers ────────────────────────────────────────────
 
 /**
- * Create a clickable entity link element.
+ * Create a clickable entity link element with hover tooltip.
  * @param {'agent'|'room'|'task'|'raid'} type
  * @param {string} id
  * @param {string} displayName
@@ -550,6 +674,7 @@ function _createEntityLink(type, id, displayName) {
 
   link.addEventListener('click', (e) => {
     e.stopPropagation();
+    _hideTooltip();
     OverlordUI.dispatch('navigate:entity', { type, id });
   });
 
@@ -557,9 +682,16 @@ function _createEntityLink(type, id, displayName) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       e.stopPropagation();
+      _hideTooltip();
       OverlordUI.dispatch('navigate:entity', { type, id });
     }
   });
+
+  // Hover tooltip
+  link.addEventListener('mouseenter', () => _showTooltip(link, type, id));
+  link.addEventListener('mouseleave', () => _hideTooltip());
+  link.addEventListener('focus', () => _showTooltip(link, type, id));
+  link.addEventListener('blur', () => _hideTooltip());
 
   return link;
 }
