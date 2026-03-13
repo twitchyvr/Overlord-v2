@@ -681,14 +681,18 @@ export class RaidLogView extends Component {
   async _updateEntryStatus(entryId, status) {
     if (!window.overlordSocket) return;
 
-    const result = await window.overlordSocket.updateRaidStatus({ id: entryId, status });
+    try {
+      const result = await window.overlordSocket.updateRaidStatus({ id: entryId, status });
 
-    if (result && result.ok) {
-      Toast.success(`Entry marked as ${status}`);
-      Drawer.close();
-      this._fetchEntries();
-    } else {
-      Toast.error(result?.error?.message || 'Failed to update status');
+      if (result && result.ok) {
+        Toast.success(`Entry marked as ${status}`);
+        Drawer.close();
+        this._fetchEntries();
+      } else {
+        Toast.error(result?.error?.message || 'Failed to update status');
+      }
+    } catch (err) {
+      Toast.error('Error updating entry status');
     }
   }
 }

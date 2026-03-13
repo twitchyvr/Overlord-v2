@@ -431,19 +431,25 @@ export class EmailView extends Component {
         const api = window.overlordSocket;
         if (!api) { Toast.error('Not connected'); return; }
 
-        const res = await api.sendAgentEmail({
-          fromId: fromAgentId,
-          to,
-          subject,
-          body,
-          priority: prioritySelect.value,
-        });
+        try {
+          const res = await api.sendAgentEmail({
+            fromId: fromAgentId,
+            to,
+            subject,
+            body,
+            priority: prioritySelect.value,
+          });
 
-        if (res && res.ok) {
-          Toast.success('Email sent');
-          Modal.close('email-compose');
-          this._fetchData();
-        } else {
+          if (res && res.ok) {
+            Toast.success('Email sent');
+            Modal.close('email-compose');
+            this._fetchData();
+          } else {
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'Send';
+          }
+        } catch (err) {
+          Toast.error('Error sending email');
           sendBtn.disabled = false;
           sendBtn.textContent = 'Send';
         }
@@ -469,8 +475,13 @@ export class EmailView extends Component {
       api.markEmailRead(emailId, this._selectedAgentForContext).catch(() => {});
     }
 
-    const res = await api.fetchEmailThread(threadId);
-    const thread = (res && res.ok) ? res.data : [];
+    let thread = [];
+    try {
+      const res = await api.fetchEmailThread(threadId);
+      thread = (res && res.ok) ? res.data : [];
+    } catch (err) {
+      Toast.error('Error loading email thread');
+    }
 
     const content = h('div', { class: 'email-thread' });
 
@@ -505,14 +516,20 @@ export class EmailView extends Component {
           btn.disabled = true;
           btn.textContent = 'Sending...';
 
-          const replyRes = await api.replyToEmail(emailId || thread[thread.length - 1]?.id, fromId, body);
-          if (replyRes && replyRes.ok) {
-            Toast.success('Reply sent');
-            // Close and refresh thread to avoid stacking
-            Drawer.close();
-            this._openThreadDrawer(threadId, emailId);
-            this._fetchData();
-          } else {
+          try {
+            const replyRes = await api.replyToEmail(emailId || thread[thread.length - 1]?.id, fromId, body);
+            if (replyRes && replyRes.ok) {
+              Toast.success('Reply sent');
+              // Close and refresh thread to avoid stacking
+              Drawer.close();
+              this._openThreadDrawer(threadId, emailId);
+              this._fetchData();
+            } else {
+              btn.disabled = false;
+              btn.textContent = 'Reply';
+            }
+          } catch (err) {
+            Toast.error('Error sending reply');
             btn.disabled = false;
             btn.textContent = 'Reply';
           }
