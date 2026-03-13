@@ -47,6 +47,10 @@ export class DeployRoom extends BaseRoom {
       'Run health checks after deployment.',
       'Document rollback plan in exit document.',
       'If deployment fails, escalate to War Room immediately.',
+      'For desktop apps: build distributable artifacts (DMG, AppImage, MSI, .deb, or portable binary). Use the project build system (cargo tauri build, electron-builder, npm run build).',
+      'For web apps: deploy to hosting (Netlify, Vercel, Docker, etc.) and verify endpoint health.',
+      'For CLI tools: publish to package registry (npm, crates.io, pip) or create GitHub Release with binaries.',
+      'Always produce a distributable artifact — the exit document must reference where the build output lives.',
     ];
   }
 
@@ -57,6 +61,8 @@ export class DeployRoom extends BaseRoom {
       deployedAt: 'string',
       healthCheck: { status: 'string', endpoints: ['string'] },
       rollbackPlan: 'string',
+      artifacts: ['string (optional — paths to build outputs: DMG, binary, bundle)'],
+      distribution: 'string (optional — where/how the artifact is distributed)',
     };
   }
 

@@ -60,6 +60,8 @@ export class TestingLab extends BaseRoom {
       'If tests fail, document failures with file paths and line numbers.',
       'Do NOT attempt to fix code — escalate to Code Lab.',
       'Your exit document must include concrete evidence.',
+      'Detect the project test runner from the project files: npm test, cargo test, swift test, pytest, go test, flutter test, xcodebuild test, etc. Run whatever the project uses.',
+      'If no formal test framework is set up, use bash to verify the build compiles and runs: check exit codes, stderr, and basic output validation.',
     ];
   }
 

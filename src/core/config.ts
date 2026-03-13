@@ -67,9 +67,9 @@ const ConfigSchema = z.object({
   AI_MAX_RETRIES: z.coerce.number().int().nonnegative().default(5),
   AI_RETRY_DELAY_MS: z.coerce.number().positive().default(1_000),
 
-  // Shell Tool
-  SHELL_TIMEOUT_MS: z.coerce.number().positive().default(120_000),
-  SHELL_MAX_OUTPUT: z.coerce.number().positive().default(500_000),
+  // Shell Tool — 300s default supports native builds (Xcode, cargo, etc.)
+  SHELL_TIMEOUT_MS: z.coerce.number().positive().default(300_000),
+  SHELL_MAX_OUTPUT: z.coerce.number().positive().default(1_000_000),
 
   // Web Tool
   WEB_MAX_RESULTS: z.coerce.number().int().positive().default(50),
