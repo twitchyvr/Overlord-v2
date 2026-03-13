@@ -86,6 +86,11 @@ export class BuildingView extends Component {
       }
     });
 
+    // Subscribe to active room changes so the highlight updates
+    this.subscribe(store, 'rooms.active', () => {
+      this.render();
+    });
+
     // Hydrate from store — data may have arrived before this view mounted
     this._buildingData = store.get('building.data') || null;
     this._agentPositions = store.get('building.agentPositions') || {};
@@ -294,9 +299,11 @@ export class BuildingView extends Component {
   _renderRoomCard(room, floorId) {
     const agentsInRoom = this._getAgentsInRoom(room.id);
     const roomStatus = this._getRoomStatus(agentsInRoom);
+    const store = OverlordUI.getStore();
+    const isActiveRoom = store?.get('rooms.active') === room.id;
 
     const roomCard = h('div', {
-      class: `room-card${agentsInRoom.length > 0 ? ' room-occupied' : ''}`,
+      class: `room-card${agentsInRoom.length > 0 ? ' room-occupied' : ''}${isActiveRoom ? ' room-active-chat' : ''}`,
       'data-room-id': room.id
     });
 
@@ -355,7 +362,14 @@ export class BuildingView extends Component {
 
     roomCard.addEventListener('click', (e) => {
       e.stopPropagation();
-      OverlordUI.dispatch('building:room-selected', { roomId: room.id, floorId });
+      // Set this room as the active chat target
+      const st = OverlordUI.getStore();
+      if (st) {
+        st.set('rooms.active', room.id);
+      }
+      OverlordUI.dispatch('building:room-selected', { roomId: room.id, roomName: room.name || this._formatRoomType(room.type), roomType: room.type, floorId });
+      // Re-render to update active highlight
+      this.render();
     });
 
     return roomCard;
