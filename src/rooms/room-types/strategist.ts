@@ -259,11 +259,13 @@ export class StrategistOffice extends BaseRoom {
       consultation: { chairs: 2, description: 'Strategist + User' },
     },
     tools: [
+      'read_file',
+      'list_dir',
+      'search_files',
       'web_search',
       'record_note',
       'recall_notes',
       'session_note',
-      'list_dir',
     ],
     fileScope: 'read-only',
     exitRequired: {

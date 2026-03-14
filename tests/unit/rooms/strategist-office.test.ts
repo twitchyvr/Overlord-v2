@@ -29,14 +29,15 @@ describe('StrategistOffice', () => {
       expect(contract.fileScope).toBe('read-only');
     });
 
-    it('has minimal tool set — research only, no file writing or execution', () => {
+    it('has research tool set — read access to codebase, no file writing or execution', () => {
+      expect(contract.tools).toContain('read_file');
+      expect(contract.tools).toContain('list_dir');
+      expect(contract.tools).toContain('search_files');
       expect(contract.tools).toContain('web_search');
       expect(contract.tools).toContain('record_note');
       expect(contract.tools).toContain('recall_notes');
       expect(contract.tools).toContain('session_note');
-      expect(contract.tools).toContain('list_dir');
-      expect(contract.tools).toHaveLength(5);
-      expect(contract.tools).not.toContain('read_file');
+      expect(contract.tools).toHaveLength(7);
       expect(contract.tools).not.toContain('write_file');
       expect(contract.tools).not.toContain('bash');
     });
@@ -161,18 +162,19 @@ describe('StrategistOffice', () => {
       expect(room.type).toBe('strategist');
     });
 
-    it('getAllowedTools returns 5 minimal tools', () => {
+    it('getAllowedTools returns 7 research tools', () => {
       const room = new StrategistOffice('room_1');
-      expect(room.getAllowedTools()).toHaveLength(5);
+      expect(room.getAllowedTools()).toHaveLength(7);
     });
 
-    it('hasTool returns false for everything except research tools', () => {
+    it('hasTool returns true for read/research tools, false for write/exec tools', () => {
       const room = new StrategistOffice('room_1');
+      expect(room.hasTool('read_file')).toBe(true);
+      expect(room.hasTool('list_dir')).toBe(true);
+      expect(room.hasTool('search_files')).toBe(true);
       expect(room.hasTool('web_search')).toBe(true);
       expect(room.hasTool('record_note')).toBe(true);
       expect(room.hasTool('recall_notes')).toBe(true);
-      expect(room.hasTool('list_dir')).toBe(true);
-      expect(room.hasTool('read_file')).toBe(false);
       expect(room.hasTool('write_file')).toBe(false);
       expect(room.hasTool('bash')).toBe(false);
     });
@@ -197,12 +199,12 @@ describe('StrategistOffice', () => {
       expect(format).toHaveProperty('estimatedPhases');
     });
 
-    it('buildContextInjection includes minimal tools and read-only scope', () => {
+    it('buildContextInjection includes research tools and read-only scope', () => {
       const room = new StrategistOffice('room_1');
       const ctx = room.buildContextInjection();
       expect(ctx.roomType).toBe('strategist');
       expect(ctx.fileScope).toBe('read-only');
-      expect((ctx.tools as string[])).toHaveLength(5);
+      expect((ctx.tools as string[])).toHaveLength(7);
     });
 
     it('validates complete exit document (building blueprint)', () => {
