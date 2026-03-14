@@ -786,6 +786,13 @@ export const SearchGlobalSchema = z.object({
 });
 
 
+// ─── Room Provider Override Schema (#555) ───
+
+export const RoomProviderSetSchema = z.object({
+  roomType: z.string().min(1).max(50),
+  provider: z.string().max(50).nullable(),
+});
+
 // ─── Agent Reset Schema (#559) ───
 
 export const AgentResetSchema = z.object({

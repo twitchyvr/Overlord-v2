@@ -73,6 +73,7 @@ import {
   QualityConfigGetSchema, QualityConfigSetSchema,
   ActivityHistorySchema,
   AgentResetSchema,
+  RoomProviderSetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { resetBuildingAgents } from '../agents/agent-registry.js';
@@ -2694,6 +2695,19 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
           },
         },
       });
+    });
+
+    // ─── Settings: Room Provider Override (#555) ───
+
+    handle(socket, 'settings:room-provider', RoomProviderSetSchema, (parsed, ack) => {
+      const envKey = `PROVIDER_${parsed.roomType.toUpperCase().replace(/-/g, '_')}`;
+      if (parsed.provider) {
+        process.env[envKey] = parsed.provider;
+      } else {
+        delete process.env[envKey];
+      }
+      log.info({ roomType: parsed.roomType, provider: parsed.provider, envKey }, 'Room provider override saved');
+      if (ack) ack({ ok: true, data: { roomType: parsed.roomType, provider: parsed.provider } });
     });
 
     // ─── System Events ───

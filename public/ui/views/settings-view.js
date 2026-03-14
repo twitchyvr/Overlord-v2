@@ -594,19 +594,45 @@ export class SettingsView extends Component {
       h('span', { class: 'settings-mapping-source' }, 'Source')
     ));
 
+    // Configured providers for the dropdown options
+    const availableProviders = Object.entries(PROVIDERS)
+      .filter(([key]) => this._serverConfig?.providers?.[key]?.configured)
+      .map(([key, info]) => ({ key, ...info }));
+
     for (const [roomType, defaultProvider] of Object.entries(ROOM_PROVIDERS)) {
       const serverOverride = this._serverConfig?.roomProviderMap?.[roomType];
       const active = serverOverride || defaultProvider;
-      const providerInfo = PROVIDERS[active] || { name: active, icon: '\u2753' };
-      const isOverride = serverOverride && serverOverride !== defaultProvider;
       const model = this._serverConfig?.providers?.[active]?.model || '\u2014';
 
+      // Room type label
+      const roomLabel = h('span', { class: 'settings-mapping-room' },
+        roomType.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '));
+
+      // Provider dropdown (editable) (#555)
+      const select = h('select', { class: 'form-select settings-mapping-select' });
+      for (const p of availableProviders) {
+        const opt = h('option', { value: p.key }, `${p.icon} ${p.name}`);
+        if (p.key === active) opt.selected = true;
+        select.appendChild(opt);
+      }
+      // Add unconfigured providers as disabled options
+      for (const [key, info] of Object.entries(PROVIDERS)) {
+        if (!availableProviders.some(p => p.key === key)) {
+          const opt = h('option', { value: key, disabled: true }, `${info.icon} ${info.name} (not configured)`);
+          select.appendChild(opt);
+        }
+      }
+      select.addEventListener('change', () => {
+        this._saveRoomProvider(roomType, select.value, defaultProvider);
+      });
+
+      const providerCell = h('span', { class: 'settings-mapping-provider' });
+      providerCell.appendChild(select);
+
+      const isOverride = active !== defaultProvider;
       mappingTable.appendChild(h('div', { class: 'settings-mapping-row' },
-        h('span', { class: 'settings-mapping-room' },
-          roomType.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')),
-        h('span', { class: 'settings-mapping-provider' },
-          h('span', null, providerInfo.icon),
-          h('span', null, ` ${providerInfo.name}`)),
+        roomLabel,
+        providerCell,
         h('span', { class: 'settings-mapping-model mono' }, model),
         h('span', {
           class: `settings-mapping-source${isOverride ? ' override' : ''}`
@@ -616,6 +642,23 @@ export class SettingsView extends Component {
     section.appendChild(mappingTable);
 
     return section;
+  }
+
+  _saveRoomProvider(roomType, providerKey, defaultProvider) {
+    if (!window.overlordSocket?.socket) return;
+    const isDefault = providerKey === defaultProvider;
+    window.overlordSocket.socket.emit('settings:room-provider', {
+      roomType,
+      provider: isDefault ? null : providerKey,
+    }, (res) => {
+      if (res?.ok) {
+        Toast.success(`${roomType} now uses ${PROVIDERS[providerKey]?.name || providerKey}`);
+        // Re-fetch server config to update model display
+        this._fetchServerConfig();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to save provider');
+      }
+    });
   }
 
   // ── Display Tab ─────────────────────────────────────────
