@@ -215,8 +215,9 @@ describe('formatTime()', () => {
   });
 
   it('returns relative hours for timestamps under 24 hours', () => {
-    const d = new Date(Date.now() - 5 * 3600000);
-    expect(formatTime(d)).toBe('5h ago');
+    // Use 2 hours ago to avoid crossing day boundary in any timezone
+    const d = new Date(Date.now() - 2 * 3600000);
+    expect(formatTime(d)).toBe('2h ago');
   });
 
   it('returns "Yesterday" with time for yesterday timestamps', () => {
