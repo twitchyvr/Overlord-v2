@@ -230,7 +230,7 @@ export const TableDeleteSchema = z.object({
 export const AgentMoveSchema = z.object({
   agentId: id(),
   roomId: id(),
-  tableType: z.string().max(100).optional().default('focus'),
+  tableType: z.string().max(100).nullish(),
 });
 
 // ─── Agent Schemas ───
