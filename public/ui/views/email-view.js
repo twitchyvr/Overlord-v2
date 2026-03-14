@@ -732,30 +732,79 @@ export class EmailView extends Component {
       )
     );
 
-    // To: multi-select checkboxes
-    const toContainer = h('div', { class: 'email-compose-to-list' });
+    // To: chip-based recipient selector with search (#554)
+    const toField = h('div', { class: 'email-compose-field' });
+    toField.appendChild(h('label', {}, 'To:'));
+    const toChipArea = h('div', { class: 'email-compose-chips' });
+    const toSearchInput = h('input', {
+      type: 'text',
+      class: 'email-compose-chip-search',
+      placeholder: 'Search agents...',
+    });
+    const toDropdown = h('div', { class: 'email-compose-chip-dropdown' });
     const selectedTo = new Set(prefill.to || []);
-    for (const agent of buildingAgents) {
-      if (agent.id === fromAgentId) continue;
-      const checkbox = h('input', {
-        type: 'checkbox',
-        value: agent.id,
-        checked: selectedTo.has(agent.id),
-        class: 'email-compose-to-check'
+    const availableAgents = buildingAgents.filter(a => a.id !== fromAgentId);
+
+    const renderToChips = () => {
+      toChipArea.querySelectorAll('.email-compose-chip').forEach(c => c.remove());
+      for (const id of selectedTo) {
+        const agent = resolveAgent(id);
+        const name = agent?.display_name || agent?.name || id;
+        const initial = (name[0] || '?').toUpperCase();
+        const chip = h('span', { class: 'email-compose-chip' },
+          h('span', { class: 'email-compose-chip-avatar' }, initial),
+          h('span', { class: 'email-compose-chip-name' }, name),
+        );
+        const removeBtn = h('button', { class: 'email-compose-chip-remove', type: 'button' }, '\u00D7');
+        removeBtn.addEventListener('click', () => { selectedTo.delete(id); renderToChips(); });
+        chip.appendChild(removeBtn);
+        toChipArea.insertBefore(chip, toSearchInput);
+      }
+    };
+
+    const showDropdown = (query) => {
+      toDropdown.textContent = '';
+      const q = (query || '').toLowerCase();
+      const matches = availableAgents.filter(a => {
+        if (selectedTo.has(a.id)) return false;
+        const name = (a.display_name || a.name || '').toLowerCase();
+        return !q || name.includes(q) || a.role?.toLowerCase().includes(q);
       });
-      toContainer.appendChild(
-        h('label', { class: 'email-compose-to-label' },
-          checkbox,
-          h('span', {}, agent.display_name || agent.name || agent.id)
-        )
-      );
-    }
-    content.appendChild(
-      h('div', { class: 'email-compose-field' },
-        h('label', {}, 'To:'),
-        toContainer
-      )
-    );
+      if (matches.length === 0) {
+        toDropdown.style.display = 'none';
+        return;
+      }
+      toDropdown.style.display = 'block';
+      for (const agent of matches.slice(0, 8)) {
+        const name = agent.display_name || agent.name || agent.id;
+        const initial = (name[0] || '?').toUpperCase();
+        const opt = h('div', { class: 'email-compose-chip-option' },
+          h('span', { class: 'email-compose-chip-avatar' }, initial),
+          h('span', { class: 'email-compose-chip-opt-name' }, name),
+          h('span', { class: 'email-compose-chip-opt-role' }, agent.role || ''),
+        );
+        opt.addEventListener('click', () => {
+          selectedTo.add(agent.id);
+          toSearchInput.value = '';
+          toDropdown.style.display = 'none';
+          renderToChips();
+        });
+        toDropdown.appendChild(opt);
+      }
+    };
+
+    toSearchInput.addEventListener('input', () => showDropdown(toSearchInput.value));
+    toSearchInput.addEventListener('focus', () => showDropdown(toSearchInput.value));
+    toSearchInput.addEventListener('blur', () => setTimeout(() => { toDropdown.style.display = 'none'; }, 200));
+
+    toChipArea.appendChild(toSearchInput);
+    renderToChips();
+
+    const toWrapper = h('div', { class: 'email-compose-to-wrapper' });
+    toWrapper.appendChild(toChipArea);
+    toWrapper.appendChild(toDropdown);
+    toField.appendChild(toWrapper);
+    content.appendChild(toField);
 
     // Subject
     const subjectInput = h('input', {
@@ -802,8 +851,7 @@ export class EmailView extends Component {
       class: 'email-compose-send-btn',
       type: 'button',
       onClick: async () => {
-        const to = [...toContainer.querySelectorAll('.email-compose-to-check:checked')]
-          .map((cb) => cb.value);
+        const to = [...selectedTo];
         const subject = subjectInput.value.trim();
         const body = bodyTextarea.value.trim();
 

@@ -3237,33 +3237,105 @@
   background: var(--surface-secondary);
   border-radius: var(--radius-sm);
 }
-.email-compose-to-list {
+/* ── Chip-based recipient selector (#554) ── */
+.email-compose-to-wrapper {
+  position: relative;
+  width: 100%;
+}
+.email-compose-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-2);
-  max-height: 120px;
-  overflow-y: auto;
-  padding: var(--sp-2);
+  align-items: center;
+  gap: 4px;
+  padding: var(--sp-1) var(--sp-2);
   background: var(--surface-secondary);
-  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-height: 36px;
+  cursor: text;
 }
-.email-compose-to-label {
+.email-compose-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 2px;
+  background: var(--accent-bg, rgba(99, 102, 241, 0.15));
+  border: 1px solid var(--accent-dim, rgba(99, 102, 241, 0.3));
+  border-radius: 12px;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+.email-compose-chip-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 600;
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
-  font-size: var(--text-sm);
-  color: var(--text-primary);
+  justify-content: center;
+}
+.email-compose-chip-name {
+  font-weight: 500;
+}
+.email-compose-chip-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
   cursor: pointer;
-  padding: 2px 6px;
+  font-size: 0.85rem;
+  padding: 0 2px;
+  line-height: 1;
+}
+.email-compose-chip-remove:hover {
+  color: var(--accent-red, #e74c3c);
+}
+.email-compose-chip-search {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+  min-width: 100px;
+  flex: 1;
+}
+.email-compose-chip-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--surface-primary);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 2px;
+}
+.email-compose-chip-option {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
   transition: background var(--duration-fast);
 }
-.email-compose-to-label:hover {
+.email-compose-chip-option:hover {
   background: var(--surface-hover);
 }
-.email-compose-to-check {
-  accent-color: var(--accent);
+.email-compose-chip-opt-name {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.email-compose-chip-opt-role {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-left: auto;
 }
 .email-compose-input {
   padding: var(--sp-2);
