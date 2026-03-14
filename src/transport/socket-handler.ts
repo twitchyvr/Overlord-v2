@@ -199,6 +199,27 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     log.info({ id: socket.id }, 'Client connected');
     broadcastLog('info', `Client connected (${socket.id})`, 'transport');
 
+    // ─── Building Selection (room-based isolation #593) ───
+    // When a client selects a building, they join a Socket.IO room for that building.
+    // This ensures events are scoped to the active building.
+    socket.on('building:select', (data: { buildingId?: string }, ack?: (res: unknown) => void) => {
+      const buildingId = data?.buildingId;
+      if (!buildingId) {
+        if (ack) ack({ ok: false, error: { code: 'MISSING_BUILDING_ID', message: 'buildingId is required' } });
+        return;
+      }
+      // Leave all previous building rooms
+      for (const room of socket.rooms) {
+        if (room.startsWith('building:') && room !== `building:${buildingId}`) {
+          socket.leave(room);
+        }
+      }
+      // Join the new building room
+      socket.join(`building:${buildingId}`);
+      log.info({ socketId: socket.id, buildingId }, 'Client joined building room');
+      if (ack) ack({ ok: true });
+    });
+
     // ─── Building Events ───
 
     handle(socket, 'building:create', BuildingCreateSchema, (parsed, ack) => {
@@ -2712,8 +2733,20 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   });
 
   // ─── Bus → Socket broadcasts ───
+  // Events are scoped to the building room when buildingId is present (#593).
+  // This prevents chat messages, agent updates, and other events from leaking
+  // between projects. Events without buildingId are broadcast globally (e.g., system:log).
 
-  const forward = (event: string) => bus.on(event, (data: Record<string, unknown>) => io.emit(event, data));
+  const forward = (event: string) => bus.on(event, (data: Record<string, unknown>) => {
+    const buildingId = data.buildingId as string | undefined;
+    if (buildingId) {
+      // Scoped broadcast — only clients viewing this building receive the event
+      io.to(`building:${buildingId}`).emit(event, data);
+    } else {
+      // Global broadcast — system-level events without building context
+      io.emit(event, data);
+    }
+  });
 
   forward('room:agent:entered');
   forward('room:agent:exited');

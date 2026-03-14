@@ -108,6 +108,15 @@ class MockIOServer extends EventEmitter {
     this.broadcasted.push({ event: String(event), data: args[0] });
     return true;
   }
+
+  // Mock io.to(room).emit for scoped broadcasts (#593)
+  to(_room: string): { emit: (event: string, data: unknown) => void } {
+    return {
+      emit: (event: string, data: unknown) => {
+        this.broadcasted.push({ event, data });
+      },
+    };
+  }
 }
 
 // Mock bus

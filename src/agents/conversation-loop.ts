@@ -250,6 +250,7 @@ function isTransientError(error: { code?: string; message?: string; retryable?: 
  */
 export async function runConversationLoop(params: ConversationParams): Promise<Result<ConversationResult>> {
   const { provider, room, agentId, ai, tools, bus, options = {} } = params;
+  const buildingId = (options.buildingId as string) || ''; // For scoped event delivery (#593)
   const messages: Message[] = [...params.messages];
   const toolCallLog: ConversationResult['toolCalls'] = [];
   const thinkingLog: string[] = [];
@@ -367,7 +368,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         retries++;
         const delay = AI_RETRY_DELAY_MS * Math.pow(2, retries - 1);
         log.warn({ error: aiError, retry: retries, delayMs: delay, agentId, roomId: room.id }, 'Retrying AI request after transient failure');
-        bus.emit('chat:stream', { agentId, roomId: room.id, content: [{ type: 'text', text: `[Retrying AI request (attempt ${retries + 1})...]` }], iteration });
+        bus.emit('chat:stream', { agentId, buildingId, roomId: room.id, content: [{ type: 'text', text: `[Retrying AI request (attempt ${retries + 1})...]` }], iteration });
         await new Promise((r) => setTimeout(r, delay));
         continue;
       }
@@ -419,6 +420,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
     bus.emit('chat:stream', {
       agentId,
+      buildingId,
       roomId: room.id,
       content: response.content,
       thinking: streamThinking.length > 0 ? streamThinking : undefined,
@@ -499,6 +501,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       // Stream tool progress to the client so the UI shows what's happening
       bus.emit('chat:stream', {
         agentId,
+        buildingId,
         roomId: room.id,
         content: [{ type: 'text', text: '' }],
         status: 'tool',

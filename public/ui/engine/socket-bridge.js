@@ -1429,6 +1429,9 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     async selectBuilding(buildingId) {
+      // Join the building's Socket.IO room for scoped event delivery (#593)
+      socket.emit('building:select', { buildingId });
+
       // Clear stale data from the previous building so views don't
       // show cached lists while the new building's data loads.
       store.batch(() => {
