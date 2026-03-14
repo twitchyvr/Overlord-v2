@@ -1153,10 +1153,8 @@ export class ChatView extends Component {
     for (const text of pills) {
       const pill = h('button', { class: 'chat-suggestion-pill' }, text);
       pill.addEventListener('click', () => {
-        if (this._tokenInput) {
-          this._tokenInput.setValue(text);
-          this._tokenInput.focus();
-        }
+        // Auto-send the suggestion instead of just filling input (#564)
+        this._sendMessage(text, []);
       });
       bar.appendChild(pill);
     }
