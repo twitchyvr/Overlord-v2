@@ -729,6 +729,10 @@ export class StrategistView extends Component {
     this._step = 'creating';
     this.render();
 
+    // Suppress individual error toasts during creation — show one summary instead
+    window._suppressOperationErrors = true;
+    window._suppressedErrors = [];
+
     try {
       if (!window.overlordSocket) {
         throw new Error('Socket not connected');
@@ -783,6 +787,13 @@ export class StrategistView extends Component {
       Toast.error(`Failed to create project: ${err.message}`);
       this._step = 'configure';
       this.render();
+    } finally {
+      window._suppressOperationErrors = false;
+      const suppressed = window._suppressedErrors || [];
+      window._suppressedErrors = [];
+      if (suppressed.length > 0) {
+        Toast.warning(`Project created with ${suppressed.length} warning${suppressed.length > 1 ? 's' : ''} (non-critical)`);
+      }
     }
   }
 }

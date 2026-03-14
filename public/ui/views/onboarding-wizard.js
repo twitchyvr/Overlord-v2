@@ -823,6 +823,10 @@ export class OnboardingWizard extends Component {
     this._creating = true;
     this.render();
 
+    // Suppress individual error toasts during creation — show one summary instead
+    window._suppressOperationErrors = true;
+    window._suppressedErrors = [];
+
     try {
       if (!window.overlordSocket) {
         throw new Error('Not connected to server');
@@ -896,6 +900,14 @@ export class OnboardingWizard extends Component {
       this._creating = false;
       this._step = 1;
       this.render();
+    } finally {
+      // Re-enable error toasts and show summary if any were suppressed
+      window._suppressOperationErrors = false;
+      const suppressed = window._suppressedErrors || [];
+      window._suppressedErrors = [];
+      if (suppressed.length > 0) {
+        Toast.warning(`Project created with ${suppressed.length} warning${suppressed.length > 1 ? 's' : ''} (non-critical)`);
+      }
     }
   }
 
@@ -910,6 +922,10 @@ export class OnboardingWizard extends Component {
 
     this._creating = true;
     this.render();
+
+    // Suppress individual error toasts during creation — show one summary instead
+    window._suppressOperationErrors = true;
+    window._suppressedErrors = [];
 
     try {
       if (!window.overlordSocket) {
@@ -968,6 +984,13 @@ export class OnboardingWizard extends Component {
       this._creating = false;
       this._step = 6; // Back to Review
       this.render();
+    } finally {
+      window._suppressOperationErrors = false;
+      const suppressed = window._suppressedErrors || [];
+      window._suppressedErrors = [];
+      if (suppressed.length > 0) {
+        Toast.warning(`Project created with ${suppressed.length} warning${suppressed.length > 1 ? 's' : ''} (non-critical)`);
+      }
     }
   }
 

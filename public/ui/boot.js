@@ -261,7 +261,15 @@ if (socket) {
   });
 
   // ── Operation error feedback ──
+  // Supports suppression during batch operations (e.g., project creation)
+  // Callers set window._suppressOperationErrors = true, then clear after.
+  // Suppressed errors are collected in window._suppressedErrors for summary.
   engine.subscribe('operation:error', (data) => {
+    if (window._suppressOperationErrors) {
+      window._suppressedErrors = window._suppressedErrors || [];
+      window._suppressedErrors.push(data.message);
+      return;
+    }
     Toast.error(`${data.message}`);
   });
 
