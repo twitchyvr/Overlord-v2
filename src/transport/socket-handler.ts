@@ -2510,6 +2510,43 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
             bus.emit('phase:gate:created', { buildingId: parsed.buildingId, ...gateData });
           }
         }
+
+        // Auto-create tasks from exit document content (#582)
+        if (parsed.buildingId && parsed.document) {
+          const doc = parsed.document;
+          const taskItems: string[] = [];
+
+          // Extract requirements from discovery exit docs
+          if (doc.acceptanceCriteria && Array.isArray(doc.acceptanceCriteria)) {
+            taskItems.push(...doc.acceptanceCriteria);
+          } else if (doc.acceptanceCriteria && typeof doc.acceptanceCriteria === 'string') {
+            taskItems.push(...doc.acceptanceCriteria.split('\n').filter((l: string) => l.trim()));
+          }
+          // Extract tasks from architecture exit docs
+          if (doc.tasks && Array.isArray(doc.tasks)) {
+            taskItems.push(...doc.tasks.map((t: { title?: string; name?: string }) => t.title || t.name || ''));
+          }
+          if (doc.taskBreakdown && Array.isArray(doc.taskBreakdown)) {
+            taskItems.push(...doc.taskBreakdown.map((t: { title?: string; name?: string }) => t.title || t.name || ''));
+          }
+
+          // Create tasks for each extracted item
+          const db2 = getDb();
+          let created = 0;
+          for (const item of taskItems.filter(Boolean)) {
+            const taskId = randomUUID();
+            const now = new Date().toISOString();
+            db2.prepare(`
+              INSERT INTO tasks (id, building_id, title, status, phase, priority, created_at, updated_at)
+              VALUES (?, ?, ?, 'pending', ?, 'normal', datetime(?), datetime(?))
+            `).run(taskId, parsed.buildingId, item, parsed.phase || 'discovery', now, now);
+            created++;
+          }
+          if (created > 0) {
+            broadcastLog('info', `${created} tasks auto-created from exit document`, 'tasks');
+            bus.emit('tasks:bulk-created', { buildingId: parsed.buildingId, count: created });
+          }
+        }
       }
 
       if (ack) ack(result);
