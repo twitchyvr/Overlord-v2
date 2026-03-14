@@ -41,7 +41,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Tablet sidebar hamburger toggle** — collapsible sidebar on tablet breakpoints (#286)
 - **Agent status changes in Activity feed** — Agents tab in activity view shows real-time status updates (#287)
 
-### Fixed (Dogfooding Session — Gardenly)
+### Fixed (Dogfooding Session — Gardenly, March 2026)
 - **CRITICAL: Project isolation** — Socket.IO events leaked between buildings; now scoped to building rooms via `io.to()` (#593)
 - **Strategist can't read files** — added `read_file` and `search_files` to Strategist tool set (#587)
 - **Agent timeout streaming** — tool execution progress now streamed to frontend ("Using read_file...") (#591)
@@ -49,6 +49,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Chat suggestion overlap** — hide suggestion pills while agent is actively streaming (#553)
 - **Drawer dismiss broken** — mount drawer on document.body to escape stacking context; z-index 3000 (#552)
 - **Code Lab write access** — verified working directory flows through to all file/shell tools (#590)
+- **Chat suggestion auto-send** — suggestion pills now send immediately instead of just filling input (#564)
 
 ### Fixed
 - **Room name truncation** — room names in sidebar truncated with tooltip and abbreviation for long names (#469, PR #469)
