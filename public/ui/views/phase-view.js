@@ -219,7 +219,7 @@ export class PhaseView extends Component {
           h('span', { class: 'phase-view-step-icon' }, circleContent)
         ),
         h('div', { class: 'phase-view-step-label' }, this._capitalize(phase)),
-        h('div', { class: 'phase-view-step-desc' }, this._truncateDescription(PHASE_DESCRIPTIONS[phase], 60))
+        h('div', { class: 'phase-view-step-desc', title: PHASE_DESCRIPTIONS[phase] || '' }, this._truncateDescription(PHASE_DESCRIPTIONS[phase], 80))
       );
 
       stepper.appendChild(step);

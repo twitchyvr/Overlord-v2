@@ -182,7 +182,7 @@ export class ChatView extends Component {
 
     // Invalidate suggestion caches when underlying data changes
     this.subscribe(store, 'commands.list', () => { this._cmdCache = null; });
-    this.subscribe(store, 'agents.list', () => { this._agentCache = null; });
+    this.subscribe(store, 'agents.list', () => { this._agentCache = null; this._updateRoomIndicator(); });
     this.subscribe(store, 'rooms.list', () => { this._refCache = null; });
     this.subscribe(store, 'raid.entries', () => { this._refCache = null; });
 
@@ -219,7 +219,8 @@ export class ChatView extends Component {
           onClick: () => this._toggleConversations()
         }, '\u{1F4AC}'),
         h('span', { class: 'chat-header-title' }, 'Chat'),
-        h('span', { class: 'chat-room-indicator', id: 'chat-room-indicator' })
+        h('span', { class: 'chat-room-indicator', id: 'chat-room-indicator' }),
+        h('span', { class: 'chat-room-agents', id: 'chat-room-agents' })
       ),
       h('div', { class: 'chat-header-actions' },
         h('button', {
@@ -993,6 +994,7 @@ export class ChatView extends Component {
   /** Update the room indicator badge in the chat header. */
   _updateRoomIndicator() {
     const indicator = this.el?.querySelector('#chat-room-indicator');
+    const agentsEl = this.el?.querySelector('#chat-room-agents');
     if (!indicator) return;
 
     const store = OverlordUI.getStore();
@@ -1011,6 +1013,26 @@ export class ChatView extends Component {
     } else {
       indicator.textContent = '';
       indicator.hidden = true;
+    }
+
+    // Show agents in the current room (#510)
+    if (agentsEl) {
+      if (activeRoomId) {
+        const allAgents = store?.get('agents.list') || [];
+        const roomAgents = allAgents.filter(a => a.current_room_id === activeRoomId);
+        if (roomAgents.length > 0) {
+          const names = roomAgents.map(a => a.display_name || a.name || 'Agent').join(', ');
+          agentsEl.textContent = names;
+          agentsEl.title = `Agents in this room: ${names}`;
+          agentsEl.hidden = false;
+        } else {
+          agentsEl.textContent = '';
+          agentsEl.hidden = true;
+        }
+      } else {
+        agentsEl.textContent = '';
+        agentsEl.hidden = true;
+      }
     }
   }
 

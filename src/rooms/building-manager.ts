@@ -488,6 +488,42 @@ export function applyBlueprint(buildingId: string, blueprint: BlueprintData): Re
     }
   }
 
+  // 3b. Provision default rooms for the integration floor when the
+  //     blueprint requests it but doesn't specify integration-specific
+  //     rooms in roomConfig (#509)
+  const blueprintRequestsIntegration = blueprint.floorsNeeded.includes('integration');
+  const blueprintHasIntegrationRooms = blueprint.roomConfig.some(e => e.floor === 'integration');
+
+  if (blueprintRequestsIntegration) {
+    const integrationFloor = db.prepare(
+      'SELECT id FROM floors WHERE building_id = ? AND type = ?',
+    ).get(buildingId, 'integration') as { id: string } | undefined;
+
+    if (integrationFloor) {
+      const existingIntegrationRooms = db.prepare(
+        'SELECT COUNT(*) as count FROM rooms WHERE floor_id = ?',
+      ).get(integrationFloor.id) as { count: number };
+
+      if (existingIntegrationRooms.count === 0 && !blueprintHasIntegrationRooms) {
+        const DEFAULT_INTEGRATION_ROOMS = ['data-exchange', 'provider-hub', 'plugin-bay'];
+        const INTEGRATION_ROOM_NAMES: Record<string, string> = {
+          'data-exchange': 'Data Exchange',
+          'provider-hub': 'Provider Hub',
+          'plugin-bay': 'Plugin Bay',
+        };
+        for (const roomType of DEFAULT_INTEGRATION_ROOMS) {
+          const roomId = uid('room');
+          db.prepare(`
+            INSERT INTO rooms (id, floor_id, type, name, config)
+            VALUES (?, ?, ?, ?, ?)
+          `).run(roomId, integrationFloor.id, roomType, INTEGRATION_ROOM_NAMES[roomType], JSON.stringify({}));
+          roomsCreated++;
+        }
+        log.info({ buildingId, rooms: DEFAULT_INTEGRATION_ROOMS }, 'Default integration floor rooms provisioned');
+      }
+    }
+  }
+
   // 4. Create agent DB rows with room access
   for (const agent of blueprint.agentRoster) {
     const agentId = uid('agent');

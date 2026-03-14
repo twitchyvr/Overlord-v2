@@ -124,7 +124,7 @@ export class EmailView extends Component {
     const api = window.overlordSocket;
     if (!api) { this._loading = false; return; }
 
-    const agents = this._agents;
+    const agents = this._getBuildingAgents();
     if (agents.length === 0) { this._loading = false; return; }
 
     const agentId = this._selectedAgentForContext || agents[0].id;
@@ -671,7 +671,18 @@ export class EmailView extends Component {
 
   // ── Agent picker ───────────────────────────────────────────
 
+  /** Get agents filtered to the active building to prevent duplicates (#534). */
+  _getBuildingAgents() {
+    const store = OverlordUI.getStore();
+    const activeBuildingId = store?.get('building.active');
+    if (!activeBuildingId) return this._agents;
+    const filtered = this._agents.filter(a => a.building_id === activeBuildingId);
+    return filtered.length > 0 ? filtered : this._agents;
+  }
+
   _buildAgentPicker() {
+    const buildingAgents = this._getBuildingAgents();
+
     const select = h('select', {
       class: 'email-view-agent-picker',
       onChange: (e) => {
@@ -685,14 +696,14 @@ export class EmailView extends Component {
       }
     });
 
-    if (this._agents.length === 0) {
+    if (buildingAgents.length === 0) {
       select.appendChild(h('option', { value: '' }, 'No agents'));
     } else {
-      for (const agent of this._agents) {
+      for (const agent of buildingAgents) {
         const opt = h('option', {
           value: agent.id,
           selected: this._selectedAgentForContext === agent.id ||
-            (!this._selectedAgentForContext && this._agents[0]?.id === agent.id)
+            (!this._selectedAgentForContext && buildingAgents[0]?.id === agent.id)
         }, agent.display_name || agent.name || agent.id);
         select.appendChild(opt);
       }
@@ -707,7 +718,8 @@ export class EmailView extends Component {
   // ── Compose modal ──────────────────────────────────────────
 
   _openComposeModal(prefill = {}) {
-    const fromAgentId = this._selectedAgentForContext || this._agents[0]?.id || '';
+    const buildingAgents = this._getBuildingAgents();
+    const fromAgentId = this._selectedAgentForContext || buildingAgents[0]?.id || '';
 
     const content = h('div', { class: 'email-compose' });
 
@@ -723,7 +735,7 @@ export class EmailView extends Component {
     // To: multi-select checkboxes
     const toContainer = h('div', { class: 'email-compose-to-list' });
     const selectedTo = new Set(prefill.to || []);
-    for (const agent of this._agents) {
+    for (const agent of buildingAgents) {
       if (agent.id === fromAgentId) continue;
       const checkbox = h('input', {
         type: 'checkbox',

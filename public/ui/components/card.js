@@ -226,14 +226,15 @@ export class Card {
         h('span', { class: 'health-badge-score' }, String(score)),
       );
 
-      // Tooltip with breakdown
+      // Tooltip with user-friendly breakdown
       const breakdown = [
-        `Phase: ${data.healthScore.phaseProgress}/25`,
-        `Tasks: ${data.healthScore.taskCompletion}/25`,
-        `RAID: ${data.healthScore.raidHealth}/25`,
-        `Activity: ${data.healthScore.agentActivity}/25`,
+        `Project progress: ${data.healthScore.phaseProgress}/25`,
+        `Tasks completed: ${data.healthScore.taskCompletion}/25`,
+        `Risks tracked: ${data.healthScore.raidHealth}/25`,
+        `Team activity: ${data.healthScore.agentActivity}/25`,
       ].join('\n');
-      badge.title = `Health Score: ${score}/100\n${breakdown}`;
+      const advice = score >= 75 ? 'Great shape!' : score >= 50 ? 'Making progress' : score >= 25 ? 'Needs attention' : 'Just getting started';
+      badge.title = `Health Score: ${score}/100 — ${advice}\n\n${breakdown}\n\nClick the building card for details.`;
 
       header.appendChild(badge);
     }
