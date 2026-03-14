@@ -194,7 +194,7 @@ export class SettingsView extends Component {
       description: 'Controls verbosity of system logs',
       control: () => {
         const store = OverlordUI.getStore();
-        const current = store?.get('ui.logLevel') || 'info';
+        const current = localStorage.getItem('overlord-log-level') || store?.get('ui.logLevel') || 'info';
 
         const select = h('select', { class: 'form-input settings-select' });
         for (const level of ['error', 'warn', 'info', 'debug']) {
@@ -205,6 +205,11 @@ export class SettingsView extends Component {
         select.addEventListener('change', () => {
           const store = OverlordUI.getStore();
           if (store) store.set('ui.logLevel', select.value);
+          localStorage.setItem('overlord-log-level', select.value);
+          // Also notify server
+          if (window.overlordSocket?.socket) {
+            window.overlordSocket.socket.emit('settings:log-level', { level: select.value });
+          }
           Toast.success(`Log level set to ${select.value}`);
         });
         return select;

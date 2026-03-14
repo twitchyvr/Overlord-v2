@@ -74,6 +74,7 @@ import {
   ActivityHistorySchema,
   AgentResetSchema,
   RoomProviderSetSchema,
+  LogLevelSetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { resetBuildingAgents } from '../agents/agent-registry.js';
@@ -2707,6 +2708,14 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       }
       log.info({ roomType: parsed.roomType, provider: parsed.provider, envKey }, 'Room provider override saved');
       if (ack) ack({ ok: true, data: { roomType: parsed.roomType, provider: parsed.provider } });
+    });
+
+    // ─── Settings: Log Level (#602) ───
+
+    handle(socket, 'settings:log-level', LogLevelSetSchema, (parsed, ack) => {
+      process.env.LOG_LEVEL = parsed.level;
+      log.info({ level: parsed.level }, 'Log level changed via settings');
+      if (ack) ack({ ok: true, data: { level: parsed.level } });
     });
 
     // ─── System Events ───

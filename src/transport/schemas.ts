@@ -786,6 +786,12 @@ export const SearchGlobalSchema = z.object({
 });
 
 
+// ─── Log Level Schema (#602) ───
+
+export const LogLevelSetSchema = z.object({
+  level: z.enum(['error', 'warn', 'info', 'debug']),
+});
+
 // ─── Room Provider Override Schema (#555) ───
 
 export const RoomProviderSetSchema = z.object({
