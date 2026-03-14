@@ -560,6 +560,18 @@ export class TaskView extends Component {
 
     // Metadata
     const infoSection = h('div', { class: 'task-detail-section task-detail-info' });
+    if (task.phase) {
+      infoSection.appendChild(h('div', { class: 'task-detail-info-row' },
+        h('span', { class: 'task-detail-label' }, 'Phase'),
+        h('span', null, task.phase)
+      ));
+    }
+    if (task.assignee_id) {
+      infoSection.appendChild(h('div', { class: 'task-detail-info-row' },
+        h('span', { class: 'task-detail-label' }, 'Assignee'),
+        EntityLink.agent(task.assignee_id, this._getAgentName(task.assignee_id))
+      ));
+    }
     if (task.created_at) {
       infoSection.appendChild(h('div', { class: 'task-detail-info-row' },
         h('span', { class: 'task-detail-label' }, 'Created'),

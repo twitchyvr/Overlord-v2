@@ -785,6 +785,7 @@ export const SearchGlobalSchema = z.object({
   limit: z.number().int().min(1).max(50).optional().default(10),
 });
 
+
 // ─── Plugin Management Schemas ───
 
 export const PluginListSchema = z.object({

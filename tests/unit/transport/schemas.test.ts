@@ -1092,6 +1092,7 @@ describe('SearchGlobalSchema', () => {
   });
 });
 
+
 // Quality Config Schemas
 
 describe('QualityConfigGetSchema', () => {

@@ -23,6 +23,7 @@ import { SettingsView } from './views/settings-view.js';
 import { initEntityNav } from './engine/entity-nav.js';
 import { GlobalSearch } from './components/global-search.js';
 
+
 import { NotificationCenter } from './components/notification-center.js';
 import { AgentActivityTracker } from './components/agent-activity-tracker.js';
 import { BreadcrumbNav } from './components/breadcrumb-nav.js';
@@ -125,6 +126,8 @@ if (socket) {
   }
   const globalSearch = new GlobalSearch(searchContainer);
   globalSearch.mount();
+
+
 
   // ── Mount Notification Center (bell icon in toolbar) ──
   const bellEl = document.getElementById('notification-bell');

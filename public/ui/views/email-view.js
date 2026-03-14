@@ -850,6 +850,134 @@ export class EmailView extends Component {
     });
   }
 
+  // ── Thread drawer ──────────────────────────────────────────
+
+  async _openThreadDrawer(threadId, emailId) {
+    const api = window.overlordSocket;
+    if (!api) return;
+
+    // Mark as read
+    if (emailId && this._selectedAgentForContext) {
+      api.markEmailRead(emailId, this._selectedAgentForContext).catch(() => {});
+    }
+
+    let thread = [];
+    try {
+      const res = await api.fetchEmailThread(threadId);
+      thread = (res && res.ok) ? res.data : [];
+    } catch (err) {
+      Toast.error('Error loading email thread');
+    }
+
+    const content = h('div', { class: 'email-thread' });
+
+    if (thread.length === 0) {
+      content.appendChild(h('p', { class: 'email-thread-empty' }, 'No messages in this thread.'));
+    } else {
+      for (const email of thread) {
+        content.appendChild(this._buildThreadMessage(email));
+      }
+    }
+
+    // Reply form
+    const replySection = h('div', { class: 'email-thread-reply' });
+    const replyBody = h('textarea', {
+      class: 'email-compose-textarea',
+      placeholder: 'Write a reply...',
+      rows: 3,
+    });
+    replySection.appendChild(replyBody);
+
+    const replyActions = h('div', { class: 'email-thread-reply-actions' },
+      h('button', {
+        class: 'email-compose-send-btn email-compose-send-btn--small',
+        type: 'button',
+        onClick: async () => {
+          const body = replyBody.value.trim();
+          if (!body) return;
+          const fromId = this._selectedAgentForContext || this._agents[0]?.id;
+          if (!fromId) { Toast.warning('No agent selected'); return; }
+
+          const btn = replyActions.querySelector('button');
+          btn.disabled = true;
+          btn.textContent = 'Sending...';
+
+          try {
+            const replyRes = await api.replyToEmail(emailId || thread[thread.length - 1]?.id, fromId, body);
+            if (replyRes && replyRes.ok) {
+              Toast.success('Reply sent');
+              // Close and refresh thread to avoid stacking
+              Drawer.close();
+              this._openThreadDrawer(threadId, emailId);
+              this._fetchData();
+            } else {
+              btn.disabled = false;
+              btn.textContent = 'Reply';
+            }
+          } catch (err) {
+            Toast.error('Error sending reply');
+            btn.disabled = false;
+            btn.textContent = 'Reply';
+          }
+        }
+      }, 'Reply')
+    );
+    replySection.appendChild(replyActions);
+    content.appendChild(replySection);
+
+    const firstSubject = thread[0]?.subject || 'Thread';
+
+    Drawer.open('email-thread', {
+      title: firstSubject,
+      width: '520px',
+      content,
+    });
+  }
+
+  /**
+   * Build a single message in a thread view.
+   */
+  _buildThreadMessage(email) {
+    const fromAgent = resolveAgent(email.from_id);
+    const fromName = email.from_name || fromAgent?.name || email.from_id;
+    const ts = email.created_at;
+
+    const msg = h('div', { class: 'email-thread-message' },
+      h('div', { class: 'email-thread-message-header' },
+        email.from_id
+          ? EntityLink.agent(email.from_id, fromName)
+          : h('span', { class: 'email-thread-message-from' }, fromName),
+        email.priority === 'urgent'
+          ? h('span', { class: 'email-priority--urgent email-thread-priority-badge' }, 'URGENT')
+          : null,
+        ts ? h('span', { class: 'email-thread-message-time' }, formatTime(ts)) : null
+      ),
+      h('div', { class: 'email-thread-message-recipients' },
+        ...this._buildRecipientTags(email.recipients || [])
+      ),
+      h('div', { class: 'email-thread-message-body' }, email.body)
+    );
+
+    return msg;
+  }
+
+  _buildRecipientTags(recipients) {
+    if (recipients.length === 0) return [];
+
+    const tags = [];
+    for (const r of recipients) {
+      const agent = resolveAgent(r.agent_id);
+      const name = agent?.name || r.agent_id;
+      const typeLabel = r.type === 'cc' ? 'CC' : '';
+      tags.push(
+        h('span', { class: `email-recipient-tag ${r.type === 'cc' ? 'email-recipient-tag--cc' : ''}` },
+          typeLabel ? `${typeLabel}: ${name}` : name
+        )
+      );
+    }
+    return tags;
+  }
+
   // ── Helpers ────────────────────────────────────────────────
 
   _truncate(text, maxLen) {
