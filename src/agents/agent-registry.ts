@@ -107,6 +107,18 @@ export function registerAgent({
     badgeStr = badge;
   }
 
+  // Auto-generate human name if not provided (#560)
+  if (!firstName) {
+    const g = gender || (Math.random() < 0.5 ? 'female' : 'male');
+    const fNames = g === 'female'
+      ? ['Aria', 'Maya', 'Elena', 'Zara', 'Nadia', 'Sierra', 'Luna', 'Freya', 'Ivy', 'Cora']
+      : ['Leo', 'Kai', 'Ravi', 'Omar', 'Felix', 'Jace', 'Marco', 'Theo', 'Ezra', 'Dion'];
+    const lNames = ['Chen', 'Park', 'Santos', 'Andersen', 'Russo', 'Okafor', 'Nakamura', 'Levy', 'Rivera', 'Singh'];
+    firstName = fNames[Math.floor(Math.random() * fNames.length)];
+    lastName = lastName || lNames[Math.floor(Math.random() * lNames.length)];
+    if (!gender) gender = g;
+  }
+
   // Compute display_name: explicit value > "First Last" > fallback to name
   const computedDisplayName = displayName
     || (firstName && lastName ? `${firstName} ${lastName}` : null)

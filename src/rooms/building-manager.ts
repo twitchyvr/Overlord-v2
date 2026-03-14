@@ -19,6 +19,49 @@ function uid(prefix: string): string {
   return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
 }
 
+// ─── Agent Identity Generator (#560) ───
+
+interface AgentIdentity {
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  gender: string;
+  bio: string;
+  specialization: string;
+}
+
+const FIRST_NAMES_F = ['Aria', 'Maya', 'Elena', 'Zara', 'Nadia', 'Sierra', 'Luna', 'Freya', 'Ivy', 'Cora', 'Iris', 'Sage', 'Nova', 'Ada', 'Vera', 'Mila', 'Leah', 'Rosa', 'Tara', 'Kira'];
+const FIRST_NAMES_M = ['Leo', 'Kai', 'Ravi', 'Omar', 'Felix', 'Jace', 'Marco', 'Theo', 'Ezra', 'Dion', 'Cole', 'Atlas', 'Nico', 'Reid', 'Quinn', 'Soren', 'Arlo', 'Dean', 'Rhys', 'Elio'];
+const LAST_NAMES = ['Chen', 'Park', 'Santos', 'Andersen', 'Russo', 'Okafor', 'Nakamura', 'Levy', 'Rivera', 'Singh', 'Kim', 'Weber', 'Torres', 'Laurent', 'Yamamoto', 'Shah', 'Moreau', 'Petrov', 'Ngozi', 'Alvarez'];
+
+const ROLE_SPECIALIZATIONS: Record<string, string[]> = {
+  strategist: ['Project strategy & planning', 'Resource allocation', 'Stakeholder alignment', 'Risk assessment'],
+  developer: ['Full-stack development', 'API design', 'Database architecture', 'Performance optimization'],
+  tester: ['QA automation', 'Edge case analysis', 'Regression testing', 'Test strategy'],
+  architect: ['System design', 'Scalability patterns', 'API contracts', 'Technical debt management'],
+  researcher: ['Requirements gathering', 'User research', 'Competitive analysis', 'Domain exploration'],
+};
+
+function generateAgentIdentity(archetype: string, role: string, usedNames: Set<string>): AgentIdentity {
+  const gender = Math.random() < 0.5 ? 'female' : 'male';
+  const firstNames = gender === 'female' ? FIRST_NAMES_F : FIRST_NAMES_M;
+
+  // Pick a unique name combination
+  let firstName = '', lastName = '', displayName = '';
+  for (let attempt = 0; attempt < 50; attempt++) {
+    firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+    lastName = LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
+    displayName = `${firstName} ${lastName}`;
+    if (!usedNames.has(displayName)) break;
+  }
+
+  const specs = ROLE_SPECIALIZATIONS[role] || ROLE_SPECIALIZATIONS.developer || ['General expertise'];
+  const specialization = specs[Math.floor(Math.random() * specs.length)];
+  const bio = `${displayName} is a ${specialization.toLowerCase()} specialist serving as ${archetype}. Focused, methodical, and collaborative.`;
+
+  return { firstName, lastName, displayName, gender, bio, specialization };
+}
+
 const log = logger.child({ module: 'building-manager' });
 
 /** Known floor types and their default sort order */
@@ -524,23 +567,22 @@ export function applyBlueprint(buildingId: string, blueprint: BlueprintData): Re
     }
   }
 
-  // 4. Create agent DB rows with room access — disambiguate duplicate names (#575)
-  const nameCount: Record<string, number> = {};
-  for (const agent of blueprint.agentRoster) {
-    nameCount[agent.name] = (nameCount[agent.name] || 0) + 1;
-  }
-  const nameIndex: Record<string, number> = {};
+  // 4. Create agent DB rows with human-readable names and profiles (#560, #575)
+  const usedNames = new Set<string>();
   for (const agent of blueprint.agentRoster) {
     const agentId = uid('agent');
-    let displayName: string | null = null;
-    if (nameCount[agent.name] > 1) {
-      nameIndex[agent.name] = (nameIndex[agent.name] || 0) + 1;
-      displayName = `${agent.name} ${nameIndex[agent.name]}`;
-    }
+    const profile = generateAgentIdentity(agent.name, agent.role, usedNames);
+    usedNames.add(profile.displayName);
+
     db.prepare(`
-      INSERT INTO agents (id, name, role, building_id, room_access, display_name)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(agentId, agent.name, agent.role, buildingId, JSON.stringify(agent.rooms), displayName);
+      INSERT INTO agents (id, name, role, building_id, room_access,
+        first_name, last_name, display_name, gender, bio, specialization)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      agentId, agent.name, agent.role, buildingId, JSON.stringify(agent.rooms),
+      profile.firstName, profile.lastName, profile.displayName,
+      profile.gender, profile.bio, profile.specialization,
+    );
     agentsCreated++;
   }
 
