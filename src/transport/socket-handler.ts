@@ -799,11 +799,10 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         return;
       }
 
-      // Exit current room if any
+      // Exit current room if any — use 'reassignment' reason to bypass exit doc (#571)
       if (agent.current_room_id) {
-        const exitResult = rooms.exitRoom({ roomId: agent.current_room_id, agentId: parsed.agentId });
+        const exitResult = rooms.exitRoom({ roomId: agent.current_room_id, agentId: parsed.agentId, reason: 'reassignment' });
         if (!exitResult.ok) {
-          // If exit fails due to exit doc requirement, tell the user
           if (ack) ack(exitResult);
           return;
         }
@@ -812,7 +811,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       }
 
       // Enter new room
-      const enterResult = rooms.enterRoom({ roomId: parsed.roomId, agentId: parsed.agentId, tableType: parsed.tableType });
+      const enterResult = rooms.enterRoom({ roomId: parsed.roomId, agentId: parsed.agentId, tableType: parsed.tableType ?? undefined });
       if (enterResult.ok) {
         getAssociations(socket.id).roomMemberships.set(parsed.agentId, parsed.roomId);
         bus.emit('room:agent:entered', { roomId: parsed.roomId, agentId: parsed.agentId, tableType: parsed.tableType });

@@ -1354,7 +1354,7 @@ describe('Socket Handler (Transport Layer)', () => {
       const ack = vi.fn();
       socket.emit('agent:move', { agentId: 'agent_1', roomId: 'room_1', tableType: 'focus' }, ack);
 
-      expect(rooms.exitRoom).toHaveBeenCalledWith({ roomId: 'room_old', agentId: 'agent_1' });
+      expect(rooms.exitRoom).toHaveBeenCalledWith({ roomId: 'room_old', agentId: 'agent_1', reason: 'reassignment' });
       expect(rooms.enterRoom).toHaveBeenCalledWith({ roomId: 'room_1', agentId: 'agent_1', tableType: 'focus' });
       expect(ack).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
     });

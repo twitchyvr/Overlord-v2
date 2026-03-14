@@ -153,7 +153,7 @@ export function enterRoom({ roomId, agentId, tableType }: EnterRoomParams): Resu
     // If agent is already in another room, auto-exit it first (prevents orphaned state)
     if (agent.current_room_id && agent.current_room_id !== roomId) {
       log.info({ agentId, previousRoom: agent.current_room_id, newRoom: roomId }, 'Agent already in another room — auto-exiting before entry');
-      const autoExit = exitRoom({ roomId: agent.current_room_id, agentId });
+      const autoExit = exitRoom({ roomId: agent.current_room_id, agentId, reason: 'reassignment' });
       if (!autoExit.ok) {
         return err('AUTO_EXIT_FAILED', `Agent is in room ${agent.current_room_id} and auto-exit failed: ${autoExit.error}`, { context: { previousRoom: agent.current_room_id } });
       }
@@ -254,7 +254,7 @@ export function enterRoom({ roomId, agentId, tableType }: EnterRoomParams): Resu
 interface ExitRoomParams {
   roomId: string;
   agentId: string;
-  reason?: 'disconnect' | 'normal';
+  reason?: 'disconnect' | 'normal' | 'reassignment';
 }
 
 /**
@@ -277,10 +277,11 @@ export function exitRoom({ roomId, agentId, reason }: ExitRoomParams): Result {
       return err('NOT_IN_ROOM', `Agent ${agentId} is not in room ${roomId}`);
     }
 
-    // Enforce exit document requirement (skip for disconnect — agent can't submit docs from a closed connection)
-    const isDisconnect = reason === 'disconnect';
+    // Enforce exit document requirement
+    // Skip for disconnect (agent can't submit docs) and reassignment (system-initiated move, #571)
+    const skipExitDoc = reason === 'disconnect' || reason === 'reassignment';
     const exitReq = room.exitRequired;
-    if (!isDisconnect && exitReq && exitReq.fields.length > 0) {
+    if (!skipExitDoc && exitReq && exitReq.fields.length > 0) {
       const exitDoc = db
         .prepare('SELECT id FROM exit_documents WHERE room_id = ? AND completed_by = ? ORDER BY created_at DESC LIMIT 1')
         .get(roomId, agentId) as { id: string } | undefined;
@@ -305,8 +306,8 @@ export function exitRoom({ roomId, agentId, reason }: ExitRoomParams): Result {
       agentId,
     );
 
-    if (isDisconnect) {
-      log.info({ roomId, agentId, reason: 'disconnect' }, 'Agent exited room due to disconnect (exit doc bypassed)');
+    if (skipExitDoc) {
+      log.info({ roomId, agentId, reason: reason || 'auto' }, 'Agent exited room (exit doc bypassed)');
     } else {
       log.info({ roomId, agentId }, 'Agent exited room');
     }
