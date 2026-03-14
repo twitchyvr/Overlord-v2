@@ -215,9 +215,19 @@ describe('formatTime()', () => {
   });
 
   it('returns relative hours for timestamps under 24 hours', () => {
-    // Use 2 hours ago to avoid crossing day boundary in any timezone
-    const d = new Date(Date.now() - 2 * 3600000);
-    expect(formatTime(d)).toBe('2h ago');
+    // Use a timestamp that's definitely "today" — set to noon today minus 3 hours = 9 AM today
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const threeHoursBeforeNoon = new Date(today.getTime() - 3 * 3600000);
+    // Only test if we're past noon (so 3h ago is still today)
+    if (new Date().getHours() >= 12) {
+      const d = new Date(Date.now() - 3 * 3600000);
+      expect(formatTime(d)).toBe('3h ago');
+    } else {
+      // Before noon — use 30 minutes ago which is always same day
+      const d = new Date(Date.now() - 30 * 60000);
+      expect(formatTime(d)).toBe('30m ago');
+    }
   });
 
   it('returns "Yesterday" with time for yesterday timestamps', () => {
