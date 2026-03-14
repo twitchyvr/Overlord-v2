@@ -2805,6 +2805,29 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
           }
           broadcastLog('info', `Phase gate created for ${phase} (exit doc auto-submitted)`, 'phase');
           bus.emit('phase:gate:created', { buildingId, ...gateData });
+
+          // In EASY mode: auto-sign the gate with GO verdict and advance the phase
+          const buildingRow = getDb().prepare('SELECT config FROM buildings WHERE id = ?').get(buildingId) as { config: string } | undefined;
+          const buildingConfig = buildingRow?.config ? JSON.parse(buildingRow.config) : {};
+          const effortLevel = buildingConfig.effortLevel || 'easy';
+
+          if (effortLevel === 'easy') {
+            const signResult = await signoffGate({
+              gateId: gateData.id,
+              reviewer: 'system-auto',
+              verdict: 'GO',
+              exitDocId: exitDocId || undefined,
+            });
+            if (signResult.ok) {
+              const signData = signResult.data as { phaseAdvanced?: boolean; nextPhase?: string };
+              broadcastLog('info', `Phase auto-advanced: ${phase} → ${signData.nextPhase || 'next'} (EASY mode)`, 'phase');
+              if (signData.phaseAdvanced && signData.nextPhase) {
+                bus.emit('phase:advanced', { buildingId, from: phase, to: signData.nextPhase, gateId: gateData.id });
+                bus.emit('building:updated', { id: buildingId, activePhase: signData.nextPhase });
+                io.emit('phase:gate:signed-off', { gateId: gateData.id, buildingId, verdict: 'GO', phaseAdvanced: true, nextPhase: signData.nextPhase });
+              }
+            }
+          }
         }
       }
 
