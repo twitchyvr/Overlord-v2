@@ -81,6 +81,11 @@
 .building-project-icon {
   flex-shrink: 0;
 }
+.building-wd-warning {
+  color: var(--yellow-400, #facc15);
+  font-style: italic;
+  font-family: inherit;
+}
 
 /* ═══════════════════════════════════════════════════
    FLOOR TREE — Vertical accordion with compact items

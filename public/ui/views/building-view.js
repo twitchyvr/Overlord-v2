@@ -122,43 +122,57 @@ export class BuildingView extends Component {
     );
     header.appendChild(headerTop);
 
-    // Project directory and repo info
-    if (this._buildingData.working_directory || this._buildingData.repo_url) {
-      const projectInfo = h('div', { class: 'building-project-info' });
-      if (this._buildingData.working_directory) {
-        const fullPath = this._buildingData.working_directory;
-        const shortPath = fullPath.split('/').filter(Boolean).pop() || fullPath;
-        const pathRow = h('div', { class: 'building-project-path mono', title: fullPath },
-          h('span', { class: 'building-project-icon' }, '\u{1F4C1}'),
-          shortPath
-        );
+    // Project directory and repo info — always show, warn if missing (#606)
+    const projectInfo = h('div', { class: 'building-project-info' });
+    if (this._buildingData.working_directory) {
+      const fullPath = this._buildingData.working_directory;
+      const shortPath = fullPath.split('/').filter(Boolean).pop() || fullPath;
+      const pathRow = h('div', { class: 'building-project-path mono', title: fullPath },
+        h('span', { class: 'building-project-icon' }, '\u{1F4C1}'),
+        shortPath
+      );
 
-        // Inline edit button for working directory (#539)
-        const editBtn = h('button', {
-          class: 'btn btn-ghost btn-xs building-wd-edit',
-          title: 'Change working directory',
-        }, '\u270E');
-        editBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this._showInlineWdEdit(pathRow, fullPath);
-        });
-        pathRow.appendChild(editBtn);
-        projectInfo.appendChild(pathRow);
-      }
-      if (this._buildingData.repo_url) {
-        const repoLink = h('a', {
-          class: 'building-project-repo mono',
-          href: this._buildingData.repo_url,
-          target: '_blank',
-          rel: 'noopener',
-        },
-          h('span', { class: 'building-project-icon' }, '\u{1F517}'),
-          this._buildingData.repo_url.replace('https://github.com/', '')
-        );
-        projectInfo.appendChild(repoLink);
-      }
-      header.appendChild(projectInfo);
+      // Inline edit button for working directory (#539)
+      const editBtn = h('button', {
+        class: 'btn btn-ghost btn-xs building-wd-edit',
+        title: 'Change working directory',
+      }, '\u270E');
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._showInlineWdEdit(pathRow, fullPath);
+      });
+      pathRow.appendChild(editBtn);
+      projectInfo.appendChild(pathRow);
+    } else {
+      // No working directory — show warning with set button
+      const warningRow = h('div', { class: 'building-project-path building-wd-warning' },
+        h('span', { class: 'building-project-icon' }, '\u26A0'),
+        h('span', null, 'No working directory set')
+      );
+      const setBtn = h('button', {
+        class: 'btn btn-ghost btn-xs building-wd-edit',
+        title: 'Set working directory',
+      }, 'Set path');
+      setBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._showInlineWdEdit(warningRow, '');
+      });
+      warningRow.appendChild(setBtn);
+      projectInfo.appendChild(warningRow);
     }
+    if (this._buildingData.repo_url) {
+      const repoLink = h('a', {
+        class: 'building-project-repo mono',
+        href: this._buildingData.repo_url,
+        target: '_blank',
+        rel: 'noopener',
+      },
+        h('span', { class: 'building-project-icon' }, '\u{1F517}'),
+        this._buildingData.repo_url.replace('https://github.com/', '')
+      );
+      projectInfo.appendChild(repoLink);
+    }
+    header.appendChild(projectInfo);
 
     // Building action bar
     const headerActions = h('div', { class: 'building-header-actions' });
