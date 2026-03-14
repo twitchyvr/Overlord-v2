@@ -31,6 +31,8 @@ export interface GenerateFullProfileOpts {
   provider?: string;
   /** Existing profile fields to preserve (won't be overwritten) */
   existing?: Partial<AgentProfileFields>;
+  /** Project context (type/description) for relevant specializations (#511) */
+  projectContext?: string;
 }
 
 export interface FullProfileResult {
@@ -77,10 +79,18 @@ export async function generateFullProfile(
   // ─── Step 1: Generate Identity (name + bio) ───
 
   if (!options.skipBio) {
-    // Build a richer specialization hint from capabilities if provided
-    const specializationHint = capabilities && capabilities.length > 0
-      ? `Specializes in: ${capabilities.join(', ')}`
-      : undefined;
+    // Build a richer specialization hint from capabilities and project context (#511)
+    let specializationHint: string | undefined;
+    const parts: string[] = [];
+    if (capabilities && capabilities.length > 0) {
+      parts.push(`Specializes in: ${capabilities.join(', ')}`);
+    }
+    if (options.projectContext) {
+      parts.push(`Project context: ${options.projectContext}`);
+    }
+    if (parts.length > 0) {
+      specializationHint = parts.join('. ');
+    }
 
     const identityResult = await generateAgentIdentity(
       ai,

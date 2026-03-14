@@ -126,10 +126,22 @@ export class BuildingView extends Component {
       if (this._buildingData.working_directory) {
         const fullPath = this._buildingData.working_directory;
         const shortPath = fullPath.split('/').filter(Boolean).pop() || fullPath;
-        projectInfo.appendChild(h('div', { class: 'building-project-path mono', title: fullPath },
+        const pathRow = h('div', { class: 'building-project-path mono', title: fullPath },
           h('span', { class: 'building-project-icon' }, '\u{1F4C1}'),
           shortPath
-        ));
+        );
+
+        // Inline edit button for working directory (#539)
+        const editBtn = h('button', {
+          class: 'btn btn-ghost btn-xs building-wd-edit',
+          title: 'Change working directory',
+        }, '\u270E');
+        editBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._showInlineWdEdit(pathRow, fullPath);
+        });
+        pathRow.appendChild(editBtn);
+        projectInfo.appendChild(pathRow);
       }
       if (this._buildingData.repo_url) {
         const repoLink = h('a', {
@@ -505,6 +517,60 @@ export class BuildingView extends Component {
       size: 'lg',
       position: window.innerWidth < 768 ? 'fullscreen' : 'center',
     });
+  }
+
+  // ── Inline Working Directory Edit (#539) ────────────────
+
+  /** Show an inline text input to change the working directory. */
+  _showInlineWdEdit(pathRow, currentPath) {
+    // Replace the path row contents with an input + save/cancel
+    pathRow.textContent = '';
+    const input = h('input', {
+      class: 'form-input form-input-sm mono',
+      type: 'text',
+      value: currentPath,
+      placeholder: '/path/to/project',
+    });
+    const saveBtn = h('button', { class: 'btn btn-primary btn-xs' }, 'Save');
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-xs' }, 'Cancel');
+
+    cancelBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.render();
+    });
+
+    saveBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const newPath = input.value.trim();
+      if (!newPath || newPath === currentPath) { this.render(); return; }
+      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+      saveBtn.disabled = true;
+      saveBtn.textContent = '...';
+      try {
+        const result = await window.overlordSocket.updateBuilding(this._buildingData.id, {
+          workingDirectory: newPath,
+        });
+        if (result && result.ok) {
+          Toast.success('Working directory updated');
+          this._buildingData.working_directory = newPath;
+        } else {
+          throw new Error(result?.error?.message || 'Update failed');
+        }
+      } catch (err) {
+        Toast.error(`Failed: ${err.message}`);
+      }
+      this.render();
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveBtn.click();
+      if (e.key === 'Escape') cancelBtn.click();
+    });
+
+    pathRow.appendChild(input);
+    pathRow.appendChild(saveBtn);
+    pathRow.appendChild(cancelBtn);
+    requestAnimationFrame(() => input.focus());
   }
 
   // ── Building Management Modal ────────────────────────────

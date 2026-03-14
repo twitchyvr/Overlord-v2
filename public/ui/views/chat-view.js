@@ -135,6 +135,10 @@ export class ChatView extends Component {
     this._lastRenderedId = null;  // last message id for incremental detection
     this._suggestionsBarEl = null; // contextual suggestions bar
 
+    // Per-room message history (#537)
+    this._roomMessages = new Map();  // roomId -> messages[]
+    this._previousRoomId = null;
+
     // Token suggestion caches (populated on first fetch, cleared on reconnect)
     this._cmdCache = null;
     this._agentCache = null;
@@ -187,7 +191,8 @@ export class ChatView extends Component {
     this.subscribe(store, 'raid.entries', () => { this._refCache = null; });
 
     // Update chat header and suggestions when active room changes
-    this.subscribe(store, 'rooms.active', () => {
+    this.subscribe(store, 'rooms.active', (newRoomId) => {
+      this._handleRoomSwitch(newRoomId);
       this._updateRoomIndicator();
       this._updateSuggestionsBar();
     });
@@ -318,6 +323,39 @@ export class ChatView extends Component {
   /**
    * Render the message list.
    *
+   * Handle room switch — preserve old messages and show divider (#537).
+   */
+  _handleRoomSwitch(newRoomId) {
+    if (!newRoomId || newRoomId === this._previousRoomId) return;
+
+    const store = OverlordUI.getStore();
+    const currentMessages = store?.get('chat.messages') || [];
+
+    // Save current room's messages before switching
+    if (this._previousRoomId && currentMessages.length > 0) {
+      this._roomMessages.set(this._previousRoomId, [...currentMessages]);
+    }
+
+    // Look up the previous room's display name
+    if (this._previousRoomId && currentMessages.length > 0 && this._messagesEl) {
+      const rooms = store?.get('rooms.list') || [];
+      const prevRoom = rooms.find(r => r.id === this._previousRoomId);
+      const roomLabel = prevRoom
+        ? (prevRoom.type || prevRoom.name || 'Unknown').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        : 'Previous';
+      // Insert a room divider in the chat
+      const divider = h('div', { class: 'chat-room-divider' },
+        h('span', { class: 'chat-room-divider-line' }),
+        h('span', { class: 'chat-room-divider-label' }, `Previous: ${roomLabel} Room`),
+        h('span', { class: 'chat-room-divider-line' })
+      );
+      this._messagesEl.appendChild(divider);
+    }
+
+    this._previousRoomId = newRoomId;
+  }
+
+  /**
    * Uses incremental append when new messages arrive to preserve scroll
    * position for users reading history.  Falls back to full re-render
    * only when the message set diverges (clear, reload, etc.).

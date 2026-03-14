@@ -268,6 +268,31 @@ export class DashboardView extends Component {
 
     for (const building of this._buildings) {
       const isActive = building.id === this._activeBuilding;
+      const isArchived = (building.name || '').includes('(Archived');
+      const cardActions = {
+        'Open': () => {
+          if (window.overlordSocket) {
+            window.overlordSocket.selectBuilding(building.id);
+          }
+          OverlordUI.dispatch('building:selected', { buildingId: building.id });
+        }
+      };
+
+      // Archive / Restore button (#515)
+      if (isArchived) {
+        cardActions['Restore'] = async () => {
+          if (!window.overlordSocket) return;
+          const newName = building.name.replace(/\s*\(Archived\)/, '');
+          await window.overlordSocket.updateBuilding(building.id, { name: newName });
+        };
+      } else {
+        cardActions['Archive'] = async () => {
+          if (!window.overlordSocket) return;
+          const newName = `${building.name} (Archived)`;
+          await window.overlordSocket.updateBuilding(building.id, { name: newName });
+        };
+      }
+
       const card = Card.create('building', {
         name: building.name,
         activePhase: building.activePhase || building.active_phase,
@@ -279,14 +304,7 @@ export class DashboardView extends Component {
       }, {
         variant: isActive ? 'solid' : 'glass',
         className: isActive ? 'building-card-active' : '',
-        actions: {
-          'Open': () => {
-            if (window.overlordSocket) {
-              window.overlordSocket.selectBuilding(building.id);
-            }
-            OverlordUI.dispatch('building:selected', { buildingId: building.id });
-          }
-        }
+        actions: cardActions,
       });
 
       grid.appendChild(card);

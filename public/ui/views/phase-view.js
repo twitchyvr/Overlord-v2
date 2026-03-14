@@ -71,6 +71,7 @@ export class PhaseView extends Component {
     this._buildingId = null;
     this._historyExpanded = false;
     this._expandedSignoffGateId = null;  // gate ID whose sign-off form is open
+    this._exitDocs = [];                 // exit docs for current building (#529)
   }
 
   /* ── Lifecycle ── */
@@ -93,6 +94,12 @@ export class PhaseView extends Component {
 
     this.subscribe(store, 'building.active', (buildingId) => {
       this._buildingId = buildingId;
+      this._fetchExitDocs();
+      this._render();
+    });
+
+    this.subscribe(store, 'exitDocs.list', (docs) => {
+      this._exitDocs = docs || [];
       this._render();
     });
 
@@ -110,6 +117,8 @@ export class PhaseView extends Component {
     this._currentPhase = store.get('building.activePhase') || 'strategy';
     this._gates = store.get('phase.gates') || [];
     this._buildingId = store.get('building.active') || null;
+    this._exitDocs = store.get('exitDocs.list') || [];
+    this._fetchExitDocs();
 
     this._render();
   }
@@ -236,7 +245,9 @@ export class PhaseView extends Component {
     const allGatesGo = currentGates.length > 0 && currentGates.every(g => g.status === 'go');
     const noGates = currentGates.length === 0;
     const nextPhase = currentIdx + 1 < PHASE_ORDER.length ? PHASE_ORDER[currentIdx + 1] : null;
-    const canAdvance = nextPhase && (allGatesGo || noGates);
+    // Require exit documents for current phase before allowing advancement (#529)
+    const hasExitDocs = this._hasExitDocsForPhase();
+    const canAdvance = nextPhase && (allGatesGo || noGates) && hasExitDocs;
 
     const card = h('div', { class: `phase-view-current-card phase-view-current-${this._currentPhase}` });
 
@@ -288,10 +299,13 @@ export class PhaseView extends Component {
         advanceBtn.addEventListener('click', () => this._handleAdvancePhase());
         actionRow.appendChild(advanceBtn);
       } else {
+        const blockedReason = !hasExitDocs
+          ? 'Complete the current phase first \u2014 submit an exit document to advance.'
+          : 'All gates must be GO before advancing.';
         actionRow.appendChild(
-          h('div', { class: 'phase-view-advance-blocked' },
+          h('div', { class: 'phase-view-advance-blocked', title: blockedReason },
             h('span', { class: 'phase-view-advance-blocked-icon' }, '\u{1F512}'),
-            h('span', null, 'All gates must be GO before advancing.')
+            h('span', null, blockedReason)
           )
         );
       }
@@ -701,6 +715,19 @@ export class PhaseView extends Component {
     }
 
     return section;
+  }
+
+  /* ── Exit Document Helpers (#529) ── */
+
+  _fetchExitDocs() {
+    if (!this._buildingId || !window.overlordSocket) return;
+    window.overlordSocket.fetchExitDocsByBuilding(this._buildingId);
+  }
+
+  _hasExitDocsForPhase() {
+    if (!this._exitDocs || this._exitDocs.length === 0) return false;
+    // Check if any exit doc exists (the rooms layer auto-creates RAID entries per exit doc)
+    return this._exitDocs.length > 0;
   }
 
   /* ── Actions ── */
