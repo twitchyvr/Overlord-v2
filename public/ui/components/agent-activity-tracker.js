@@ -68,11 +68,12 @@ export class AgentActivityTracker extends Component {
       })
     );
 
-    // ── Working: tool execution ──
+    // ── Working: tool execution — track which tool for activity indicators (#583) ──
     this._listeners.push(
       OverlordUI.subscribe('tool:executed', (data) => {
         if (data && data.agentId) {
           this._setState(data.agentId, 'working', WORKING_TIMEOUT);
+          this._setActivity(data.agentId, data.toolName || data.tool || 'working');
         }
       })
     );
@@ -174,6 +175,56 @@ export class AgentActivityTracker extends Component {
   getState(agentId) {
     const entry = this._agentStates.get(agentId);
     return entry ? entry.state : null;
+  }
+
+  /** Tool name → activity icon + label mapping (#583) */
+  static ACTIVITY_ICONS = {
+    read_file:     { icon: '\u{1F4C4}', label: 'Reading' },
+    write_file:    { icon: '\u270F\uFE0F', label: 'Writing' },
+    copy_file:     { icon: '\u{1F4CB}', label: 'Copying' },
+    patch_file:    { icon: '\u270F\uFE0F', label: 'Editing' },
+    list_dir:      { icon: '\u{1F4C2}', label: 'Browsing' },
+    bash:          { icon: '\u{1F4BB}', label: 'Running' },
+    web_search:    { icon: '\u{1F50D}', label: 'Searching' },
+    fetch_webpage: { icon: '\u{1F310}', label: 'Fetching' },
+    chat:          { icon: '\u{1F4AC}', label: 'Chatting' },
+    session_note:  { icon: '\u{1F4DD}', label: 'Noting' },
+    game_engine:   { icon: '\u{1F3AE}', label: 'Building' },
+    dev_server:    { icon: '\u{1F680}', label: 'Serving' },
+    working:       { icon: '\u{1F9E0}', label: 'Thinking' },
+  };
+
+  /**
+   * Set the current activity indicator on agent cards (#583).
+   * Shows a small icon + label overlay.
+   */
+  _setActivity(agentId, toolName) {
+    const info = AgentActivityTracker.ACTIVITY_ICONS[toolName]
+      || { icon: '\u2699\uFE0F', label: toolName.replace(/_/g, ' ') };
+
+    const elements = document.querySelectorAll(`[data-agent-id="${agentId}"]`);
+    for (const el of elements) {
+      // Find or create the activity badge
+      let badge = el.querySelector('.agent-activity-badge');
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'agent-activity-badge';
+        // Insert after the avatar
+        const avatar = el.querySelector('.agents-view-card-avatar, .agents-view-avatar-sm');
+        if (avatar) {
+          avatar.parentElement?.insertBefore(badge, avatar.nextSibling);
+        } else {
+          el.appendChild(badge);
+        }
+      }
+      badge.textContent = `${info.icon} ${info.label}`;
+      badge.style.display = 'inline-flex';
+
+      // Auto-hide after working timeout
+      setTimeout(() => {
+        if (badge) badge.style.display = 'none';
+      }, WORKING_TIMEOUT);
+    }
   }
 
   // ── DOM Class Application ─────────────────────────────────

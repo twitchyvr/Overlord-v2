@@ -3479,6 +3479,29 @@
    ═══════════════════════════════════════════════════ */
 
 /* ── Thinking: pulsing glow on avatar ── */
+/* ── Agent activity-type badge (#583) ── */
+.agent-activity-badge {
+  display: none;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  color: var(--text-primary);
+  background: var(--accent-bg, rgba(99, 102, 241, 0.15));
+  border: 1px solid var(--accent-dim, rgba(99, 102, 241, 0.3));
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+  animation: activity-badge-in 0.3s ease;
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+@keyframes activity-badge-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
 .agent-activity-thinking.agents-view-card-avatar {
   animation: agent-think-glow 1.8s ease-in-out infinite;
   border-color: var(--accent-purple);
