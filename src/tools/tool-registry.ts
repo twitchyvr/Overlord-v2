@@ -10,7 +10,7 @@
 import { logger } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
 import { executeShell } from './providers/shell.js';
-import { readFileImpl, writeFileImpl, patchFileImpl, listDirImpl } from './providers/filesystem.js';
+import { readFileImpl, writeFileImpl, patchFileImpl, listDirImpl, copyFileImpl } from './providers/filesystem.js';
 import { recordNote, recallNotes } from './providers/notes.js';
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from './providers/session-notes.js';
 import { webSearch, fetchWebpage } from './providers/web.js';
@@ -169,6 +169,24 @@ function registerBuiltinTools(): void {
     execute: async (p, ctx) => {
       const result = await writeFileImpl({ path: p.path as string, content: p.content as string, cwd: ctx?.workingDirectory, allowedPaths: ctx?.allowedPaths });
       return { output: `Written ${result.bytesWritten} bytes to ${result.path}`, path: result.path };
+    },
+  });
+
+  registerTool({
+    name: 'copy_file',
+    description: 'Copy a file from source to destination. Bypasses AI context — efficient for large files.',
+    category: 'file',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        source: { type: 'string', description: 'Source file path to copy from' },
+        destination: { type: 'string', description: 'Destination file path to copy to' },
+      },
+      required: ['source', 'destination'],
+    },
+    execute: async (p, ctx) => {
+      const result = await copyFileImpl({ source: p.source as string, destination: p.destination as string, cwd: ctx?.workingDirectory || '.', allowedPaths: ctx?.allowedPaths });
+      return { output: `Copied ${result.bytesCopied} bytes: ${result.source} → ${result.destination}` };
     },
   });
 

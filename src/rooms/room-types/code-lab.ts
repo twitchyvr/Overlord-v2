@@ -26,6 +26,7 @@ export class CodeLab extends BaseRoom {
     tools: [
       'read_file',
       'write_file',
+      'copy_file',
       'patch_file',
       'list_dir',
       'bash',

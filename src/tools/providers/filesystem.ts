@@ -6,8 +6,8 @@
  * validated to stay within the cwd boundary (path traversal protection).
  */
 
-import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { readFile, writeFile, readdir, stat, copyFile as fsCopyFile, mkdir } from 'node:fs/promises';
+import { resolve, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 import { logger } from '../../core/logger.js';
 import { guardPathWithPermissions } from '../path-permissions.js';
@@ -99,4 +99,35 @@ export async function listDirImpl(params: {
   }
 
   return { path: fullPath, entries };
+}
+
+/**
+ * Copy a file from source to destination without AI involvement (#595).
+ * Bypasses the AI context window — no need to read/output large content.
+ */
+export async function copyFileImpl(params: {
+  source: string;
+  destination: string;
+  cwd: string;
+  allowedPaths?: string[];
+}): Promise<{ source: string; destination: string; bytesCopied: number }> {
+  const srcPath = resolve(params.cwd, params.source);
+  const destPath = resolve(params.cwd, params.destination);
+
+  guardPathWithPermissions(srcPath, params.cwd, params.allowedPaths || []);
+  guardPathWithPermissions(destPath, params.cwd, params.allowedPaths || []);
+
+  if (!existsSync(srcPath)) {
+    throw new Error(`Source file does not exist: ${params.source}`);
+  }
+
+  // Ensure destination directory exists
+  const destDir = dirname(destPath);
+  await mkdir(destDir, { recursive: true });
+
+  await fsCopyFile(srcPath, destPath);
+  const st = await stat(destPath);
+  log.info({ source: srcPath, destination: destPath, bytes: st.size }, 'File copied');
+
+  return { source: srcPath, destination: destPath, bytesCopied: st.size };
 }
