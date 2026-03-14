@@ -36,6 +36,7 @@ export class AgentActivityTracker extends Component {
     super(el, opts);
     // Map of agentId → { state, timer }
     this._agentStates = new Map();
+    this._activityTimers = new Map(); // agentId → setTimeout handle for badge auto-hide
   }
 
   mount() {
@@ -219,12 +220,16 @@ export class AgentActivityTracker extends Component {
       }
       badge.textContent = `${info.icon} ${info.label}`;
       badge.style.display = 'inline-flex';
-
-      // Auto-hide after working timeout
-      setTimeout(() => {
-        if (badge) badge.style.display = 'none';
-      }, WORKING_TIMEOUT);
     }
+
+    // Clear previous timer and set new auto-hide (prevents flicker from rapid tool calls)
+    const prevTimer = this._activityTimers.get(agentId);
+    if (prevTimer) clearTimeout(prevTimer);
+    this._activityTimers.set(agentId, setTimeout(() => {
+      const elements2 = document.querySelectorAll(`[data-agent-id="${agentId}"] .agent-activity-badge`);
+      for (const b of elements2) b.style.display = 'none';
+      this._activityTimers.delete(agentId);
+    }, WORKING_TIMEOUT));
   }
 
   // ── DOM Class Application ─────────────────────────────────

@@ -2737,6 +2737,23 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
     // ─── Settings: Room Provider Override (#555) ───
 
     handle(socket, 'settings:room-provider', RoomProviderSetSchema, (parsed, ack) => {
+      // Whitelist room types and providers to prevent arbitrary env var injection (SEC-1)
+      const VALID_ROOM_TYPES = new Set([
+        'strategist', 'building-architect', 'discovery', 'architecture',
+        'code-lab', 'testing-lab', 'review', 'deploy', 'war-room',
+        'data-exchange', 'provider-hub', 'plugin-bay', 'integration',
+      ]);
+      const VALID_PROVIDERS = new Set(['anthropic', 'minimax', 'openai', 'ollama']);
+
+      if (!VALID_ROOM_TYPES.has(parsed.roomType)) {
+        if (ack) ack({ ok: false, error: { code: 'INVALID_ROOM_TYPE', message: `Unknown room type: ${parsed.roomType}`, retryable: false } });
+        return;
+      }
+      if (parsed.provider && !VALID_PROVIDERS.has(parsed.provider)) {
+        if (ack) ack({ ok: false, error: { code: 'INVALID_PROVIDER', message: `Unknown provider: ${parsed.provider}`, retryable: false } });
+        return;
+      }
+
       const envKey = `PROVIDER_${parsed.roomType.toUpperCase().replace(/-/g, '_')}`;
       if (parsed.provider) {
         process.env[envKey] = parsed.provider;

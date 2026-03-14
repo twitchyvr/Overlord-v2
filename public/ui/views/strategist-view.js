@@ -781,10 +781,44 @@ export class StrategistView extends Component {
     ));
   }
 
-  /** Re-render source option cards without full page rebuild */
+  /** Re-render source option cards without full page rebuild (preserves input focus) */
   _renderSourceOptions(group, optionsContainer) {
-    // Full re-render of the configure step is simplest
-    this.render();
+    // Update selected state on cards
+    optionsContainer.querySelectorAll('.project-source-card').forEach(card => {
+      const isSelected = card.querySelector('.project-source-info strong')?.textContent?.includes(
+        this._projectSource === 'fresh' ? 'Start Fresh' :
+        this._projectSource === 'local' ? 'Local Directory' : 'Clone'
+      );
+      card.classList.toggle('selected', !!isSelected);
+      const check = card.querySelector('.project-source-check');
+      if (check) check.remove();
+      if (isSelected) card.appendChild(h('span', { class: 'project-source-check' }, '\u2713'));
+    });
+
+    // Update the conditional input area
+    let inputArea = group.querySelector('.project-source-input');
+    if (!inputArea) {
+      inputArea = h('div', { class: 'project-source-input' });
+      group.appendChild(inputArea);
+    }
+    inputArea.textContent = '';
+    if (this._projectSource === 'local') {
+      const pathInput = h('input', {
+        class: 'form-input mono', type: 'text',
+        placeholder: '/path/to/your/project', value: this._localPath,
+      });
+      pathInput.addEventListener('input', (e) => { this._localPath = e.target.value; });
+      inputArea.appendChild(pathInput);
+      requestAnimationFrame(() => pathInput.focus());
+    } else if (this._projectSource === 'clone') {
+      const urlInput = h('input', {
+        class: 'form-input mono', type: 'text',
+        placeholder: 'https://github.com/owner/repo.git', value: this._cloneUrl,
+      });
+      urlInput.addEventListener('input', (e) => { this._cloneUrl = e.target.value; });
+      inputArea.appendChild(urlInput);
+      requestAnimationFrame(() => urlInput.focus());
+    }
   }
 
   async _createProject() {

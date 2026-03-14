@@ -46,13 +46,19 @@ function generateAgentIdentity(archetype: string, role: string, usedNames: Set<s
   const gender = Math.random() < 0.5 ? 'female' : 'male';
   const firstNames = gender === 'female' ? FIRST_NAMES_F : FIRST_NAMES_M;
 
-  // Pick a unique name combination
+  // Pick a unique name combination — guaranteed unique via suffix fallback
   let firstName = '', lastName = '', displayName = '';
   for (let attempt = 0; attempt < 50; attempt++) {
     firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
     lastName = LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
     displayName = `${firstName} ${lastName}`;
     if (!usedNames.has(displayName)) break;
+  }
+  // Guarantee uniqueness: if still colliding, append numeric suffix
+  if (usedNames.has(displayName)) {
+    let suffix = 2;
+    while (usedNames.has(`${displayName} ${suffix}`)) suffix++;
+    displayName = `${displayName} ${suffix}`;
   }
 
   const specs = ROLE_SPECIALIZATIONS[role] || ROLE_SPECIALIZATIONS.developer || ['General expertise'];
