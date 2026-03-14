@@ -496,6 +496,16 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         input: toolInput,
       });
 
+      // Stream tool progress to the client so the UI shows what's happening
+      bus.emit('chat:stream', {
+        agentId,
+        roomId: room.id,
+        content: [{ type: 'text', text: '' }],
+        status: 'tool',
+        toolName,
+        iteration,
+      });
+
       // Execute through the tool registry with timeout
       let toolResult: Result;
       try {

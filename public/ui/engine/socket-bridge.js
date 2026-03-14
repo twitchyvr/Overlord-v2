@@ -149,6 +149,17 @@ export function initSocketBridge(socket, store, engine) {
       });
       return;
     }
+    // Tool execution progress — show what tool is running
+    if (data.status === 'tool' && data.toolName) {
+      engine.dispatch('chat:stream-chunk', {
+        text: `\n*Using ${data.toolName}...*\n`,
+        agentId: data.agentId,
+        roomId: data.roomId,
+        iteration: data.iteration,
+        isTool: true,
+      });
+      return;
+    }
     // Content arrived — extract text from content blocks
     const textParts = (data.content || [])
       .filter((b) => b.type === 'text' && b.text)
