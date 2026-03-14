@@ -13,6 +13,7 @@ import { logger } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
 import type { Result } from '../core/contracts.js';
 import { getDb } from '../storage/db.js';
+import { getAgent } from './agent-registry.js';
 
 const log = logger.child({ module: 'agents:email' });
 
@@ -65,6 +66,12 @@ export interface SendEmailParams {
  */
 export function sendEmail(params: SendEmailParams): Result {
   const db = getDb();
+
+  // Validate sender exists in agent registry
+  const senderAgent = getAgent(params.fromId);
+  if (!senderAgent) {
+    return err('AGENT_NOT_FOUND', `Sender agent ${params.fromId} does not exist in registry`);
+  }
 
   // Prevent self-send
   if (params.to.includes(params.fromId)) {
@@ -352,9 +359,16 @@ export function replyToEmail(
   body: string,
   opts: { replyAll?: boolean; priority?: 'normal' | 'urgent' | 'low' } = {},
 ): Result {
-  const db = getDb();
   const original = getEmail(emailId);
   if (!original) return err('EMAIL_NOT_FOUND', `Email ${emailId} does not exist`);
+
+  // Validate sender exists in agent registry to prevent fabricated names
+  const senderAgent = getAgent(fromId);
+  if (!senderAgent) return err('AGENT_NOT_FOUND', `Agent ${fromId} does not exist in registry`);
+
+  // Use the agent's registered ID (not whatever was passed in) to guarantee
+  // the from_id stored in the database maps to a real agent row.
+  const validatedFromId = senderAgent.id;
 
   // Determine recipients: reply to sender, or reply-all includes all recipients
   const to = [original.from_id];
@@ -363,12 +377,12 @@ export function replyToEmail(
   if (opts.replyAll) {
     const allRecipients = original.recipients
       .map((r) => r.agent_id)
-      .filter((id) => id !== fromId && id !== original.from_id);
+      .filter((id) => id !== validatedFromId && id !== original.from_id);
     cc = allRecipients;
   }
 
   return sendEmail({
-    fromId,
+    fromId: validatedFromId,
     to,
     cc: cc.length > 0 ? cc : undefined,
     subject: original.subject.startsWith('Re: ') ? original.subject : `Re: ${original.subject}`,
@@ -392,12 +406,22 @@ export function forwardEmail(
   const original = getEmail(emailId);
   if (!original) return err('EMAIL_NOT_FOUND', `Email ${emailId} does not exist`);
 
+  // Validate sender exists in agent registry to prevent fabricated names
+  const senderAgent = getAgent(fromId);
+  if (!senderAgent) return err('AGENT_NOT_FOUND', `Agent ${fromId} does not exist in registry`);
+
+  const validatedFromId = senderAgent.id;
+
+  // Resolve original sender name from registry (not from potentially stale email data)
+  const originalSenderAgent = getAgent(original.from_id);
+  const originalFromName = originalSenderAgent?.display_name || originalSenderAgent?.name || original.from_name || original.from_id;
+
   const forwardBody = body
-    ? `${body}\n\n--- Forwarded ---\nFrom: ${original.from_name || original.from_id}\nSubject: ${original.subject}\n\n${original.body}`
-    : `--- Forwarded ---\nFrom: ${original.from_name || original.from_id}\nSubject: ${original.subject}\n\n${original.body}`;
+    ? `${body}\n\n--- Forwarded ---\nFrom: ${originalFromName}\nSubject: ${original.subject}\n\n${original.body}`
+    : `--- Forwarded ---\nFrom: ${originalFromName}\nSubject: ${original.subject}\n\n${original.body}`;
 
   return sendEmail({
-    fromId,
+    fromId: validatedFromId,
     to,
     subject: original.subject.startsWith('Fwd: ') ? original.subject : `Fwd: ${original.subject}`,
     body: forwardBody,

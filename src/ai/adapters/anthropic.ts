@@ -7,6 +7,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../../core/logger.js';
+import { buildCachedSystemPrompt } from '../prompt-cache.js';
 import type { AIAdapter, ToolDefinition, Config } from '../../core/contracts.js';
 
 const log = logger.child({ module: 'ai:anthropic' });
@@ -76,12 +77,18 @@ export function createAnthropicAdapter(cfg: Config): AIAdapter {
         input_schema: t.inputSchema,
       }));
 
+      // Build system prompt with cache_control if caching is available
+      const rawSystem = options.system as string | undefined;
+      const systemPayload = rawSystem
+        ? buildCachedSystemPrompt(rawSystem, 'anthropic')
+        : undefined;
+
       const requestParams: Anthropic.MessageCreateParams = {
         model,
         max_tokens: (options.max_tokens as number) || 4096,
         messages: messages as Anthropic.MessageParam[],
         ...(anthropicTools.length > 0 ? { tools: anthropicTools as Anthropic.Tool[] } : {}),
-        ...(options.system ? { system: options.system as string } : {}),
+        ...(systemPayload ? { system: systemPayload as Anthropic.MessageCreateParams['system'] } : {}),
         ...(options.temperature !== undefined ? { temperature: options.temperature as number } : {}),
       };
 

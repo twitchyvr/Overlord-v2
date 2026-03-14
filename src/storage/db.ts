@@ -90,6 +90,11 @@ const SCHEMA_SQL = `
     specialization TEXT,
     gender TEXT,
     profile_generated INTEGER DEFAULT 0,
+    age INTEGER,
+    backstory TEXT,
+    communication_style TEXT,
+    expertise_areas TEXT DEFAULT '[]',
+    subject_reference TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
@@ -357,6 +362,11 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['buildings', 'allowed_paths', "TEXT DEFAULT '[]'"],
   ['messages', 'attachments', "TEXT DEFAULT '[]'"],
   ['phase_gates', 'criteria', "TEXT DEFAULT '[]'"],
+  ['agents', 'age', 'INTEGER'],
+  ['agents', 'backstory', 'TEXT'],
+  ['agents', 'communication_style', 'TEXT'],
+  ['agents', 'expertise_areas', "TEXT DEFAULT '[]'"],
+  ['agents', 'subject_reference', 'TEXT'],
 ];
 
 /**

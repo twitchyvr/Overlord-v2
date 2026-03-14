@@ -98,6 +98,9 @@ const FILTER_PREDICATES = {
 
 /* ── ActivityView ──────────────────────────────────────────── */
 
+/** localStorage key for activity filter persistence (#348) */
+const ACTIVITY_STORAGE_KEY = 'overlord:view:activity:filters';
+
 export class ActivityView extends Component {
 
   /**
@@ -123,6 +126,37 @@ export class ActivityView extends Component {
 
     /** @type {boolean} True until first data arrives from the store. */
     this._loading = true;
+
+    /** @type {string} Active filter pill id. */
+    this._pillFilter = 'all';
+
+    /** @type {number} Number of items visible (for load-more). */
+    this._visibleCount = 50;
+
+    // Restore persisted filter (#348)
+    this._restoreActivityFilters();
+  }
+
+  /** Restore filter state from localStorage (#348). */
+  _restoreActivityFilters() {
+    try {
+      const saved = localStorage.getItem(ACTIVITY_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.pillFilter) this._pillFilter = parsed.pillFilter;
+        if (parsed.filter) this._filter = parsed.filter;
+      }
+    } catch { /* ignore */ }
+  }
+
+  /** Save filter state to localStorage (#348). */
+  _persistActivityFilters() {
+    try {
+      localStorage.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify({
+        pillFilter: this._pillFilter,
+        filter: this._filter,
+      }));
+    } catch { /* ignore */ }
   }
 
   /* ── Lifecycle ─────────────────────────────────────────── */
@@ -135,6 +169,9 @@ export class ActivityView extends Component {
     // Seed from existing store data
     this._items = (store.get('activity.items') || []).slice(-MAX_ITEMS);
     if (this._items.length > 0) this._loading = false;
+
+    // No building selected — nothing to load, clear loading state
+    if (!store.get('building.active')) this._loading = false;
 
     // Subscribe to bulk store updates
     this.subscribe(store, 'activity.items', (items) => {
@@ -176,6 +213,31 @@ export class ActivityView extends Component {
     );
     this.el.appendChild(header);
 
+    // ── Filter pills ──
+    const pillsContainer = h('div', { class: 'activity-filter-pills' });
+    const pillDefs = [
+      { id: 'all', label: 'All' },
+      { id: 'rooms', label: 'Rooms' },
+      { id: 'agents', label: 'Agents' },
+      { id: 'tools', label: 'Tools' },
+      { id: 'phases', label: 'Phase Gates' }
+    ];
+    for (const def of pillDefs) {
+      const pill = h('button', {
+        class: `activity-filter-pill ${this._pillFilter === def.id ? 'active' : ''}`,
+        dataset: { filterId: def.id }
+      }, def.label);
+      pill.addEventListener('click', () => {
+        this._pillFilter = def.id;
+        this._filter = def.id === 'rooms' ? 'building' : def.id;
+        this._visibleCount = 50;
+        this._persistActivityFilters();
+        this._render();
+      });
+      pillsContainer.appendChild(pill);
+    }
+    this.el.appendChild(pillsContainer);
+
     // ── Filter tabs ──
     const tabWrapper = h('div', { class: 'activity-view-tabs' });
     const tabContainer = h('div');
@@ -214,6 +276,16 @@ export class ActivityView extends Component {
 
     // Render the actual timeline items
     this._renderTimeline(this._getFilteredItems());
+
+    // Load more button
+    const filtered = this._getFilteredItems();
+    if (filtered.length > this._visibleCount) {
+      const remaining = filtered.length - this._visibleCount;
+      const loadMoreBtn = h('button', { class: 'activity-load-more' },
+        `Load more (${remaining} remaining)`);
+      loadMoreBtn.addEventListener('click', () => this._loadMore());
+      this.el.appendChild(loadMoreBtn);
+    }
   }
 
   /* ── Timeline rendering ────────────────────────────────── */
@@ -232,8 +304,21 @@ export class ActivityView extends Component {
       this._countEl.textContent = `${total} event${total !== 1 ? 's' : ''}`;
     }
 
+    // Show "select a project" when no building is active
+    const store = OverlordUI.getStore();
+    const hasBuilding = store && store.get('building.active');
+
     if (filtered.length === 0) {
-      if (this._loading) {
+      if (!hasBuilding) {
+        this._timelineEl.appendChild(
+          h('div', { class: 'activity-view-empty' },
+            h('div', { class: 'activity-view-empty-icon' }, '\u{1F3E2}'),
+            h('p', { class: 'activity-view-empty-title' }, 'Select a project'),
+            h('p', { class: 'activity-view-empty-desc' },
+              'Choose a project from the Dashboard to view its activity.')
+          )
+        );
+      } else if (this._loading) {
         this._timelineEl.appendChild(
           h('div', { class: 'loading-state' },
             h('div', { class: 'loading-spinner' }),
@@ -255,11 +340,12 @@ export class ActivityView extends Component {
       return;
     }
 
-    // Build timeline — newest first
+    // Build timeline — newest first, limited by visibleCount
     const frag = document.createDocumentFragment();
     const reversed = [...filtered].reverse();
+    const visible = reversed.slice(0, this._visibleCount);
 
-    for (const item of reversed) {
+    for (const item of visible) {
       frag.appendChild(this._buildTimelineItem(item));
     }
 
@@ -296,9 +382,11 @@ export class ActivityView extends Component {
     // ── Content column ──
     const content = h('div', { class: 'activity-view-content' });
 
-    // Icon + summary row
+    // Icon + summary row with event type icon
+    const typeIcon = this._eventTypeIcon(eventType);
     const summaryRow = h('div', { class: 'activity-view-summary-row' },
       h('span', { class: 'activity-view-icon' }, icon),
+      typeIcon ? h('span', { class: 'activity-event-icon' }, typeIcon) : null,
       h('span', { class: 'activity-view-summary' }, this._formatSummary(item))
     );
 
@@ -332,7 +420,7 @@ export class ActivityView extends Component {
 
     if (ts) {
       metaRow.appendChild(
-        h('span', { class: 'activity-view-time' }, formatTime(ts))
+        h('span', { class: 'activity-view-time' }, this._relativeTime(ts))
       );
     }
 
@@ -775,6 +863,43 @@ export class ActivityView extends Component {
     }, label);
     btn.addEventListener('click', onClick);
     return btn;
+  }
+
+  /* ── Load more ────────────────────────────────────────── */
+
+  /** Increase visible count and re-render. */
+  _loadMore() {
+    this._visibleCount += 50;
+    this._render();
+  }
+
+  /** Format a timestamp as a relative string. */
+  _relativeTime(timestamp) {
+    if (!timestamp) return '';
+    const d = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    if (isNaN(d.getTime())) return '';
+    const now = Date.now();
+    const diffSec = Math.floor((now - d.getTime()) / 1000);
+    if (diffSec < 60) return 'Just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} min ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr} hour${diffHr > 1 ? 's' : ''} ago`;
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffDay < 7) return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`;
+    return formatTime(timestamp);
+  }
+
+  /** Map event type to a contextual emoji icon. */
+  _eventTypeIcon(eventType) {
+    if (!eventType) return null;
+    if (eventType.startsWith('room:agent:entered')) return '\u{1F6AA}';
+    if (eventType.startsWith('room:agent:exited')) return '\u{1F6AA}';
+    if (eventType.startsWith('tool:')) return '\u{1F527}';
+    if (eventType.startsWith('phase:')) return '\u{1F4CB}';
+    if (eventType.startsWith('agent:')) return '\u{1F464}';
+    if (eventType.startsWith('task:')) return '\u{1F4DD}';
+    return null;
   }
 
   /* ── Visual helpers ────────────────────────────────────── */

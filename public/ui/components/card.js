@@ -101,7 +101,7 @@ export class Card {
       }),
       h('span', { class: 'task-title' }, data.title || 'Untitled Task'),
       data.priority ? h('span', { class: `task-priority priority-${data.priority}` }, data.priority) : null,
-      data.id ? h('span', { class: 'task-id' }, `#${data.id}`) : null
+      data.id ? h('span', { class: 'task-id', title: data.id }, `T-${data.id.slice(-4).toUpperCase()}`) : null
     );
     card.appendChild(header);
 
@@ -212,8 +212,18 @@ export class Card {
 
   /** @private — v2: Building card for dashboard */
   static _buildBuilding(card, data) {
+    // Archived building visual distinction (#528)
+    const isArchived = (data.name || '').includes('(Archived');
+    if (isArchived) {
+      card.style.opacity = '0.6';
+      card.classList.add('card-archived');
+    }
+
     const header = h('div', { class: 'card-header' },
       h('span', null, data.name || 'Building'),
+      isArchived
+        ? h('span', { class: 'card-archived-badge' }, 'ARCHIVED')
+        : null,
       data.activePhase ? h('span', { class: `phase-badge phase-${data.activePhase}` }, data.activePhase) : null
     );
     card.appendChild(header);
@@ -226,14 +236,15 @@ export class Card {
         h('span', { class: 'health-badge-score' }, String(score)),
       );
 
-      // Tooltip with breakdown
+      // Tooltip with user-friendly breakdown
       const breakdown = [
-        `Phase: ${data.healthScore.phaseProgress}/25`,
-        `Tasks: ${data.healthScore.taskCompletion}/25`,
-        `RAID: ${data.healthScore.raidHealth}/25`,
-        `Activity: ${data.healthScore.agentActivity}/25`,
+        `Project progress: ${data.healthScore.phaseProgress}/25`,
+        `Tasks completed: ${data.healthScore.taskCompletion}/25`,
+        `Risks tracked: ${data.healthScore.raidHealth}/25`,
+        `Team activity: ${data.healthScore.agentActivity}/25`,
       ].join('\n');
-      badge.title = `Health Score: ${score}/100\n${breakdown}`;
+      const advice = score >= 75 ? 'Great shape!' : score >= 50 ? 'Making progress' : score >= 25 ? 'Needs attention' : 'Just getting started';
+      badge.title = `Health Score: ${score}/100 — ${advice}\n\n${breakdown}\n\nClick the building card for details.`;
 
       header.appendChild(badge);
     }
@@ -246,10 +257,10 @@ export class Card {
     // Stats row: floors, agents, repo
     const stats = h('div', { class: 'building-stats' });
     if (data.floorCount !== undefined) {
-      stats.appendChild(h('span', { class: 'building-stat' }, `${data.floorCount} floors`));
+      stats.appendChild(h('span', { class: 'building-stat' }, `${data.floorCount} ${data.floorCount === 1 ? 'floor' : 'floors'}`));
     }
     if (data.agentCount !== undefined && data.agentCount > 0) {
-      stats.appendChild(h('span', { class: 'building-stat' }, `${data.agentCount} agents`));
+      stats.appendChild(h('span', { class: 'building-stat' }, `${data.agentCount} ${data.agentCount === 1 ? 'agent' : 'agents'}`));
     }
     if (data.repoUrl) {
       const repoName = data.repoUrl.split('/').slice(-2).join('/');

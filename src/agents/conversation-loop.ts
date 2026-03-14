@@ -16,6 +16,8 @@ import { config } from '../core/config.js';
 import { AgentSession } from './agent-session.js';
 import { estimateTokens, allocateBudget, pruneMessages, getContextMetrics } from './context-manager.js';
 import { buildScratchpadInjection } from '../tools/providers/session-notes.js';
+import { acquireSlot, releaseSlot } from '../ai/rate-limiter.js';
+import { buildPerception, extractToolResults } from './perception-builder.js';
 import type { Bus } from '../core/bus.js';
 import type {
   Result,
@@ -26,11 +28,145 @@ import type {
 
 const log = logger.child({ module: 'conversation-loop' });
 
+// ─── Exit Document Auto-Detection (#524) ───
+
+/**
+ * Known exit document field sets by room type.
+ * If an AI response contains a JSON object with fields matching one of these
+ * sets, it's treated as an exit document and auto-submitted.
+ */
+const EXIT_DOC_FIELD_SETS: Record<string, string[]> = {
+  'building-blueprint': ['effortLevel', 'projectGoals', 'successCriteria', 'floorsNeeded', 'roomConfig', 'agentRoster', 'estimatedPhases'],
+  'requirements-document': ['businessOutcomes', 'constraints', 'unknowns', 'gapAnalysis', 'riskAssessment', 'acceptanceCriteria'],
+  'architecture-document': ['milestones', 'taskBreakdown', 'dependencyGraph', 'techDecisions', 'fileAssignments'],
+  'implementation-report': ['filesModified', 'testsAdded', 'changesDescription', 'riskAssessment'],
+  'test-report': ['testsPassed', 'testsFailed', 'coverage', 'blockers'],
+  'gate-review': ['verdict', 'evidence', 'conditions', 'riskQuestionnaire'],
+  'deployment-report': ['environment', 'version', 'deployedAt', 'healthCheck', 'rollbackPlan'],
+  'incident-report': ['incidentSummary', 'rootCause', 'resolution', 'preventionPlan', 'timeToResolve'],
+  'research-report': ['findings', 'sources', 'recommendations', 'gaps'],
+  'security-report': ['vulnerabilities', 'riskLevel', 'recommendations', 'dependencyAudit', 'complianceChecks'],
+  'documentation-report': ['documentsWritten', 'documentsUpdated', 'coverageAreas', 'remainingGaps'],
+  'monitoring-report': ['metricsConfigured', 'alertsCreated', 'dashboardsSetup', 'recommendations'],
+};
+
+/**
+ * Extract JSON blocks from AI response text.
+ * Looks for ```json ... ``` fenced blocks and bare JSON objects.
+ */
+function extractJsonBlocks(text: string): unknown[] {
+  const results: unknown[] = [];
+
+  // Match ```json ... ``` fenced code blocks
+  const fencedPattern = /```(?:json)?\s*\n?([\s\S]*?)```/g;
+  let match: RegExpExecArray | null;
+  while ((match = fencedPattern.exec(text)) !== null) {
+    try {
+      results.push(JSON.parse(match[1].trim()));
+    } catch {
+      // Not valid JSON — skip
+    }
+  }
+
+  // If no fenced blocks found, try to find bare JSON objects
+  if (results.length === 0) {
+    // Look for top-level { ... } that span substantial content
+    const barePattern = /\{[\s\S]{20,}\}/g;
+    while ((match = barePattern.exec(text)) !== null) {
+      try {
+        results.push(JSON.parse(match[0]));
+      } catch {
+        // Not valid JSON — skip
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Check if a parsed object matches any known exit document field set,
+ * optionally narrowed to a specific room's exit template.
+ *
+ * Returns the matching field set type or null.
+ */
+function matchesExitDocFields(
+  obj: Record<string, unknown>,
+  roomExitTemplate?: { type: string; fields: string[] },
+): string | null {
+  // If room has a specific exit template, check that first
+  if (roomExitTemplate && roomExitTemplate.fields.length > 0) {
+    const matchCount = roomExitTemplate.fields.filter((f) => f in obj).length;
+    // Require at least half the fields to match (AI may not fill every field)
+    if (matchCount >= Math.ceil(roomExitTemplate.fields.length / 2)) {
+      return roomExitTemplate.type;
+    }
+  }
+
+  // Fallback: check against all known field sets
+  for (const [type, fields] of Object.entries(EXIT_DOC_FIELD_SETS)) {
+    const matchCount = fields.filter((f) => f in obj).length;
+    if (matchCount >= Math.ceil(fields.length / 2)) {
+      return type;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Detect if an AI response contains an exit document and auto-submit it.
+ *
+ * The Strategist (and other rooms) often generate the exit document as JSON
+ * in their text response but never call the submission tool. This function
+ * catches that case and emits `exit-doc:auto-submit` on the bus.
+ *
+ * @returns true if an exit doc was detected and submitted
+ */
+export function detectAndSubmitExitDoc(
+  responseText: string,
+  roomId: string,
+  agentId: string,
+  bus: Bus,
+  roomExitTemplate?: { type: string; fields: string[] },
+): boolean {
+  if (!responseText || responseText.length < 30) return false;
+
+  const jsonBlocks = extractJsonBlocks(responseText);
+  if (jsonBlocks.length === 0) return false;
+
+  for (const block of jsonBlocks) {
+    if (!block || typeof block !== 'object' || Array.isArray(block)) continue;
+
+    const obj = block as Record<string, unknown>;
+    const matchedType = matchesExitDocFields(obj, roomExitTemplate);
+
+    if (matchedType) {
+      log.info(
+        { roomId, agentId, exitDocType: matchedType, fieldCount: Object.keys(obj).length },
+        'Auto-detected exit document in AI response',
+      );
+
+      bus.emit('exit-doc:auto-submit', {
+        roomId,
+        agentId,
+        document: obj,
+        exitDocType: matchedType,
+      });
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /** All limits are user-configurable via environment variables / config */
 const MAX_TOOL_ITERATIONS = config.get('MAX_TOOL_ITERATIONS');
 const TOOL_TIMEOUT_MS = config.get('TOOL_TIMEOUT_MS');
 const AI_MAX_RETRIES = config.get('AI_MAX_RETRIES');
 const AI_RETRY_DELAY_MS = config.get('AI_RETRY_DELAY_MS');
+const PARALLEL_TOOL_EXECUTION = config.get('PARALLEL_TOOL_EXECUTION');
 
 interface ContentBlock {
   type: 'text' | 'thinking' | 'tool_use' | 'tool_result';
@@ -114,10 +250,12 @@ function isTransientError(error: { code?: string; message?: string; retryable?: 
  */
 export async function runConversationLoop(params: ConversationParams): Promise<Result<ConversationResult>> {
   const { provider, room, agentId, ai, tools, bus, options = {} } = params;
+  const buildingId = (options.buildingId as string) || ''; // For scoped event delivery (#593)
   const messages: Message[] = [...params.messages];
   const toolCallLog: ConversationResult['toolCalls'] = [];
   const thinkingLog: string[] = [];
   const totalTokens = { input: 0, output: 0 };
+  const allTextParts: string[] = []; // Accumulate text from ALL iterations (#532)
 
   // Create agent session for this conversation
   const session = new AgentSession({
@@ -181,17 +319,47 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       'Conversation loop iteration',
     );
 
+    // PTA: Inject perception context after the first iteration (#362)
+    // On iteration 2+, the AI gets a structured snapshot of what just happened
+    if (iteration > 1 && toolCallLog.length > 0) {
+      // Extract results from the most recent batch of tool calls
+      const recentResults = extractToolResults(toolCallLog.slice(-10));
+      const perception = buildPerception(
+        {
+          roomId: room.id,
+          roomType: room.type,
+          allowedTools: allowedToolNames,
+          fileScope: String(room.fileScope),
+          rules: room.getRules(),
+        },
+        recentResults,
+        iteration,
+        MAX_TOOL_ITERATIONS,
+      );
+
+      // Inject perception as a system-level user message so the AI sees it
+      messages.push({
+        role: 'user',
+        content: `[Perception Update]\n${perception}`,
+      });
+    }
+
     // Send to AI with retry for transient failures
     let aiResult: Result;
     let retries = 0;
 
     while (true) {
+      // Rate limiting: acquire a slot before sending (#381)
+      await acquireSlot(provider);
+
       aiResult = await ai.sendMessage({
         provider,
         messages,
         tools: roomTools,
         options: { ...options, system: systemPrompt },
       });
+
+      releaseSlot(provider);
 
       if (aiResult.ok) break;
 
@@ -200,7 +368,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         retries++;
         const delay = AI_RETRY_DELAY_MS * Math.pow(2, retries - 1);
         log.warn({ error: aiError, retry: retries, delayMs: delay, agentId, roomId: room.id }, 'Retrying AI request after transient failure');
-        bus.emit('chat:stream', { agentId, roomId: room.id, content: [{ type: 'text', text: `[Retrying AI request (attempt ${retries + 1})...]` }], iteration });
+        bus.emit('chat:stream', { agentId, buildingId, roomId: room.id, content: [{ type: 'text', text: `[Retrying AI request (attempt ${retries + 1})...]` }], iteration });
         await new Promise((r) => setTimeout(r, delay));
         continue;
       }
@@ -233,14 +401,29 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       .map((b: ContentBlock) => b.text || '')
       .join('\n');
     if (assistantText) {
+      allTextParts.push(assistantText); // Accumulate across iterations (#532)
       session.addMessage({ role: 'assistant', content: assistantText });
       room.onMessage(agentId, assistantText, 'assistant');
+
+      // Auto-detect exit documents embedded in AI text responses (#524)
+      // The AI sometimes generates exit doc JSON in prose instead of calling the tool
+      const exitTemplate = room.exitRequired;
+      if (exitTemplate && exitTemplate.fields.length > 0) {
+        detectAndSubmitExitDoc(assistantText, room.id, agentId, bus, exitTemplate);
+      }
     }
+
+    // Forward thinking blocks explicitly for the UI to display AI reasoning
+    const streamThinking = thinkingBlocks
+      .filter((b) => b.thinking)
+      .map((b) => b.thinking as string);
 
     bus.emit('chat:stream', {
       agentId,
+      buildingId,
       roomId: room.id,
       content: response.content,
+      thinking: streamThinking.length > 0 ? streamThinking : undefined,
       iteration,
     });
 
@@ -253,11 +436,18 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       break;
     }
 
-    // Extract tool_use blocks and execute each
+    // Extract tool_use blocks and execute (parallel or sequential per config #365)
     const toolUseBlocks = response.content.filter((b) => b.type === 'tool_use');
     const toolResults: ContentBlock[] = [];
 
-    for (const toolBlock of toolUseBlocks) {
+    /**
+     * Execute a single tool block and return its result.
+     * Extracted to enable both sequential and parallel execution paths.
+     */
+    const executeSingleTool = async (toolBlock: ContentBlock): Promise<{
+      result: ContentBlock;
+      logEntry: { name: string; input: Record<string, unknown>; result: unknown };
+    }> => {
       const toolName = toolBlock.name || '';
       const toolInput = toolBlock.input || {};
       const toolUseId = toolBlock.id || '';
@@ -267,17 +457,6 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       // Guard: reject tool names not in the room's allowed list
       if (!allowedToolNames.includes(toolName)) {
         log.warn({ tool: toolName, agentId, roomId: room.id, allowedTools: allowedToolNames }, 'AI requested unknown/disallowed tool');
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUseId,
-          content: `Error: Tool "${toolName}" is not available in this room. Available tools: ${allowedToolNames.join(', ')}`,
-          is_error: true,
-        });
-        toolCallLog.push({
-          name: toolName,
-          input: toolInput,
-          result: { error: `Tool "${toolName}" is not available` },
-        });
         bus.emit('tool:guardrail-violation', {
           type: 'unknown_tool',
           toolName,
@@ -285,26 +464,31 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
           roomId: room.id,
           allowedTools: allowedToolNames,
         });
-        continue;
+        return {
+          result: {
+            type: 'tool_result',
+            tool_use_id: toolUseId,
+            content: `Error: Tool "${toolName}" is not available in this room. Available tools: ${allowedToolNames.join(', ')}`,
+            is_error: true,
+          },
+          logEntry: { name: toolName, input: toolInput, result: { error: `Tool "${toolName}" is not available` } },
+        };
       }
 
       // Room-level guardrail: onBeforeToolCall can BLOCK execution
       const beforeResult = room.onBeforeToolCall(toolName, agentId, toolInput);
       if (!beforeResult.ok) {
         log.warn({ tool: toolName, agentId, reason: beforeResult.error.message }, 'Tool blocked by room');
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUseId,
-          content: `Blocked by room: ${beforeResult.error.message}`,
-          is_error: true,
-        });
-        toolCallLog.push({
-          name: toolName,
-          input: toolInput,
-          result: beforeResult.error,
-        });
         bus.emit('tool:blocked', { toolName, agentId, roomId: room.id, reason: beforeResult.error.message });
-        continue;
+        return {
+          result: {
+            type: 'tool_result',
+            tool_use_id: toolUseId,
+            content: `Blocked by room: ${beforeResult.error.message}`,
+            is_error: true,
+          },
+          logEntry: { name: toolName, input: toolInput, result: beforeResult.error },
+        };
       }
 
       bus.emit('tool:executing', {
@@ -312,6 +496,17 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         agentId,
         roomId: room.id,
         input: toolInput,
+      });
+
+      // Stream tool progress to the client so the UI shows what's happening
+      bus.emit('chat:stream', {
+        agentId,
+        buildingId,
+        roomId: room.id,
+        content: [{ type: 'text', text: '' }],
+        status: 'tool',
+        toolName,
+        iteration,
       });
 
       // Execute through the tool registry with timeout
@@ -339,14 +534,15 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         log.error({ tool: toolName, agentId, roomId: room.id, error: errorMsg }, 'Tool execution failed');
         bus.emit('tool:executed', { toolName, roomId: room.id, agentId, success: false, error: errorMsg });
 
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUseId,
-          content: `Error: ${errorMsg}`,
-          is_error: true,
-        });
-        toolCallLog.push({ name: toolName, input: toolInput, result: { error: errorMsg } });
-        continue;
+        return {
+          result: {
+            type: 'tool_result',
+            tool_use_id: toolUseId,
+            content: `Error: ${errorMsg}`,
+            is_error: true,
+          },
+          logEntry: { name: toolName, input: toolInput, result: { error: errorMsg } },
+        };
       }
 
       // Room-level observation: onAfterToolCall can trigger escalation
@@ -356,25 +552,45 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         ? JSON.stringify(toolResult.data)
         : `Error: ${toolResult.error.message}`;
 
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: toolUseId,
-        content: resultContent,
-        is_error: !toolResult.ok,
-      });
-
-      toolCallLog.push({
-        name: toolName,
-        input: toolInput,
-        result: toolResult.ok ? toolResult.data : toolResult.error,
-      });
-
       bus.emit('tool:executed', {
         toolName,
         roomId: room.id,
         agentId,
         success: toolResult.ok,
       });
+
+      return {
+        result: {
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content: resultContent,
+          is_error: !toolResult.ok,
+        },
+        logEntry: {
+          name: toolName,
+          input: toolInput,
+          result: toolResult.ok ? toolResult.data : toolResult.error,
+        },
+      };
+    };
+
+    // Execute tools: parallel if enabled and multiple tools, otherwise sequential (#365)
+    if (PARALLEL_TOOL_EXECUTION && toolUseBlocks.length > 1) {
+      log.info(
+        { toolCount: toolUseBlocks.length, agentId, roomId: room.id },
+        'Executing tools in parallel',
+      );
+      const outcomes = await Promise.all(toolUseBlocks.map(executeSingleTool));
+      for (const outcome of outcomes) {
+        toolResults.push(outcome.result);
+        toolCallLog.push(outcome.logEntry);
+      }
+    } else {
+      for (const toolBlock of toolUseBlocks) {
+        const outcome = await executeSingleTool(toolBlock);
+        toolResults.push(outcome.result);
+        toolCallLog.push(outcome.logEntry);
+      }
     }
 
     // Add tool results as user message
@@ -387,17 +603,21 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     // to avoid double-sending messages to the frontend
   }
 
-  // Extract final text from last assistant message
-  const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
-  let finalText = '';
-  if (lastAssistant) {
-    if (typeof lastAssistant.content === 'string') {
-      finalText = lastAssistant.content;
-    } else {
-      finalText = lastAssistant.content
-        .filter((b) => b.type === 'text')
-        .map((b) => b.text || '')
-        .join('\n');
+  // Use accumulated text from ALL iterations so intermediate text
+  // (e.g. explanation before tool calls) isn't lost (#532)
+  let finalText = allTextParts.join('\n\n');
+  if (!finalText) {
+    // Fallback: extract from last assistant message
+    const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
+    if (lastAssistant) {
+      if (typeof lastAssistant.content === 'string') {
+        finalText = lastAssistant.content;
+      } else {
+        finalText = lastAssistant.content
+          .filter((b) => b.type === 'text')
+          .map((b) => b.text || '')
+          .join('\n');
+      }
     }
   }
 

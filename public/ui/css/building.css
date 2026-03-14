@@ -1,287 +1,574 @@
 /* ═══════════════════════════════════════════════════
-   OVERLORD v2 — Building Visualization
-   Tycoon-game style building cross-section
+   OVERLORD v2 — Building Navigation (Tree Design)
+   Vertical tree-style sidebar with collapsible floors
+   and compact, detail-rich room items.
    ═══════════════════════════════════════════════════ */
 
-/* ── Building container ── */
-.building-view {
+/* ── Building header & stats ── */
+.building-header {
   display: flex;
-  flex-direction: column-reverse; /* Bottom-up: operations at bottom, strategy at top */
-  gap: 2px;
-  padding: var(--sp-3);
-  background: var(--building-bg);
-  border-radius: var(--radius-lg);
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-/* ── Floor bar ── */
-.floor-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-3);
+  flex-direction: column;
+  gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
-  background: var(--floor-bg);
-  border-radius: var(--radius-md);
-  border-left: 3px solid var(--floor-color, var(--border-primary));
-  cursor: pointer;
-  transition: all var(--duration-normal) var(--ease-default);
-  position: relative;
-  overflow: hidden;
+  border-bottom: 1px solid var(--border-secondary);
+  flex-shrink: 0;
 }
-.floor-bar::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, var(--floor-color, transparent) 0%, transparent 50%);
-  opacity: 0.03;
-  pointer-events: none;
-}
-.floor-bar:hover {
-  background: var(--floor-bg-hover);
-}
-.floor-bar:hover::before {
-  opacity: 0.06;
-}
-.floor-bar.active {
-  background: var(--floor-bg-active);
-  border-left-width: 4px;
-}
-.floor-bar.active::before {
-  opacity: 0.08;
-}
-
-/* Floor type colors */
-.floor-bar[data-type="strategy"]      { --floor-color: var(--floor-strategy); }
-.floor-bar[data-type="collaboration"] { --floor-color: var(--floor-collaboration); }
-.floor-bar[data-type="execution"]     { --floor-color: var(--floor-execution); }
-.floor-bar[data-type="governance"]    { --floor-color: var(--floor-governance); }
-.floor-bar[data-type="operations"]    { --floor-color: var(--floor-operations); }
-.floor-bar[data-type="integration"]   { --floor-color: var(--floor-integration); }
-
-.floor-icon {
-  width: 28px;
-  height: 28px;
+.building-header-top {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  color: var(--floor-color, var(--text-secondary));
+  justify-content: space-between;
+  width: 100%;
+}
+.building-name {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.building-phase {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.phase-badge {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-full);
+  text-transform: capitalize;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+.phase-badge.phase-strategy     { background: rgba(168, 85, 247, 0.15); color: var(--floor-strategy); }
+.phase-badge.phase-discovery    { background: rgba(56, 189, 248, 0.15); color: var(--floor-collaboration); }
+.phase-badge.phase-architecture { background: rgba(56, 189, 248, 0.15); color: var(--floor-collaboration); }
+.phase-badge.phase-execution    { background: rgba(74, 222, 128, 0.15); color: var(--floor-execution); }
+.phase-badge.phase-review       { background: rgba(251, 191, 36, 0.15); color: var(--floor-governance); }
+.phase-badge.phase-deploy       { background: rgba(248, 113, 113, 0.15); color: var(--floor-operations); }
+
+.building-header-actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+/* ── Project info ── */
+.building-project-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-1) 0;
+}
+.building-project-path,
+.building-project-repo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.building-project-repo {
+  color: var(--blue-400, #60a5fa);
+  text-decoration: none;
+}
+.building-project-repo:hover {
+  text-decoration: underline;
+}
+.building-project-icon {
   flex-shrink: 0;
 }
 
-.floor-info {
+/* ═══════════════════════════════════════════════════
+   FLOOR TREE — Vertical accordion with compact items
+   ═══════════════════════════════════════════════════ */
+
+.building-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--sp-2) var(--sp-2);
   flex: 1;
-  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Smooth scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-primary) transparent;
 }
-.floor-name {
+.building-tree::-webkit-scrollbar { width: 5px; }
+.building-tree::-webkit-scrollbar-track { background: transparent; }
+.building-tree::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: 3px;
+}
+.building-tree::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ── Floor section ── */
+.floor-section {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+
+/* ── Floor section header ── */
+.floor-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-default);
+  user-select: none;
+  position: relative;
+}
+.floor-section-header:hover {
+  background: var(--floor-bg-hover);
+}
+.floor-section.expanded > .floor-section-header {
+  background: var(--floor-bg-active);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+/* Chevron */
+.floor-chevron {
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: color var(--duration-fast);
+}
+.floor-section.expanded > .floor-section-header .floor-chevron {
+  color: var(--text-secondary);
+}
+
+/* Floor color dot — type indicator */
+.floor-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.floor-dot-strategy      { background: var(--floor-strategy); box-shadow: 0 0 6px rgba(168, 85, 247, 0.3); }
+.floor-dot-collaboration { background: var(--floor-collaboration); box-shadow: 0 0 6px rgba(56, 189, 248, 0.3); }
+.floor-dot-execution     { background: var(--floor-execution); box-shadow: 0 0 6px rgba(74, 222, 128, 0.3); }
+.floor-dot-governance    { background: var(--floor-governance); box-shadow: 0 0 6px rgba(251, 191, 36, 0.3); }
+.floor-dot-operations    { background: var(--floor-operations); box-shadow: 0 0 6px rgba(248, 113, 113, 0.3); }
+.floor-dot-integration   { background: var(--floor-integration); box-shadow: 0 0 6px rgba(192, 132, 252, 0.3); }
+.floor-dot-default       { background: var(--text-muted); }
+
+/* Floor name */
+.floor-section-name {
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.floor-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  margin-top: 2px;
+  white-space: nowrap;
 }
 
-.floor-agents {
-  display: flex;
-  gap: -4px;
-  align-items: center;
+/* Floor room count pill */
+.floor-section-count {
+  font-size: 10px;
+  font-weight: var(--font-bold);
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  line-height: 1.4;
 }
-.floor-agent-dot {
+
+/* Floor agent activity indicator */
+.floor-agent-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  color: var(--accent-green);
+  flex-shrink: 0;
+  padding: 1px 5px;
+  background: rgba(74, 222, 128, 0.08);
+  border-radius: var(--radius-full);
+}
+.floor-agent-pulse {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--accent-green);
-  box-shadow: 0 0 4px rgba(74, 222, 128, 0.4);
-  margin-left: -2px;
+  animation: agentPulse 2s ease-in-out infinite;
 }
-.floor-agent-dot:first-child { margin-left: 0; }
-
-.floor-expand-icon {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  transition: transform var(--duration-fast) var(--ease-default);
-}
-.floor-bar.active .floor-expand-icon {
-  transform: rotate(90deg);
+@keyframes agentPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.4); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(74, 222, 128, 0); }
 }
 
-/* ── Room grid (expanded floor) ── */
-.floor-rooms {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
-  padding-left: calc(var(--sp-4) + 3px + var(--sp-3)); /* Align with floor content */
-  animation: slideDown var(--duration-normal) var(--ease-default);
+/* ── Floor section body (expanded) ── */
+.floor-section-body {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  padding: var(--sp-1) 0;
+  animation: treeSlideDown 200ms var(--ease-default);
+}
+@keyframes treeSlideDown {
+  from { opacity: 0; max-height: 0; }
+  to   { opacity: 1; max-height: 600px; }
 }
 
-/* ── Room card ── */
-.room-card {
-  background: var(--room-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: var(--sp-3);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-default);
-  position: relative;
-}
-.room-card:hover {
-  background: var(--room-bg-hover);
-  border-color: var(--border-accent);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
-}
-.room-card.occupied {
-  background: var(--room-bg-occupied);
-}
-.room-card.room-active-chat {
-  border-color: var(--color-primary, #4ECDC4);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #4ECDC4) 30%, transparent);
-  background: color-mix(in srgb, var(--color-primary, #4ECDC4) 5%, var(--room-bg, #fff));
-}
-.room-card.room-active-chat::after {
-  content: 'chat';
-  position: absolute;
-  top: var(--sp-1, 4px);
-  right: var(--sp-1, 4px);
-  font-size: 9px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-primary, #4ECDC4);
-  background: color-mix(in srgb, var(--color-primary, #4ECDC4) 12%, transparent);
-  padding: 1px 5px;
-  border-radius: var(--radius-sm, 4px);
-}
-
-.room-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--sp-2);
-}
-.room-type-label {
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--floor-color, var(--text-secondary));
-}
-.room-card-name {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--text-primary);
-  margin-bottom: var(--sp-2);
-}
-.room-card-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
+/* Empty floor hint */
+.floor-empty {
+  padding: var(--sp-2) var(--sp-4) var(--sp-2) calc(var(--sp-4) + 24px);
   font-size: var(--text-xs);
   color: var(--text-muted);
-}
-
-/* Agent chip (in room cards via Card._buildRoom) */
-.room-agent-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px var(--sp-2);
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.2);
-  border-radius: var(--radius-full);
-  color: var(--accent-blue);
-  white-space: nowrap;
-}
-
-/* Room tools container (in room cards via Card._buildRoom) */
-.room-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-1);
-  margin-top: var(--sp-2);
-}
-.tool-tag-more {
-  opacity: 0.6;
   font-style: italic;
 }
 
-/* Floor type indicator dot (in floor cards via Card._buildFloor) */
-.floor-type-indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: inline-block;
+/* Floor actions (bottom of expanded section) */
+.floor-section-actions {
+  display: flex;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  padding-left: calc(var(--sp-3) + 24px);
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+.floor-add-room-btn {
+  color: var(--accent-blue) !important;
 }
 
-/* Floor type badge (in floor cards via Card._buildFloor) */
-.floor-type-badge {
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  padding: 2px var(--sp-2);
+/* ═══════════════════════════════════════════════════
+   ROOM ITEMS — Compact, single-line tree items
+   ═══════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════
+   ROOM ITEMS — Detail-rich mini cards in sidebar
+   ═══════════════════════════════════════════════════ */
+
+.floor-room-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) calc(var(--sp-2) + 20px);
+}
+
+.room-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-default);
+  position: relative;
+  background: var(--floor-bg);
+}
+.room-item::before {
+  /* Tree branch connector line */
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 14px;
+  width: 10px;
+  height: 1px;
+  background: var(--border-primary);
+}
+.room-item:hover {
+  background: var(--floor-bg-hover);
+  border-color: var(--border-primary);
+}
+.room-item:hover .room-item-actions {
+  opacity: 1;
+}
+.room-item-active {
+  background: rgba(78, 205, 196, 0.06);
+  border-color: rgba(78, 205, 196, 0.25);
+}
+.room-item-active .room-item-name {
+  color: var(--color-primary, #4ECDC4);
+  font-weight: var(--font-semibold);
+}
+.room-item-occupied {
+  background: var(--room-bg-occupied, rgba(0, 212, 255, 0.04));
+}
+
+/* Row 1: Status badge + Room name */
+.room-item-row1 {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* Status badge (Active / Idle / Error) */
+.room-item-status {
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  padding: 1px 6px;
   border-radius: var(--radius-full);
-  background: var(--bg-tertiary);
-  color: var(--text-muted);
   text-transform: capitalize;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+.room-item-status-active {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--status-active);
+}
+.room-item-status-idle {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--status-idle);
+}
+.room-item-status-error {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--status-error);
+}
+
+/* Room name */
+.room-item-name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Floor room count (in floor cards via Card._buildFloor) */
-.floor-room-count {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
+/* Row 2: Type tag + Agent count */
+.room-item-row2 {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
 }
 
-/* Agent avatars in room */
-.room-agents {
-  display: flex;
-  gap: var(--sp-1);
-  margin-top: var(--sp-2);
-  flex-wrap: wrap;
+/* Room type tag */
+.room-item-type {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
 }
-.agent-avatar {
-  width: 24px;
-  height: 24px;
+
+/* Agent count */
+.room-item-agent-count {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* Row 3: Agent avatars */
+.room-item-avatars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+}
+.room-item-avatar {
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: var(--font-bold);
   color: var(--bg-primary);
   background: var(--accent-blue);
-  border: 2px solid var(--bg-secondary);
-  position: relative;
+  border: 1.5px solid var(--bg-secondary);
 }
-.agent-avatar.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  right: -1px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--status-active);
-  border: 2px solid var(--bg-secondary);
+.room-item-avatar-active,
+.room-item-avatar-working {
+  background: var(--accent-green);
+}
+.room-item-avatar-error {
+  background: var(--accent-red);
+}
+.room-item-avatar-idle {
+  background: var(--status-idle);
+}
+.room-item-avatar-overflow {
+  font-size: 9px;
+  color: var(--text-muted);
+  padding-left: 3px;
 }
 
-/* ── Room detail view (table/chair layout) ── */
+/* Last activity */
+.room-item-activity {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.room-item-activity-label {
+  opacity: 0.7;
+}
+.room-item-activity-time {
+  color: var(--text-secondary);
+}
+
+/* Hover action buttons */
+.room-item-actions {
+  position: absolute;
+  top: var(--sp-1);
+  right: var(--sp-1);
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-default);
+  z-index: 2;
+}
+.room-item-action-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  border: none;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.room-item-action-btn:hover {
+  background: var(--bg-tertiary);
+}
+.room-item-action-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+/* ═══════════════════════════════════════════════════
+   CONTEXT MENU (right-click)
+   ═══════════════════════════════════════════════════ */
+
+.ctx-menu {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  min-width: 160px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--sp-1) 0;
+  overflow: hidden;
+}
+.ctx-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background var(--duration-fast);
+}
+.ctx-menu-item:hover {
+  background: var(--bg-hover);
+}
+.ctx-menu-danger {
+  color: var(--accent-red) !important;
+}
+.ctx-menu-danger:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
+/* ═══════════════════════════════════════════════════
+   RESIZE HANDLE
+   ═══════════════════════════════════════════════════ */
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+  transition: background var(--duration-fast);
+}
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle.dragging {
+  background: var(--accent-blue);
+  opacity: 0.5;
+}
+
+/* ═══════════════════════════════════════════════════
+   BUILDING FOUNDATION
+   ═══════════════════════════════════════════════════ */
+
+.building-foundation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-2) var(--sp-4);
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--bg-tertiary),
+    var(--bg-tertiary) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: var(--sp-2);
+}
+
+/* ═══════════════════════════════════════════════════
+   BUILDING STATS FOOTER
+   ═══════════════════════════════════════════════════ */
+
+.building-stats {
+  display: flex;
+  justify-content: space-around;
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--border-secondary);
+  flex-shrink: 0;
+}
+.building-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.building-stat-value {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+.building-stat-label {
+  font-size: 10px;
+  font-weight: var(--font-medium);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ═══════════════════════════════════════════════════
+   ROOM VIEW (table/chair layout — used in center panel)
+   Kept for room detail views, not the sidebar nav.
+   ═══════════════════════════════════════════════════ */
+
 .room-view {
   padding: var(--sp-4);
   flex: 1;
@@ -410,144 +697,165 @@
   color: var(--text-secondary);
 }
 
-/* ── Building header & stats (building-view.js) ── */
-.building-header {
+/* Agent chip (in room cards via Card._buildRoom) */
+.room-agent-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--sp-2);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: var(--radius-full);
+  color: var(--accent-blue);
+  white-space: nowrap;
+}
+
+/* Room tools container */
+.room-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin-top: var(--sp-2);
+}
+.tool-tag-more {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+/* Floor type indicator dot */
+.floor-type-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* Floor type badge */
+.floor-type-badge {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-full);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+/* Floor room count */
+.floor-room-count {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* Agent avatars in room */
+.room-agents {
+  display: flex;
+  gap: var(--sp-1);
+  margin-top: var(--sp-2);
+  flex-wrap: wrap;
+}
+.agent-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: var(--font-bold);
+  color: var(--bg-primary);
+  background: var(--accent-blue);
+  border: 2px solid var(--bg-secondary);
+  position: relative;
+}
+.agent-avatar.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-active);
+  border: 2px solid var(--bg-secondary);
+}
+
+/* ═══════════════════════════════════════════════════
+   ROOM CARD (used in agents view, not sidebar)
+   ═══════════════════════════════════════════════════ */
+
+.room-card {
+  background: var(--room-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-3);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-default);
+  position: relative;
+}
+.room-card:hover {
+  background: var(--room-bg-hover);
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.room-card.occupied {
+  background: var(--room-bg-occupied);
+}
+.room-card.room-active-chat {
+  border-color: var(--color-primary, #4ECDC4);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #4ECDC4) 30%, transparent);
+  background: color-mix(in srgb, var(--color-primary, #4ECDC4) 5%, var(--room-bg, #fff));
+}
+.room-card.room-active-chat::after {
+  content: 'chat';
+  position: absolute;
+  top: var(--sp-1, 4px);
+  right: var(--sp-1, 4px);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-primary, #4ECDC4);
+  background: color-mix(in srgb, var(--color-primary, #4ECDC4) 12%, transparent);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.room-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--sp-3) var(--sp-4);
-  border-bottom: 1px solid var(--border-secondary);
-  flex-shrink: 0;
+  margin-bottom: var(--sp-2);
 }
-.building-name {
-  font-size: var(--text-base);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-}
-.building-phase {
-  display: flex;
-  align-items: center;
-}
-.phase-badge {
+.room-type-label {
   font-size: var(--text-xs);
   font-weight: var(--font-semibold);
-  padding: 2px var(--sp-2);
-  border-radius: var(--radius-full);
-  text-transform: capitalize;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--floor-color, var(--text-secondary));
 }
-.phase-badge.phase-strategy     { background: rgba(168, 85, 247, 0.15); color: var(--floor-strategy); }
-.phase-badge.phase-discovery    { background: rgba(56, 189, 248, 0.15); color: var(--floor-collaboration); }
-.phase-badge.phase-architecture { background: rgba(56, 189, 248, 0.15); color: var(--floor-collaboration); }
-.phase-badge.phase-execution    { background: rgba(74, 222, 128, 0.15); color: var(--floor-execution); }
-.phase-badge.phase-review       { background: rgba(251, 191, 36, 0.15); color: var(--floor-governance); }
-.phase-badge.phase-deploy       { background: rgba(248, 113, 113, 0.15); color: var(--floor-operations); }
-
-/* Building cross-section container */
-.building-cross-section {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--sp-3);
-  flex: 1;
-  overflow-y: auto;
-}
-
-/* Floor bar additional states */
-.floor-bar.expanded {
-  background: var(--floor-bg-active);
-  border-left-width: 4px;
-}
-.floor-bar.expanded::before {
-  opacity: 0.08;
-}
-
-/* Floor bar info (inside floor bar) */
-.floor-bar-info {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sp-1) var(--sp-2);
-  flex: 1;
-  min-width: 0;
-}
-.floor-bar-name {
+.room-card-name {
   font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
+  font-weight: var(--font-medium);
   color: var(--text-primary);
-  white-space: nowrap;
+  margin-bottom: var(--sp-2);
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
-  min-width: 0;
-}
-.floor-bar-meta-row {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  width: 100%;
-}
-.floor-bar-type {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  text-transform: capitalize;
-}
-.floor-bar-rooms {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
   white-space: nowrap;
 }
-
-/* Agent dots (in floor bars) */
-.floor-agent-dots {
+.room-card-meta {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 var(--sp-2);
-}
-.agent-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.agent-dot-idle {
-  background: var(--status-idle);
-}
-.agent-dot-active,
-.agent-dot-working {
-  background: var(--status-active);
-  box-shadow: 0 0 4px rgba(74, 222, 128, 0.4);
-}
-.agent-dot-busy {
-  background: var(--status-busy);
-}
-.agent-dot-error {
-  background: var(--status-error);
-}
-.agent-dot-overflow {
-  font-size: 9px;
-  color: var(--text-muted);
-  margin-left: 2px;
-}
-
-/* Room grid (expanded floor) */
-.floor-room-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: var(--sp-2);
-  padding: var(--sp-3) 0;
-  padding-left: var(--sp-4);
-  animation: slideDown var(--duration-normal) var(--ease-default);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
-/* Room occupied state */
-.room-occupied {
-  background: var(--room-bg-occupied);
-}
-
-/* Room status badge (in room cards) */
+/* Room status badge (used in room cards outside sidebar) */
 .room-status-badge {
   font-size: 10px;
   font-weight: var(--font-semibold);
@@ -612,7 +920,49 @@
   flex-wrap: wrap;
 }
 
-/* ── Citations / Backlinks section (room-view.js) ── */
+/* Room card action buttons */
+.room-card-actions {
+  position: absolute;
+  top: var(--sp-1);
+  right: var(--sp-1);
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-default);
+  z-index: 2;
+}
+.room-card:hover .room-card-actions {
+  opacity: 1;
+}
+.room-action-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  border: none;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.room-action-btn:hover {
+  background: var(--bg-tertiary);
+}
+.room-action-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+/* Room occupied state */
+.room-occupied {
+  background: var(--room-bg-occupied);
+}
+
+/* ═══════════════════════════════════════════════════
+   CITATIONS / BACKLINKS (room-view.js)
+   ═══════════════════════════════════════════════════ */
+
 .room-citations-section {
   padding-top: var(--sp-3);
   border-top: 1px solid var(--border-secondary);
@@ -677,121 +1027,10 @@
   white-space: nowrap;
 }
 
-/* ── Building header layout (updated for management controls) ── */
-.building-header {
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-.building-header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-.building-header-actions {
-  display: flex;
-  gap: var(--sp-2);
-}
+/* ═══════════════════════════════════════════════════
+   MANAGEMENT MODALS
+   ═══════════════════════════════════════════════════ */
 
-/* ── Building project info (working dir + repo) ── */
-.building-project-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--sp-1) 0;
-}
-.building-project-path,
-.building-project-repo {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-1);
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.building-project-repo {
-  color: var(--blue-400, #60a5fa);
-  text-decoration: none;
-}
-.building-project-repo:hover {
-  text-decoration: underline;
-}
-.building-project-icon {
-  flex-shrink: 0;
-}
-
-/* ── Form hint text ── */
-.form-hint {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-/* ── Floor action bar ── */
-.floor-action-bar {
-  display: flex;
-  gap: var(--sp-2);
-  padding: var(--sp-2) 0;
-  padding-left: var(--sp-4);
-  border-top: 1px solid var(--border-secondary);
-  margin-top: var(--sp-2);
-}
-
-/* Danger ghost button */
-.btn-danger-ghost {
-  color: var(--accent-red, #ef4444) !important;
-}
-.btn-danger-ghost:hover {
-  background: rgba(239, 68, 68, 0.1) !important;
-}
-
-/* Danger solid button */
-.btn-danger {
-  background: var(--accent-red, #ef4444);
-  color: white;
-  border: none;
-}
-.btn-danger:hover {
-  background: color-mix(in srgb, var(--accent-red, #ef4444) 85%, black);
-}
-
-/* ── Room card action buttons ── */
-.room-card-actions {
-  position: absolute;
-  top: var(--sp-1);
-  right: var(--sp-1);
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-default);
-  z-index: 2;
-}
-.room-card:hover .room-card-actions {
-  opacity: 1;
-}
-.room-action-btn {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  border: none;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background var(--duration-fast);
-}
-.room-action-btn:hover {
-  background: var(--bg-tertiary);
-}
-.room-action-danger:hover {
-  background: rgba(239, 68, 68, 0.2);
-}
-
-/* ── Management modal shared styles ── */
 .edit-floor-modal,
 .edit-room-modal,
 .edit-building-modal,
@@ -889,59 +1128,28 @@
   border-radius: var(--radius-md);
 }
 
-/* Building foundation */
-.building-foundation {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--sp-2) var(--sp-4);
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--bg-tertiary),
-    var(--bg-tertiary) 4px,
-    transparent 4px,
-    transparent 8px
-  );
-  border-radius: var(--radius-md);
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+/* Danger ghost button */
+.btn-danger-ghost {
+  color: var(--accent-red, #ef4444) !important;
+}
+.btn-danger-ghost:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
 }
 
-/* Building stats footer */
-.building-stats {
-  display: flex;
-  justify-content: space-around;
-  padding: var(--sp-3) var(--sp-4);
-  border-top: 1px solid var(--border-secondary);
-  flex-shrink: 0;
+/* Danger solid button */
+.btn-danger {
+  background: var(--accent-red, #ef4444);
+  color: white;
+  border: none;
 }
-.building-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-.building-stat-value {
-  font-size: var(--text-lg);
-  font-weight: var(--font-bold);
-  color: var(--text-primary);
-}
-.building-stat-label {
-  font-size: 10px;
-  font-weight: var(--font-medium);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.btn-danger:hover {
+  background: color-mix(in srgb, var(--accent-red, #ef4444) 85%, black);
 }
 
 /* ═══════════════════════════════════════════════════
    ROOM CONFIGURATION SECTION (#220)
    ═══════════════════════════════════════════════════ */
 
-/* ── Room Config Panel ── */
 .room-config-section {
   padding: var(--sp-3) 0;
   border-bottom: 1px solid var(--border-secondary);
@@ -982,7 +1190,7 @@
   white-space: nowrap;
 }
 
-/* ── Edit Room Config Modal ── */
+/* Edit Room Config Modal */
 .edit-room-config-modal {
   display: flex;
   flex-direction: column;
@@ -1005,14 +1213,12 @@
    TABLE MANAGEMENT SECTION (#221)
    ═══════════════════════════════════════════════════ */
 
-/* ── Table list layout ── */
 .room-table-list {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
 }
 
-/* ── Table card action buttons ── */
 .room-table-card-actions {
   display: flex;
   gap: 2px;
@@ -1041,7 +1247,7 @@
   color: var(--accent-red);
 }
 
-/* ── Seated agents in table card ── */
+/* Seated agents in table card */
 .room-table-seated-agents {
   display: flex;
   align-items: center;
@@ -1086,7 +1292,7 @@
   color: var(--accent-yellow);
 }
 
-/* ── Edit Table Modal ── */
+/* Edit Table Modal */
 .edit-table-modal {
   display: flex;
   flex-direction: column;

@@ -1,0 +1,16 @@
+{
+  "id": "phase-gate-reporter",
+  "name": "Phase Gate Reporter",
+  "version": "1.0.0",
+  "description": "Generates detailed, formatted reports every time a phase gate decision is made, building a searchable history of all phase transitions with evidence and participants.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

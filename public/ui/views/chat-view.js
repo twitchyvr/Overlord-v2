@@ -10,7 +10,7 @@
 
 import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
-import { h, setTrustedContent, escapeHtml, formatTime, debounce } from '../engine/helpers.js';
+import { h, setTrustedContent, escapeHtml, formatTime, debounce, linkEntities } from '../engine/helpers.js';
 import { TokenInput } from '../components/token-input.js';
 import { Table } from '../components/table.js';
 import { Toast } from '../components/toast.js';
@@ -85,6 +85,43 @@ function fuzzyFilter(items, query, labelKey = 'label') {
 }
 
 
+/* ── Contextual suggestion definitions per room type ──────── */
+
+const ROOM_SUGGESTIONS = {
+  'strategist':           ['Start quick setup', 'Describe your project', 'Define phases'],
+  'building-architect':   ['Describe architecture', 'List components', 'Show blueprint'],
+  'discovery':            ['Gather requirements', 'Identify risks', 'List stakeholders'],
+  'architecture':         ['Design system', 'Break down tasks', 'Review structure'],
+  'code-lab':             ['Run tests', 'List files', 'Check build'],
+  'testing-lab':          ['Run test suite', 'Check coverage', 'Report bugs'],
+  'review':               ['View exit document', 'Check test results', 'Review changes'],
+  'deploy':               ['Deploy status', 'Run checks', 'View changelog'],
+  'war-room':             ['Escalation status', 'Critical issues', 'Action items'],
+  '_default':             ['Create task', 'Search RAID log'],
+};
+
+
+/* ── Friendly tool labels for non-technical users (#521) ───── */
+
+const TOOL_LABELS = {
+  'list_dir':      'Browsing files',
+  'read_file':     'Reading a file',
+  'write_file':    'Writing code',
+  'web_search':    'Searching the web',
+  'record_note':   'Taking notes',
+  'recall_notes':  'Checking notes',
+  'session_note':  'Saving context',
+  'bash':          'Running a command',
+  'fetch_webpage': 'Fetching a page',
+  'patch_file':    'Updating code',
+  'search_files':  'Searching files',
+  'create_dir':    'Creating a folder',
+  'delete_file':   'Removing a file',
+  'move_file':     'Moving a file',
+  'copy_file':     'Copying a file',
+};
+
+
 export class ChatView extends Component {
 
   constructor(el, opts = {}) {
@@ -96,6 +133,11 @@ export class ChatView extends Component {
     this._streamBuffer = '';      // accumulated stream text
     this._renderedCount = 0;     // tracks how many messages are in DOM
     this._lastRenderedId = null;  // last message id for incremental detection
+    this._suggestionsBarEl = null; // contextual suggestions bar
+
+    // Per-room message history (#537)
+    this._roomMessages = new Map();  // roomId -> messages[]
+    this._previousRoomId = null;
 
     // Token suggestion caches (populated on first fetch, cleared on reconnect)
     this._cmdCache = null;
@@ -124,15 +166,18 @@ export class ChatView extends Component {
     this._listeners.push(
       OverlordUI.subscribe('chat:stream-start', (data) => {
         this._handleStreamStart(data);
+        this._updateSuggestionsBar(); // Hide suggestions while streaming (#553)
       }),
       OverlordUI.subscribe('chat:stream-chunk', (data) => {
         this._handleStreamChunk(data);
       }),
       OverlordUI.subscribe('chat:stream-end', (data) => {
         this._handleStreamEnd(data);
+        this._updateSuggestionsBar(); // Show suggestions again (#553)
       }),
       OverlordUI.subscribe('chat:response', (data) => {
         this._handleResponse(data);
+        this._updateSuggestionsBar(); // Show suggestions after response (#553)
       }),
       OverlordUI.subscribe('plan:submitted', (data) => {
         this._handlePlanSubmitted(data);
@@ -144,25 +189,29 @@ export class ChatView extends Component {
 
     // Invalidate suggestion caches when underlying data changes
     this.subscribe(store, 'commands.list', () => { this._cmdCache = null; });
-    this.subscribe(store, 'agents.list', () => { this._agentCache = null; });
+    this.subscribe(store, 'agents.list', () => { this._agentCache = null; this._updateRoomIndicator(); });
     this.subscribe(store, 'rooms.list', () => { this._refCache = null; });
     this.subscribe(store, 'raid.entries', () => { this._refCache = null; });
 
-    // Update chat header when active room changes
-    this.subscribe(store, 'rooms.active', () => { this._updateRoomIndicator(); });
+    // Update chat header and suggestions when active room changes
+    this.subscribe(store, 'rooms.active', (newRoomId) => {
+      this._handleRoomSwitch(newRoomId);
+      this._updateRoomIndicator();
+      this._updateSuggestionsBar();
+    });
 
     // Listen for room selection from building sidebar
     this._listeners.push(
-      OverlordUI.subscribe('building:room-selected', (data) => {
+      OverlordUI.subscribe('building:room-selected', () => {
         this._updateRoomIndicator();
+        this._updateSuggestionsBar();
       })
     );
 
-    // Hydrate from store — messages may have arrived before this view mounted
-    const existingMessages = store.get('chat.messages');
-    if (existingMessages && existingMessages.length > 0) {
-      this._renderMessages(existingMessages);
-    }
+    // Hydrate from store — messages may have arrived before this view mounted.
+    // Always call _renderMessages so the empty state is shown when no messages exist.
+    const existingMessages = store.get('chat.messages') || [];
+    this._renderMessages(existingMessages);
   }
 
   _render() {
@@ -178,7 +227,8 @@ export class ChatView extends Component {
           onClick: () => this._toggleConversations()
         }, '\u{1F4AC}'),
         h('span', { class: 'chat-header-title' }, 'Chat'),
-        h('span', { class: 'chat-room-indicator', id: 'chat-room-indicator' })
+        h('span', { class: 'chat-room-indicator', id: 'chat-room-indicator' }),
+        h('span', { class: 'chat-room-agents', id: 'chat-room-agents' })
       ),
       h('div', { class: 'chat-header-actions' },
         h('button', {
@@ -214,6 +264,10 @@ export class ChatView extends Component {
       onClick: () => this._scrollToBottom()
     }, '\u25BC');
     this.el.appendChild(this._scrollBtn);
+
+    // Contextual suggestions bar (above input)
+    this._suggestionsBarEl = this._buildSuggestionsBar();
+    this.el.appendChild(this._suggestionsBarEl);
 
     // Token input with attachment support
     const inputContainer = h('div', { class: 'chat-input-container' });
@@ -272,6 +326,39 @@ export class ChatView extends Component {
   /**
    * Render the message list.
    *
+   * Handle room switch — preserve old messages and show divider (#537).
+   */
+  _handleRoomSwitch(newRoomId) {
+    if (!newRoomId || newRoomId === this._previousRoomId) return;
+
+    const store = OverlordUI.getStore();
+    const currentMessages = store?.get('chat.messages') || [];
+
+    // Save current room's messages before switching
+    if (this._previousRoomId && currentMessages.length > 0) {
+      this._roomMessages.set(this._previousRoomId, [...currentMessages]);
+    }
+
+    // Look up the previous room's display name
+    if (this._previousRoomId && currentMessages.length > 0 && this._messagesEl) {
+      const rooms = store?.get('rooms.list') || [];
+      const prevRoom = rooms.find(r => r.id === this._previousRoomId);
+      const roomLabel = prevRoom
+        ? (prevRoom.type || prevRoom.name || 'Unknown').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        : 'Previous';
+      // Insert a room divider in the chat
+      const divider = h('div', { class: 'chat-room-divider' },
+        h('span', { class: 'chat-room-divider-line' }),
+        h('span', { class: 'chat-room-divider-label' }, `Previous: ${roomLabel} Room`),
+        h('span', { class: 'chat-room-divider-line' })
+      );
+      this._messagesEl.appendChild(divider);
+    }
+
+    this._previousRoomId = newRoomId;
+  }
+
+  /**
    * Uses incremental append when new messages arrive to preserve scroll
    * position for users reading history.  Falls back to full re-render
    * only when the message set diverges (clear, reload, etc.).
@@ -368,18 +455,32 @@ export class ChatView extends Component {
     );
     contentWrap.appendChild(meta);
 
-    // Message content
+    // Message content — handle both string and array-of-blocks formats (#532)
     const content = h('div', { class: 'chat-message-content' });
 
-    if (msg.content) {
-      // Render markdown if marked is available
-      if (typeof marked !== 'undefined' && this._looksLikeMarkdown(msg.content)) {
-        const text = this._wrapJsonBlocks(msg.content);
+    const rawContent = msg.content;
+    let textContent = '';
+
+    if (Array.isArray(rawContent)) {
+      // Content is an array of blocks (e.g. [{type:'text', text:'...'}, {type:'tool_use',...}])
+      textContent = rawContent
+        .filter((b) => b.type === 'text' && b.text)
+        .map((b) => b.text)
+        .join('\n');
+    } else if (rawContent && typeof rawContent === 'string') {
+      textContent = rawContent;
+    }
+
+    if (textContent) {
+      if (typeof marked !== 'undefined' && this._looksLikeMarkdown(textContent)) {
+        const text = this._formatContentBlocks(textContent);
         const parsed = marked.parse(text, { breaks: true, gfm: true });
         setTrustedContent(content, parsed);
         Table.styleMarkdownTables(content);
       } else {
-        content.textContent = msg.content;
+        // Use entity linking for plain text messages (@agent, #123)
+        const linked = linkEntities(textContent);
+        content.appendChild(linked);
       }
     }
     contentWrap.appendChild(content);
@@ -565,20 +666,43 @@ export class ChatView extends Component {
     return bubble;
   }
 
-  /** Build a tool call chip. */
+  /** Build a tool call chip with friendly labels (#521). */
   _buildToolChip(toolCall) {
+    const rawName = toolCall.name || toolCall.tool || '';
+    const friendlyLabel = TOOL_LABELS[rawName] || rawName.replace(/_/g, ' ');
+
     const chip = h('div', { class: 'tool-chip' },
-      h('span', { class: 'tool-chip-name' }, toolCall.name || toolCall.tool),
+      h('span', { class: 'tool-chip-name' }, friendlyLabel),
       toolCall.status ? h('span', {
         class: `tool-chip-status tool-chip-${toolCall.status}`
       }, toolCall.status) : null
     );
 
+    // Add hidden details with a toggle for advanced users
     if (toolCall.input) {
       const paramText = typeof toolCall.input === 'object'
         ? Object.keys(toolCall.input).join(', ')
         : String(toolCall.input);
-      chip.appendChild(h('span', { class: 'tool-chip-params' }, paramText));
+
+      const detailsEl = h('span', {
+        class: 'tool-chip-params',
+        style: { display: 'none' }
+      }, `${rawName}(${paramText})`);
+
+      const toggleBtn = h('button', {
+        class: 'tool-chip-toggle',
+        title: 'Show details',
+        onClick: (e) => {
+          e.stopPropagation();
+          const hidden = detailsEl.style.display === 'none';
+          detailsEl.style.display = hidden ? '' : 'none';
+          toggleBtn.textContent = hidden ? '\u25B4' : '\u25BE';
+          toggleBtn.title = hidden ? 'Hide details' : 'Show details';
+        }
+      }, '\u25BE');
+
+      chip.appendChild(toggleBtn);
+      chip.appendChild(detailsEl);
     }
 
     return chip;
@@ -593,7 +717,10 @@ export class ChatView extends Component {
       class: 'chat-action-btn',
       title: 'Copy',
       onClick: () => {
-        navigator.clipboard.writeText(msg.content || '').catch(() => {});
+        const copyText = Array.isArray(msg.content)
+          ? msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n')
+          : (msg.content || '');
+        navigator.clipboard.writeText(copyText).catch(() => {});
       }
     }, '\u{1F4CB}');
     actions.appendChild(copyBtn);
@@ -668,24 +795,13 @@ export class ChatView extends Component {
 
   _handleStreamEnd(data) {
     if (!this._streamingMessage) return;
-    this._streamingMessage.classList.remove('streaming');
 
-    // Remove cursor
-    const cursor = this._streamingMessage.querySelector('.stream-cursor');
-    if (cursor) cursor.remove();
-
-    // Final render
-    const content = this._streamingMessage.querySelector('.chat-message-content');
-    if (content && this._streamBuffer) {
-      if (typeof marked !== 'undefined') {
-        const parsed = marked.parse(this._streamBuffer, { breaks: true, gfm: true });
-        setTrustedContent(content, parsed);
-        Table.styleMarkdownTables(content);
-      } else {
-        content.textContent = this._streamBuffer;
-      }
-    }
-
+    // Remove the streaming element from the DOM entirely.
+    // The final message will be rendered by the store subscription
+    // when chat:response adds it to chat.messages.  Keeping this
+    // element around causes a duplicate because _renderMessages
+    // can't find it (the .streaming class would already be removed).
+    this._streamingMessage.remove();
     this._streamingMessage = null;
     this._streamBuffer = '';
   }
@@ -919,6 +1035,7 @@ export class ChatView extends Component {
   /** Update the room indicator badge in the chat header. */
   _updateRoomIndicator() {
     const indicator = this.el?.querySelector('#chat-room-indicator');
+    const agentsEl = this.el?.querySelector('#chat-room-agents');
     if (!indicator) return;
 
     const store = OverlordUI.getStore();
@@ -937,6 +1054,26 @@ export class ChatView extends Component {
     } else {
       indicator.textContent = '';
       indicator.hidden = true;
+    }
+
+    // Show agents in the current room (#510)
+    if (agentsEl) {
+      if (activeRoomId) {
+        const allAgents = store?.get('agents.list') || [];
+        const roomAgents = allAgents.filter(a => a.current_room_id === activeRoomId);
+        if (roomAgents.length > 0) {
+          const names = roomAgents.map(a => a.display_name || a.name || 'Agent').join(', ');
+          agentsEl.textContent = names;
+          agentsEl.title = `Agents in this room: ${names}`;
+          agentsEl.hidden = false;
+        } else {
+          agentsEl.textContent = '';
+          agentsEl.hidden = true;
+        }
+      } else {
+        agentsEl.textContent = '';
+        agentsEl.hidden = true;
+      }
     }
   }
 
@@ -1007,6 +1144,49 @@ export class ChatView extends Component {
     }
   }
 
+  // ── Contextual Suggestions ──────────────────────────────────
+
+  /** Build the suggestions bar with context-aware pill buttons. */
+  _buildSuggestionsBar() {
+    const bar = h('div', { class: 'chat-suggestions-bar' });
+    const pills = this._getSuggestionPills();
+    for (const text of pills) {
+      const pill = h('button', { class: 'chat-suggestion-pill' }, text);
+      pill.addEventListener('click', () => {
+        // Auto-send the suggestion instead of just filling input (#564)
+        this._sendMessage(text, []);
+      });
+      bar.appendChild(pill);
+    }
+    return bar;
+  }
+
+  /** Get the current room type and return matching suggestions. */
+  _getSuggestionPills() {
+    const store = OverlordUI.getStore();
+    const activeRoomId = store?.get('rooms.active');
+    const rooms = store?.get('rooms.list') || [];
+    const room = rooms.find(r => r.id === activeRoomId);
+    const roomType = room?.type || '';
+    return ROOM_SUGGESTIONS[roomType] || ROOM_SUGGESTIONS['_default'];
+  }
+
+  /** Rebuild the suggestions bar when room context changes. */
+  _updateSuggestionsBar() {
+    if (!this._suggestionsBarEl) return;
+    const store = OverlordUI.getStore();
+    const isProcessing = store?.get('ui.processing') || store?.get('ui.streaming');
+    // Hide suggestions while agent is actively responding (#553)
+    if (isProcessing) {
+      this._suggestionsBarEl.style.display = 'none';
+      return;
+    }
+    this._suggestionsBarEl.style.display = '';
+    const newBar = this._buildSuggestionsBar();
+    this._suggestionsBarEl.replaceWith(newBar);
+    this._suggestionsBarEl = newBar;
+  }
+
   // ── Scroll ───────────────────────────────────────────────────
 
   _checkScrollLock() {
@@ -1030,11 +1210,92 @@ export class ChatView extends Component {
   }
 
   /**
-   * Detect bare JSON blocks in message text and wrap them in markdown
-   * code fences so marked renders them as formatted code blocks.
-   * Handles: entire message is JSON, or JSON embedded between prose.
+   * Check if a parsed JSON object looks like an exit document (#522).
+   * Exit documents contain fields like effortLevel, projectGoals, etc.
    */
-  _wrapJsonBlocks(text) {
+  _isExitDocument(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+    const exitFields = ['effortLevel', 'projectGoals', 'successCriteria', 'phases', 'milestones',
+      'projectName', 'deliverables', 'acceptanceCriteria', 'requirements', 'taskBreakdown'];
+    const matchCount = exitFields.filter((f) => f in obj).length;
+    return matchCount >= 2;
+  }
+
+  /**
+   * Render an exit document as a friendly summary card (#522).
+   * Returns a markdown string with a human-readable summary.
+   */
+  _renderExitDocumentSummary(obj) {
+    const parts = [];
+    const title = obj.projectName || obj.title || 'Blueprint';
+    parts.push(`### ${title} ready`);
+
+    const stats = [];
+    if (obj.projectGoals) {
+      const count = Array.isArray(obj.projectGoals) ? obj.projectGoals.length : 1;
+      stats.push(`${count} goal${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.successCriteria || obj.acceptanceCriteria) {
+      const criteria = obj.successCriteria || obj.acceptanceCriteria;
+      const count = Array.isArray(criteria) ? criteria.length : 1;
+      stats.push(`${count} ${obj.successCriteria ? 'success' : 'acceptance'} criteria`);
+    }
+    if (obj.phases) {
+      const count = Array.isArray(obj.phases) ? obj.phases.length : 1;
+      stats.push(`${count} phase${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.milestones) {
+      const count = Array.isArray(obj.milestones) ? obj.milestones.length : 1;
+      stats.push(`${count} milestone${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.deliverables) {
+      const count = Array.isArray(obj.deliverables) ? obj.deliverables.length : 1;
+      stats.push(`${count} deliverable${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.requirements) {
+      const count = Array.isArray(obj.requirements) ? obj.requirements.length : 1;
+      stats.push(`${count} requirement${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.taskBreakdown) {
+      const count = Array.isArray(obj.taskBreakdown) ? obj.taskBreakdown.length : 1;
+      stats.push(`${count} task${count !== 1 ? 's' : ''}`);
+    }
+    if (obj.effortLevel) {
+      stats.push(`effort: ${obj.effortLevel}`);
+    }
+
+    if (stats.length > 0) {
+      parts.push(stats.join(' | '));
+    }
+
+    // List goals as bullet points if present
+    if (Array.isArray(obj.projectGoals) && obj.projectGoals.length > 0) {
+      parts.push('\n**Goals:**');
+      for (const goal of obj.projectGoals.slice(0, 5)) {
+        const goalText = typeof goal === 'string' ? goal : (goal.description || goal.name || JSON.stringify(goal));
+        parts.push(`- ${goalText}`);
+      }
+    }
+
+    // List phases if present
+    if (Array.isArray(obj.phases) && obj.phases.length > 0) {
+      parts.push('\n**Phases:**');
+      for (const phase of obj.phases.slice(0, 6)) {
+        const phaseText = typeof phase === 'string' ? phase : (phase.name || phase.title || JSON.stringify(phase));
+        parts.push(`- ${phaseText}`);
+      }
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Format message content: detect exit documents and wrap bare JSON blocks
+   * in markdown code fences so marked renders them as formatted blocks.
+   * Handles: exit documents (#522), entire-message JSON, embedded JSON,
+   * and JSON already wrapped in code fences.
+   */
+  _formatContentBlocks(text) {
     const trimmed = text.trim();
 
     // Entire message is a single JSON value
@@ -1042,23 +1303,49 @@ export class ChatView extends Component {
         (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
       try {
         const obj = JSON.parse(trimmed);
+        if (this._isExitDocument(obj)) {
+          return this._renderExitDocumentSummary(obj);
+        }
         return '```json\n' + JSON.stringify(obj, null, 2) + '\n```';
       } catch { /* not valid JSON — continue */ }
     }
 
-    // Look for JSON objects/arrays embedded between text.
-    // Match lines starting with { or [ that form valid JSON spanning multiple lines.
+    // Detect exit documents already wrapped in code fences by the AI (#522)
+    // e.g. ```json\n{...}\n```
+    const fencedResult = text.replace(
+      /```(?:json)?\s*\n(\{[\s\S]*?\})\s*\n```/g,
+      (fullMatch, jsonContent) => {
+        try {
+          const obj = JSON.parse(jsonContent);
+          if (this._isExitDocument(obj)) {
+            return this._renderExitDocumentSummary(obj);
+          }
+        } catch { /* not valid JSON — leave as-is */ }
+        return fullMatch;
+      }
+    );
+    if (fencedResult !== text) return fencedResult;
+
+    // Look for bare JSON objects/arrays embedded between text.
     return text.replace(
       /^(\{[\s\S]*?\n\}|\[[\s\S]*?\n\])/gm,
       (match) => {
         try {
           const obj = JSON.parse(match);
+          if (this._isExitDocument(obj)) {
+            return this._renderExitDocumentSummary(obj);
+          }
           return '```json\n' + JSON.stringify(obj, null, 2) + '\n```';
         } catch {
           return match;
         }
       }
     );
+  }
+
+  /** @deprecated Use _formatContentBlocks instead */
+  _wrapJsonBlocks(text) {
+    return this._formatContentBlocks(text);
   }
 
   // ── Conversations ──────────────────────────────────────────

@@ -9,7 +9,7 @@
 
 import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
-import { h, formatTime, escapeHtml } from '../engine/helpers.js';
+import { h, formatTime, escapeHtml, tip } from '../engine/helpers.js';
 import { Modal } from '../components/modal.js';
 import { Button } from '../components/button.js';
 import { Toast } from '../components/toast.js';
@@ -305,13 +305,13 @@ export class RoomView extends Component {
 
     // AI Provider
     const provLabel = PROVIDER_OPTIONS.find(p => p.value === (room.provider || ''))?.label || room.provider || 'Default';
-    grid.appendChild(this._configRow('AI Provider',
+    grid.appendChild(this._configRow(tip('AI Provider'),
       h('span', { class: 'rv-config-val' }, provLabel)
     ));
 
     // File Scope
     const scopeOpt = FILE_SCOPE_OPTIONS.find(s => s.value === room.fileScope) || FILE_SCOPE_OPTIONS[0];
-    grid.appendChild(this._configRow('File Scope',
+    grid.appendChild(this._configRow(tip('File Scope'),
       h('span', { class: 'rv-config-val' }, scopeOpt.label),
       scopeOpt.desc
     ));
@@ -397,7 +397,7 @@ export class RoomView extends Component {
 
     // File Scope dropdown
     const scopeGroup = h('div', { class: 'rv-edit-field' });
-    scopeGroup.appendChild(h('label', { class: 'form-label' }, 'File Scope'));
+    scopeGroup.appendChild(h('label', { class: 'form-label' }, tip('File Scope')));
     const scopeSelect = h('select', { class: 'form-input' });
     for (const opt of FILE_SCOPE_OPTIONS) {
       const optEl = h('option', { value: opt.value }, opt.label);
@@ -413,7 +413,7 @@ export class RoomView extends Component {
 
     // AI Provider select
     const provGroup = h('div', { class: 'rv-edit-field' });
-    provGroup.appendChild(h('label', { class: 'form-label' }, 'AI Provider'));
+    provGroup.appendChild(h('label', { class: 'form-label' }, tip('AI Provider')));
     const provSelect = h('select', { class: 'form-input' });
     for (const opt of PROVIDER_OPTIONS) {
       const optEl = h('option', { value: opt.value }, opt.label);
@@ -1143,7 +1143,7 @@ export class RoomView extends Component {
     const section = h('div', { class: 'room-exit-doc-section' });
 
     // Header
-    section.appendChild(h('h4', null, 'Exit Document'));
+    section.appendChild(h('h4', null, tip('Exit Document')));
 
     // Info about the required exit doc
     const infoRow = h('div', { class: 'room-exit-doc-info' },
@@ -1264,7 +1264,7 @@ export class RoomView extends Component {
 
   _buildCitationsSection(room) {
     const section = h('div', { class: 'room-citations-section' },
-      h('h4', null, 'Cross-Room Citations')
+      h('h4', null, tip('Cross-Room Citations'))
     );
     const container = h('div', {
       class: 'room-citations-list',

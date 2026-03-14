@@ -1,0 +1,16 @@
+{
+  "id": "room-timer",
+  "name": "Room Timer",
+  "version": "1.0.0",
+  "description": "Time-boxes room sessions with configurable durations, emitting warning and expiry events so teams stay on track and avoid spending too long in any single phase.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

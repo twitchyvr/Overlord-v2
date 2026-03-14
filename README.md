@@ -64,8 +64,8 @@ Swap AI providers per room. **Anthropic Claude** for reasoning. **MiniMax M2.5**
 </td>
 <td width="33%" valign="top">
 
-### 🔌 Extensible Plugins
-Custom room types, tools, and commands via **JavaScript** or **Lua** scripting. MCP (Model Context Protocol) for external tool integration.
+### 🔌 Lua Scripting Platform
+In-browser Lua IDE with 26 built-in scripts. View, fork, edit, create, import/export scripts. Scriptable core — override phase gates, validation, assignment via Lua hooks.
 
 </td>
 </tr>
@@ -78,7 +78,7 @@ Custom room types, tools, and commands via **JavaScript** or **Lua** scripting. 
 ```mermaid
 graph TD
     T["🌐 Transport<br/><small>Socket.IO · Express</small>"]
-    R["🏢 Rooms<br/><small>12 types · Phase Gates · RAID</small>"]
+    R["🏢 Rooms<br/><small>16 types · Phase Gates · RAID</small>"]
     A["🤖 Agents<br/><small>Registry · Email · Profiles</small>"]
     TL["🔧 Tools<br/><small>Registry · MCP · Providers</small>"]
     AI["🧠 AI<br/><small>Anthropic · MiniMax · OpenAI · Ollama</small>"]
@@ -104,7 +104,7 @@ graph TD
 | Layer | Directory | Files | Depends On |
 |:------|:----------|:------|:-----------|
 | 🌐 **Transport** | `src/transport/` | Socket handlers, Zod schemas | Rooms, Agents, Tools, Core |
-| 🏢 **Rooms** | `src/rooms/` | 25 files — room manager, 12 room types, phase gates, RAID, chat orchestrator | Agents, Tools, AI, Storage, Core |
+| 🏢 **Rooms** | `src/rooms/` | 29 files — room manager, 16 room types, phase gates, RAID, chat orchestrator | Agents, Tools, AI, Storage, Core |
 | 🤖 **Agents** | `src/agents/` | 7 files — registry, email, sessions, conversation loop, stats, routing, badges | Tools, AI, Storage, Core |
 | 🔧 **Tools** | `src/tools/` | 12 files — registry, MCP manager/client, 7 tool providers | AI, Storage, Core |
 | 🧠 **AI** | `src/ai/` | 11 files — 4 adapters, profile generation, image service | Storage, Core |
@@ -132,20 +132,24 @@ graph TD
     R3["🚪 Discovery"]
     R4["🚪 Architecture"]
     R5["🚪 War Room"]
+    R13["🚪 Research"]
     R6["🚪 Code Lab"]
     R7["🚪 Testing Lab"]
+    R14["🚪 Documentation"]
     R8["🚪 Review"]
+    R15["🚪 Security Review"]
     R9["🚪 Deploy"]
+    R16["🚪 Monitoring"]
     R10["🚪 Data Exchange"]
     R11["🚪 Provider Hub"]
     R12["🚪 Plugin Bay"]
 
     B --> F1 & F2 & F3 & F4 & F5 & F6
     F1 --> R1 & R2
-    F2 --> R3 & R4 & R5
-    F3 --> R6 & R7
-    F4 --> R8
-    F5 --> R9
+    F2 --> R3 & R4 & R5 & R13
+    F3 --> R6 & R7 & R14
+    F4 --> R8 & R15
+    F5 --> R9 & R16
     F6 --> R10 & R11 & R12
 
     style B fill:#2C3E50,color:#fff
@@ -160,28 +164,32 @@ graph TD
 | Floor | Purpose | Rooms |
 |:------|:--------|:------|
 | 🟣 **Strategy** | Phase Zero — goals, building layout | Strategist Office, Building Architect |
-| 🔵 **Collaboration** | Planning, requirements, design, incidents | Discovery, Architecture, War Room |
-| 🟢 **Execution** | Implementation and verification | Code Lab, Testing Lab |
-| 🟠 **Governance** | Quality gates and sign-off | Review |
-| 🔴 **Operations** | Deployment and release | Deploy |
+| 🔵 **Collaboration** | Planning, requirements, design, incidents | Discovery, Architecture, War Room, Research |
+| 🟢 **Execution** | Implementation, verification, documentation | Code Lab, Testing Lab, Documentation |
+| 🟠 **Governance** | Quality gates, security, sign-off | Review, Security Review |
+| 🔴 **Operations** | Deployment, monitoring, release | Deploy, Monitoring |
 | 🩵 **Integration** | External I/O, plugins, providers | Data Exchange, Provider Hub, Plugin Bay |
 
 ---
 
 ## 🚪 Room Types
 
-Overlord ships with **12 built-in room types**. Custom rooms can be added via the plugin system.
+Overlord ships with **16 built-in room types**. Custom rooms can be added via the Lua plugin system.
 
 | Room | Floor | Scope | Key Constraint |
 |:-----|:------|:------|:---------------|
-| `strategist` | Strategy | 📖 Read-only | Consultation only — no code tools |
+| `strategist` | Strategy | 📖 Read-only | Consultation — 12 Quick Start templates incl. desktop/mobile/widget |
 | `building-architect` | Strategy | 📖 Read-only | Custom floor/room layout design |
-| `discovery` | Collaboration | 📖 Read-only | Requirements gathering — produce specs |
-| `architecture` | Collaboration | 📖 Read-only | System design — produce task breakdown |
+| `discovery` | Collaboration | 📖 Read-only | Requirements gathering with smart question rules |
+| `architecture` | Collaboration | 📖 Read-only | System design — native toolchain planning support |
+| `research` | Collaboration | 📖 Read-only | Requirements gathering, competitive analysis, citations |
 | `code-lab` | Execution | ✏️ **Read-write** | Full write access, scoped to assigned files |
-| `testing-lab` | Execution | 📖 Read-only | **NO `write_file`** — structurally enforced |
+| `testing-lab` | Execution | 📖 Read-only | **NO `write_file`** — detects any test runner (npm/cargo/swift/etc.) |
+| `documentation` | Execution | ✏️ **Read-write** | User guides, API docs, READMEs |
 | `review` | Governance | 📖 Read-only | GO/NO-GO decisions with evidence |
-| `deploy` | Operations | 📖 Read-only | Git/CI tools — requires release sign-off |
+| `security-review` | Governance | 📖 Read-only | Vulnerability assessment, OWASP, dependency scanning |
+| `deploy` | Operations | ✏️ **Read-write** | Desktop artifact packaging (DMG/AppImage/MSI) + web deploy |
+| `monitoring` | Operations | ✏️ **Read-write** | Observability setup, alerting, health dashboards |
 | `war-room` | Collaboration | ✏️ **Read-write** | Elevated access — incident response |
 | `data-exchange` | Integration | ↔️ Varies | External data import/export |
 | `provider-hub` | Integration | 📖 Read-only | AI provider configuration |

@@ -117,6 +117,136 @@ export const QUICK_START_TEMPLATES: ReadonlyArray<BuildingTemplate> = [
     ],
     estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
   },
+  {
+    id: 'unity-game',
+    name: 'Unity Game',
+    description: 'Unity game project with C# scripting, scene management, and asset pipeline',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'integration', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'Game Designer', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Gameplay Developer', role: 'developer', rooms: ['code-lab', 'testing-lab'] },
+      { name: 'Systems Developer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Tester', role: 'tester', rooms: ['testing-lab'] },
+      { name: 'Build Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+  {
+    id: 'js-game',
+    name: 'JavaScript Game',
+    description: 'Browser-based game using Phaser, Three.js, PixiJS, or Babylon.js with web deployment',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'integration', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'Game Designer', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Game Developer', role: 'developer', rooms: ['code-lab', 'testing-lab'] },
+      { name: 'QA Tester', role: 'tester', rooms: ['testing-lab'] },
+      { name: 'Deploy Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+  {
+    id: 'unreal-game',
+    name: 'Unreal Engine Game',
+    description: 'Unreal Engine project with C++ and Blueprints for high-fidelity 3D games',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'integration', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'Game Designer', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Gameplay Programmer', role: 'developer', rooms: ['code-lab', 'testing-lab'] },
+      { name: 'Engine Programmer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Tester', role: 'tester', rooms: ['testing-lab'] },
+      { name: 'Build Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+  {
+    id: 'desktop-app',
+    name: 'Desktop Application',
+    description: 'Native desktop app for macOS, Windows, or Linux — Electron, Tauri, or native framework',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'UI/UX Developer', role: 'developer', rooms: ['code-lab', 'architecture', 'discovery'] },
+      { name: 'Systems Developer', role: 'developer', rooms: ['code-lab', 'testing-lab'] },
+      { name: 'QA Engineer', role: 'tester', rooms: ['testing-lab', 'review'] },
+      { name: 'Build Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+  {
+    id: 'tauri-app',
+    name: 'Tauri Desktop App',
+    description: 'Lightweight native desktop app with Tauri (Rust) backend and web frontend (Svelte, React, or Vue)',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'Frontend Developer', role: 'developer', rooms: ['code-lab', 'testing-lab', 'architecture'] },
+      { name: 'Rust/Backend Developer', role: 'developer', rooms: ['code-lab', 'testing-lab'] },
+      { name: 'QA Engineer', role: 'tester', rooms: ['testing-lab', 'review'] },
+      { name: 'Build Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+  {
+    id: 'mobile-app',
+    name: 'Mobile Application',
+    description: 'iOS/Android app using React Native, Flutter, SwiftUI, or Kotlin — cross-platform or native',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'Mobile Developer', role: 'developer', rooms: ['code-lab', 'testing-lab', 'architecture'] },
+      { name: 'UI/UX Developer', role: 'developer', rooms: ['code-lab', 'discovery'] },
+      { name: 'QA Engineer', role: 'tester', rooms: ['testing-lab', 'review'] },
+      { name: 'Release Engineer', role: 'operator', rooms: ['deploy'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
+  {
+    id: 'macos-widget',
+    name: 'macOS Widget / Menu Bar App',
+    description: 'macOS desktop widget or menu bar utility using SwiftUI, Tauri, or Electron with system integration',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'testing-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+    ],
+    agentRoster: [
+      { name: 'Desktop Developer', role: 'developer', rooms: ['code-lab', 'testing-lab', 'architecture', 'discovery'] },
+      { name: 'Build Engineer', role: 'operator', rooms: ['deploy', 'testing-lab'] },
+    ],
+    estimatedPhases: ['discovery', 'architecture', 'execution', 'review', 'deploy'],
+  },
 ];
 
 // ─── Room Definition ───
@@ -129,16 +259,19 @@ export class StrategistOffice extends BaseRoom {
       consultation: { chairs: 2, description: 'Strategist + User' },
     },
     tools: [
+      'read_file',
+      'list_dir',
+      'search_files',
       'web_search',
       'record_note',
       'recall_notes',
       'session_note',
-      'list_dir',
     ],
     fileScope: 'read-only',
     exitRequired: {
       type: 'building-blueprint',
       fields: [
+        'effortLevel',
         'projectGoals',
         'successCriteria',
         'floorsNeeded',
@@ -183,12 +316,13 @@ export class StrategistOffice extends BaseRoom {
    */
   static buildBlueprintFromTemplate(
     templateId: string,
-    overrides: { projectGoals: string[]; successCriteria: string[] },
+    overrides: { projectGoals: string[]; successCriteria: string[]; effortLevel?: string },
   ): Record<string, unknown> | null {
     const template = StrategistOffice.getTemplate(templateId);
     if (!template) return null;
 
     return {
+      effortLevel: overrides.effortLevel || 'medium',
       projectGoals: overrides.projectGoals,
       successCriteria: overrides.successCriteria,
       floorsNeeded: template.floorsNeeded,
@@ -214,18 +348,26 @@ export class StrategistOffice extends BaseRoom {
   override getRules(): string[] {
     return [
       'You are the Strategist. Guide the user through project setup.',
-      'Ask consultative questions: goals, success criteria, constraints.',
-      'Suggest a building layout based on answers.',
+      'The building has an effortLevel setting (easy, medium, or advanced) that determines your interaction style.',
+      'EASY mode: Accept vague one-shot prompts like "build me a website for my bakery". Make ALL technical decisions. Infer the template from the description. Only ask when truly ambiguous (e.g., "will users log in?"). Pre-fill blueprint with sensible defaults. Use simple, non-technical language. Never mention tech stack, frameworks, or architecture — just describe what the project will do.',
+      'In EASY mode: NEVER mention specific technologies, frameworks, libraries, or programming languages. Say "modern tools" not "React". Say "fast backend" not "Node.js". Say "reliable database" not "SQLite". Say "real-time updates" not "WebSocket". Say "hosted online" not "deployed to Netlify". Technical choices are made silently — the user only sees outcomes, never implementation details.',
+      'MEDIUM mode: Ask targeted questions in plain language. Suggest options with business-terms explanations. Walk through a simplified questionnaire. Example: "Do you need user accounts?" not "What authentication provider?".',
+      'ADVANCED mode: Full consultative experience. Ask detailed questions about goals, constraints, architecture. Technical terminology is acceptable.',
+      'ALL MODES: Always present information in the user\'s language. A bakery owner doesn\'t care about "React" — they care about "your customers can order online".',
       'Offer Quick Start (template) or Advanced (custom) mode.',
-      'Quick Start templates: web-app, microservices, data-pipeline, cli-tool, api-service.',
+      'Quick Start templates: web-app, microservices, data-pipeline, cli-tool, api-service, desktop-app, tauri-app, mobile-app, macos-widget, unity-game, js-game, unreal-game.',
+      'For desktop/widget projects: recommend Tauri (lightweight, Rust + web UI) as the default. Only suggest Electron for complex apps needing Node.js APIs. Suggest SwiftUI only if the user specifically asks for Apple-native and accepts Mac-only.',
+      'For mobile projects: recommend React Native or Flutter for cross-platform. Suggest SwiftUI (iOS-only) or Kotlin (Android-only) if the user explicitly wants single-platform native.',
+      'Stack selection rules: (1) Always prefer cross-platform over single-platform unless the user explicitly asks for native. (2) Always prefer lighter frameworks (Tauri > Electron, Svelte > React unless React is needed). (3) For macOS widgets/utilities, Tauri with system info crates is the sweet spot.',
       'For Advanced mode, recommend routing to the Building Architect room.',
-      'Your exit document configures the entire building.',
+      'Your exit document configures the entire building. Include the effortLevel field.',
       'On completion, the system transitions to the Discovery phase.',
     ];
   }
 
   override getOutputFormat(): Record<string, unknown> {
     return {
+      effortLevel: 'easy | medium | advanced',
       projectGoals: ['string'],
       successCriteria: ['string'],
       floorsNeeded: ['string'],
@@ -238,12 +380,19 @@ export class StrategistOffice extends BaseRoom {
   }
 
   override validateExitDocumentValues(document: Record<string, unknown>): Result {
+    const effortLevel = document.effortLevel as string | undefined;
     const projectGoals = document.projectGoals as unknown[];
     const successCriteria = document.successCriteria as unknown[];
     const floorsNeeded = document.floorsNeeded as unknown[];
     const roomConfig = document.roomConfig as unknown[];
     const agentRoster = document.agentRoster as unknown[];
     const estimatedPhases = document.estimatedPhases as unknown[];
+
+    // ── effortLevel: valid enum value ──
+    const VALID_LEVELS = ['easy', 'medium', 'advanced'];
+    if (effortLevel && !VALID_LEVELS.includes(effortLevel)) {
+      return err('EXIT_DOC_INVALID', `effortLevel must be one of: ${VALID_LEVELS.join(', ')}`);
+    }
 
     // ── projectGoals: non-empty array of strings ──
     if (!Array.isArray(projectGoals) || projectGoals.length === 0) {

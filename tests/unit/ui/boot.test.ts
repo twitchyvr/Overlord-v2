@@ -375,7 +375,7 @@ describe('boot.js — system:status handler', () => {
     expect(mockStore.set).not.toHaveBeenCalledWith('building.list', expect.anything());
   });
 
-  it('navigates to strategist for new users', async () => {
+  it('navigates to strategist for new users on first connection', async () => {
     setupDOM({ withSocket: true });
     await importBoot();
 
@@ -385,7 +385,7 @@ describe('boot.js — system:status handler', () => {
     expect(navigateTo).toHaveBeenCalledWith('strategist');
   });
 
-  it('navigates to dashboard for returning users with buildings', async () => {
+  it('navigates to dashboard for returning users on first connection', async () => {
     setupDOM({ withSocket: true });
     await importBoot();
 
@@ -395,7 +395,7 @@ describe('boot.js — system:status handler', () => {
     expect(navigateTo).toHaveBeenCalledWith('dashboard');
   });
 
-  it('navigates to strategist when buildings array is empty', async () => {
+  it('navigates to strategist when buildings array is empty on first connection', async () => {
     setupDOM({ withSocket: true });
     await importBoot();
 
@@ -404,6 +404,40 @@ describe('boot.js — system:status handler', () => {
     // !data.buildings?.length is true when array is empty
     expect(getInitialRoute).toHaveBeenCalledWith(true);
     expect(navigateTo).toHaveBeenCalledWith('strategist');
+  });
+
+  it('does NOT navigate on subsequent system:status events (reconnection)', async () => {
+    setupDOM({ withSocket: true });
+    await importBoot();
+
+    const cb = getSubscribeCallback(mockEngine.subscribe, 'system:status');
+
+    // First call — should navigate
+    cb!({ isNewUser: false, buildings: [{ id: 'b1' }] });
+    expect(navigateTo).toHaveBeenCalledTimes(1);
+    expect(navigateTo).toHaveBeenCalledWith('dashboard');
+
+    navigateTo.mockClear();
+
+    // Second call (simulating reconnect) — should NOT navigate
+    cb!({ isNewUser: false, buildings: [{ id: 'b1' }] });
+    expect(navigateTo).not.toHaveBeenCalled();
+  });
+
+  it('still updates building.list on reconnect even without navigating', async () => {
+    setupDOM({ withSocket: true });
+    await importBoot();
+
+    const cb = getSubscribeCallback(mockEngine.subscribe, 'system:status');
+
+    // First call
+    cb!({ isNewUser: false, buildings: [{ id: 'b1' }] });
+    mockStore.set.mockClear();
+
+    // Second call (reconnect) — data should still be updated
+    const updatedBuildings = [{ id: 'b1' }, { id: 'b2' }];
+    cb!({ isNewUser: false, buildings: updatedBuildings });
+    expect(mockStore.set).toHaveBeenCalledWith('building.list', updatedBuildings);
   });
 });
 

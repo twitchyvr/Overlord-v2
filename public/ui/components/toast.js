@@ -57,6 +57,14 @@ export class Toast {
 
     const container = getContainer();
 
+    // Deduplicate: don't show the same message if it's already visible (#577)
+    const existing = container.querySelectorAll('.toast');
+    for (const t of existing) {
+      if (t.textContent?.includes(message) && t.classList.contains(`toast-${type}`)) {
+        return t; // Same message already showing
+      }
+    }
+
     const toast = h('div', {
       class: `toast toast-${type}`,
       role: 'alert',

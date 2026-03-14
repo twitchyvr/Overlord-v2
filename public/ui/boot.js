@@ -22,7 +22,8 @@ import { ExitDocForm } from './views/exit-doc-form.js';
 import { SettingsView } from './views/settings-view.js';
 import { initEntityNav } from './engine/entity-nav.js';
 import { GlobalSearch } from './components/global-search.js';
-import { QuickActions } from './components/quick-actions.js';
+
+
 import { NotificationCenter } from './components/notification-center.js';
 import { AgentActivityTracker } from './components/agent-activity-tracker.js';
 import { BreadcrumbNav } from './components/breadcrumb-nav.js';
@@ -126,11 +127,7 @@ if (socket) {
   const globalSearch = new GlobalSearch(searchContainer);
   globalSearch.mount();
 
-  // ── Mount Quick Actions FAB (floating action button, bottom-right) ──
-  const qaContainer = document.createElement('div');
-  document.body.appendChild(qaContainer);
-  const quickActions = new QuickActions(qaContainer);
-  quickActions.mount();
+
 
   // ── Mount Notification Center (bell icon in toolbar) ──
   const bellEl = document.getElementById('notification-bell');
@@ -225,6 +222,7 @@ if (socket) {
   }
 
   // ── Determine initial view after connection ──
+  let _initialNavDone = false;
   engine.subscribe('system:status', (data) => {
     const loadingEl = document.getElementById('loading-state');
     if (loadingEl) loadingEl.remove();
@@ -234,9 +232,13 @@ if (socket) {
       store.set('building.list', data.buildings);
     }
 
-    // Navigate to the appropriate view
-    const route = getInitialRoute(data.isNewUser || !data.buildings?.length);
-    navigateTo(route);
+    // Only navigate on the FIRST connection, not on reconnects.
+    // Reconnects should preserve the user's current view.
+    if (!_initialNavDone) {
+      _initialNavDone = true;
+      const route = getInitialRoute(data.isNewUser || !data.buildings?.length);
+      navigateTo(route);
+    }
   });
 
   // ── Connection lost / reconnected ──

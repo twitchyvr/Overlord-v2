@@ -38,10 +38,46 @@ const ROLES = [
   'tester', 'reviewer', 'operator', 'lead'
 ];
 
+/** Human-readable role labels (#576) */
+const ROLE_LABELS = {
+  'strategist': 'Strategist',
+  'analyst': 'Business Analyst',
+  'architect': 'Solutions Architect',
+  'developer': 'Developer',
+  'tester': 'QA Engineer',
+  'reviewer': 'Code Reviewer',
+  'operator': 'DevOps Engineer',
+  'lead': 'Team Lead',
+  'agent': 'Agent',
+};
+
+/** Format a raw role string into a human-readable label. */
+function formatRole(role) {
+  if (!role) return 'Agent';
+  return ROLE_LABELS[role] || role.charAt(0).toUpperCase() + role.slice(1).replace(/-/g, ' ');
+}
+
 const CAPABILITIES = [
   'chat', 'analysis', 'code-generation', 'code-review',
   'testing', 'deployment', 'documentation', 'planning'
 ];
+
+/** Personality traits derived from agent name hash. */
+const PERSONALITY_TRAITS = [
+  'analytical', 'creative', 'methodical', 'empathetic',
+  'pragmatic', 'visionary', 'detail-oriented', 'collaborative'
+];
+
+/** Hash an agent name to deterministically pick a personality trait. */
+function derivePersonality(name) {
+  if (!name) return PERSONALITY_TRAITS[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i);
+    hash |= 0; // 32-bit int
+  }
+  return PERSONALITY_TRAITS[Math.abs(hash) % PERSONALITY_TRAITS.length];
+}
 
 const ROOM_TYPES = [
   'strategist', 'building-architect', 'discovery', 'architecture',
@@ -66,6 +102,7 @@ export class AgentsView extends Component {
     this._agentPositions = {};
     this._rooms = [];
     this._filter = 'all';
+    this._sort = 'name';     // 'name' | 'status' | 'last-active'
     this._tabs = null;
   }
 
@@ -165,8 +202,11 @@ export class AgentsView extends Component {
 
   /** Get the filtered agent list based on current filter. */
   _getFilteredAgents() {
-    if (this._filter === 'all') return this._agents;
-    return this._getAgentsByStatus(this._filter);
+    let list;
+    if (this._filter === 'all') list = this._agents;
+    else if (this._filter === 'in-room') list = this._getAgentsInRooms();
+    else list = this._getAgentsByStatus(this._filter);
+    return this._sortAgents(list);
   }
 
   // ── Main Render ──────────────────────────────────────────────
@@ -207,7 +247,8 @@ export class AgentsView extends Component {
       items: [
         { id: 'all',    label: 'All',    badge: String(this._agents.length) },
         { id: 'active', label: 'Active', badge: String(this._getAgentsByStatus('active').length) },
-        { id: 'idle',   label: 'Idle',   badge: String(this._getAgentsByStatus('idle').length) }
+        { id: 'idle',   label: 'Idle',   badge: String(this._getAgentsByStatus('idle').length) },
+        { id: 'in-room', label: 'In Room', badge: String(this._getAgentsInRooms().length) }
       ],
       activeId: this._filter,
       style: 'pills',
@@ -219,6 +260,42 @@ export class AgentsView extends Component {
     this._tabs.mount();
     this.el.appendChild(tabContainer);
 
+    const roomNameMap = this._buildRoomNameMap();
+
+    // ── Sort dropdown ──
+    const sortRow = h('div', { class: 'agents-view-sort-row', style: 'display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-3)' });
+    sortRow.appendChild(h('span', { style: 'font-size:var(--text-sm);color:var(--text-secondary)' }, 'Sort by:'));
+    const sortSelect = h('select', { class: 'agents-sort-dropdown' });
+    sortSelect.appendChild(h('option', { value: 'name' }, 'Name'));
+    sortSelect.appendChild(h('option', { value: 'status' }, 'Status'));
+    sortSelect.appendChild(h('option', { value: 'last-active' }, 'Last Active'));
+    sortSelect.value = this._sort;
+    sortSelect.addEventListener('change', () => {
+      this._sort = sortSelect.value;
+      this._render();
+    });
+    sortRow.appendChild(sortSelect);
+    this.el.appendChild(sortRow);
+
+    // ── Currently working section ──
+    const workingSection = this._renderWorkingSection(roomNameMap);
+    if (workingSection) this.el.appendChild(workingSection);
+
+    // ── Unassigned agents banner (#512) ──
+    const unassigned = this._agents.filter(a => !this._resolveRoomId(a));
+    if (unassigned.length > 0) {
+      const banner = h('div', { class: 'agents-unassigned-banner' },
+        h('span', { class: 'agents-unassigned-banner-text' },
+          `${unassigned.length} agent${unassigned.length === 1 ? ' is' : 's are'} waiting for work. Click 'Assign' to put them in a room.`
+        ),
+        h('button', {
+          class: 'btn btn-primary btn-sm',
+          onClick: () => this._autoAssignAll(unassigned)
+        }, 'Auto-Assign All')
+      );
+      this.el.appendChild(banner);
+    }
+
     // ── Agent grid ──
     const filtered = this._getFilteredAgents();
 
@@ -227,7 +304,6 @@ export class AgentsView extends Component {
       return;
     }
 
-    const roomNameMap = this._buildRoomNameMap();
     const grid = h('div', { class: 'agents-view-grid' });
 
     for (const agent of filtered) {
@@ -259,6 +335,48 @@ export class AgentsView extends Component {
     }
 
     return emptyContainer;
+  }
+
+  /** Get agents currently assigned to rooms. */
+  _getAgentsInRooms() {
+    return this._agents.filter(a => this._resolveRoomId(a));
+  }
+
+  /** Sort agents by the selected criterion. */
+  _sortAgents(agents) {
+    const sorted = [...agents];
+    if (this._sort === 'name') {
+      sorted.sort((a, b) => (this._resolveDisplayName(a) || '').localeCompare(this._resolveDisplayName(b) || ''));
+    } else if (this._sort === 'status') {
+      const order = { active: 0, working: 0, paused: 1, idle: 2, error: 3 };
+      sorted.sort((a, b) => (order[this._resolveStatus(a)] ?? 9) - (order[this._resolveStatus(b)] ?? 9));
+    } else if (this._sort === 'last-active') {
+      sorted.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+    }
+    return sorted;
+  }
+
+  /** Render a highlighted section showing agents currently in rooms. */
+  _renderWorkingSection(roomNameMap) {
+    const working = this._getAgentsInRooms();
+    if (working.length === 0) return null;
+
+    const section = h('div', { class: 'agents-working-section' });
+    section.appendChild(h('div', { class: 'agents-working-title' },
+      `Currently Working (${working.length})`));
+
+    for (const agent of working) {
+      const roomId = this._resolveRoomId(agent);
+      const roomName = roomId ? (roomNameMap[roomId] || 'Room') : '';
+      const statusCfg = STATUS_CONFIG[this._resolveStatus(agent)] || STATUS_CONFIG.idle;
+      const row = h('div', { style: 'display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) 0;font-size:var(--text-sm)' },
+        h('div', { class: `agents-view-status-dot ${statusCfg.dot}`, style: 'position:static;width:8px;height:8px' }),
+        h('span', { style: 'font-weight:var(--font-medium)' }, this._resolveDisplayName(agent)),
+        h('span', { style: 'color:var(--text-muted)' }, `in ${roomName}`)
+      );
+      section.appendChild(row);
+    }
+    return section;
   }
 
   // ── Agent Card ───────────────────────────────────────────────
@@ -353,7 +471,7 @@ export class AgentsView extends Component {
         ? h('div', { class: 'agents-view-card-specialization' }, agent.specialization)
         : null,
       h('div', { class: 'agents-view-card-role' },
-        h('span', { class: 'agents-view-role-badge' }, agent.role || 'agent')
+        h('span', { class: 'agents-view-role-badge' }, formatRole(agent.role))
       )
     );
     cardHeader.appendChild(nameGroup);
@@ -429,7 +547,94 @@ export class AgentsView extends Component {
       }
     });
 
+    // ── Right-click context menu ──
+    card.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this._showAgentContextMenu(e, agent);
+    });
+
     return card;
+  }
+
+  /** Show a context menu at the cursor position for an agent card. */
+  _showAgentContextMenu(event, agent) {
+    // Remove any existing context menu
+    const existing = document.querySelector('.agent-context-menu');
+    if (existing) existing.remove();
+
+    const roomId = this._resolveRoomId(agent);
+    const displayName = this._resolveDisplayName(agent);
+
+    const menuItems = [
+      { label: 'View Profile', icon: '\uD83D\uDC64', action: () => this._openAgentDetail(agent) },
+      { label: 'Send Email', icon: '\u2709', action: () => {
+        const firstName = agent.first_name || displayName.split(' ')[0] || '';
+        const lastName = agent.last_name || '';
+        const email = firstName && lastName
+          ? `${firstName.toLowerCase()}.${lastName.toLowerCase()}@overlord.ai`
+          : `${(agent.name || agent.id).toLowerCase().replace(/\s+/g, '.')}@overlord.ai`;
+        OverlordUI.dispatch('navigate:entity', { type: 'email', id: email, agentId: agent.id });
+        Toast.info(`Email: ${email}`);
+      }},
+      { label: 'Assign to Room', icon: '\uD83C\uDFE0', action: () => this._openQuickAssignModal(agent) },
+      { label: 'View Activity', icon: '\uD83D\uDCCA', action: () => {
+        OverlordUI.dispatch('navigate:view', { view: 'activity', filter: 'agents', agentId: agent.id });
+      }},
+    ];
+
+    const menu = h('div', { class: 'agent-context-menu', style: {
+      position: 'fixed',
+      top: `${event.clientY}px`,
+      left: `${event.clientX}px`,
+      zIndex: '10000'
+    }});
+
+    for (const item of menuItems) {
+      const menuItem = h('div', { class: 'agent-context-menu-item' },
+        h('span', { class: 'agent-context-menu-icon' }, item.icon),
+        h('span', null, item.label)
+      );
+      menuItem.addEventListener('click', () => {
+        menu.remove();
+        item.action();
+      });
+      menu.appendChild(menuItem);
+    }
+
+    document.body.appendChild(menu);
+
+    // Adjust position if menu overflows viewport
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      menu.style.left = `${window.innerWidth - rect.width - 8}px`;
+    }
+    if (rect.bottom > window.innerHeight) {
+      menu.style.top = `${window.innerHeight - rect.height - 8}px`;
+    }
+
+    // Close menu on click outside or Escape
+    const closeMenu = (e) => {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+        document.removeEventListener('contextmenu', closeMenu);
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+        document.removeEventListener('contextmenu', closeMenu);
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    // Delay adding listeners to avoid immediate close
+    setTimeout(() => {
+      document.addEventListener('click', closeMenu);
+      document.addEventListener('contextmenu', closeMenu);
+      document.addEventListener('keydown', escHandler);
+    }, 0);
   }
 
   /** Parse capabilities/room_access which may be string or array. */
@@ -490,7 +695,7 @@ export class AgentsView extends Component {
     // Role badge + status
     identityGroup.appendChild(
       h('div', { class: 'agents-view-detail-meta' },
-        h('span', { class: 'agents-view-role-badge' }, agent.role || 'agent'),
+        h('span', { class: 'agents-view-role-badge' }, formatRole(agent.role)),
         h('span', {
           class: `agents-view-status-label agents-view-status-label-${status}`,
           style: { marginLeft: 'var(--sp-2)' }
@@ -620,7 +825,8 @@ export class AgentsView extends Component {
       profileRows.push(['Specialization', agent.specialization]);
     }
     profileRows.push(['Status', statusCfg.label]);
-    profileRows.push(['Role', agent.role || 'agent']);
+    profileRows.push(['Role', formatRole(agent.role)]);
+    profileRows.push(['Personality', derivePersonality(agent.name || agent.id)]);
     profileRows.push(['Profile Generated', agent.profile_generated ? 'Yes' : 'No']);
 
     for (const [label, value] of profileRows) {
@@ -700,7 +906,6 @@ export class AgentsView extends Component {
     infoSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Details'));
 
     const infoRows = [
-      ['ID', agent.id],
       ['Created', agent.created_at ? new Date(agent.created_at).toLocaleString() : '\u2014'],
       ['Updated', agent.updated_at ? new Date(agent.updated_at).toLocaleString() : '\u2014'],
     ];
@@ -1372,7 +1577,7 @@ export class AgentsView extends Component {
     container.appendChild(h('div', { class: 'assign-agent-guidance' },
       h('p', null, 'Select a room for '),
       h('strong', null, agent.name || agent.id),
-      h('span', null, ` (${agent.role || 'agent'}).`),
+      h('span', null, ` (${formatRole(agent.role)}).`),
     ));
 
     container.appendChild(h('label', { class: 'form-label' }, 'Available Rooms'));
@@ -1446,6 +1651,68 @@ export class AgentsView extends Component {
       size: 'md',
       position: window.innerWidth < 768 ? 'fullscreen' : 'center',
     });
+  }
+
+  // ── Auto-Assign All (#512) ─────────────────────────────────────
+
+  /**
+   * Auto-assign each unassigned agent to the first room in their room_access list.
+   * Falls back to the first available room if room_access is empty or wildcard.
+   */
+  async _autoAssignAll(unassigned) {
+    if (!window.overlordSocket) {
+      Toast.error('Not connected');
+      return;
+    }
+    if (this._rooms.length === 0) {
+      Toast.warning('No rooms available. Create rooms first.');
+      return;
+    }
+
+    const roomMap = {};
+    for (const room of this._rooms) {
+      roomMap[room.type] = room.id;
+    }
+    const fallbackRoomId = this._rooms[0]?.id;
+
+    let assigned = 0;
+    let failed = 0;
+
+    for (const agent of unassigned) {
+      const roomAccess = this._parseArray(agent.room_access);
+      let targetRoomId = null;
+
+      // Find the first matching room from the agent's room_access
+      for (const accessType of roomAccess) {
+        if (accessType === '*') {
+          targetRoomId = fallbackRoomId;
+          break;
+        }
+        if (roomMap[accessType]) {
+          targetRoomId = roomMap[accessType];
+          break;
+        }
+      }
+
+      // Fall back to first available room if no match found
+      if (!targetRoomId) targetRoomId = fallbackRoomId;
+
+      try {
+        const result = await window.overlordSocket.moveAgent(agent.id, targetRoomId);
+        if (result && result.ok) {
+          assigned++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    if (assigned > 0) Toast.success(`${assigned} agent${assigned === 1 ? '' : 's'} assigned to rooms`);
+    if (failed > 0) Toast.warning(`${failed} agent${failed === 1 ? '' : 's'} could not be assigned`);
+
+    this._fetchAgents();
   }
 
 }

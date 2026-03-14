@@ -141,7 +141,9 @@
   --duration-slow: 400ms;
 
   /* ── Layout ── */
-  --sidebar-width:  280px;
+  --sidebar-width:  300px;
+  --sidebar-min-width: 240px;
+  --sidebar-max-width: 480px;
   --header-height:  52px;
   --mobile-nav-height: 56px;
 }

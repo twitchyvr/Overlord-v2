@@ -1,0 +1,16 @@
+{
+  "id": "code-complexity-alert",
+  "name": "Code Complexity Alert",
+  "version": "1.0.0",
+  "description": "Flags complex code when tools report high complexity scores or heuristic indicators. Hooks into tool executions in code-lab rooms, tracks complexity metrics in storage, and emits complexity:alert events when thresholds are exceeded.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

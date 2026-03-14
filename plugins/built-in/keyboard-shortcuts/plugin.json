@@ -1,0 +1,16 @@
+{
+  "id": "keyboard-shortcuts",
+  "name": "Keyboard Shortcuts",
+  "version": "1.0.0",
+  "description": "Add custom keyboard shortcuts for common Overlord actions. Navigate between rooms, manage agents, and control tasks without touching the mouse.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "bus:emit",
+    "storage:read",
+    "storage:write",
+    "room:read",
+    "agent:read"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "escalation-notifier",
+  "name": "Escalation Notifier",
+  "version": "1.0.0",
+  "description": "Detects escalation patterns such as agents entering the war-room, error states, or blocked tools, and emits escalation:detected events with severity and context for custom notification rules.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit",
+    "tool:execute"
+  ]
+}

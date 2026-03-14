@@ -11,6 +11,7 @@
 import { logger } from '../core/logger.js';
 import { getDb } from '../storage/db.js';
 import { ok, err } from '../core/contracts.js';
+import { queryHook } from '../plugins/plugin-loader.js';
 import type {
   Result,
   RoomManagerAPI,
@@ -326,12 +327,28 @@ interface SubmitExitDocParams {
  * If buildingId and phase are provided, a RAID decision entry is automatically
  * created linking this exit document to the project's decision log.
  */
-export function submitExitDocument({ roomId, agentId, document, buildingId, phase }: SubmitExitDocParams): Result {
+export async function submitExitDocument({ roomId, agentId, document, buildingId, phase }: SubmitExitDocParams): Promise<Result> {
   const room = activeRooms.get(roomId);
   if (!room) return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
 
   const validation = room.validateExitDocument(document);
   if (!validation.ok) return validation;
+
+  // Queryable hook: Let Lua plugins do additional exit document validation
+  try {
+    const hookResult = await queryHook('onExitDocValidate', {
+      roomId, roomType: room.type, agentId, exitDoc: document,
+    });
+    if (hookResult && typeof hookResult === 'object') {
+      const override = hookResult as { valid?: boolean; reason?: string };
+      if (override.valid === false) {
+        log.info({ roomId, reason: override.reason }, 'Plugin hook rejected exit document');
+        return err('PLUGIN_VALIDATION_FAILED', override.reason || 'Plugin rejected exit document');
+      }
+    }
+  } catch (hookErr) {
+    log.warn({ roomId, error: String(hookErr) }, 'Exit doc hook validation failed (proceeding with default)');
+  }
 
   try {
     const db = getDb();
@@ -378,6 +395,47 @@ export function submitExitDocument({ roomId, agentId, document, buildingId, phas
     log.error({ roomId, agentId, err: msg }, 'Failed to submit exit document');
     return err('DB_ERROR', `Failed to submit exit document: ${msg}`);
   }
+}
+
+/**
+ * Delegate a task from one room to another.
+ * The agent exits the source room and enters the target room,
+ * carrying context about what task to work on.
+ */
+export function delegateTask({
+  fromRoomId, toRoomId, agentId, taskContext,
+}: {
+  fromRoomId: string;
+  toRoomId: string;
+  agentId: string;
+  taskContext: Record<string, unknown>;
+}): Result {
+  const fromRoom = activeRooms.get(fromRoomId);
+  const toRoom = activeRooms.get(toRoomId);
+
+  if (!fromRoom) return err('ROOM_NOT_FOUND', `Source room ${fromRoomId} not found`);
+  if (!toRoom) return err('ROOM_NOT_FOUND', `Target room ${toRoomId} not found`);
+
+  // Exit source room
+  const exitResult = exitRoom({ roomId: fromRoomId, agentId, reason: 'normal' });
+  if (!exitResult.ok) return exitResult;
+
+  // Enter target room
+  const enterResult = enterRoom({ roomId: toRoomId, agentId });
+  if (!enterResult.ok) return enterResult;
+
+  // Emit delegation event
+  if (moduleBus) {
+    moduleBus.emit('room:task:delegated', {
+      fromRoomId, toRoomId, agentId,
+      fromRoomType: fromRoom.type,
+      toRoomType: toRoom.type,
+      taskContext,
+    });
+  }
+
+  log.info({ fromRoomId, toRoomId, agentId }, 'Task delegated across rooms');
+  return ok({ fromRoomId, toRoomId, agentId });
 }
 
 export function getRoom(roomId: string): BaseRoom | null {

@@ -13,6 +13,13 @@ const MockAnthropic = vi.fn().mockImplementation(() => ({
   messages: { create: mockCreate },
 }));
 
+vi.mock('../../../src/ai/prompt-cache.js', () => ({
+  buildCachedSystemPrompt: (system: string, _provider: string) => system,
+  cachePrompt: vi.fn(),
+  getCachedPrompt: vi.fn(),
+  hashPrompt: vi.fn().mockReturnValue('mock-hash'),
+}));
+
 vi.mock('@anthropic-ai/sdk', () => ({
   default: MockAnthropic,
 }));

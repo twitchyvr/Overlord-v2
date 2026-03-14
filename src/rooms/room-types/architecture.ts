@@ -54,6 +54,11 @@ export class ArchitectureRoom extends BaseRoom {
       'Define dependency graph between tasks.',
       'Make and document tech decisions with rationale.',
       'Assign files to tasks for scoped execution.',
+      'PLAIN LANGUAGE: Document tech decisions in simple terms for user review. "We will build the website using modern tools" not "React 18 with Next.js App Router on Vercel".',
+      'When effortLevel is "easy", make all tech decisions autonomously. Only escalate to the user for business-logic decisions, not technical ones.',
+      'For desktop/widget projects: define build toolchain setup as the FIRST milestone. Include: project scaffolding (cargo init, npm create, etc.), dependency installation, and a "hello world" build verification before any feature work.',
+      'For native projects: plan for platform-specific considerations — file paths, system APIs, permissions (camera, location, file access), and distribution format (DMG, AppImage, MSI).',
+      'For cross-platform projects (Tauri, Electron, React Native, Flutter): structure tasks to keep platform-specific code isolated. Shared logic in one directory, platform bridges in another.',
     ];
   }
 

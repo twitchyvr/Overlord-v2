@@ -255,6 +255,7 @@ async function handleChatMessage(
     // 7. Emit a "thinking" indicator so the frontend shows the AI is working
     bus.emit('chat:stream', {
       socketId,
+      buildingId,
       agentId: resolvedAgentId,
       agentName,
       roomId: room.id,
@@ -340,6 +341,7 @@ async function handleChatMessage(
 
       bus.emit('chat:response', {
         socketId,
+        buildingId,
         type: 'message',
         agentId: resolvedAgentId,
         agentName,
@@ -367,6 +369,7 @@ async function handleChatMessage(
       log.error({ socketId, error: result.error }, 'Conversation loop failed');
       bus.emit('chat:response', {
         socketId,
+        buildingId,
         type: 'error',
         agentId: resolvedAgentId,
         agentName,

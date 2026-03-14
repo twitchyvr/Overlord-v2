@@ -17,7 +17,7 @@
 
 import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
-import { h, formatTime, escapeHtml } from '../engine/helpers.js';
+import { h, formatTime, escapeHtml, tip } from '../engine/helpers.js';
 import { Card } from '../components/card.js';
 import { Tabs } from '../components/tabs.js';
 import { Button } from '../components/button.js';
@@ -103,7 +103,7 @@ export class RaidLogView extends Component {
     // Header
     const header = h('div', { class: 'raid-view-header' },
       h('div', { class: 'raid-view-title-row' },
-        h('h2', { class: 'raid-view-title' }, 'RAID Log'),
+        h('h2', { class: 'raid-view-title' }, tip('RAID Log')),
         h('div', { class: 'raid-view-subtitle' },
           'Risks \u2022 Assumptions \u2022 Issues \u2022 Decisions'
         )

@@ -11,6 +11,7 @@ import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
 import { ok, err, safeJsonParse } from '../core/contracts.js';
 import type { Result, PhaseGateRow, BuildingRow, GateVerdict, PhaseGateCriterion } from '../core/contracts.js';
+import { queryHook } from '../plugins/plugin-loader.js';
 
 const log = logger.child({ module: 'phase-gate' });
 
@@ -61,7 +62,7 @@ interface SignoffGateParams {
  * Optional `criteria` array lets the reviewer mark each criterion as met/unmet
  * and attach an evidence URL. If omitted, existing criteria are preserved.
  */
-export function signoffGate({ gateId, reviewer, verdict, conditions = [], criteria, exitDocId, nextPhaseInput = {} }: SignoffGateParams): Result {
+export async function signoffGate({ gateId, reviewer, verdict, conditions = [], criteria, exitDocId, nextPhaseInput = {} }: SignoffGateParams): Promise<Result> {
   if (!(['GO', 'NO-GO', 'CONDITIONAL'] as GateVerdict[]).includes(verdict)) {
     return err('INVALID_VERDICT', `Verdict must be GO, NO-GO, or CONDITIONAL. Got: ${verdict}`);
   }
@@ -73,6 +74,24 @@ export function signoffGate({ gateId, reviewer, verdict, conditions = [], criter
   // Prevent re-signing a gate that has already been signed off as GO or NO-GO
   if (gate.status === 'go' || gate.status === 'no-go') {
     return err('GATE_ALREADY_SIGNED', `Phase gate ${gateId} already signed off as ${gate.signoff_verdict}. Create a new gate to re-evaluate.`);
+  }
+
+  // Queryable hook: Let Lua plugins influence gate evaluation
+  // A plugin can return { verdict: 'GO' | 'NO-GO', reason: '...' } to override
+  try {
+    const hookResult = await queryHook('onPhaseGateEvaluate', {
+      gateId, buildingId: gate.building_id, phase: gate.phase,
+      verdict, reviewer, criteria,
+    });
+    if (hookResult && typeof hookResult === 'object') {
+      const override = hookResult as { verdict?: string; reason?: string };
+      if (override.verdict === 'NO_GO' || override.verdict === 'NO-GO') {
+        log.info({ gateId, reason: override.reason }, 'Plugin hook overrode phase gate to NO-GO');
+        return err('PLUGIN_BLOCKED', override.reason || 'Plugin blocked phase gate advancement');
+      }
+    }
+  } catch (hookErr) {
+    log.warn({ gateId, error: String(hookErr) }, 'Phase gate hook evaluation failed (proceeding with default)');
   }
 
   const status = verdict === 'GO' ? 'go' : verdict === 'NO-GO' ? 'no-go' : 'conditional';
@@ -195,11 +214,11 @@ export function getPendingGates(buildingId?: string): Result {
  * @param gateId — the conditional gate
  * @param resolvedConditions — conditions that have been met (subset of original)
  */
-export function resolveConditions({ gateId, resolvedConditions, resolver }: {
+export async function resolveConditions({ gateId, resolvedConditions, resolver }: {
   gateId: string;
   resolvedConditions: string[];
   resolver: string;
-}): Result {
+}): Promise<Result> {
   const db = getDb();
   const gate = db.prepare('SELECT * FROM phase_gates WHERE id = ?').get(gateId) as PhaseGateRow | undefined;
   if (!gate) return err('GATE_NOT_FOUND', `Phase gate ${gateId} does not exist`);

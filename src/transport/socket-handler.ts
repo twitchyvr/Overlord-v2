@@ -10,8 +10,11 @@
  * All incoming payloads are validated with Zod schemas before processing.
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { randomUUID } from 'crypto';
 import { logger, broadcastLog } from '../core/logger.js';
+import { config as appConfig } from '../core/config.js';
 import type { Bus } from '../core/bus.js';
 import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
@@ -62,10 +65,20 @@ import {
   SessionNoteWriteSchema, SessionNoteReadSchema, SessionNoteListSchema,
   SessionNoteDeleteSchema, SessionNoteClearSchema,
   SearchGlobalSchema,
+  PluginListSchema, PluginGetSchema, PluginToggleSchema,
+  PluginConfigGetSchema, PluginConfigSetSchema, PluginActivitySchema,
+  PluginSourceGetSchema, PluginSourceSaveSchema, PluginCreateSchema,
+  PluginDeleteSchema, PluginValidateSchema, PluginExportSchema,
+  PluginImportSchema, PluginLogSubscribeSchema,
+  QualityConfigGetSchema, QualityConfigSetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
+import { getQualityConfig } from '../tools/quality-defaults.js';
 import { globalSearch } from '../storage/global-search.js';
+import { listPlugins, getPlugin, loadPlugin, unloadPlugin, reloadPlugin, getPluginDir, getPluginLogs } from '../plugins/plugin-loader.js';
+import { validateLuaSyntax } from '../plugins/lua-validator.js';
+import { exportBundle, importBundle } from '../plugins/plugin-bundler.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
@@ -186,15 +199,55 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
     log.info({ id: socket.id }, 'Client connected');
     broadcastLog('info', `Client connected (${socket.id})`, 'transport');
 
+    // ─── Building Selection (room-based isolation #593) ───
+    // When a client selects a building, they join a Socket.IO room for that building.
+    // This ensures events are scoped to the active building.
+    socket.on('building:select', (data: { buildingId?: string }, ack?: (res: unknown) => void) => {
+      const buildingId = data?.buildingId;
+      if (!buildingId) {
+        if (ack) ack({ ok: false, error: { code: 'MISSING_BUILDING_ID', message: 'buildingId is required' } });
+        return;
+      }
+      // Leave all previous building rooms
+      for (const room of socket.rooms) {
+        if (room.startsWith('building:') && room !== `building:${buildingId}`) {
+          socket.leave(room);
+        }
+      }
+      // Join the new building room
+      socket.join(`building:${buildingId}`);
+      log.info({ socketId: socket.id, buildingId }, 'Client joined building room');
+      if (ack) ack({ ok: true });
+    });
+
     // ─── Building Events ───
 
     handle(socket, 'building:create', BuildingCreateSchema, (parsed, ack) => {
+      // Default working directory if none specified (#540)
+      // Ensures Code Lab has a directory to write files from the start
+      let workingDirectory = parsed.workingDirectory;
+      if (!workingDirectory) {
+        const kebabName = parsed.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+        workingDirectory = `/tmp/overlord-projects/${kebabName}`;
+      }
+      // Ensure the directory exists
+      try {
+        fs.mkdirSync(workingDirectory, { recursive: true });
+      } catch (e) {
+        log.warn({ err: e, dir: workingDirectory }, 'Failed to create default working directory');
+      }
+
       const result = createBuilding({
         name: parsed.name,
         projectId: parsed.projectId,
-        workingDirectory: parsed.workingDirectory,
+        workingDirectory,
         repoUrl: parsed.repoUrl,
-        config: {},
+        config: {
+          ...(parsed.effortLevel ? { effortLevel: parsed.effortLevel } : {}),
+        },
       });
       if (result.ok) {
         const buildingData = result.data as { id: string; name: string; workingDirectory: string | null; repoUrl: string | null; floorIds: string[] };
@@ -298,8 +351,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (ack) ack({ ok: result.success, data: result, error: result.success ? undefined : { code: 'GIT_CLONE_FAILED', message: result.message } });
     });
 
-    handle(socket, 'building:apply-blueprint', BuildingApplyBlueprintSchema, (parsed, ack) => {
-      const result = handleBlueprintSubmission({
+    handle(socket, 'building:apply-blueprint', BuildingApplyBlueprintSchema, async (parsed, ack) => {
+      const result = await handleBlueprintSubmission({
         buildingId: parsed.buildingId,
         blueprint: parsed.blueprint,
         agentId: parsed.agentId,
@@ -775,9 +828,29 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         // Auto-generate profile in background if no profile fields were provided
         const hasProfile = parsed.firstName || parsed.lastName || parsed.bio;
         if (!hasProfile && parsed.role) {
+          // Look up building context for relevant specializations (#511)
+          let projectContext: string | undefined;
+          try {
+            const db = getDb();
+            const buildings = db.prepare(
+              'SELECT name, config FROM buildings ORDER BY created_at DESC LIMIT 1',
+            ).all() as Array<{ name: string; config: string }>;
+            if (buildings.length > 0) {
+              const bConfig = buildings[0].config ? JSON.parse(buildings[0].config) : {};
+              const desc = bConfig.projectDescription || '';
+              const template = bConfig.template || '';
+              if (desc || template) {
+                projectContext = `Building: ${buildings[0].name}. ${template ? `Type: ${template}.` : ''} ${desc}`.trim();
+              }
+            }
+          } catch {
+            // Non-fatal — continue without project context
+          }
+
           // Fire-and-forget: don't block registration
           generateFullProfile(ai, parsed.role, undefined, {
             provider: 'minimax',
+            projectContext,
           }).then((genResult) => {
             if (genResult.ok) {
               const profileResult = genResult.data as FullProfileResult;
@@ -856,6 +929,22 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       const role = parsed.role || agent.role || 'General Agent';
       const capabilities = parsed.capabilities || agent.capabilities || [];
 
+      // Look up building context for relevant specializations (#511)
+      let profileProjectContext: string | undefined;
+      if (agent.building_id) {
+        try {
+          const bRow = getDb().prepare('SELECT name, config FROM buildings WHERE id = ?').get(agent.building_id) as { name: string; config: string } | undefined;
+          if (bRow) {
+            const bCfg = bRow.config ? JSON.parse(bRow.config) : {};
+            const desc = bCfg.projectDescription || '';
+            const tmpl = bCfg.template || '';
+            if (desc || tmpl) {
+              profileProjectContext = `Building: ${bRow.name}. ${tmpl ? `Type: ${tmpl}.` : ''} ${desc}`.trim();
+            }
+          }
+        } catch { /* non-fatal */ }
+      }
+
       broadcastLog('info', `Generating AI profile for agent ${agent.name} (${role})...`, 'agents');
 
       const result = await generateFullProfile(ai, role, capabilities, {
@@ -863,6 +952,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         skipPhoto: parsed.skipPhoto,
         gender: parsed.gender,
         provider: parsed.provider,
+        projectContext: profileProjectContext,
         existing: {
           firstName: agent.first_name,
           lastName: agent.last_name,
@@ -1134,6 +1224,391 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         limit: parsed.limit,
       });
       if (ack) ack(result);
+    });
+
+    // ─── Plugin Management Events ───
+
+    handle(socket, 'plugin:list', PluginListSchema, (_parsed, ack) => {
+      const all = listPlugins();
+      const items = all.map(p => ({
+        id: p.manifest.id,
+        name: p.manifest.name,
+        version: p.manifest.version,
+        description: p.manifest.description,
+        author: p.manifest.author || 'Unknown',
+        status: p.status,
+        permissions: p.manifest.permissions,
+        hooks: Object.keys(p.hooks),
+        provides: p.manifest.provides || {},
+        loadedAt: p.loadedAt,
+        error: p.error || null,
+        isBuiltIn: p.isBuiltIn,
+        engine: p.manifest.engine,
+      }));
+      if (ack) ack({ ok: true, data: { plugins: items, total: items.length } });
+    });
+
+    handle(socket, 'plugin:get', PluginGetSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+      const data = {
+        id: plugin.manifest.id,
+        name: plugin.manifest.name,
+        version: plugin.manifest.version,
+        description: plugin.manifest.description,
+        author: plugin.manifest.author || 'Unknown',
+        engine: plugin.manifest.engine,
+        entrypoint: plugin.manifest.entrypoint,
+        status: plugin.status,
+        permissions: plugin.manifest.permissions,
+        hooks: Object.keys(plugin.hooks),
+        provides: plugin.manifest.provides || {},
+        loadedAt: plugin.loadedAt,
+        error: plugin.error || null,
+        isBuiltIn: plugin.isBuiltIn,
+        dir: plugin.dir,
+      };
+      if (ack) ack({ ok: true, data });
+    });
+
+    handle(socket, 'plugin:toggle', PluginToggleSchema, async (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+
+      if (parsed.enabled && plugin.status !== 'active') {
+        // Re-load plugin
+        const result = await loadPlugin(plugin.manifest, '');
+        if (ack) ack(result.ok ? { ok: true, data: { pluginId: parsed.pluginId, status: 'active' } } : result);
+        if (result.ok) {
+          io.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'active' });
+          bus.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'active' });
+        }
+      } else if (!parsed.enabled && plugin.status === 'active') {
+        // Unload plugin
+        const result = unloadPlugin(parsed.pluginId);
+        if (ack) ack(result.ok ? { ok: true, data: { pluginId: parsed.pluginId, status: 'unloaded' } } : result);
+        if (result.ok) {
+          io.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'unloaded' });
+          bus.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'unloaded' });
+        }
+      } else {
+        if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId, status: plugin.status } });
+      }
+    });
+
+    handle(socket, 'plugin:config:get', PluginConfigGetSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+      // Read config from plugin's storage namespace
+      const config = plugin.context.storage.get('__config__') || {};
+      if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId, config } });
+    });
+
+    handle(socket, 'plugin:config:set', PluginConfigSetSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+      // Store config in plugin's storage namespace
+      const config = (plugin.context.storage.get('__config__') || {}) as Record<string, unknown>;
+      config[parsed.key] = parsed.value;
+      plugin.context.storage.set('__config__', config);
+      if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId, key: parsed.key } });
+      io.emit('plugin:config-changed', { pluginId: parsed.pluginId, key: parsed.key, value: parsed.value });
+    });
+
+    handle(socket, 'plugin:activity', PluginActivitySchema, (_parsed, ack) => {
+      // Activity is tracked via bus events — return recent plugin-related events from memory
+      // For now, return empty list (activity tracking will be wired via bus listener)
+      if (ack) ack({ ok: true, data: { events: [], total: 0 } });
+    });
+
+    // ─── Plugin Source / IDE Events ───
+
+    handle(socket, 'plugin:source:get', PluginSourceGetSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+
+      const dir = plugin.dir;
+      if (!dir) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NO_DIR', message: `Plugin "${parsed.pluginId}" has no stored directory`, retryable: false } });
+        return;
+      }
+
+
+
+      const entrypointPath = path.join(dir, plugin.manifest.entrypoint);
+
+      try {
+        const code = fs.readFileSync(entrypointPath, 'utf-8');
+        if (ack) ack({
+          ok: true,
+          data: {
+            pluginId: parsed.pluginId,
+            code,
+            isBuiltIn: plugin.isBuiltIn,
+            manifest: plugin.manifest,
+          },
+        });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_SOURCE_READ_ERROR', message, retryable: false } });
+      }
+    });
+
+    handle(socket, 'plugin:source:save', PluginSourceSaveSchema, async (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+
+
+
+
+
+
+      let targetDir = plugin.dir;
+
+      // For built-in plugins, save to user plugin dir (creating an override)
+      if (plugin.isBuiltIn) {
+        const pluginBaseDir = path.resolve(appConfig.get('PLUGIN_DIR'));
+        targetDir = path.join(pluginBaseDir, plugin.manifest.id);
+        fs.mkdirSync(targetDir, { recursive: true });
+
+        // Copy manifest to user dir if not present
+        const manifestDest = path.join(targetDir, 'plugin.json');
+        if (!fs.existsSync(manifestDest)) {
+          fs.writeFileSync(manifestDest, JSON.stringify(plugin.manifest, null, 2), 'utf-8');
+        }
+      }
+
+      const entrypointPath = path.join(targetDir, plugin.manifest.entrypoint);
+
+      try {
+        fs.writeFileSync(entrypointPath, parsed.code, 'utf-8');
+
+        // Hot-reload the plugin
+        const result = await reloadPlugin(parsed.pluginId);
+        if (result.ok) {
+          io.emit('plugin:source-changed', { pluginId: parsed.pluginId });
+          io.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'active' });
+        }
+        if (ack) ack(result.ok
+          ? { ok: true, data: { pluginId: parsed.pluginId, reloaded: true } }
+          : { ok: false, error: { code: 'PLUGIN_RELOAD_ERROR', message: result.error.message, retryable: false } },
+        );
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_SOURCE_WRITE_ERROR', message, retryable: false } });
+      }
+    });
+
+    handle(socket, 'plugin:create', PluginCreateSchema, async (parsed, ack) => {
+
+
+
+
+
+      // Check for ID conflict
+      if (getPlugin(parsed.id)) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_DUPLICATE', message: `Plugin "${parsed.id}" already exists`, retryable: false } });
+        return;
+      }
+
+      const pluginBaseDir = path.resolve(appConfig.get('PLUGIN_DIR'));
+      const pluginDir = path.join(pluginBaseDir, parsed.id);
+
+      // Create plugin directory
+      fs.mkdirSync(pluginDir, { recursive: true });
+
+      // Create manifest
+      const manifest = {
+        id: parsed.id,
+        name: parsed.name,
+        version: '1.0.0',
+        description: parsed.description || 'Custom Overlord script',
+        author: 'User',
+        engine: 'lua' as const,
+        entrypoint: 'main.lua',
+        permissions: ['bus:emit', 'storage:read', 'storage:write'] as string[],
+      };
+      fs.writeFileSync(path.join(pluginDir, 'plugin.json'), JSON.stringify(manifest, null, 2), 'utf-8');
+
+      // Read template
+      const templateName = parsed.template || 'blank';
+      const templatePath = path.join(pluginBaseDir, '..', 'plugins', 'templates', `${templateName}.lua`);
+      let templateCode = '-- New plugin\nregisterHook("onLoad", function()\n  overlord.log.info("Plugin loaded")\nend)\n';
+
+      try {
+        if (fs.existsSync(templatePath)) {
+          templateCode = fs.readFileSync(templatePath, 'utf-8');
+        } else {
+          // Try alternate path structure
+          const altPath = path.join(path.resolve('.'), 'plugins', 'templates', `${templateName}.lua`);
+          if (fs.existsSync(altPath)) {
+            templateCode = fs.readFileSync(altPath, 'utf-8');
+          }
+        }
+      } catch {
+        // Use default template on read failure
+      }
+
+      // Replace template placeholders
+      templateCode = templateCode
+        .replace(/\{\{PLUGIN_NAME\}\}/g, parsed.name)
+        .replace(/\{\{PLUGIN_DESCRIPTION\}\}/g, parsed.description || 'Custom Overlord script')
+        .replace(/\{\{PLUGIN_ID\}\}/g, parsed.id);
+
+      fs.writeFileSync(path.join(pluginDir, 'main.lua'), templateCode, 'utf-8');
+
+      // Load the new plugin
+      const result = await loadPlugin(manifest as any, pluginDir);
+      if (result.ok) {
+        io.emit('plugin:status-changed', { pluginId: parsed.id, status: 'active' });
+        bus.emit('plugin:status-changed', { pluginId: parsed.id, status: 'active' });
+      }
+      if (ack) ack(result.ok
+        ? { ok: true, data: { pluginId: parsed.id, manifest } }
+        : { ok: false, error: { code: 'PLUGIN_CREATE_ERROR', message: result.error.message, retryable: false } },
+      );
+    });
+
+    handle(socket, 'plugin:delete', PluginDeleteSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+
+      // Refuse to delete built-in plugins
+      if (plugin.isBuiltIn) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_DELETE_BUILTIN', message: 'Cannot delete built-in plugins', retryable: false } });
+        return;
+      }
+
+      const dir = plugin.dir;
+
+      // Unload first
+      unloadPlugin(parsed.pluginId);
+
+      // Remove the plugin directory
+      if (dir) {
+        try {
+          fs.rmSync(dir, { recursive: true, force: true });
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          log.warn({ pluginId: parsed.pluginId, error: message }, 'Failed to remove plugin directory');
+        }
+      }
+
+      io.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'deleted' });
+      bus.emit('plugin:status-changed', { pluginId: parsed.pluginId, status: 'deleted' });
+      if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId } });
+    });
+
+    handle(socket, 'plugin:validate', PluginValidateSchema, async (parsed, ack) => {
+      const result = await validateLuaSyntax(parsed.code);
+      if (ack) ack({ ok: true, data: result });
+    });
+
+    handle(socket, 'plugin:export', PluginExportSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+      const dir = plugin.dir;
+      if (!dir) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NO_DIR', message: `Plugin "${parsed.pluginId}" has no stored directory`, retryable: false } });
+        return;
+      }
+      const result = exportBundle(dir);
+      if (ack) ack(result.ok
+        ? { ok: true, data: { pluginId: parsed.pluginId, bundle: result.data } }
+        : result,
+      );
+    });
+
+    handle(socket, 'plugin:import', PluginImportSchema, async (parsed, ack) => {
+
+
+
+      const pluginBaseDir = path.resolve(appConfig.get('PLUGIN_DIR'));
+      const result = importBundle(parsed.bundle, pluginBaseDir);
+      if (!result.ok) {
+        if (ack) ack(result);
+        return;
+      }
+
+      const manifest = result.data;
+      const pluginDir = path.join(pluginBaseDir, manifest.id);
+
+      // Load the imported plugin
+      const loadResult = await loadPlugin(manifest, pluginDir);
+      if (loadResult.ok) {
+        io.emit('plugin:status-changed', { pluginId: manifest.id, status: 'active' });
+        bus.emit('plugin:status-changed', { pluginId: manifest.id, status: 'active' });
+      }
+      if (ack) ack(loadResult.ok
+        ? { ok: true, data: { pluginId: manifest.id, manifest } }
+        : { ok: false, error: { code: 'PLUGIN_IMPORT_LOAD_ERROR', message: loadResult.error.message, retryable: false } },
+      );
+    });
+
+    handle(socket, 'plugin:log:subscribe', PluginLogSubscribeSchema, (parsed, ack) => {
+      const plugin = getPlugin(parsed.pluginId);
+      if (!plugin) {
+        if (ack) ack({ ok: false, error: { code: 'PLUGIN_NOT_FOUND', message: `Plugin "${parsed.pluginId}" not found`, retryable: false } });
+        return;
+      }
+
+      // Return existing logs and subscribe to live updates
+      const logs = getPluginLogs(parsed.pluginId);
+      socket.join(`plugin-logs:${parsed.pluginId}`);
+      if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId, logs } });
+    });
+
+    handle(socket, 'plugin:log:unsubscribe', PluginLogSubscribeSchema, (parsed, ack) => {
+      socket.leave(`plugin-logs:${parsed.pluginId}`);
+      if (ack) ack({ ok: true, data: { pluginId: parsed.pluginId } });
+    });
+
+    // --- Quality Config ---
+
+    handle(socket, 'quality:config:get', QualityConfigGetSchema, (_data, ack) => {
+      const cfg = getQualityConfig();
+      if (ack) ack({ ok: true, data: cfg });
+    });
+
+    handle(socket, 'quality:config:set', QualityConfigSetSchema, (parsed, ack) => {
+      const envKeyMap: Record<string, string> = {
+        autoLint: 'QUALITY_AUTO_LINT',
+        autoTypecheck: 'QUALITY_AUTO_TYPECHECK',
+        autoTest: 'QUALITY_AUTO_TEST',
+        autoSecurityScan: 'QUALITY_AUTO_SECURITY_SCAN',
+        minCoverage: 'QUALITY_MIN_COVERAGE',
+      };
+      const envKey = envKeyMap[parsed.key];
+      if (envKey) {
+        process.env[envKey] = String(parsed.value);
+      }
+      const cfg = getQualityConfig();
+      io.emit('quality:config-changed', cfg);
+      if (ack) ack({ ok: true, data: cfg });
     });
 
     // ─── Command List ───
@@ -1499,8 +1974,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (ack) ack(getPendingGates(parsed?.buildingId));
     });
 
-    handle(socket, 'phase:resolve-conditions', PhaseResolveConditionsSchema, (parsed, ack) => {
-      const result = resolveConditions({
+    handle(socket, 'phase:resolve-conditions', PhaseResolveConditionsSchema, async (parsed, ack) => {
+      const result = await resolveConditions({
         gateId: parsed.gateId,
         resolvedConditions: parsed.resolvedConditions,
         resolver: parsed.resolver,
@@ -1981,8 +2456,8 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
 
     // ─── Exit Document Events ───
 
-    handle(socket, 'exit-doc:submit', ExitDocSubmitSchema, (parsed, ack) => {
-      const result = submitExitDocument({
+    handle(socket, 'exit-doc:submit', ExitDocSubmitSchema, async (parsed, ack) => {
+      const result = await submitExitDocument({
         roomId: parsed.roomId, agentId: parsed.agentId,
         document: parsed.document ?? {}, buildingId: parsed.buildingId, phase: parsed.phase,
       });
@@ -2053,11 +2528,11 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (ack) ack(result);
     });
 
-    handle(socket, 'phase:gate:signoff', PhaseGateSignoffSchema, (parsed, ack) => {
+    handle(socket, 'phase:gate:signoff', PhaseGateSignoffSchema, async (parsed, ack) => {
       // Look up the gate to get buildingId and phase before signoff
       const gateRow = getDb().prepare('SELECT building_id, phase FROM phase_gates WHERE id = ?').get(parsed.gateId) as { building_id: string; phase: string } | undefined;
 
-      const result = signoffGate({
+      const result = await signoffGate({
         gateId: parsed.gateId, reviewer: parsed.reviewer, verdict: parsed.verdict,
         conditions: parsed.conditions, criteria: parsed.criteria, exitDocId: parsed.exitDocId, nextPhaseInput: parsed.nextPhaseInput,
       });
@@ -2092,7 +2567,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       if (ack) ack(result);
     });
 
-    handle(socket, 'phase:advance', PhaseAdvanceSchema, (parsed, ack) => {
+    handle(socket, 'phase:advance', PhaseAdvanceSchema, async (parsed, ack) => {
       const buildingId = parsed.buildingId;
       const phaseOrder = getPhaseOrder();
 
@@ -2119,7 +2594,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       }
 
       const gateData = gateResult.data as { id: string };
-      const signoffResult = signoffGate({
+      const signoffResult = await signoffGate({
         gateId: gateData.id, reviewer: parsed.reviewer || 'system',
         verdict: 'GO', conditions: [], nextPhaseInput: parsed.nextPhaseInput,
       });
@@ -2258,8 +2733,20 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   });
 
   // ─── Bus → Socket broadcasts ───
+  // Events are scoped to the building room when buildingId is present (#593).
+  // This prevents chat messages, agent updates, and other events from leaking
+  // between projects. Events without buildingId are broadcast globally (e.g., system:log).
 
-  const forward = (event: string) => bus.on(event, (data: Record<string, unknown>) => io.emit(event, data));
+  const forward = (event: string) => bus.on(event, (data: Record<string, unknown>) => {
+    const buildingId = data.buildingId as string | undefined;
+    if (buildingId) {
+      // Scoped broadcast — only clients viewing this building receive the event
+      io.to(`building:${buildingId}`).emit(event, data);
+    } else {
+      // Global broadcast — system-level events without building context
+      io.emit(event, data);
+    }
+  });
 
   forward('room:agent:entered');
   forward('room:agent:exited');
@@ -2316,6 +2803,134 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
   forward('plan:submitted');
   forward('plan:reviewed');
   forward('email:dispatched');
+  forward('plugin:status-changed');
+  forward('plugin:config-changed');
+  forward('plugin:source-changed');
+
+  // ─── Exit Doc Auto-Submit (#524) ───
+  // When the conversation loop detects an exit document in AI prose,
+  // it emits exit-doc:auto-submit. We handle it here to call the real
+  // submitExitDocument() flow and trigger the phase gate pipeline.
+  bus.on('exit-doc:auto-submit', async (data: Record<string, unknown>) => {
+    const roomId = data.roomId as string;
+    const agentId = data.agentId as string;
+    const document = data.document as Record<string, unknown>;
+    const exitDocType = data.exitDocType as string;
+
+    if (!roomId || !agentId || !document) {
+      log.warn({ data }, 'exit-doc:auto-submit missing required fields');
+      return;
+    }
+
+    // Look up buildingId and active phase from the room's floor
+    let buildingId: string | undefined;
+    let phase: string | undefined;
+    try {
+      const db = getDb();
+      const roomRow = db.prepare('SELECT floor_id, type FROM rooms WHERE id = ?').get(roomId) as { floor_id: string; type: string } | undefined;
+      if (roomRow) {
+        const floorRow = db.prepare('SELECT building_id FROM floors WHERE id = ?').get(roomRow.floor_id) as { building_id: string } | undefined;
+        if (floorRow) {
+          buildingId = floorRow.building_id;
+          const building = db.prepare('SELECT active_phase FROM buildings WHERE id = ?').get(buildingId) as { active_phase: string } | undefined;
+          phase = building?.active_phase || undefined;
+        }
+      }
+    } catch (e) {
+      log.warn({ err: e, roomId }, 'Failed to look up building context for auto-submitted exit doc');
+    }
+
+    log.info(
+      { roomId, agentId, exitDocType, buildingId, phase },
+      'Processing auto-detected exit document',
+    );
+
+    const result = await submitExitDocument({
+      roomId,
+      agentId,
+      document,
+      buildingId,
+      phase,
+    });
+
+    if (result.ok) {
+      const exitDocData = result.data as Record<string, unknown>;
+      bus.emit('exit-doc:submitted', {
+        roomId,
+        roomType: exitDocType,
+        buildingId,
+        agentId,
+        document,
+        ...exitDocData,
+      });
+
+      // RAID auto-populate: create a "decision" entry for phase completion (#508)
+      if (buildingId && phase) {
+        try {
+          const raidId = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          const phaseName = phase.charAt(0).toUpperCase() + phase.slice(1);
+          getDb().prepare(`
+            INSERT INTO raid_entries (id, building_id, type, phase, room_id, summary, rationale, decided_by, affected_areas)
+            VALUES (?, ?, 'decision', ?, ?, ?, ?, ?, ?)
+          `).run(
+            raidId,
+            buildingId,
+            phase,
+            roomId,
+            `Phase ${phaseName} completed \u2014 exit document submitted`,
+            `Agent ${agentId} auto-submitted exit document for ${exitDocType || 'room'} work. Phase deliverables captured.`,
+            agentId,
+            JSON.stringify([exitDocType || phase]),
+          );
+          bus.emit('raid:created', { id: raidId, buildingId, type: 'decision', phase });
+          log.info({ raidId, buildingId, phase }, 'RAID decision auto-created for phase completion');
+        } catch (raidErr) {
+          log.warn({ err: raidErr, buildingId, phase }, 'Failed to auto-create RAID decision entry');
+        }
+      }
+
+      // Auto-create a pending phase gate when exit doc is submitted
+      if (buildingId && phase) {
+        const gateResult = createGate({ buildingId, phase });
+        if (gateResult.ok) {
+          const gateData = gateResult.data as { id: string; phase: string; status: string };
+          const exitDocId = exitDocData.id as string | undefined;
+          if (exitDocId) {
+            getDb().prepare('UPDATE phase_gates SET exit_doc_id = ? WHERE id = ?').run(exitDocId, gateData.id);
+          }
+          broadcastLog('info', `Phase gate created for ${phase} (exit doc auto-submitted)`, 'phase');
+          bus.emit('phase:gate:created', { buildingId, ...gateData });
+
+          // In EASY mode: auto-sign the gate with GO verdict and advance the phase
+          const buildingRow = getDb().prepare('SELECT config FROM buildings WHERE id = ?').get(buildingId) as { config: string } | undefined;
+          const buildingConfig = buildingRow?.config ? JSON.parse(buildingRow.config) : {};
+          const effortLevel = buildingConfig.effortLevel || 'easy';
+
+          if (effortLevel === 'easy') {
+            const signResult = await signoffGate({
+              gateId: gateData.id,
+              reviewer: 'system-auto',
+              verdict: 'GO',
+              exitDocId: exitDocId || undefined,
+            });
+            if (signResult.ok) {
+              const signData = signResult.data as { phaseAdvanced?: boolean; nextPhase?: string };
+              broadcastLog('info', `Phase auto-advanced: ${phase} → ${signData.nextPhase || 'next'} (EASY mode)`, 'phase');
+              if (signData.phaseAdvanced && signData.nextPhase) {
+                bus.emit('phase:advanced', { buildingId, from: phase, to: signData.nextPhase, gateId: gateData.id });
+                bus.emit('building:updated', { id: buildingId, activePhase: signData.nextPhase });
+                io.emit('phase:gate:signed-off', { gateId: gateData.id, buildingId, verdict: 'GO', phaseAdvanced: true, nextPhase: signData.nextPhase });
+              }
+            }
+          }
+        }
+      }
+
+      broadcastLog('info', `Exit document auto-submitted for ${exitDocType} in room ${roomId}`, 'exit-doc');
+    } else {
+      log.warn({ roomId, agentId, error: result.error }, 'Auto-submitted exit document failed validation');
+    }
+  });
 
   // ─── Stats: record every agent status change ───
   bus.on('agent:status-changed', (data: Record<string, unknown>) => {

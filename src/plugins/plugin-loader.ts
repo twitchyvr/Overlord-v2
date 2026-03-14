@@ -28,6 +28,7 @@ import type {
   PluginHookData,
   PluginPermission,
   PluginLogger,
+  PluginLogEntry,
   PluginBusAPI,
   PluginRoomAPI,
   PluginAgentAPI,
@@ -44,6 +45,10 @@ const log = logger.child({ module: 'plugins' });
 const plugins = new Map<string, PluginInstance>();
 const sandboxes = new Map<string, PluginSandbox>();
 const pluginStorage = new Map<string, Map<string, unknown>>();
+const pluginDirs = new Map<string, string>();
+const pluginLogs = new Map<string, PluginLogEntry[]>();
+
+const LOG_RING_BUFFER_SIZE = 100;
 
 // Module-scope references to system APIs — injected via initPluginLoader
 let systemBus: InitPluginsParams['bus'] | null = null;
@@ -275,6 +280,7 @@ export async function loadPlugin(manifest: PluginManifest, pluginDir: string): P
   const execResult = sandbox.execute(code);
   if (!execResult.ok) {
     sandbox.destroy();
+    const isBuiltIn = pluginDir.includes(path.join('plugins', 'built-in'));
     const instance: PluginInstance = {
       manifest,
       status: 'error',
@@ -282,10 +288,15 @@ export async function loadPlugin(manifest: PluginManifest, pluginDir: string): P
       hooks: {},
       context,
       loadedAt: Date.now(),
+      dir: pluginDir,
+      isBuiltIn,
     };
     plugins.set(manifest.id, instance);
     return err('PLUGIN_LOAD_ERROR', execResult.error.message);
   }
+
+  // Determine if this is a built-in plugin (loaded from built-in subdirectory)
+  const isBuiltIn = pluginDir.includes(path.join('plugins', 'built-in'));
 
   // Build the plugin instance
   const instance: PluginInstance = {
@@ -294,10 +305,13 @@ export async function loadPlugin(manifest: PluginManifest, pluginDir: string): P
     hooks: sandbox.getHooks(),
     context,
     loadedAt: Date.now(),
+    dir: pluginDir,
+    isBuiltIn,
   };
 
   plugins.set(manifest.id, instance);
   sandboxes.set(manifest.id, sandbox);
+  pluginDirs.set(manifest.id, pluginDir);
 
   // Register room types if the plugin provides any
   if (manifest.provides?.roomTypes) {
@@ -376,6 +390,7 @@ export function unloadPlugin(pluginId: string): Result {
   // Update instance status and remove from registry
   instance.status = 'unloaded';
   plugins.delete(pluginId);
+  pluginDirs.delete(pluginId);
 
   log.info({ pluginId }, 'Plugin unloaded');
   return ok({ pluginId });
@@ -426,6 +441,115 @@ export async function broadcastHook(hook: PluginHook, data: Omit<PluginHookData,
   }
 }
 
+// ─── Plugin Directory Access ───
+
+/**
+ * Get the directory path for a loaded plugin.
+ */
+export function getPluginDir(pluginId: string): string | undefined {
+  return pluginDirs.get(pluginId);
+}
+
+// ─── Plugin Reload ───
+
+/**
+ * Reload a plugin by unloading it and re-loading from its stored directory.
+ * Returns the new PluginInstance on success.
+ */
+export async function reloadPlugin(pluginId: string): Promise<Result<PluginInstance>> {
+  const instance = plugins.get(pluginId);
+  const dir = pluginDirs.get(pluginId);
+  if (!instance || !dir) {
+    return err('PLUGIN_NOT_FOUND', `Plugin "${pluginId}" is not loaded or has no stored directory`);
+  }
+
+  const { manifest } = instance;
+  log.info({ pluginId }, 'Reloading plugin...');
+
+  // Unload current instance (but preserve storage)
+  const storedStorage = pluginStorage.get(pluginId);
+  unloadPlugin(pluginId);
+
+  // Restore storage so the plugin keeps its state across reloads
+  if (storedStorage) {
+    pluginStorage.set(pluginId, storedStorage);
+  }
+
+  // Re-read manifest in case it changed
+  const manifestPath = path.join(dir, 'plugin.json');
+  let freshManifest = manifest;
+  try {
+    const raw = fs.readFileSync(manifestPath, 'utf-8');
+    freshManifest = JSON.parse(raw) as PluginManifest;
+  } catch {
+    // Fall back to the original manifest
+    log.warn({ pluginId }, 'Could not re-read manifest, using original');
+  }
+
+  // Re-load the plugin
+  return loadPlugin(freshManifest, dir);
+}
+
+// ─── Query Hook (Scriptable Core Delegation) ───
+
+/**
+ * Query active plugins for a hook response. Calls each plugin's hook handler
+ * sequentially. The first non-null/non-undefined return value wins.
+ * Returns null if all plugins return void (meaning "use TypeScript default").
+ *
+ * This is the core mechanism for making Overlord's behavior scriptable:
+ * TypeScript fires a queryHook at a decision point, and Lua scripts can
+ * override the default behavior by returning a value.
+ */
+export async function queryHook(hook: PluginHook, data: Record<string, unknown>): Promise<unknown | null> {
+  const hookData: PluginHookData = { ...data, hook };
+
+  for (const [pluginId, sandbox] of sandboxes) {
+    const instance = plugins.get(pluginId);
+    if (!instance || instance.status !== 'active') continue;
+    if (!instance.hooks[hook]) continue;
+
+    try {
+      const result = await sandbox.callHook(hook, hookData);
+      if (result.ok && result.data !== undefined && result.data !== null) {
+        log.debug({ pluginId, hook }, 'Plugin provided hook override');
+        return result.data;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log.error({ pluginId, hook, error: message }, 'Plugin queryHook threw exception');
+    }
+  }
+
+  return null; // No plugin overrode — use TypeScript default
+}
+
+// ─── Plugin Log Ring Buffer ───
+
+/**
+ * Push a log entry to a plugin's ring buffer.
+ */
+function pushPluginLog(pluginId: string, entry: PluginLogEntry): void {
+  let buffer = pluginLogs.get(pluginId);
+  if (!buffer) {
+    buffer = [];
+    pluginLogs.set(pluginId, buffer);
+  }
+  buffer.push(entry);
+  if (buffer.length > LOG_RING_BUFFER_SIZE) {
+    buffer.shift();
+  }
+}
+
+/**
+ * Get recent log entries for a plugin.
+ */
+export function getPluginLogs(pluginId: string, limit = LOG_RING_BUFFER_SIZE): PluginLogEntry[] {
+  const buffer = pluginLogs.get(pluginId);
+  if (!buffer) return [];
+  return buffer.slice(-limit);
+}
+
 // ─── Plugin Context Builder ───
 
 /**
@@ -453,11 +577,17 @@ function buildPluginContext(manifest: PluginManifest): PluginContext {
 
 function buildPluginLogger(pluginId: string): PluginLogger {
   const pluginLog = logger.child({ module: 'plugins', pluginId });
+
+  function logAndBuffer(level: PluginLogEntry['level'], msg: string, data?: Record<string, unknown>): void {
+    pluginLog[level](data || {}, msg);
+    pushPluginLog(pluginId, { timestamp: Date.now(), level, message: msg, data });
+  }
+
   return {
-    info: (msg: string, data?: Record<string, unknown>) => pluginLog.info(data || {}, msg),
-    warn: (msg: string, data?: Record<string, unknown>) => pluginLog.warn(data || {}, msg),
-    error: (msg: string, data?: Record<string, unknown>) => pluginLog.error(data || {}, msg),
-    debug: (msg: string, data?: Record<string, unknown>) => pluginLog.debug(data || {}, msg),
+    info: (msg: string, data?: Record<string, unknown>) => logAndBuffer('info', msg, data),
+    warn: (msg: string, data?: Record<string, unknown>) => logAndBuffer('warn', msg, data),
+    error: (msg: string, data?: Record<string, unknown>) => logAndBuffer('error', msg, data),
+    debug: (msg: string, data?: Record<string, unknown>) => logAndBuffer('debug', msg, data),
   };
 }
 

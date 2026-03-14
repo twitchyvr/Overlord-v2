@@ -77,10 +77,10 @@ describe('CodeLab', () => {
       expect(room.type).toBe('code-lab');
     });
 
-    it('getAllowedTools returns all 8 implementation tools', () => {
+    it('getAllowedTools returns all implementation tools', () => {
       const room = new CodeLab('room_1');
       const tools = room.getAllowedTools();
-      expect(tools).toHaveLength(8);
+      expect(tools).toHaveLength(11);
     });
 
     it('hasTool returns true for write tools', () => {

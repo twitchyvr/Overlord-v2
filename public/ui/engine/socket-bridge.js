@@ -149,6 +149,17 @@ export function initSocketBridge(socket, store, engine) {
       });
       return;
     }
+    // Tool execution progress — show what tool is running
+    if (data.status === 'tool' && data.toolName) {
+      engine.dispatch('chat:stream-chunk', {
+        text: `\n*Using ${data.toolName}...*\n`,
+        agentId: data.agentId,
+        roomId: data.roomId,
+        iteration: data.iteration,
+        isTool: true,
+      });
+      return;
+    }
     // Content arrived — extract text from content blocks
     const textParts = (data.content || [])
       .filter((b) => b.type === 'text' && b.text)
@@ -190,10 +201,26 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('phase:advanced', (data) => {
-    store.set('building.activePhase', data.to || data.nextPhase || data.phase);
+    const newPhase = data.to || data.nextPhase || data.phase;
+    store.set('building.activePhase', newPhase);
     store.update('activity.items', (items) => [{ event: 'phase:advanced', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('phase:advanced', data);
     engine.dispatch('activity:new', { event: 'phase:advanced', ...data });
+
+    // Auto-switch chat to a room matching the new phase
+    const PHASE_TO_ROOM_TYPE = {
+      discovery: 'discovery', architecture: 'architecture',
+      execution: 'code-lab', review: 'review', deploy: 'deploy',
+    };
+    const targetRoomType = PHASE_TO_ROOM_TYPE[newPhase];
+    if (targetRoomType) {
+      const rooms = store.get('rooms.list') || [];
+      const targetRoom = rooms.find(r => r.type === targetRoomType);
+      if (targetRoom) {
+        store.set('rooms.active', targetRoom.id);
+        engine.dispatch('building:room-selected', { roomId: targetRoom.id, roomType: targetRoom.type });
+      }
+    }
   });
 
   socket.on('raid:entry:added', (data) => {
@@ -1402,7 +1429,23 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     async selectBuilding(buildingId) {
-      store.set('building.active', buildingId);
+      // Join the building's Socket.IO room for scoped event delivery (#593)
+      socket.emit('building:select', { buildingId });
+
+      // Clear stale data from the previous building so views don't
+      // show cached lists while the new building's data loads.
+      store.batch(() => {
+        store.set('building.active', buildingId);
+        store.set('building.floors', []);
+        store.set('rooms.list', []);
+        store.set('rooms.active', null);
+        store.set('agents.list', []);
+        store.set('building.agentPositions', {});
+        store.set('tasks.list', []);
+        store.set('raid.entries', []);
+        store.set('chat.messages', []);
+        store.set('building.activePhase', 'strategy');
+      });
       const results = await Promise.all([
         this.fetchBuilding(buildingId),
         this.fetchFloors(buildingId),
@@ -1412,6 +1455,7 @@ export function initSocketBridge(socket, store, engine) {
         this.fetchRaidEntries(buildingId),
         this.fetchRooms(),
         this.fetchTasks(buildingId),
+        this.fetchConversations(buildingId),
       ]);
       // Set active phase from building data
       const buildingRes = results[0];

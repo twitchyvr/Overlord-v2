@@ -59,7 +59,10 @@ function open(id, opts = {}) {
 
   // ── Backdrop ──
   _backdropEl = h('div', { class: 'drawer-backdrop' });
-  _backdropEl.addEventListener('click', close);
+  _backdropEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    close();
+  });
 
   // ── Drawer container ──
   _drawerEl = h('div', {
@@ -81,7 +84,10 @@ function open(id, opts = {}) {
     'aria-label': 'Close drawer',
     title: 'Close'
   }, '\u2715');
-  closeBtn.addEventListener('click', close);
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    close();
+  });
   header.appendChild(closeBtn);
 
   _drawerEl.appendChild(header);
@@ -94,7 +100,11 @@ function open(id, opts = {}) {
   _drawerEl.appendChild(body);
 
   // ── Mount ──
-  const root = document.getElementById('drawer-root') || document.getElementById('modal-root') || document.body;
+  // Mount directly on document.body to avoid stacking context issues.
+  // #main-layout has overflow:hidden which creates a stacking context,
+  // trapping z-index values inside it. Mounting on body ensures the
+  // drawer is always above all other content.
+  const root = document.body;
   root.appendChild(_backdropEl);
   root.appendChild(_drawerEl);
 
@@ -131,7 +141,11 @@ function close() {
   const drawer = _drawerEl;
   const backdrop = _backdropEl;
 
+  let cleaned = false;
   const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+
     drawer.removeEventListener('transitionend', cleanup);
     backdrop.remove();
     drawer.remove();

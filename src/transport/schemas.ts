@@ -69,6 +69,7 @@ export const BuildingCreateSchema = z.object({
   description: optionalDescription(),
   workingDirectory: z.string().max(1000).optional(),
   repoUrl: z.string().max(1000).optional(),
+  effortLevel: z.enum(['easy', 'medium', 'advanced']).optional(),
 }).passthrough();
 
 export const BuildingGetSchema = z.object({
@@ -783,3 +784,84 @@ export const SearchGlobalSchema = z.object({
   filters: z.array(z.string().max(50)).max(10).optional().default([]),
   limit: z.number().int().min(1).max(50).optional().default(10),
 });
+
+
+// ─── Plugin Management Schemas ───
+
+export const PluginListSchema = z.object({
+  filter: z.enum(['all', 'active', 'error', 'unloaded']).optional(),
+});
+
+export const PluginGetSchema = z.object({
+  pluginId: id(),
+});
+
+export const PluginToggleSchema = z.object({
+  pluginId: id(),
+  enabled: z.boolean(),
+});
+
+export const PluginConfigGetSchema = z.object({
+  pluginId: id(),
+});
+
+export const PluginConfigSetSchema = z.object({
+  pluginId: id(),
+  key: z.string().min(1).max(MAX_NAME),
+  value: z.unknown(),
+});
+
+export const PluginActivitySchema = z.object({
+  pluginId: optionalId(),
+  limit: z.number().int().min(1).max(100).optional(),
+});
+
+// ─── Plugin Source / IDE Schemas ───
+
+export const PluginSourceGetSchema = z.object({
+  pluginId: id(),
+});
+
+export const PluginSourceSaveSchema = z.object({
+  pluginId: id(),
+  code: z.string().min(1).max(500_000),
+});
+
+export const PluginCreateSchema = z.object({
+  id: z.string().min(1).max(MAX_ID).regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/),
+  name: z.string().min(1).max(MAX_NAME),
+  description: z.string().min(1).max(MAX_DESCRIPTION).optional().default('Custom Overlord script'),
+  template: z.enum([
+    'blank', 'room-hook', 'tool-hook', 'phase-hook', 'dashboard-widget', 'validator',
+  ]).optional().default('blank'),
+});
+
+export const PluginDeleteSchema = z.object({
+  pluginId: id(),
+});
+
+export const PluginValidateSchema = z.object({
+  code: z.string().min(1).max(500_000),
+});
+
+export const PluginExportSchema = z.object({
+  pluginId: id(),
+});
+
+export const PluginImportSchema = z.object({
+  bundle: z.string().min(1).max(10_000_000), // base64-encoded bundle
+});
+
+export const PluginLogSubscribeSchema = z.object({
+  pluginId: id(),
+});
+
+// --- Quality Config Schemas ---
+
+export const QualityConfigGetSchema = z.object({});
+
+export const QualityConfigSetSchema = z.object({
+  key: z.enum(['autoLint', 'autoTypecheck', 'autoTest', 'autoSecurityScan', 'minCoverage']),
+  value: z.union([z.boolean(), z.number()]),
+});
+

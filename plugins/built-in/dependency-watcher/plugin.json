@@ -1,0 +1,15 @@
+{
+  "id": "dependency-watcher",
+  "name": "Dependency Watcher",
+  "version": "1.0.0",
+  "description": "Monitors dependency status by tracking tool executions related to dependency checking. Stores known dependency issues and emits dependency:alert events. Full remote scanning requires net:http (not yet available).",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

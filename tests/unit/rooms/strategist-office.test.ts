@@ -29,22 +29,24 @@ describe('StrategistOffice', () => {
       expect(contract.fileScope).toBe('read-only');
     });
 
-    it('has minimal tool set — research only, no file writing or execution', () => {
+    it('has research tool set — read access to codebase, no file writing or execution', () => {
+      expect(contract.tools).toContain('read_file');
+      expect(contract.tools).toContain('list_dir');
+      expect(contract.tools).toContain('search_files');
       expect(contract.tools).toContain('web_search');
       expect(contract.tools).toContain('record_note');
       expect(contract.tools).toContain('recall_notes');
       expect(contract.tools).toContain('session_note');
-      expect(contract.tools).toContain('list_dir');
-      expect(contract.tools).toHaveLength(5);
-      expect(contract.tools).not.toContain('read_file');
+      expect(contract.tools).toHaveLength(7);
       expect(contract.tools).not.toContain('write_file');
       expect(contract.tools).not.toContain('bash');
     });
 
-    it('requires building-blueprint exit template with 6 fields', () => {
+    it('requires building-blueprint exit template with 7 fields (including effortLevel)', () => {
       expect(contract.exitRequired.type).toBe('building-blueprint');
-      expect(contract.exitRequired.fields).toHaveLength(6);
+      expect(contract.exitRequired.fields).toHaveLength(7);
       expect(contract.exitRequired.fields).toEqual([
+        'effortLevel',
         'projectGoals',
         'successCriteria',
         'floorsNeeded',
@@ -123,6 +125,35 @@ describe('StrategistOffice', () => {
         expect(template.floorsNeeded).toContain('strategy');
       }
     });
+
+    it('includes game engine templates (unity, js, unreal)', () => {
+      const ids = QUICK_START_TEMPLATES.map(t => t.id);
+      expect(ids).toContain('unity-game');
+      expect(ids).toContain('js-game');
+      expect(ids).toContain('unreal-game');
+    });
+
+    it('game engine templates have integration floor', () => {
+      const gameTemplates = QUICK_START_TEMPLATES.filter(t =>
+        ['unity-game', 'js-game', 'unreal-game'].includes(t.id)
+      );
+      expect(gameTemplates).toHaveLength(3);
+      for (const t of gameTemplates) {
+        expect(t.floorsNeeded).toContain('integration');
+      }
+    });
+
+    it('buildBlueprintFromTemplate works with game engine templates', () => {
+      const blueprint = StrategistOffice.buildBlueprintFromTemplate('unity-game', {
+        projectGoals: ['Build a 3D platformer'],
+        successCriteria: ['Player can jump and collect items'],
+        effortLevel: 'easy',
+      });
+      expect(blueprint).not.toBeNull();
+      expect(blueprint!.templateId).toBe('unity-game');
+      expect(blueprint!.effortLevel).toBe('easy');
+      expect(blueprint!.floorsNeeded).toContain('integration');
+    });
   });
 
   describe('instance behavior', () => {
@@ -131,18 +162,19 @@ describe('StrategistOffice', () => {
       expect(room.type).toBe('strategist');
     });
 
-    it('getAllowedTools returns 5 minimal tools', () => {
+    it('getAllowedTools returns 7 research tools', () => {
       const room = new StrategistOffice('room_1');
-      expect(room.getAllowedTools()).toHaveLength(5);
+      expect(room.getAllowedTools()).toHaveLength(7);
     });
 
-    it('hasTool returns false for everything except research tools', () => {
+    it('hasTool returns true for read/research tools, false for write/exec tools', () => {
       const room = new StrategistOffice('room_1');
+      expect(room.hasTool('read_file')).toBe(true);
+      expect(room.hasTool('list_dir')).toBe(true);
+      expect(room.hasTool('search_files')).toBe(true);
       expect(room.hasTool('web_search')).toBe(true);
       expect(room.hasTool('record_note')).toBe(true);
       expect(room.hasTool('recall_notes')).toBe(true);
-      expect(room.hasTool('list_dir')).toBe(true);
-      expect(room.hasTool('read_file')).toBe(false);
       expect(room.hasTool('write_file')).toBe(false);
       expect(room.hasTool('bash')).toBe(false);
     });
@@ -167,17 +199,18 @@ describe('StrategistOffice', () => {
       expect(format).toHaveProperty('estimatedPhases');
     });
 
-    it('buildContextInjection includes minimal tools and read-only scope', () => {
+    it('buildContextInjection includes research tools and read-only scope', () => {
       const room = new StrategistOffice('room_1');
       const ctx = room.buildContextInjection();
       expect(ctx.roomType).toBe('strategist');
       expect(ctx.fileScope).toBe('read-only');
-      expect((ctx.tools as string[])).toHaveLength(5);
+      expect((ctx.tools as string[])).toHaveLength(7);
     });
 
     it('validates complete exit document (building blueprint)', () => {
       const room = new StrategistOffice('room_1');
       const result = room.validateExitDocument({
+        effortLevel: 'medium',
         projectGoals: ['Build a task manager'],
         successCriteria: ['Users can create tasks'],
         floorsNeeded: ['collaboration', 'execution'],
@@ -286,6 +319,116 @@ describe('StrategistOffice', () => {
     it('accepts exit doc with all valid fields (happy path value validation)', () => {
       const room = new StrategistOffice('room_test');
       const result = room.validateExitDocumentValues(validDoc);
+      expect(result.ok).toBe(true);
+    });
+  });
+
+  describe('effortLevel validation', () => {
+    const validDoc = {
+      projectGoals: ['Build a web app'],
+      successCriteria: ['100% test coverage'],
+      floorsNeeded: ['strategy', 'execution'],
+      roomConfig: [{ floor: 'execution', rooms: ['code-lab'] }],
+      agentRoster: [{ name: 'Dev', role: 'developer', rooms: ['code-lab'] }],
+      estimatedPhases: ['discovery', 'execution'],
+    };
+
+    it('accepts effortLevel "easy"', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, effortLevel: 'easy' });
+      expect(result.ok).toBe(true);
+    });
+
+    it('accepts effortLevel "medium"', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, effortLevel: 'medium' });
+      expect(result.ok).toBe(true);
+    });
+
+    it('accepts effortLevel "advanced"', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, effortLevel: 'advanced' });
+      expect(result.ok).toBe(true);
+    });
+
+    it('rejects invalid effortLevel value', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues({ ...validDoc, effortLevel: 'extreme' });
+      expect(result.ok).toBe(false);
+      expect(result.error.message).toContain('effortLevel');
+    });
+
+    it('accepts exit doc without effortLevel (optional)', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.validateExitDocumentValues(validDoc);
+      expect(result.ok).toBe(true);
+    });
+  });
+
+  describe('effortLevel in blueprint builder', () => {
+    it('buildBlueprintFromTemplate includes effortLevel from overrides', () => {
+      const blueprint = StrategistOffice.buildBlueprintFromTemplate('web-app', {
+        projectGoals: ['Build a dashboard'],
+        successCriteria: ['Loads in under 2s'],
+        effortLevel: 'easy',
+      });
+      expect(blueprint).not.toBeNull();
+      expect(blueprint!.effortLevel).toBe('easy');
+    });
+
+    it('buildBlueprintFromTemplate defaults effortLevel to "medium"', () => {
+      const blueprint = StrategistOffice.buildBlueprintFromTemplate('web-app', {
+        projectGoals: ['Build an app'],
+        successCriteria: ['It works'],
+      });
+      expect(blueprint).not.toBeNull();
+      expect(blueprint!.effortLevel).toBe('medium');
+    });
+  });
+
+  describe('effortLevel in rules', () => {
+    it('getRules includes effort-level-aware instructions', () => {
+      const room = new StrategistOffice('room_test');
+      const rules = room.getRules();
+      expect(rules.some((r) => r.includes('EASY mode'))).toBe(true);
+      expect(rules.some((r) => r.includes('MEDIUM mode'))).toBe(true);
+      expect(rules.some((r) => r.includes('ADVANCED mode'))).toBe(true);
+    });
+
+    it('getRules mentions effortLevel setting', () => {
+      const room = new StrategistOffice('room_test');
+      const rules = room.getRules();
+      expect(rules.some((r) => r.includes('effortLevel'))).toBe(true);
+    });
+  });
+
+  describe('effortLevel in output format', () => {
+    it('getOutputFormat includes effortLevel field', () => {
+      const room = new StrategistOffice('room_test');
+      const format = room.getOutputFormat() as Record<string, unknown>;
+      expect(format).toHaveProperty('effortLevel');
+      expect(format.effortLevel).toContain('easy');
+      expect(format.effortLevel).toContain('medium');
+      expect(format.effortLevel).toContain('advanced');
+    });
+  });
+
+  describe('write tool blocking', () => {
+    it('blocks write_file in the Strategist Office (consultation-only)', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.onBeforeToolCall('write_file', 'agent_1', {});
+      expect(result.ok).toBe(false);
+    });
+
+    it('blocks bash in the Strategist Office', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.onBeforeToolCall('bash', 'agent_1', {});
+      expect(result.ok).toBe(false);
+    });
+
+    it('allows web_search in the Strategist Office', () => {
+      const room = new StrategistOffice('room_test');
+      const result = room.onBeforeToolCall('web_search', 'agent_1', {});
       expect(result.ok).toBe(true);
     });
   });

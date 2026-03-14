@@ -1,0 +1,16 @@
+{
+  "id": "auto-assign-agent",
+  "name": "Auto-Assign Agent",
+  "version": "1.0.0",
+  "description": "Automatically assigns the best-suited agent to a room based on task type and historical affinity scores. Learns over time which agents perform best in which rooms.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

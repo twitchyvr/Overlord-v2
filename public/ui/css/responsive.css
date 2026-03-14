@@ -20,11 +20,15 @@
 /* ── Left sidebar: Building visualization ── */
 #building-panel {
   width: var(--sidebar-width);
+  min-width: var(--sidebar-min-width);
+  max-width: var(--sidebar-max-width);
   border-right: 1px solid var(--border-primary);
   background: var(--bg-secondary);
-  overflow-y: auto;
+  overflow: hidden;
   flex-shrink: 0;
-  transition: width var(--duration-normal) var(--ease-default);
+  display: flex;
+  flex-direction: column;
+  position: relative; /* For resize handle positioning */
 }
 
 /* ── Center: Chat or Dashboard ── */

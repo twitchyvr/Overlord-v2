@@ -1,0 +1,16 @@
+{
+  "id": "changelog-generator",
+  "name": "Changelog Generator",
+  "version": "1.0.0",
+  "description": "Automatically generates CHANGELOG entries from tool executions and phase advances. Stores entries chronologically and emits changelog:entry events with formatted text.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "room:read",
+    "agent:read",
+    "storage:read",
+    "storage:write",
+    "bus:emit"
+  ]
+}

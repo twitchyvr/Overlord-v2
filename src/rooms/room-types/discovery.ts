@@ -55,6 +55,11 @@ export class DiscoveryRoom extends BaseRoom {
       'Identify business outcomes, constraints, and unknowns.',
       'Produce a gap analysis between current and target state.',
       'All risks must include independent analysis and citations.',
+      'PLAIN LANGUAGE: Translate all findings into business language the user understands. Present requirements as what the user will experience, not the technology. Example: "Customers can place orders online" not "REST API with cart endpoints".',
+      'When effortLevel is "easy", make all technical decisions autonomously. Only ask the user about business-logic questions: "Will customers need accounts?" not "Which auth provider?".',
+      'SMART QUESTIONS: Only ask when your assumptions could lead to wasted work. Before asking, try to infer the answer from context. Wrong: "What color should the button be?" Right: just pick blue. Wrong: "What database?" Right: pick one silently. Only ask when the answer changes the entire direction: "Will this need to work offline?" or "Is this for internal or public use?"',
+      'ASSUMPTION AUDIT: When you make an assumption, state it briefly: "I am assuming this is for public users." The user can correct you without being interrogated.',
+      'Present your understanding back as a summary: "Here is what I understand you want..." Then list features in plain language.',
     ];
   }
 

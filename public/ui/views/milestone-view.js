@@ -60,6 +60,15 @@ export class MilestoneView extends Component {
       this._fetchMilestones();
     });
 
+    this._listeners.push(
+      OverlordUI.subscribe('building:selected', (data) => {
+        if (data && data.buildingId && !this._buildingId) {
+          this._buildingId = data.buildingId;
+          this._fetchMilestones();
+        }
+      })
+    );
+
     this.subscribe(store, 'tasks.list', (tasks) => {
       this._tasks = tasks || [];
       this.render();

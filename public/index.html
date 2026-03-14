@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Overlord v2</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#3b82f6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Overlord">
+  <meta name="description" content="AI-powered project orchestration platform">
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -98,6 +104,10 @@
         <button class="toolbar-btn" data-view="milestones" title="Milestones" aria-label="Milestones">
           <span class="toolbar-icon">&#127919;</span>
           <span class="toolbar-label">Milestones</span>
+        </button>
+        <button class="toolbar-btn" data-view="scripts" title="Scripts" aria-label="Scripts">
+          <span class="toolbar-icon">&#9889;</span>
+          <span class="toolbar-label">Scripts</span>
         </button>
         <button class="toolbar-btn" data-view="strategist" title="New Project" aria-label="New Project">
           <span class="toolbar-icon">&#10010;</span>
@@ -196,5 +206,6 @@
 
   <!-- Bootstrap -->
   <script type="module" src="ui/boot.js"></script>
+  <script>if('serviceWorker'in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}</script>
 </body>
 </html>

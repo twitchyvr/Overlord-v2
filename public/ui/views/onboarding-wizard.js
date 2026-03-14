@@ -30,12 +30,14 @@ const PROJECT_TYPES = [
     icon: '\u{1F310}',
     tagline: 'A website, dashboard, or online tool',
     examples: 'Marketing site, SaaS platform, admin panel, e-commerce store',
-    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations', 'integration'],
     roomConfig: [
       { floor: 'strategy', rooms: ['strategist'] },
       { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
-      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
-      { floor: 'integration', rooms: ['deploy', 'monitoring'] }
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+      { floor: 'integration', rooms: ['monitoring'] }
     ],
     agentRoster: [
       { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
@@ -52,12 +54,13 @@ const PROJECT_TYPES = [
     icon: '\u{1F4F1}',
     tagline: 'An app for phones or tablets',
     examples: 'iOS app, Android app, cross-platform app',
-    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
     roomConfig: [
       { floor: 'strategy', rooms: ['strategist'] },
       { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
-      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
-      { floor: 'integration', rooms: ['deploy'] }
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
     ],
     agentRoster: [
       { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
@@ -74,12 +77,14 @@ const PROJECT_TYPES = [
     icon: '\u{1F517}',
     tagline: 'A service that powers other apps',
     examples: 'REST API, GraphQL service, webhook handler, integration layer',
-    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations', 'integration'],
     roomConfig: [
       { floor: 'strategy', rooms: ['strategist'] },
       { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
-      { floor: 'execution', rooms: ['code-lab', 'review'] },
-      { floor: 'integration', rooms: ['deploy', 'monitoring'] }
+      { floor: 'execution', rooms: ['code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] },
+      { floor: 'integration', rooms: ['monitoring'] }
     ],
     agentRoster: [
       { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
@@ -95,12 +100,13 @@ const PROJECT_TYPES = [
     icon: '\u{1F4CA}',
     tagline: 'Data processing, reports, or dashboards',
     examples: 'Data pipeline, analytics dashboard, ML model, reporting tool',
-    floorsNeeded: ['strategy', 'collaboration', 'execution', 'integration'],
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
     roomConfig: [
       { floor: 'strategy', rooms: ['strategist'] },
       { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
-      { floor: 'execution', rooms: ['code-lab', 'code-lab', 'review'] },
-      { floor: 'integration', rooms: ['deploy'] }
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
     ],
     agentRoster: [
       { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
@@ -112,16 +118,108 @@ const PROJECT_TYPES = [
     ]
   },
   {
+    id: 'desktop-app',
+    label: 'Desktop Application',
+    icon: '\u{1F5A5}\uFE0F',
+    tagline: 'Native desktop app for macOS, Windows, or Linux',
+    examples: 'Electron app, native utility, productivity tool, media player',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'App Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'UI Developer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Systems Developer', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Build Engineer', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
+    id: 'tauri-app',
+    label: 'Tauri Desktop App',
+    icon: '\u26A1',
+    tagline: 'Lightweight native app with Rust backend and web frontend',
+    examples: 'Tauri + Svelte, Tauri + React, lightweight desktop tool',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'App Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Frontend Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Rust Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Build Engineer', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
+    id: 'mobile-app-native',
+    label: 'Mobile Application',
+    icon: '\u{1F4F1}',
+    tagline: 'iOS/Android app using React Native, Flutter, or native frameworks',
+    examples: 'React Native app, Flutter app, SwiftUI, Kotlin Multiplatform',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab', 'code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Mobile Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Mobile Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'UI Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'QA Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Release Manager', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
+    id: 'macos-widget',
+    label: 'macOS Widget',
+    icon: '\u{1F5A5}\uFE0F',
+    tagline: 'macOS widget or menu bar utility with system integration',
+    examples: 'Menu bar app, system monitor widget, notification center widget',
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance', 'operations'],
+    roomConfig: [
+      { floor: 'strategy', rooms: ['strategist'] },
+      { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
+      { floor: 'execution', rooms: ['code-lab'] },
+      { floor: 'governance', rooms: ['review'] },
+      { floor: 'operations', rooms: ['deploy'] }
+    ],
+    agentRoster: [
+      { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
+      { name: 'Desktop Architect', role: 'architect', rooms: ['architecture', 'discovery'] },
+      { name: 'Desktop Dev', role: 'developer', rooms: ['code-lab'] },
+      { name: 'Reviewer', role: 'reviewer', rooms: ['review'] },
+      { name: 'Build Engineer', role: 'devops', rooms: ['deploy'] }
+    ]
+  },
+  {
     id: 'other',
     label: 'Something Else',
     icon: '\u{1F4A1}',
     tagline: 'CLI tool, game, library, or anything custom',
     examples: 'Command-line tool, desktop app, game, open-source library',
-    floorsNeeded: ['strategy', 'collaboration', 'execution'],
+    floorsNeeded: ['strategy', 'collaboration', 'execution', 'governance'],
     roomConfig: [
       { floor: 'strategy', rooms: ['strategist'] },
       { floor: 'collaboration', rooms: ['discovery', 'architecture'] },
-      { floor: 'execution', rooms: ['code-lab', 'review'] }
+      { floor: 'execution', rooms: ['code-lab'] },
+      { floor: 'governance', rooms: ['review'] }
     ],
     agentRoster: [
       { name: 'Strategist', role: 'strategist', rooms: ['strategist', 'discovery'] },
@@ -129,6 +227,32 @@ const PROJECT_TYPES = [
       { name: 'Developer', role: 'developer', rooms: ['code-lab'] },
       { name: 'Reviewer', role: 'reviewer', rooms: ['review'] }
     ]
+  }
+];
+
+// ─── Effort Levels ───
+
+const EFFORT_LEVELS = [
+  {
+    id: 'easy',
+    label: 'Easy',
+    icon: '\u2728',
+    title: 'Hands-Off',
+    description: 'Just tell me what you want. I\u2019ll handle everything.'
+  },
+  {
+    id: 'medium',
+    label: 'Medium',
+    icon: '\u{1F4AC}',
+    title: 'Guided',
+    description: 'I\u2019ll ask a few questions to understand your needs.'
+  },
+  {
+    id: 'advanced',
+    label: 'Advanced',
+    icon: '\u2699\uFE0F',
+    title: 'Full Control',
+    description: 'Configure every detail yourself.'
   }
 ];
 
@@ -161,7 +285,7 @@ const SCALE_OPTIONS = [
   }
 ];
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 
 export class OnboardingWizard extends Component {
@@ -171,6 +295,7 @@ export class OnboardingWizard extends Component {
     this._step = 1;
     this._projectName = '';
     this._projectDescription = '';
+    this._selectedEffort = null;
     this._selectedType = null;
     this._selectedScale = null;
     this._creating = false;
@@ -206,9 +331,10 @@ export class OnboardingWizard extends Component {
     switch (this._step) {
       case 1: this._renderWelcome(); break;
       case 2: this._renderNameStep(); break;
-      case 3: this._renderTypeStep(); break;
-      case 4: this._renderScaleStep(); break;
-      case 5: this._renderReviewStep(); break;
+      case 3: this._renderEffortStep(); break;
+      case 4: this._renderTypeStep(); break;
+      case 5: this._renderScaleStep(); break;
+      case 6: this._renderReviewStep(); break;
     }
   }
 
@@ -216,7 +342,7 @@ export class OnboardingWizard extends Component {
 
   _renderProgress() {
     const bar = h('div', { class: 'wizard-progress' });
-    const labels = ['Name', 'Type', 'Scale', 'Review'];
+    const labels = ['Name', 'Effort', 'Type', 'Scale', 'Review'];
     for (let i = 0; i < labels.length; i++) {
       const stepNum = i + 2; // Steps 2-5
       const dot = h('div', {
@@ -236,6 +362,48 @@ export class OnboardingWizard extends Component {
     return bar;
   }
 
+  // ─── Project Name Extraction (for one-shot) ───
+
+  /**
+   * Parse a user's free-text description to extract a project name.
+   * Tries several heuristics in order:
+   *   1. "called X" / "named X" pattern
+   *   2. "X app" / "X tool" / "X platform" / "X site" / "X dashboard" pattern
+   *   3. First capitalized multi-word phrase (2+ words starting uppercase)
+   *   4. Fallback: first 3 words of the description
+   */
+  _extractProjectName(description) {
+    const text = (description || '').trim();
+    if (!text) return 'My Project';
+
+    // 1. "called X" or "named X" — capture consecutive Capitalized Words only
+    // Stops at clause boundary words (that, which, with, for, to, it, and, or, the)
+    const calledMatch = text.match(/(?:called|named)\s+["']?([A-Z][A-Za-z0-9]*(?:\s+[A-Z][A-Za-z0-9]*)*)/);
+    if (calledMatch) return calledMatch[1].trim();
+
+    // 1b. Quoted name fallback: "My App" or 'My App'
+    const quotedMatch = text.match(/["']([A-Z][A-Za-z0-9]*(?:\s+[A-Za-z0-9]+){0,4})["']/);
+    if (quotedMatch) return quotedMatch[1].trim();
+
+    // 2. "X app/tool/platform/site/dashboard/service/system" pattern
+    const productMatch = text.match(/([A-Z][A-Za-z0-9]+(?: [A-Za-z0-9]+){0,3})\s+(?:app|tool|platform|site|website|dashboard|service|system|portal|manager)/i);
+    if (productMatch) {
+      const candidate = productMatch[1].trim();
+      // Only use if the first word is capitalized (proper noun feel)
+      if (/^[A-Z]/.test(candidate)) return candidate;
+    }
+
+    // 3. First capitalized multi-word phrase (at least 2 words starting with uppercase)
+    const capsMatch = text.match(/\b([A-Z][A-Za-z0-9]+(?: [A-Z][A-Za-z0-9]+)+)/);
+    if (capsMatch) return capsMatch[1].trim();
+
+    // 4. Fallback: first 3 meaningful words
+    const words = text.replace(/^(I want|I need|Build me|Create|Make)\s+/i, '').split(/\s+/).slice(0, 3);
+    const fallback = words.join(' ');
+    // Capitalize first letter
+    return fallback.charAt(0).toUpperCase() + fallback.slice(1);
+  }
+
   // ─── Step 1: Welcome ───
 
   _renderWelcome() {
@@ -252,6 +420,44 @@ export class OnboardingWizard extends Component {
       )
     );
 
+    // ─── "Just Build It" one-shot section ───
+    const oneShotSection = h('div', { class: 'wizard-oneshot' },
+      h('div', { class: 'wizard-oneshot-divider' },
+        h('span', null, 'or just tell me what you want')
+      )
+    );
+
+    const oneShotInput = h('textarea', {
+      class: 'wizard-textarea wizard-oneshot-input',
+      placeholder: 'e.g. "Build me a customer portal called ClientHub" or "I need a mobile app for tracking fitness goals"...',
+      rows: '3',
+      maxlength: '500'
+    });
+    oneShotSection.appendChild(oneShotInput);
+
+    const oneShotBtn = h('button', {
+      class: 'wizard-btn wizard-btn-accent wizard-btn-lg'
+    }, '\u26A1 Just Build It');
+    oneShotBtn.addEventListener('click', () => {
+      const description = oneShotInput.value.trim();
+      if (!description) {
+        Toast.error('Please describe what you want to build.');
+        oneShotInput.focus();
+        return;
+      }
+      this._handleOneShot(description);
+    });
+    oneShotInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const description = oneShotInput.value.trim();
+        if (description) this._handleOneShot(description);
+      }
+    });
+    oneShotSection.appendChild(oneShotBtn);
+    content.appendChild(oneShotSection);
+
+    // ─── Standard wizard actions ───
     const actions = h('div', { class: 'wizard-actions' });
     const startBtn = h('button', {
       class: 'wizard-btn wizard-btn-primary wizard-btn-lg'
@@ -308,7 +514,7 @@ export class OnboardingWizard extends Component {
     });
     nameInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && this._projectName.trim()) {
-        this._step = 3;
+        this._step = 3; // Effort step
         this.render();
       }
     });
@@ -342,7 +548,7 @@ export class OnboardingWizard extends Component {
     }, 'Next \u2192');
     nextBtn.addEventListener('click', () => {
       if (this._projectName.trim()) {
-        this._step = 3;
+        this._step = 3; // Effort step
         this.render();
       }
     });
@@ -355,7 +561,47 @@ export class OnboardingWizard extends Component {
     requestAnimationFrame(() => nameInput.focus());
   }
 
-  // ─── Step 3: Project Type ───
+  // ─── Step 3: Effort Level ───
+
+  _renderEffortStep() {
+    const content = h('div', { class: 'wizard-step' },
+      h('h2', { class: 'wizard-step-title' }, 'How much control do you want?'),
+      h('p', { class: 'wizard-step-subtitle' }, 'Choose how involved you\u2019d like to be. You can change this later in project settings.')
+    );
+
+    const cards = h('div', { class: 'effort-level-choices' });
+
+    for (const level of EFFORT_LEVELS) {
+      const card = h('div', {
+        class: `effort-level-card${this._selectedEffort?.id === level.id ? ' selected' : ''}`
+      });
+
+      card.appendChild(h('div', { class: 'effort-level-icon' }, level.icon));
+      card.appendChild(h('div', { class: 'effort-level-title' }, level.title));
+      card.appendChild(h('div', { class: 'effort-level-desc' }, level.description));
+
+      card.addEventListener('click', () => {
+        this._selectedEffort = level;
+        this._step = 4; // Type step
+        this.render();
+      });
+
+      cards.appendChild(card);
+    }
+
+    content.appendChild(cards);
+
+    // Actions
+    const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
+    const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
+    backBtn.addEventListener('click', () => { this._step = 2; this.render(); }); // Back to Name
+    actions.appendChild(backBtn);
+    content.appendChild(actions);
+
+    this.el.appendChild(content);
+  }
+
+  // ─── Step 4: Project Type ───
 
   _renderTypeStep() {
     const content = h('div', { class: 'wizard-step' },
@@ -377,7 +623,7 @@ export class OnboardingWizard extends Component {
 
       card.addEventListener('click', () => {
         this._selectedType = type;
-        this._step = 4;
+        this._step = 5; // Scale step
         this.render();
       });
 
@@ -389,14 +635,14 @@ export class OnboardingWizard extends Component {
     // Actions
     const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
     const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
-    backBtn.addEventListener('click', () => { this._step = 2; this.render(); });
+    backBtn.addEventListener('click', () => { this._step = 3; this.render(); }); // Back to Effort
     actions.appendChild(backBtn);
     content.appendChild(actions);
 
     this.el.appendChild(content);
   }
 
-  // ─── Step 4: Scale ───
+  // ─── Step 5: Scale ───
 
   _renderScaleStep() {
     const content = h('div', { class: 'wizard-step' },
@@ -418,7 +664,7 @@ export class OnboardingWizard extends Component {
 
       card.addEventListener('click', () => {
         this._selectedScale = scale;
-        this._step = 5;
+        this._step = 6; // Review step
         this.render();
       });
 
@@ -430,14 +676,14 @@ export class OnboardingWizard extends Component {
     // Actions
     const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
     const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
-    backBtn.addEventListener('click', () => { this._step = 3; this.render(); });
+    backBtn.addEventListener('click', () => { this._step = 4; this.render(); }); // Back to Type
     actions.appendChild(backBtn);
     content.appendChild(actions);
 
     this.el.appendChild(content);
   }
 
-  // ─── Step 5: Review ───
+  // ─── Step 6: Review ───
 
   _renderReviewStep() {
     const type = this._selectedType;
@@ -454,7 +700,9 @@ export class OnboardingWizard extends Component {
     // Summary cards
     const summary = h('div', { class: 'wizard-summary' });
 
+    const effort = this._selectedEffort || EFFORT_LEVELS[0]; // default Easy
     summary.appendChild(this._summaryRow('\u{1F4DD}', 'Project', this._projectName));
+    summary.appendChild(this._summaryRow(effort.icon, 'Effort', `${effort.title} \u2014 ${effort.description}`));
     summary.appendChild(this._summaryRow(type.icon, 'Type', type.label));
     summary.appendChild(this._summaryRow(scale.icon, 'Scale', `${scale.label} \u2014 ${teamSize} AI team members`));
 
@@ -484,7 +732,7 @@ export class OnboardingWizard extends Component {
     // Actions
     const actions = h('div', { class: 'wizard-actions wizard-actions-row' });
     const backBtn = h('button', { class: 'wizard-btn wizard-btn-ghost' }, '\u2190 Back');
-    backBtn.addEventListener('click', () => { this._step = 4; this.render(); });
+    backBtn.addEventListener('click', () => { this._step = 5; this.render(); }); // Back to Scale
     actions.appendChild(backBtn);
 
     const launchBtn = h('button', {
@@ -557,6 +805,100 @@ export class OnboardingWizard extends Component {
     return base; // medium = base roster
   }
 
+  // ─── One-Shot "Just Build It" Handler ───
+
+  async _handleOneShot(description) {
+    // Extract a project name from the user's description
+    const projectName = this._extractProjectName(description);
+
+    // Default to web-app template, medium scale
+    const type = PROJECT_TYPES[0]; // web-app
+    const scale = SCALE_OPTIONS[1]; // medium
+
+    this._projectName = projectName;
+    this._projectDescription = description;
+    this._selectedType = type;
+    this._selectedScale = scale;
+    this._selectedEffort = EFFORT_LEVELS[0]; // easy (hands-off)
+    this._creating = true;
+    this.render();
+
+    try {
+      if (!window.overlordSocket) {
+        throw new Error('Not connected to server');
+      }
+
+      // Create building with the extracted name
+      const buildResult = await window.overlordSocket.createBuilding({
+        name: projectName,
+        config: {
+          projectDescription: description,
+          template: type.id,
+          effortLevel: 'easy'
+        }
+      });
+
+      if (!buildResult || !buildResult.ok) {
+        throw new Error(buildResult?.error?.message || 'Failed to create project');
+      }
+
+      const buildingId = buildResult.data.id;
+
+      // Apply blueprint with default roster
+      const roster = this._getAdjustedRoster();
+      const blueprintResult = await window.overlordSocket.applyBlueprint({
+        buildingId,
+        blueprint: {
+          mode: 'quickStart',
+          floorsNeeded: type.floorsNeeded,
+          roomConfig: type.roomConfig,
+          agentRoster: roster,
+          projectGoals: description,
+          successCriteria: ''
+        },
+        agentId: 'user'
+      });
+
+      if (!blueprintResult || !blueprintResult.ok) {
+        throw new Error(blueprintResult?.error?.message || 'Failed to set up project');
+      }
+
+      // Auto-create milestones matching estimated phases (#536)
+      await this._createPhaseMilestones(buildingId);
+
+      Toast.success(`"${projectName}" is ready! Your AI team is standing by.`);
+
+      await window.overlordSocket.selectBuilding(buildingId);
+
+      // Navigate to chat view so the user can immediately start talking
+      OverlordUI.dispatch('building:selected', { buildingId });
+      OverlordUI.dispatch('navigate:chat');
+
+      // Forward the user's description as the first chat message
+      // Use a short delay to let the chat view mount and the room activate
+      setTimeout(() => {
+        if (window.overlordSocket) {
+          const store = OverlordUI.getStore();
+          const roomId = store?.get('rooms.active') || '';
+          window.overlordSocket.sendMessage({
+            text: description,
+            buildingId,
+            roomId,
+            tokens: [],
+            attachments: []
+          });
+        }
+      }, 500);
+
+    } catch (err) {
+      console.error('[OnboardingWizard] One-shot creation failed:', err);
+      Toast.error(`Something went wrong: ${err.message}`);
+      this._creating = false;
+      this._step = 1;
+      this.render();
+    }
+  }
+
   // ─── Project Creation ───
 
   async _createProject() {
@@ -575,11 +917,13 @@ export class OnboardingWizard extends Component {
       }
 
       // Create building
+      const effortLevel = (this._selectedEffort || EFFORT_LEVELS[0]).id; // default 'easy'
       const buildResult = await window.overlordSocket.createBuilding({
         name: projectName,
         config: {
           projectDescription: this._projectDescription || `${type.label} project`,
-          template: type.id
+          template: type.id,
+          effortLevel
         }
       });
 
@@ -608,6 +952,9 @@ export class OnboardingWizard extends Component {
         throw new Error(blueprintResult?.error?.message || 'Failed to set up project');
       }
 
+      // Auto-create milestones matching estimated phases (#536)
+      await this._createPhaseMilestones(buildingId);
+
       Toast.success(`"${projectName}" is ready! Your AI team is standing by.`);
 
       await window.overlordSocket.selectBuilding(buildingId);
@@ -619,8 +966,35 @@ export class OnboardingWizard extends Component {
       console.error('[OnboardingWizard] Project creation failed:', err);
       Toast.error(`Something went wrong: ${err.message}`);
       this._creating = false;
-      this._step = 5;
+      this._step = 6; // Back to Review
       this.render();
+    }
+  }
+
+  // ─── Auto-Create Phase Milestones (#536) ───
+
+  async _createPhaseMilestones(buildingId) {
+    if (!window.overlordSocket?.createMilestone) return;
+
+    const phases = [
+      { title: 'Phase 1: Discovery',    description: 'Research requirements, gather information, identify unknowns and risks.' },
+      { title: 'Phase 2: Architecture', description: 'Design system architecture, create task breakdown, define interfaces.' },
+      { title: 'Phase 3: Execution',    description: 'Build the solution. Write code, create tests, implement features.' },
+      { title: 'Phase 4: Review',       description: 'Review all deliverables. Code review, testing, documentation check.' },
+      { title: 'Phase 5: Deploy',       description: 'Deploy to production. CI/CD pipeline, release management, monitoring.' },
+    ];
+
+    for (const phase of phases) {
+      try {
+        await window.overlordSocket.createMilestone({
+          buildingId,
+          title: phase.title,
+          description: phase.description,
+          status: 'open',
+        });
+      } catch {
+        // Non-blocking — milestone creation failure shouldn't stop onboarding
+      }
     }
   }
 }

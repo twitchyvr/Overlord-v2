@@ -48,7 +48,7 @@ export class DashboardView extends Component {
     this.subscribe(store, 'building.active', (id) => {
       this._activeBuilding = id;
       if (id && window.overlordSocket) {
-        window.overlordSocket.fetchAgents({});
+        window.overlordSocket.fetchAgents({ buildingId: id });
         window.overlordSocket.fetchRaidEntries(id);
       }
       this.render();
@@ -61,9 +61,10 @@ export class DashboardView extends Component {
     this._raidEntries = store.get('raid.entries') || [];
     this._activeBuilding = store.get('building.active');
 
-    // Agents are global — fetch on mount regardless of building selection
+    // Fetch agents — scoped to active building when one is selected
     if (window.overlordSocket && this._agents.length === 0) {
-      window.overlordSocket.fetchAgents({});
+      const agentFilter = this._activeBuilding ? { buildingId: this._activeBuilding } : {};
+      window.overlordSocket.fetchAgents(agentFilter);
     }
     // RAID entries are building-specific — fetch only when a building is active
     if (this._activeBuilding && window.overlordSocket && this._raidEntries.length === 0) {
@@ -77,20 +78,30 @@ export class DashboardView extends Component {
     this.el.textContent = '';
     this.el.className = 'dashboard-view';
 
-    // Header
+    // Header with project switcher
     const header = h('div', { class: 'dashboard-header' },
       h('h2', { class: 'dashboard-title' }, 'Dashboard'),
       h('div', { class: 'dashboard-actions' },
         Button.create('New Project', {
           variant: 'primary',
           icon: '+',
-          onClick: () => OverlordUI.dispatch('navigate:strategist')
+          onClick: () => OverlordUI.dispatch('navigate:onboarding')
         })
       )
     );
     this.el.appendChild(header);
 
-    // KPI Cards
+    // Project Switcher (multi-building selector)
+    if (this._buildings.length > 0) {
+      this.el.appendChild(this._buildProjectSwitcher());
+    }
+
+    // Cross-project KPIs (aggregate stats)
+    if (this._buildings.length > 1) {
+      this.el.appendChild(this._buildCrossProjectKPIs());
+    }
+
+    // Per-building KPI Cards
     this.el.appendChild(this._buildKPISection());
 
     // Phase Progress (if active building)
@@ -103,6 +114,65 @@ export class DashboardView extends Component {
 
     // Building List
     this.el.appendChild(this._buildBuildingList());
+  }
+
+  _buildProjectSwitcher() {
+    const switcher = h('div', { class: 'project-switcher' });
+
+    for (const building of this._buildings) {
+      const isActive = building.id === this._activeBuilding;
+      const pill = h('button', {
+        class: `project-pill${isActive ? ' active' : ''}`
+      },
+        h('span', { class: 'project-pill-icon' }, '\u{1F3D7}\uFE0F'),
+        h('span', { class: 'project-pill-name' }, building.name || 'Untitled')
+      );
+
+      pill.addEventListener('click', () => {
+        if (window.overlordSocket) {
+          window.overlordSocket.selectBuilding(building.id);
+        }
+        OverlordUI.dispatch('building:selected', { buildingId: building.id });
+      });
+
+      switcher.appendChild(pill);
+    }
+
+    // "New Project" mini-button at end of switcher
+    const addPill = h('button', { class: 'project-pill project-pill-add' },
+      h('span', { class: 'project-pill-icon' }, '+'),
+      h('span', { class: 'project-pill-name' }, 'New')
+    );
+    addPill.addEventListener('click', () => OverlordUI.dispatch('navigate:onboarding'));
+    switcher.appendChild(addPill);
+
+    return switcher;
+  }
+
+  _buildCrossProjectKPIs() {
+    const section = h('div', { class: 'cross-project-kpis' });
+
+    const totalBuildings = this._buildings.length;
+    const totalRooms = this._buildings.reduce((sum, b) => sum + (b.floorCount ?? b.floor_count ?? 0), 0);
+    const totalAgents = this._buildings.reduce((sum, b) => sum + (b.agentCount ?? b.agent_count ?? 0), 0);
+    // Use live agent list count when it exceeds building-level metadata
+    const liveAgentCount = this._agents.length > totalAgents ? this._agents.length : totalAgents;
+
+    const kpis = [
+      { label: 'Total Projects', value: totalBuildings, icon: '\u{1F4C1}', color: 'var(--accent-cyan)' },
+      { label: 'Total Floors', value: totalRooms, icon: '\u{1F3E2}', color: 'var(--accent-purple, #a855f7)' },
+      { label: 'Total Agents', value: liveAgentCount, icon: '\u{1F916}', color: 'var(--accent-green)' }
+    ];
+
+    for (const kpi of kpis) {
+      section.appendChild(h('div', { class: 'cross-kpi-card glass-card' },
+        h('div', { class: 'cross-kpi-icon', style: { color: kpi.color } }, kpi.icon),
+        h('div', { class: 'cross-kpi-value' }, String(kpi.value)),
+        h('div', { class: 'cross-kpi-label' }, kpi.label)
+      ));
+    }
+
+    return section;
   }
 
   _buildKPISection() {
@@ -131,13 +201,14 @@ export class DashboardView extends Component {
         label: 'RAID Entries',
         value: this._raidEntries.length,
         icon: '\u26A0',
-        color: 'var(--accent-amber)'
+        color: 'var(--accent-amber)',
+        tooltip: 'Risks, Assumptions, Issues, and Decisions tracked for this project'
       }
     ];
 
     const kpiRow = h('div', { class: 'kpi-card-row' });
     for (const kpi of kpis) {
-      const card = h('div', { class: 'kpi-card glass-card' },
+      const card = h('div', { class: 'kpi-card glass-card', title: kpi.tooltip || '' },
         h('div', { class: 'kpi-card-icon', style: { color: kpi.color } }, kpi.icon),
         h('div', { class: 'kpi-card-value' }, String(kpi.value)),
         h('div', { class: 'kpi-card-label' }, kpi.label)
@@ -197,6 +268,31 @@ export class DashboardView extends Component {
 
     for (const building of this._buildings) {
       const isActive = building.id === this._activeBuilding;
+      const isArchived = (building.name || '').includes('(Archived');
+      const cardActions = {
+        'Open': () => {
+          if (window.overlordSocket) {
+            window.overlordSocket.selectBuilding(building.id);
+          }
+          OverlordUI.dispatch('building:selected', { buildingId: building.id });
+        }
+      };
+
+      // Archive / Restore button (#515)
+      if (isArchived) {
+        cardActions['Restore'] = async () => {
+          if (!window.overlordSocket) return;
+          const newName = building.name.replace(/\s*\(Archived\)/, '');
+          await window.overlordSocket.updateBuilding(building.id, { name: newName });
+        };
+      } else {
+        cardActions['Archive'] = async () => {
+          if (!window.overlordSocket) return;
+          const newName = `${building.name} (Archived)`;
+          await window.overlordSocket.updateBuilding(building.id, { name: newName });
+        };
+      }
+
       const card = Card.create('building', {
         name: building.name,
         activePhase: building.activePhase || building.active_phase,
@@ -208,14 +304,7 @@ export class DashboardView extends Component {
       }, {
         variant: isActive ? 'solid' : 'glass',
         className: isActive ? 'building-card-active' : '',
-        actions: {
-          'Open': () => {
-            if (window.overlordSocket) {
-              window.overlordSocket.selectBuilding(building.id);
-            }
-            OverlordUI.dispatch('building:selected', { buildingId: building.id });
-          }
-        }
+        actions: cardActions,
       });
 
       grid.appendChild(card);
@@ -237,7 +326,15 @@ export class DashboardView extends Component {
   }
 
   _getAgentCount() {
-    // Use fetched agent list when available; fall back to building-level counts
+    // When a building is selected, show agents for that building only
+    if (this._activeBuilding) {
+      // Use the fetched (building-filtered) agent list when available
+      if (this._agents.length > 0) return this._agents.length;
+      // Fall back to building-level metadata
+      const b = this._buildings.find(b => b.id === this._activeBuilding);
+      return b ? (b.agentCount ?? b.agent_count ?? 0) : 0;
+    }
+    // No building selected — aggregate across all buildings
     if (this._agents.length > 0) return this._agents.length;
     return this._buildings.reduce((sum, b) => sum + (b.agentCount ?? b.agent_count ?? 0), 0);
   }
