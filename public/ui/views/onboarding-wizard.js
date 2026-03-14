@@ -863,6 +863,9 @@ export class OnboardingWizard extends Component {
         throw new Error(blueprintResult?.error?.message || 'Failed to set up project');
       }
 
+      // Auto-create milestones matching estimated phases (#536)
+      await this._createPhaseMilestones(buildingId);
+
       Toast.success(`"${projectName}" is ready! Your AI team is standing by.`);
 
       await window.overlordSocket.selectBuilding(buildingId);
@@ -949,6 +952,9 @@ export class OnboardingWizard extends Component {
         throw new Error(blueprintResult?.error?.message || 'Failed to set up project');
       }
 
+      // Auto-create milestones matching estimated phases (#536)
+      await this._createPhaseMilestones(buildingId);
+
       Toast.success(`"${projectName}" is ready! Your AI team is standing by.`);
 
       await window.overlordSocket.selectBuilding(buildingId);
@@ -962,6 +968,33 @@ export class OnboardingWizard extends Component {
       this._creating = false;
       this._step = 6; // Back to Review
       this.render();
+    }
+  }
+
+  // ─── Auto-Create Phase Milestones (#536) ───
+
+  async _createPhaseMilestones(buildingId) {
+    if (!window.overlordSocket?.createMilestone) return;
+
+    const phases = [
+      { title: 'Phase 1: Discovery',    description: 'Research requirements, gather information, identify unknowns and risks.' },
+      { title: 'Phase 2: Architecture', description: 'Design system architecture, create task breakdown, define interfaces.' },
+      { title: 'Phase 3: Execution',    description: 'Build the solution. Write code, create tests, implement features.' },
+      { title: 'Phase 4: Review',       description: 'Review all deliverables. Code review, testing, documentation check.' },
+      { title: 'Phase 5: Deploy',       description: 'Deploy to production. CI/CD pipeline, release management, monitoring.' },
+    ];
+
+    for (const phase of phases) {
+      try {
+        await window.overlordSocket.createMilestone({
+          buildingId,
+          title: phase.title,
+          description: phase.description,
+          status: 'open',
+        });
+      } catch {
+        // Non-blocking — milestone creation failure shouldn't stop onboarding
+      }
     }
   }
 }

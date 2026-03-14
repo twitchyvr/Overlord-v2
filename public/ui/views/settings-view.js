@@ -19,6 +19,7 @@ import { Toast } from '../components/toast.js';
 const TABS = [
   { id: 'general',  label: 'General',  icon: '\u2699\uFE0F' },
   { id: 'folders',  label: 'Folders',  icon: '\u{1F4C2}' },
+  { id: 'quality',  label: 'Quality',  icon: '\u2705' },
   { id: 'ai',       label: 'AI',       icon: '\u{1F916}' },
   { id: 'display',  label: 'Display',  icon: '\u{1F5A5}\uFE0F' },
 ];
@@ -132,6 +133,9 @@ export class SettingsView extends Component {
         break;
       case 'folders':
         tabContent.appendChild(this._buildFoldersTab());
+        break;
+      case 'quality':
+        tabContent.appendChild(this._buildQualityTab());
         break;
       case 'ai':
         tabContent.appendChild(this._buildAITab());
@@ -416,6 +420,104 @@ export class SettingsView extends Component {
     } catch (err) {
       Toast.error('Failed to remove folder');
     }
+  }
+
+  // ── Quality Defaults Tab (#538) ─────────────────────────
+
+  _buildQualityTab() {
+    const section = h('div', { class: 'settings-section' });
+    section.appendChild(h('h4', { class: 'settings-section-title' }, 'Quality Checks'));
+    section.appendChild(h('p', { class: 'settings-section-desc' },
+      'Configure which automated quality checks run after each code change.'));
+
+    // Fetch current quality config
+    this._qualityConfig = this._qualityConfig || {
+      autoLint: true,
+      autoTypecheck: true,
+      autoTest: true,
+      autoSecurityScan: false,
+      minCoverage: 80,
+    };
+
+    if (window.overlordSocket?.socket) {
+      window.overlordSocket.socket.emit('quality:config:get', {}, (res) => {
+        if (res?.ok && res.data) {
+          this._qualityConfig = { ...this._qualityConfig, ...res.data };
+          if (this._activeTab === 'quality') this._updateModalContent();
+        }
+      });
+    }
+
+    const toggles = [
+      { key: 'autoLint',         label: 'Auto-Lint',          desc: 'Run linter after code changes' },
+      { key: 'autoTypecheck',    label: 'Auto-Typecheck',     desc: 'Run type checker after code changes' },
+      { key: 'autoTest',         label: 'Auto-Test',          desc: 'Run test suite after code changes' },
+      { key: 'autoSecurityScan', label: 'Auto-Security Scan', desc: 'Run security scan after code changes' },
+    ];
+
+    for (const item of toggles) {
+      section.appendChild(this._buildSettingRow({
+        label: item.label,
+        description: item.desc,
+        control: () => {
+          const current = this._qualityConfig[item.key] !== false;
+          const toggle = h('button', {
+            class: `settings-switch${current ? ' on' : ''}`,
+            role: 'switch',
+            'aria-checked': current ? 'true' : 'false'
+          });
+          toggle.appendChild(h('span', { class: 'settings-switch-knob' }));
+          toggle.addEventListener('click', () => {
+            const nowOn = !toggle.classList.contains('on');
+            toggle.classList.toggle('on', nowOn);
+            toggle.setAttribute('aria-checked', nowOn ? 'true' : 'false');
+            this._qualityConfig[item.key] = nowOn;
+            this._saveQualityConfig();
+          });
+          return toggle;
+        }
+      }));
+    }
+
+    // Min Coverage slider
+    section.appendChild(this._buildSettingRow({
+      label: 'Minimum Coverage',
+      description: 'Required test coverage percentage',
+      control: () => {
+        const wrapper = h('div', { class: 'settings-slider-group' });
+        const valueLabel = h('span', { class: 'settings-slider-value' },
+          `${this._qualityConfig.minCoverage}%`);
+        const slider = h('input', {
+          type: 'range',
+          class: 'settings-slider',
+          min: '0',
+          max: '100',
+          step: '5',
+          value: String(this._qualityConfig.minCoverage),
+        });
+        slider.addEventListener('input', () => {
+          this._qualityConfig.minCoverage = Number(slider.value);
+          valueLabel.textContent = `${slider.value}%`;
+        });
+        slider.addEventListener('change', () => {
+          this._saveQualityConfig();
+        });
+        wrapper.appendChild(slider);
+        wrapper.appendChild(valueLabel);
+        return wrapper;
+      }
+    }));
+
+    return section;
+  }
+
+  _saveQualityConfig() {
+    if (!window.overlordSocket?.socket) return;
+    window.overlordSocket.socket.emit('quality:config:set', this._qualityConfig, (res) => {
+      if (res?.ok) {
+        Toast.success('Quality settings saved');
+      }
+    });
   }
 
   // ── AI Providers Tab ────────────────────────────────────

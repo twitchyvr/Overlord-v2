@@ -807,9 +807,29 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         // Auto-generate profile in background if no profile fields were provided
         const hasProfile = parsed.firstName || parsed.lastName || parsed.bio;
         if (!hasProfile && parsed.role) {
+          // Look up building context for relevant specializations (#511)
+          let projectContext: string | undefined;
+          try {
+            const db = getDb();
+            const buildings = db.prepare(
+              'SELECT name, config FROM buildings ORDER BY created_at DESC LIMIT 1',
+            ).all() as Array<{ name: string; config: string }>;
+            if (buildings.length > 0) {
+              const bConfig = buildings[0].config ? JSON.parse(buildings[0].config) : {};
+              const desc = bConfig.projectDescription || '';
+              const template = bConfig.template || '';
+              if (desc || template) {
+                projectContext = `Building: ${buildings[0].name}. ${template ? `Type: ${template}.` : ''} ${desc}`.trim();
+              }
+            }
+          } catch {
+            // Non-fatal — continue without project context
+          }
+
           // Fire-and-forget: don't block registration
           generateFullProfile(ai, parsed.role, undefined, {
             provider: 'minimax',
+            projectContext,
           }).then((genResult) => {
             if (genResult.ok) {
               const profileResult = genResult.data as FullProfileResult;
@@ -888,6 +908,22 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
       const role = parsed.role || agent.role || 'General Agent';
       const capabilities = parsed.capabilities || agent.capabilities || [];
 
+      // Look up building context for relevant specializations (#511)
+      let profileProjectContext: string | undefined;
+      if (agent.building_id) {
+        try {
+          const bRow = getDb().prepare('SELECT name, config FROM buildings WHERE id = ?').get(agent.building_id) as { name: string; config: string } | undefined;
+          if (bRow) {
+            const bCfg = bRow.config ? JSON.parse(bRow.config) : {};
+            const desc = bCfg.projectDescription || '';
+            const tmpl = bCfg.template || '';
+            if (desc || tmpl) {
+              profileProjectContext = `Building: ${bRow.name}. ${tmpl ? `Type: ${tmpl}.` : ''} ${desc}`.trim();
+            }
+          }
+        } catch { /* non-fatal */ }
+      }
+
       broadcastLog('info', `Generating AI profile for agent ${agent.name} (${role})...`, 'agents');
 
       const result = await generateFullProfile(ai, role, capabilities, {
@@ -895,6 +931,7 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         skipPhoto: parsed.skipPhoto,
         gender: parsed.gender,
         provider: parsed.provider,
+        projectContext: profileProjectContext,
         existing: {
           firstName: agent.first_name,
           lastName: agent.last_name,
@@ -2793,6 +2830,31 @@ export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTranspo
         document,
         ...exitDocData,
       });
+
+      // RAID auto-populate: create a "decision" entry for phase completion (#508)
+      if (buildingId && phase) {
+        try {
+          const raidId = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          const phaseName = phase.charAt(0).toUpperCase() + phase.slice(1);
+          getDb().prepare(`
+            INSERT INTO raid_entries (id, building_id, type, phase, room_id, summary, rationale, decided_by, affected_areas)
+            VALUES (?, ?, 'decision', ?, ?, ?, ?, ?, ?)
+          `).run(
+            raidId,
+            buildingId,
+            phase,
+            roomId,
+            `Phase ${phaseName} completed \u2014 exit document submitted`,
+            `Agent ${agentId} auto-submitted exit document for ${exitDocType || 'room'} work. Phase deliverables captured.`,
+            agentId,
+            JSON.stringify([exitDocType || phase]),
+          );
+          bus.emit('raid:created', { id: raidId, buildingId, type: 'decision', phase });
+          log.info({ raidId, buildingId, phase }, 'RAID decision auto-created for phase completion');
+        } catch (raidErr) {
+          log.warn({ err: raidErr, buildingId, phase }, 'Failed to auto-create RAID decision entry');
+        }
+      }
 
       // Auto-create a pending phase gate when exit doc is submitted
       if (buildingId && phase) {

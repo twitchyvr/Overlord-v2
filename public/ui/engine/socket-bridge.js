@@ -1441,6 +1441,7 @@ export function initSocketBridge(socket, store, engine) {
         this.fetchRaidEntries(buildingId),
         this.fetchRooms(),
         this.fetchTasks(buildingId),
+        this.fetchConversations(buildingId),
       ]);
       // Set active phase from building data
       const buildingRes = results[0];

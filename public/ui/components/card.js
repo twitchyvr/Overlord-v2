@@ -212,8 +212,18 @@ export class Card {
 
   /** @private — v2: Building card for dashboard */
   static _buildBuilding(card, data) {
+    // Archived building visual distinction (#528)
+    const isArchived = (data.name || '').includes('(Archived');
+    if (isArchived) {
+      card.style.opacity = '0.6';
+      card.classList.add('card-archived');
+    }
+
     const header = h('div', { class: 'card-header' },
       h('span', null, data.name || 'Building'),
+      isArchived
+        ? h('span', { class: 'card-archived-badge' }, 'ARCHIVED')
+        : null,
       data.activePhase ? h('span', { class: `phase-badge phase-${data.activePhase}` }, data.activePhase) : null
     );
     card.appendChild(header);
