@@ -1,9 +1,9 @@
 /**
  * Overlord v2 — Building View
  *
- * Tycoon-game cross-section visualization of the building.
- * Renders floors bottom-up (column-reverse) with agent dots,
- * room indicators, and phase-colored floor bars.
+ * Vertical tree-style navigation for the building sidebar.
+ * Renders floors as collapsible sections with compact room
+ * list items — optimized for sidebar width constraints.
  *
  * Lives in #building-panel (left sidebar).
  */
@@ -23,35 +23,37 @@ const ROOM_TYPE_INFO = {
   'code-lab':           { icon: '\u{1F4BB}', label: 'Code Lab',           desc: 'Active development room. Agents write, refactor, and generate code.' },
   'testing-lab':        { icon: '\u{1F9EA}', label: 'Testing Lab',        desc: 'Test execution and QA. Agents run tests, generate test cases, and validate.' },
   'review':             { icon: '\u{1F4DD}', label: 'Review',             desc: 'Code review and quality gates. Agents review PRs and verify standards.' },
-  'deploy':             { icon: '\u{1F680}', label: 'Deploy',             desc: 'Deployment and release management. Agents manage CI/CD and releases.' },
-  'war-room':           { icon: '\u{1F6A8}', label: 'War Room',           desc: 'Incident response and escalation. Created when critical issues arise.' },
-  'data-exchange':      { icon: '\u{1F4E6}', label: 'Data Exchange',      desc: 'Cross-room data sharing and artifact transfer between phases.' },
-  'provider-hub':       { icon: '\u2699\uFE0F', label: 'Provider Hub',     desc: 'AI provider management and configuration.' },
-  'plugin-bay':         { icon: '\u{1F9E9}', label: 'Plugin Bay',         desc: 'Plugin and extension management. Lua scripts and custom tools.' },
+  'deploy':             { icon: '\u{1F680}', label: 'Deploy',             desc: 'Deployment and release management. CI/CD pipelines and production pushes.' },
+  'war-room':           { icon: '\u{1F6A8}', label: 'War Room',           desc: 'Incident response and emergency triage. Elevated access for critical issues.' },
+  'integration':        { icon: '\u{1F50C}', label: 'Integration',        desc: 'External APIs, plugins, and third-party service connections.' },
 };
 
-/** Which room types are recommended per floor type. */
+/** Suggested room types per floor type. */
 const FLOOR_ROOM_SUGGESTIONS = {
-  strategy:      ['strategist', 'building-architect'],
-  collaboration: ['discovery', 'architecture'],
-  execution:     ['code-lab', 'testing-lab'],
-  governance:    ['review', 'deploy'],
-  operations:    ['war-room'],
-  integration:   ['data-exchange', 'provider-hub', 'plugin-bay'],
-  lobby:         [],
+  'strategy':      ['strategist', 'building-architect'],
+  'collaboration': ['discovery', 'architecture'],
+  'execution':     ['code-lab', 'testing-lab'],
+  'governance':    ['review'],
+  'operations':    ['deploy', 'war-room'],
+  'integration':   ['integration'],
 };
 
+/** Floor type icons. */
+const FLOOR_TYPE_ICONS = {
+  'strategy':      '\u{1F3AF}',
+  'collaboration': '\u{1F4AC}',
+  'execution':     '\u{1F4BB}',
+  'governance':    '\u{1F4DD}',
+  'operations':    '\u2699\uFE0F',
+  'integration':   '\u{1F50C}',
+};
 
 export class BuildingView extends Component {
-
-  /**
-   * @param {HTMLElement} el — the #building-panel element
-   */
   constructor(el, opts = {}) {
     super(el, opts);
     this._buildingData = null;
     this._floors = [];
-    this._expandedFloor = null;
+    this._expandedFloors = new Set(); // allow multiple floors expanded
     this._agentPositions = {};
   }
 
@@ -69,7 +71,7 @@ export class BuildingView extends Component {
     // Subscribe to agent position updates
     this.subscribe(store, 'building.agentPositions', (positions) => {
       this._agentPositions = positions || {};
-      this._updateAgentDots();
+      this._updateAgentIndicators();
     });
 
     // Subscribe to floor data
@@ -107,7 +109,7 @@ export class BuildingView extends Component {
       return;
     }
 
-    // Building header with management controls
+    // ── Building header ──
     const header = h('div', { class: 'building-header' });
 
     const headerTop = h('div', { class: 'building-header-top' },
@@ -171,29 +173,28 @@ export class BuildingView extends Component {
 
     this.el.appendChild(header);
 
-    // Building cross-section (column-reverse for bottom-up)
-    const crossSection = h('div', { class: 'building-cross-section' });
+    // ── Floor tree (top-down, natural reading order) ──
+    const tree = h('div', { class: 'building-tree' });
 
-    // Sort floors by ordinal (highest = top of building)
-    const sortedFloors = [...this._floors].sort((a, b) => (b.ordinal || 0) - (a.ordinal || 0));
+    // Sort floors by ordinal (lowest first = top-down)
+    const sortedFloors = [...this._floors].sort((a, b) => (a.ordinal || 0) - (b.ordinal || 0));
 
     for (const floor of sortedFloors) {
-      const floorBar = this._renderFloorBar(floor);
-      crossSection.appendChild(floorBar);
+      tree.appendChild(this._renderFloorSection(floor));
     }
 
-    // Ground/foundation — visual anchor for the building metaphor
+    // Foundation anchor
     const foundation = h('div', {
       class: 'building-foundation',
       title: 'The base infrastructure that supports all floors and rooms above'
     },
       h('span', null, '\u{1F3D7}\uFE0F Foundation')
     );
-    crossSection.appendChild(foundation);
+    tree.appendChild(foundation);
 
-    this.el.appendChild(crossSection);
+    this.el.appendChild(tree);
 
-    // Building stats
+    // ── Building stats footer ──
     const stats = h('div', { class: 'building-stats' },
       h('div', { class: 'building-stat' },
         h('span', { class: 'building-stat-value' }, String(this._floors.length)),
@@ -209,321 +210,292 @@ export class BuildingView extends Component {
       )
     );
     this.el.appendChild(stats);
+
+    // ── Resize handle ──
+    this._initResizeHandle();
   }
 
-  /** Render a single floor bar. */
-  _renderFloorBar(floor) {
-    const isExpanded = this._expandedFloor === floor.id;
+  // ── Floor Section (collapsible) ────────────────────────
+
+  _renderFloorSection(floor) {
+    const isExpanded = this._expandedFloors.has(floor.id);
     const floorType = floor.type || 'default';
     const roomCount = (floor.rooms || []).length;
     const agentsOnFloor = this._getAgentsOnFloor(floor.id);
+    const floorIcon = FLOOR_TYPE_ICONS[floorType] || '\u{1F3E2}';
 
-    const bar = h('div', {
-      class: `floor-bar${isExpanded ? ' expanded' : ''}`,
+    const section = h('div', {
+      class: `floor-section${isExpanded ? ' expanded' : ''}`,
       'data-floor-id': floor.id,
-      'data-type': floorType
+      'data-type': floorType,
     });
 
-    // Floor info row — name on first line, type + room count as metadata
-    const floorLabel = floor.name || `Floor ${floor.ordinal || '?'}`;
-    const infoRow = h('div', { class: 'floor-bar-info' },
-      h('span', { class: 'floor-bar-name', title: floorLabel }, floorLabel),
-      h('span', { class: 'floor-bar-meta-row' },
-        h('span', { class: 'floor-bar-type' }, floorType),
-        h('span', { class: 'floor-bar-rooms' }, `${roomCount} room${roomCount !== 1 ? 's' : ''}`)
-      )
-    );
-    bar.appendChild(infoRow);
+    // Floor header row — clickable to expand/collapse
+    const header = h('div', { class: 'floor-section-header' });
 
-    // Agent dots
-    if (agentsOnFloor.length > 0) {
-      const dotsRow = h('div', { class: 'floor-agent-dots' });
-      for (const agent of agentsOnFloor.slice(0, 8)) {
-        const dot = h('div', {
-          class: `agent-dot agent-dot-${agent.status || 'idle'}`,
-          title: agent.name || agent.agentId
-        });
-        dotsRow.appendChild(dot);
-      }
-      if (agentsOnFloor.length > 8) {
-        dotsRow.appendChild(h('span', { class: 'agent-dot-overflow' }, `+${agentsOnFloor.length - 8}`));
-      }
-      bar.appendChild(dotsRow);
-    }
+    // Chevron
+    const chevron = h('span', { class: 'floor-chevron' }, isExpanded ? '\u25BE' : '\u25B8');
 
-    // Expand icon
-    const expandIcon = h('span', { class: 'floor-expand-icon' }, isExpanded ? '\u25BC' : '\u25B6');
-    bar.appendChild(expandIcon);
+    // Floor color indicator
+    const colorBar = h('span', { class: `floor-color-dot floor-dot-${floorType}` });
+
+    // Floor name + room count
+    const floorLabel = floor.name || `${floorType.charAt(0).toUpperCase() + floorType.slice(1)} Floor`;
+    const nameEl = h('span', { class: 'floor-section-name', title: floorLabel }, floorLabel);
+
+    // Room count pill
+    const countPill = h('span', { class: 'floor-section-count' }, String(roomCount));
+
+    // Agent activity indicator
+    const agentIndicator = agentsOnFloor.length > 0
+      ? h('span', { class: 'floor-agent-indicator', title: `${agentsOnFloor.length} agent${agentsOnFloor.length !== 1 ? 's' : ''} on this floor` },
+          h('span', { class: 'floor-agent-pulse' }),
+          String(agentsOnFloor.length)
+        )
+      : null;
+
+    header.appendChild(chevron);
+    header.appendChild(colorBar);
+    header.appendChild(nameEl);
+    if (agentIndicator) header.appendChild(agentIndicator);
+    header.appendChild(countPill);
 
     // Click to expand/collapse
-    bar.addEventListener('click', () => {
-      this._expandedFloor = isExpanded ? null : floor.id;
-      OverlordUI.dispatch('building:floor-selected', { floorId: floor.id, expanded: !isExpanded });
+    header.addEventListener('click', () => {
+      if (this._expandedFloors.has(floor.id)) {
+        this._expandedFloors.delete(floor.id);
+      } else {
+        this._expandedFloors.add(floor.id);
+      }
+      OverlordUI.dispatch('building:floor-selected', { floorId: floor.id, expanded: this._expandedFloors.has(floor.id) });
       this.render();
     });
 
-    // Expanded content: room grid + floor management
+    // Context menu on right-click
+    header.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this._showFloorContextMenu(e, floor);
+    });
+
+    section.appendChild(header);
+
+    // Expanded content: room list + actions
     if (isExpanded) {
-      const expandedContent = h('div', { class: 'floor-expanded-content' });
-      expandedContent.addEventListener('click', (e) => e.stopPropagation());
+      const body = h('div', { class: 'floor-section-body' });
 
       if (floor.rooms && floor.rooms.length > 0) {
-        const roomGrid = h('div', { class: 'floor-room-grid' });
+        const roomList = h('div', { class: 'floor-room-list' });
         for (const room of floor.rooms) {
-          roomGrid.appendChild(this._renderRoomCard(room, floor.id));
+          roomList.appendChild(this._renderRoomItem(room, floor.id));
         }
-        expandedContent.appendChild(roomGrid);
+        body.appendChild(roomList);
       } else {
-        // Empty floor guidance
-        expandedContent.appendChild(h('div', { class: 'floor-empty-guidance' },
-          h('span', { class: 'floor-empty-icon' }, '\u{1F4AD}'),
-          h('p', null, `This floor has no rooms yet. Add a room to start working in the ${floorType} phase.`)
+        body.appendChild(h('div', { class: 'floor-empty' },
+          'No rooms yet'
         ));
       }
 
-      // Floor action toolbar
-      const floorActions = h('div', { class: 'floor-action-bar' });
+      // Floor actions (compact)
+      const actions = h('div', { class: 'floor-section-actions' });
 
-      const addRoomBtn = h('button', { class: 'btn btn-primary btn-sm' }, '+ Add Room');
+      const addRoomBtn = h('button', { class: 'btn btn-ghost btn-xs floor-add-room-btn' }, '+ Room');
       addRoomBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._openAddRoomModal(floor);
       });
-      floorActions.appendChild(addRoomBtn);
+      actions.appendChild(addRoomBtn);
 
-      const editFloorBtn = h('button', { class: 'btn btn-ghost btn-sm' }, 'Edit Floor');
+      const editFloorBtn = h('button', { class: 'btn btn-ghost btn-xs' }, 'Edit');
       editFloorBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._openEditFloorModal(floor);
       });
-      floorActions.appendChild(editFloorBtn);
+      actions.appendChild(editFloorBtn);
 
-      const deleteFloorBtn = h('button', { class: 'btn btn-ghost btn-sm btn-danger-ghost' }, 'Delete');
+      const deleteFloorBtn = h('button', { class: 'btn btn-ghost btn-xs btn-danger-ghost' }, 'Delete');
       deleteFloorBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._confirmDeleteFloor(floor);
       });
-      floorActions.appendChild(deleteFloorBtn);
+      actions.appendChild(deleteFloorBtn);
 
-      expandedContent.appendChild(floorActions);
-      bar.appendChild(expandedContent);
+      body.appendChild(actions);
+      section.appendChild(body);
     }
 
-    return bar;
+    return section;
   }
 
-  /** Render a single room card within an expanded floor. */
-  _renderRoomCard(room, floorId) {
+  // ── Room Item (compact single-line) ────────────────────
+
+  _renderRoomItem(room, floorId) {
     const agentsInRoom = this._getAgentsInRoom(room.id);
     const roomStatus = this._getRoomStatus(agentsInRoom);
     const store = OverlordUI.getStore();
     const isActiveRoom = store?.get('rooms.active') === room.id;
-
-    const roomCard = h('div', {
-      class: `room-card${agentsInRoom.length > 0 ? ' room-occupied' : ''}${isActiveRoom ? ' room-active-chat' : ''}`,
-      'data-room-id': room.id
-    });
-
-    // Header: status badge + name
-    const header = h('div', { class: 'room-card-header' },
-      h('span', { class: `room-status-badge room-status-${roomStatus}` }, roomStatus),
-      h('span', { class: 'room-card-name', title: room.name || this._formatRoomType(room.type) }, room.name || this._formatRoomType(room.type))
-    );
-    roomCard.appendChild(header);
-
-    // Meta row: room type + agent count
     const typeInfo = ROOM_TYPE_INFO[room.type] || {};
-    const meta = h('div', { class: 'room-card-meta' },
-      h('span', { class: 'room-card-type-tag has-tooltip', dataset: { tooltip: typeInfo.desc || room.type } }, typeInfo.label || room.type),
-      h('span', { class: 'room-card-agent-count' },
-        `${agentsInRoom.length} agent${agentsInRoom.length !== 1 ? 's' : ''}`
-      )
-    );
-    roomCard.appendChild(meta);
+    const roomName = room.name || typeInfo.label || this._formatRoomType(room.type);
 
-    // Last activity timestamp (if room has lastActivity)
-    if (room.lastActivity) {
-      roomCard.appendChild(h('div', { class: 'room-card-activity' },
-        h('span', { class: 'room-card-activity-label' }, 'Last:'),
-        h('span', { class: 'room-card-activity-time' }, formatTime(room.lastActivity))
-      ));
-    }
-
-    // Agent avatars
-    if (agentsInRoom.length > 0) {
-      const avatarRow = h('div', { class: 'room-agent-avatars' });
-      for (const agent of agentsInRoom) {
-        avatarRow.appendChild(h('div', {
-          class: `agent-avatar${agent.status === 'active' || agent.status === 'working' ? ' active' : ''}`,
-          title: agent.name || agent.agentId
-        }, (agent.name || '?')[0].toUpperCase()));
-      }
-      roomCard.appendChild(avatarRow);
-    }
-
-    // Room action buttons (visible on hover via CSS)
-    const roomActions = h('div', { class: 'room-card-actions' });
-    const editRoomBtn = h('button', { class: 'room-action-btn', title: 'Edit room' }, '\u270F\uFE0F');
-    editRoomBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this._openEditRoomModal(room, floorId);
+    const item = h('div', {
+      class: `room-item${isActiveRoom ? ' room-item-active' : ''}${agentsInRoom.length > 0 ? ' room-item-occupied' : ''}`,
+      'data-room-id': room.id,
+      title: `${roomName} (${typeInfo.label || room.type}) — ${agentsInRoom.length} agent${agentsInRoom.length !== 1 ? 's' : ''}`,
     });
-    roomActions.appendChild(editRoomBtn);
 
-    const deleteRoomBtn = h('button', { class: 'room-action-btn room-action-danger', title: 'Delete room' }, '\u{1F5D1}\uFE0F');
-    deleteRoomBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this._confirmDeleteRoom(room);
-    });
-    roomActions.appendChild(deleteRoomBtn);
-    roomCard.appendChild(roomActions);
+    // Status dot
+    const statusDot = h('span', { class: `room-status-dot room-dot-${roomStatus}` });
 
-    roomCard.addEventListener('click', (e) => {
-      if (e.target.closest('.room-card-actions')) return; // let action buttons handle their own clicks
+    // Room icon (from type)
+    const icon = h('span', { class: 'room-item-icon' }, typeInfo.icon || '\u{1F4C4}');
+
+    // Room name
+    const name = h('span', { class: 'room-item-name' }, roomName);
+
+    // Agent count (only if agents present)
+    const agentBadge = agentsInRoom.length > 0
+      ? h('span', { class: 'room-item-agents' },
+          ...agentsInRoom.slice(0, 3).map(a =>
+            h('span', {
+              class: `room-item-agent-dot room-dot-${a.status || 'idle'}`,
+              title: a.name || a.agentId,
+            })
+          ),
+          agentsInRoom.length > 3
+            ? h('span', { class: 'room-item-agent-overflow' }, `+${agentsInRoom.length - 3}`)
+            : null
+        )
+      : null;
+
+    item.appendChild(statusDot);
+    item.appendChild(icon);
+    item.appendChild(name);
+    if (agentBadge) item.appendChild(agentBadge);
+
+    // Click to select room
+    item.addEventListener('click', (e) => {
       e.stopPropagation();
       const st = OverlordUI.getStore();
       if (st) {
         st.set('rooms.active', room.id);
       }
-      // Dispatch room-selected so chat view switches target room
       OverlordUI.dispatch('building:room-selected', { roomId: room.id, floorId });
-      // Re-render to update active highlight
       this.render();
     });
 
-    return roomCard;
+    // Right-click context menu
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this._showRoomContextMenu(e, room, floorId);
+    });
+
+    return item;
   }
 
-  /** Open modal to add a room to a floor. */
-  _openAddRoomModal(floor) {
-    const floorType = floor.type || 'default';
-    const suggested = FLOOR_ROOM_SUGGESTIONS[floorType] || [];
-    const allTypes = Object.entries(ROOM_TYPE_INFO);
+  // ── Context Menus ──────────────────────────────────────
 
-    // Sort: suggested types first, then the rest
-    const sorted = [...allTypes].sort((a, b) => {
-      const aS = suggested.includes(a[0]) ? 0 : 1;
-      const bS = suggested.includes(b[0]) ? 0 : 1;
-      return aS - bS;
-    });
+  _showFloorContextMenu(e, floor) {
+    this._closeContextMenu();
+    const menu = h('div', { class: 'ctx-menu' });
+    menu.style.left = `${e.clientX}px`;
+    menu.style.top = `${e.clientY}px`;
 
-    let selectedType = suggested[0] || allTypes[0][0];
-    let roomName = '';
+    const addRoom = h('button', { class: 'ctx-menu-item' }, '+ Add Room');
+    addRoom.addEventListener('click', () => { this._closeContextMenu(); this._openAddRoomModal(floor); });
+    menu.appendChild(addRoom);
 
-    const container = h('div', { class: 'add-room-modal' });
+    const editFloor = h('button', { class: 'ctx-menu-item' }, 'Edit Floor');
+    editFloor.addEventListener('click', () => { this._closeContextMenu(); this._openEditFloorModal(floor); });
+    menu.appendChild(editFloor);
 
-    // Guidance text
-    container.appendChild(h('div', { class: 'add-room-guidance' },
-      h('p', null, `Adding a room to `),
-      h('strong', null, floor.name || `Floor ${floor.ordinal || '?'}`),
-      h('span', null, ` (${floorType} floor)`),
-    ));
+    const deleteFloor = h('button', { class: 'ctx-menu-item ctx-menu-danger' }, 'Delete Floor');
+    deleteFloor.addEventListener('click', () => { this._closeContextMenu(); this._confirmDeleteFloor(floor); });
+    menu.appendChild(deleteFloor);
 
-    if (suggested.length > 0) {
-      container.appendChild(h('div', { class: 'add-room-suggestion' },
-        h('span', { class: 'add-room-suggestion-icon' }, '\u{1F4A1}'),
-        h('span', null, `Recommended for ${floorType}: ${suggested.map(t => ROOM_TYPE_INFO[t]?.label || t).join(', ')}`)
-      ));
-    }
+    document.body.appendChild(menu);
+    // Close on click outside
+    setTimeout(() => {
+      const closer = (ev) => {
+        if (!menu.contains(ev.target)) { this._closeContextMenu(); document.removeEventListener('click', closer); }
+      };
+      document.addEventListener('click', closer);
+    }, 0);
+  }
 
-    // Room name input
-    const nameGroup = h('div', { class: 'add-room-field' });
-    nameGroup.appendChild(h('label', { class: 'form-label' }, 'Room Name (optional)'));
-    const nameInput = h('input', { class: 'form-input', type: 'text', placeholder: 'e.g., "Frontend Code Lab"' });
-    nameInput.addEventListener('input', () => { roomName = nameInput.value; });
-    nameGroup.appendChild(nameInput);
-    container.appendChild(nameGroup);
+  _showRoomContextMenu(e, room, floorId) {
+    this._closeContextMenu();
+    const menu = h('div', { class: 'ctx-menu' });
+    menu.style.left = `${e.clientX}px`;
+    menu.style.top = `${e.clientY}px`;
 
-    // Room type picker grid
-    container.appendChild(h('label', { class: 'form-label' }, 'Room Type'));
-    const typeGrid = h('div', { class: 'add-room-type-grid' });
+    const editRoom = h('button', { class: 'ctx-menu-item' }, 'Edit Room');
+    editRoom.addEventListener('click', () => { this._closeContextMenu(); this._openEditRoomModal(room, floorId); });
+    menu.appendChild(editRoom);
 
-    for (const [typeKey, info] of sorted) {
-      const isSuggested = suggested.includes(typeKey);
-      const card = h('div', {
-        class: `add-room-type-card${selectedType === typeKey ? ' selected' : ''}${isSuggested ? ' suggested' : ''}`,
-        'data-type': typeKey
-      },
-        h('div', { class: 'add-room-type-icon' }, info.icon),
-        h('div', { class: 'add-room-type-info' },
-          h('div', { class: 'add-room-type-label' },
-            info.label,
-            isSuggested ? h('span', { class: 'add-room-type-badge' }, 'Recommended') : null
-          ),
-          h('div', { class: 'add-room-type-desc' }, info.desc)
-        )
-      );
+    const deleteRoom = h('button', { class: 'ctx-menu-item ctx-menu-danger' }, 'Delete Room');
+    deleteRoom.addEventListener('click', () => { this._closeContextMenu(); this._confirmDeleteRoom(room); });
+    menu.appendChild(deleteRoom);
 
-      card.addEventListener('click', () => {
-        selectedType = typeKey;
-        typeGrid.querySelectorAll('.add-room-type-card').forEach(c => c.classList.remove('selected'));
-        card.classList.add('selected');
-      });
+    document.body.appendChild(menu);
+    setTimeout(() => {
+      const closer = (ev) => {
+        if (!menu.contains(ev.target)) { this._closeContextMenu(); document.removeEventListener('click', closer); }
+      };
+      document.addEventListener('click', closer);
+    }, 0);
+  }
 
-      typeGrid.appendChild(card);
-    }
-    container.appendChild(typeGrid);
+  _closeContextMenu() {
+    document.querySelectorAll('.ctx-menu').forEach(m => m.remove());
+  }
 
-    // Action buttons
-    const actions = h('div', { class: 'add-room-actions' });
-    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
-    cancelBtn.addEventListener('click', () => Modal.close('add-room'));
+  // ── Resize Handle ──────────────────────────────────────
 
-    const createBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Create Room');
-    createBtn.addEventListener('click', async () => {
-      if (!window.overlordSocket) {
-        Toast.error('Not connected to server');
-        return;
-      }
+  _initResizeHandle() {
+    // Only add once
+    if (this.el.parentElement?.querySelector('.sidebar-resize-handle')) return;
 
-      createBtn.disabled = true;
-      createBtn.textContent = 'Creating...';
+    const handle = h('div', { class: 'sidebar-resize-handle' });
+    this.el.parentElement?.appendChild?.(handle); // Append to parent of building-panel
 
-      try {
-        const result = await window.overlordSocket.createRoom({
-          type: selectedType,
-          floorId: floor.id,
-          name: roomName.trim() || undefined,
-        });
+    // Actually, append as last child of building-panel itself
+    // so it sits on the right edge
+    handle.remove();
+    this.el.appendChild(handle);
 
-        if (result && result.ok) {
-          Toast.success(`Room "${ROOM_TYPE_INFO[selectedType]?.label || selectedType}" created`);
-          Modal.close('add-room');
+    let startX = 0;
+    let startWidth = 0;
 
-          // Refresh floor data to show new room
-          const store = OverlordUI.getStore();
-          const buildingId = store?.get('building.active');
-          if (buildingId && window.overlordSocket) {
-            window.overlordSocket.fetchFloors(buildingId);
-            window.overlordSocket.fetchRooms();
-          }
-        } else {
-          throw new Error(result?.error?.message || 'Failed to create room');
-        }
-      } catch (err) {
-        Toast.error(`Create failed: ${err.message}`);
-        createBtn.disabled = false;
-        createBtn.textContent = 'Create Room';
-      }
-    });
+    const onMouseMove = (e) => {
+      const newWidth = startWidth + (e.clientX - startX);
+      const min = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-min-width')) || 240;
+      const max = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-max-width')) || 480;
+      const clamped = Math.max(min, Math.min(max, newWidth));
+      this.el.style.width = `${clamped}px`;
+    };
 
-    actions.appendChild(cancelBtn);
-    actions.appendChild(createBtn);
-    container.appendChild(actions);
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      handle.classList.remove('dragging');
+    };
 
-    Modal.open('add-room', {
-      title: `Add Room to ${floor.name || 'Floor'}`,
-      content: container,
-      size: 'lg',
-      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startX = e.clientX;
+      startWidth = this.el.getBoundingClientRect().width;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      handle.classList.add('dragging');
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
     });
   }
 
   // ── Inline Working Directory Edit (#539) ────────────────
 
-  /** Show an inline text input to change the working directory. */
   _showInlineWdEdit(pathRow, currentPath) {
-    // Replace the path row contents with an input + save/cancel
     pathRow.textContent = '';
     const input = h('input', {
       class: 'form-input form-input-sm mono',
@@ -575,7 +547,6 @@ export class BuildingView extends Component {
 
   // ── Building Management Modal ────────────────────────────
 
-  /** Open modal to edit building name and configuration. */
   _openEditBuildingModal() {
     if (!this._buildingData) return;
     let buildingName = this._buildingData.name || '';
@@ -685,14 +656,12 @@ export class BuildingView extends Component {
 
   // ── Floor Management Modals ──────────────────────────────
 
-  /** Open modal to edit a floor's name and configuration. */
   _openEditFloorModal(floor) {
     let floorName = floor.name || '';
     let isActive = floor.is_active !== 0;
 
     const container = h('div', { class: 'edit-floor-modal' });
 
-    // Name input
     const nameGroup = h('div', { class: 'add-room-field' });
     nameGroup.appendChild(h('label', { class: 'form-label' }, 'Floor Name'));
     const nameInput = h('input', { class: 'form-input', type: 'text', value: floorName });
@@ -700,14 +669,12 @@ export class BuildingView extends Component {
     nameGroup.appendChild(nameInput);
     container.appendChild(nameGroup);
 
-    // Floor type (read-only — structural identity)
     const typeGroup = h('div', { class: 'add-room-field' });
     typeGroup.appendChild(h('label', { class: 'form-label' }, 'Floor Type'));
     typeGroup.appendChild(h('div', { class: 'form-input-readonly' }, floor.type || 'default'));
     typeGroup.appendChild(h('span', { class: 'form-hint' }, 'Floor type cannot be changed — it defines the floor\'s purpose.'));
     container.appendChild(typeGroup);
 
-    // Active toggle
     const activeGroup = h('div', { class: 'add-room-field' });
     activeGroup.appendChild(h('label', { class: 'form-label' }, 'Active'));
     const activeToggle = h('button', {
@@ -725,7 +692,6 @@ export class BuildingView extends Component {
     activeGroup.appendChild(h('span', { class: 'form-hint' }, 'Inactive floors are hidden from agents but preserved.'));
     container.appendChild(activeGroup);
 
-    // Room summary (read-only info)
     const rooms = floor.rooms || [];
     if (rooms.length > 0) {
       container.appendChild(h('div', { class: 'edit-floor-rooms-summary' },
@@ -739,7 +705,6 @@ export class BuildingView extends Component {
       ));
     }
 
-    // Actions
     const actions = h('div', { class: 'add-room-actions' });
     const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
     cancelBtn.addEventListener('click', () => Modal.close('edit-floor'));
@@ -779,7 +744,6 @@ export class BuildingView extends Component {
     });
   }
 
-  /** Confirm and delete a floor. */
   _confirmDeleteFloor(floor) {
     const rooms = floor.rooms || [];
     const container = h('div', { class: 'confirm-delete-modal' });
@@ -792,7 +756,6 @@ export class BuildingView extends Component {
         h('span', { class: 'confirm-delete-warning-icon' }, '\u26A0\uFE0F'),
         h('span', null, `This floor has ${rooms.length} room${rooms.length > 1 ? 's' : ''}. You must delete all rooms first before removing this floor.`)
       ));
-      // Disable delete button when floor has rooms
       const actions = h('div', { class: 'add-room-actions' });
       const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'OK');
       cancelBtn.addEventListener('click', () => Modal.close('confirm-delete-floor'));
@@ -822,7 +785,7 @@ export class BuildingView extends Component {
         if (result && result.ok) {
           Toast.success('Floor deleted');
           Modal.close('confirm-delete-floor');
-          this._expandedFloor = null;
+          this._expandedFloors.delete(floor.id);
         } else {
           throw new Error(result?.error?.message || 'Delete failed');
         }
@@ -847,7 +810,124 @@ export class BuildingView extends Component {
 
   // ── Room Management Modals ──────────────────────────────
 
-  /** Open modal to edit a room's name, tools, and configuration. */
+  _openAddRoomModal(floor) {
+    const floorType = floor.type || 'default';
+    const suggested = FLOOR_ROOM_SUGGESTIONS[floorType] || [];
+    const allTypes = Object.entries(ROOM_TYPE_INFO);
+
+    const sorted = [...allTypes].sort((a, b) => {
+      const aS = suggested.includes(a[0]) ? 0 : 1;
+      const bS = suggested.includes(b[0]) ? 0 : 1;
+      return aS - bS;
+    });
+
+    let selectedType = suggested[0] || allTypes[0][0];
+    let roomName = '';
+
+    const container = h('div', { class: 'add-room-modal' });
+
+    container.appendChild(h('div', { class: 'add-room-guidance' },
+      h('p', null, `Adding a room to `),
+      h('strong', null, floor.name || `Floor ${floor.ordinal || '?'}`),
+      h('span', null, ` (${floorType} floor)`),
+    ));
+
+    if (suggested.length > 0) {
+      container.appendChild(h('div', { class: 'add-room-suggestion' },
+        h('span', { class: 'add-room-suggestion-icon' }, '\u{1F4A1}'),
+        h('span', null, `Recommended for ${floorType}: ${suggested.map(t => ROOM_TYPE_INFO[t]?.label || t).join(', ')}`)
+      ));
+    }
+
+    const nameGroup = h('div', { class: 'add-room-field' });
+    nameGroup.appendChild(h('label', { class: 'form-label' }, 'Room Name (optional)'));
+    const nameInput = h('input', { class: 'form-input', type: 'text', placeholder: 'e.g., "Frontend Code Lab"' });
+    nameInput.addEventListener('input', () => { roomName = nameInput.value; });
+    nameGroup.appendChild(nameInput);
+    container.appendChild(nameGroup);
+
+    container.appendChild(h('label', { class: 'form-label' }, 'Room Type'));
+    const typeGrid = h('div', { class: 'add-room-type-grid' });
+
+    for (const [typeKey, info] of sorted) {
+      const isSuggested = suggested.includes(typeKey);
+      const card = h('div', {
+        class: `add-room-type-card${selectedType === typeKey ? ' selected' : ''}${isSuggested ? ' suggested' : ''}`,
+        'data-type': typeKey
+      },
+        h('div', { class: 'add-room-type-icon' }, info.icon),
+        h('div', { class: 'add-room-type-info' },
+          h('div', { class: 'add-room-type-label' },
+            info.label,
+            isSuggested ? h('span', { class: 'add-room-type-badge' }, 'Recommended') : null
+          ),
+          h('div', { class: 'add-room-type-desc' }, info.desc)
+        )
+      );
+
+      card.addEventListener('click', () => {
+        selectedType = typeKey;
+        typeGrid.querySelectorAll('.add-room-type-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+      });
+
+      typeGrid.appendChild(card);
+    }
+    container.appendChild(typeGrid);
+
+    const actions = h('div', { class: 'add-room-actions' });
+    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
+    cancelBtn.addEventListener('click', () => Modal.close('add-room'));
+
+    const createBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Create Room');
+    createBtn.addEventListener('click', async () => {
+      if (!window.overlordSocket) {
+        Toast.error('Not connected to server');
+        return;
+      }
+
+      createBtn.disabled = true;
+      createBtn.textContent = 'Creating...';
+
+      try {
+        const result = await window.overlordSocket.createRoom({
+          type: selectedType,
+          floorId: floor.id,
+          name: roomName.trim() || undefined,
+        });
+
+        if (result && result.ok) {
+          Toast.success(`Room "${ROOM_TYPE_INFO[selectedType]?.label || selectedType}" created`);
+          Modal.close('add-room');
+
+          const store = OverlordUI.getStore();
+          const buildingId = store?.get('building.active');
+          if (buildingId && window.overlordSocket) {
+            window.overlordSocket.fetchFloors(buildingId);
+            window.overlordSocket.fetchRooms();
+          }
+        } else {
+          throw new Error(result?.error?.message || 'Failed to create room');
+        }
+      } catch (err) {
+        Toast.error(`Create failed: ${err.message}`);
+        createBtn.disabled = false;
+        createBtn.textContent = 'Create Room';
+      }
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(createBtn);
+    container.appendChild(actions);
+
+    Modal.open('add-room', {
+      title: `Add Room to ${floor.name || 'Floor'}`,
+      content: container,
+      size: 'lg',
+      position: window.innerWidth < 768 ? 'fullscreen' : 'center',
+    });
+  }
+
   _openEditRoomModal(room, floorId) {
     let roomName = room.name || '';
     let allowedTools = room.allowed_tools || room.allowedTools || [];
@@ -860,7 +940,6 @@ export class BuildingView extends Component {
 
     const container = h('div', { class: 'edit-room-modal' });
 
-    // Name input
     const nameGroup = h('div', { class: 'add-room-field' });
     nameGroup.appendChild(h('label', { class: 'form-label' }, 'Room Name'));
     const nameInput = h('input', { class: 'form-input', type: 'text', value: roomName });
@@ -868,7 +947,6 @@ export class BuildingView extends Component {
     nameGroup.appendChild(nameInput);
     container.appendChild(nameGroup);
 
-    // Room type (read-only)
     const typeGroup = h('div', { class: 'add-room-field' });
     typeGroup.appendChild(h('label', { class: 'form-label' }, 'Room Type'));
     const typeInfo = ROOM_TYPE_INFO[room.type] || { icon: '\u2753', label: room.type, desc: '' };
@@ -877,7 +955,6 @@ export class BuildingView extends Component {
     typeGroup.appendChild(h('span', { class: 'form-hint' }, typeInfo.desc));
     container.appendChild(typeGroup);
 
-    // File scope selector
     const scopeGroup = h('div', { class: 'add-room-field' });
     scopeGroup.appendChild(h('label', { class: 'form-label' }, tip('File Scope')));
     const scopeSelect = h('select', { class: 'form-input settings-select' });
@@ -891,7 +968,6 @@ export class BuildingView extends Component {
     scopeGroup.appendChild(h('span', { class: 'form-hint' }, 'Controls agent file access in this room.'));
     container.appendChild(scopeGroup);
 
-    // Provider selector
     const providerGroup = h('div', { class: 'add-room-field' });
     providerGroup.appendChild(h('label', { class: 'form-label' }, tip('AI Provider')));
     const providerSelect = h('select', { class: 'form-input settings-select' });
@@ -904,7 +980,6 @@ export class BuildingView extends Component {
     providerGroup.appendChild(providerSelect);
     container.appendChild(providerGroup);
 
-    // Tools list
     const toolsGroup = h('div', { class: 'add-room-field' });
     toolsGroup.appendChild(h('label', { class: 'form-label' }, `Allowed Tools (${allowedTools.length})`));
     const toolsTextarea = h('textarea', {
@@ -917,7 +992,6 @@ export class BuildingView extends Component {
     toolsGroup.appendChild(h('span', { class: 'form-hint' }, 'One tool per line. Only these tools will be available to agents in this room.'));
     container.appendChild(toolsGroup);
 
-    // Actions
     const actions = h('div', { class: 'add-room-actions' });
     const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
     cancelBtn.addEventListener('click', () => Modal.close('edit-room'));
@@ -965,7 +1039,6 @@ export class BuildingView extends Component {
     });
   }
 
-  /** Confirm and delete a room. */
   _confirmDeleteRoom(room) {
     const container = h('div', { class: 'confirm-delete-modal' });
     const typeName = ROOM_TYPE_INFO[room.type]?.label || room.type;
@@ -1016,7 +1089,6 @@ export class BuildingView extends Component {
 
   // ── Add Floor Modal ──────────────────────────────────────
 
-  /** Open modal to add a new floor to the building. */
   _openAddFloorModal() {
     const FLOOR_TYPES = [
       { type: 'strategy',      label: 'Strategy',      icon: '\u{1F3AF}', desc: 'Phase Zero setup, consulting, and project strategy' },
@@ -1032,7 +1104,6 @@ export class BuildingView extends Component {
 
     const container = h('div', { class: 'add-floor-modal' });
 
-    // Name input
     const nameGroup = h('div', { class: 'add-room-field' });
     nameGroup.appendChild(h('label', { class: 'form-label' }, 'Floor Name (optional)'));
     const nameInput = h('input', { class: 'form-input', type: 'text', placeholder: 'e.g., "Frontend Execution"' });
@@ -1040,7 +1111,6 @@ export class BuildingView extends Component {
     nameGroup.appendChild(nameInput);
     container.appendChild(nameGroup);
 
-    // Floor type picker
     container.appendChild(h('label', { class: 'form-label' }, 'Floor Type'));
     const typeGrid = h('div', { class: 'add-room-type-grid' });
 
@@ -1065,7 +1135,6 @@ export class BuildingView extends Component {
     }
     container.appendChild(typeGrid);
 
-    // Actions
     const actions = h('div', { class: 'add-room-actions' });
     const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
     cancelBtn.addEventListener('click', () => Modal.close('add-floor'));
@@ -1109,10 +1178,6 @@ export class BuildingView extends Component {
 
   // ── Helpers ──────────────────────────────────────────────
 
-  /**
-   * Determine the room status based on its agents.
-   * @returns {'active' | 'idle' | 'error'}
-   */
   _getRoomStatus(agents) {
     if (agents.length === 0) return 'idle';
     const hasError = agents.some(a => a.status === 'error');
@@ -1122,7 +1187,6 @@ export class BuildingView extends Component {
     return 'idle';
   }
 
-  /** Format room type slug as title (e.g., "code-lab" -> "Code Lab"). */
   _formatRoomType(type) {
     if (!type) return 'Room';
     return type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -1166,88 +1230,9 @@ export class BuildingView extends Component {
     return Object.values(this._agentPositions).filter(a => a.status === 'active' || a.status === 'working').length;
   }
 
-  _updateAgentDots() {
-    // Optimized partial update — update agent dots + room avatars without full render
-    let needsFullRender = false;
-
-    this.el.querySelectorAll('.floor-bar').forEach(bar => {
-      const floorId = bar.dataset.floorId;
-      const agents = this._getAgentsOnFloor(floorId);
-
-      // Update floor-level dots
-      let dotsRow = bar.querySelector('.floor-agent-dots');
-      if (agents.length > 0) {
-        if (!dotsRow) {
-          // Create dots row if it didn't exist
-          dotsRow = h('div', { class: 'floor-agent-dots' });
-          const expandIcon = bar.querySelector('.floor-expand-icon');
-          if (expandIcon) {
-            bar.insertBefore(dotsRow, expandIcon);
-          } else {
-            bar.appendChild(dotsRow);
-          }
-        }
-        dotsRow.textContent = '';
-        for (const agent of agents.slice(0, 8)) {
-          dotsRow.appendChild(h('div', {
-            class: `agent-dot agent-dot-${agent.status || 'idle'}`,
-            title: agent.name || agent.agentId
-          }));
-        }
-        if (agents.length > 8) {
-          dotsRow.appendChild(h('span', { class: 'agent-dot-overflow' }, `+${agents.length - 8}`));
-        }
-      } else if (dotsRow) {
-        // No agents on floor — remove dots row
-        dotsRow.remove();
-      }
-
-      // Update room cards (for expanded floors)
-      bar.querySelectorAll('.room-card').forEach(roomCard => {
-        const roomId = roomCard.dataset.roomId;
-        const agentsInRoom = this._getAgentsInRoom(roomId);
-        const existingAvatarRow = roomCard.querySelector('.room-agent-avatars');
-        const roomStatus = this._getRoomStatus(agentsInRoom);
-
-        // Update occupied class
-        roomCard.classList.toggle('room-occupied', agentsInRoom.length > 0);
-
-        // Update status badge
-        const statusBadge = roomCard.querySelector('.room-status-badge');
-        if (statusBadge) {
-          statusBadge.classList.remove('room-status-active', 'room-status-idle', 'room-status-error');
-          statusBadge.classList.add(`room-status-${roomStatus}`);
-          statusBadge.textContent = roomStatus;
-        }
-
-        // Update agent count
-        const agentCount = roomCard.querySelector('.room-card-agent-count');
-        if (agentCount) {
-          agentCount.textContent = `${agentsInRoom.length} agent${agentsInRoom.length !== 1 ? 's' : ''}`;
-        }
-
-        if (agentsInRoom.length > 0) {
-          const avatarRow = existingAvatarRow || h('div', { class: 'room-agent-avatars' });
-          avatarRow.textContent = '';
-          for (const agent of agentsInRoom) {
-            avatarRow.appendChild(h('div', {
-              class: `agent-avatar${agent.status === 'active' || agent.status === 'working' ? ' active' : ''}`,
-              title: agent.name || agent.agentId
-            }, (agent.name || '?')[0].toUpperCase()));
-          }
-          if (!existingAvatarRow) {
-            roomCard.appendChild(avatarRow);
-          }
-        } else if (existingAvatarRow) {
-          existingAvatarRow.remove();
-        }
-      });
-    });
-
-    // Update active agent count in stats
-    const activeStatEl = this.el.querySelector('.building-stats .building-stat:last-child .building-stat-value');
-    if (activeStatEl) {
-      activeStatEl.textContent = String(this._countActiveAgents());
-    }
+  _updateAgentIndicators() {
+    // Lightweight update — just refresh agent dots and counts without full re-render
+    // For the tree design, a full re-render is fast enough since items are lightweight
+    this.render();
   }
 }

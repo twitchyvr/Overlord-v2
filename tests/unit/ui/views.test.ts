@@ -72,13 +72,12 @@ describe('BuildingView', () => {
     expect(el.textContent).toContain('No Building Selected');
   });
 
-  it('renders floors when building data is set', async () => {
+  it('renders floor sections when building data is set', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
     view.mount();
 
-    // Set store data AFTER mount so subscriptions fire
     const store = OverlordUI.getStore();
     store.set('building.data', { name: 'Test Building', active_phase: 'execution' });
     store.set('building.floors', [
@@ -88,7 +87,7 @@ describe('BuildingView', () => {
 
     expect(el.querySelector('.building-header')).not.toBeNull();
     expect(el.querySelector('.building-name')!.textContent).toBe('Test Building');
-    expect(el.querySelectorAll('.floor-bar').length).toBe(2);
+    expect(el.querySelectorAll('.floor-section').length).toBe(2);
     expect(el.querySelector('.building-stats')).not.toBeNull();
   });
 
@@ -98,7 +97,6 @@ describe('BuildingView', () => {
     const view = new BuildingView(el);
     view.mount();
 
-    // Set store data AFTER mount so subscriptions fire
     const store = OverlordUI.getStore();
     store.set('building.data', { name: 'B' });
     store.set('building.floors', [
@@ -112,7 +110,7 @@ describe('BuildingView', () => {
     expect(statValues[2].textContent).toBe('0');  // 0 active agents
   });
 
-  it('adds agent dots when agentPositions update without full re-render', async () => {
+  it('shows agent indicator when agents are on a floor', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -124,23 +122,21 @@ describe('BuildingView', () => {
       { id: 'f1', ordinal: 1, rooms: [] }
     ]);
 
-    // Verify no dots initially
-    expect(el.querySelector('.floor-agent-dots')).toBeNull();
+    // Verify no indicator initially
+    expect(el.querySelector('.floor-agent-indicator')).toBeNull();
 
-    // Add agents via agentPositions — triggers _updateAgentDots (partial update)
+    // Add agents
     store.set('building.agentPositions', {
       a1: { agentId: 'a1', name: 'Agent 1', floorId: 'f1', status: 'active' },
       a2: { agentId: 'a2', name: 'Agent 2', floorId: 'f1', status: 'idle' }
     });
 
-    const dotsRow = el.querySelector('.floor-agent-dots');
-    expect(dotsRow).not.toBeNull();
-    expect(dotsRow!.querySelectorAll('.agent-dot').length).toBe(2);
-    expect(dotsRow!.querySelector('.agent-dot-active')).not.toBeNull();
-    expect(dotsRow!.querySelector('.agent-dot-idle')).not.toBeNull();
+    const indicator = el.querySelector('.floor-agent-indicator');
+    expect(indicator).not.toBeNull();
+    expect(indicator!.textContent).toContain('2');
   });
 
-  it('removes agent dots when all agents leave a floor', async () => {
+  it('removes agent indicator when all agents leave a floor', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -155,12 +151,12 @@ describe('BuildingView', () => {
       a1: { agentId: 'a1', name: 'Agent 1', floorId: 'f1', status: 'active' }
     });
 
-    expect(el.querySelector('.floor-agent-dots')).not.toBeNull();
+    expect(el.querySelector('.floor-agent-indicator')).not.toBeNull();
 
     // Remove all agents
     store.set('building.agentPositions', {});
 
-    expect(el.querySelector('.floor-agent-dots')).toBeNull();
+    expect(el.querySelector('.floor-agent-indicator')).toBeNull();
   });
 
   it('updates active agent count in stats on agentPositions change', async () => {
@@ -176,7 +172,7 @@ describe('BuildingView', () => {
     ]);
 
     // Initially 0 active
-    const statValues = el.querySelectorAll('.building-stat-value');
+    let statValues = el.querySelectorAll('.building-stat-value');
     expect(statValues[2].textContent).toBe('0');
 
     // Add agents — one active, one idle
@@ -187,10 +183,11 @@ describe('BuildingView', () => {
     });
 
     // active + working = 2
+    statValues = el.querySelectorAll('.building-stat-value');
     expect(statValues[2].textContent).toBe('2');
   });
 
-  it('updates room card avatars in expanded floors on agentPositions change', async () => {
+  it('shows room items with agent dots in expanded floors', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -198,62 +195,30 @@ describe('BuildingView', () => {
 
     const store = OverlordUI.getStore();
     store.set('building.data', { name: 'B' });
+    store.set('building.agentPositions', {
+      a1: { agentId: 'a1', name: 'Alice', floorId: 'f1', roomId: 'r1', status: 'active' }
+    });
     store.set('building.floors', [
       { id: 'f1', ordinal: 1, rooms: [{ id: 'r1', name: 'Code Lab', type: 'code-lab' }] }
     ]);
 
-    // Expand the floor by clicking the floor bar
-    const floorBar = el.querySelector('.floor-bar') as HTMLElement;
-    expect(floorBar).not.toBeNull();
-    floorBar.click();
+    // Expand the floor by clicking the floor header
+    const floorHeader = el.querySelector('.floor-section-header') as HTMLElement;
+    expect(floorHeader).not.toBeNull();
+    floorHeader.click();
 
-    // Should now have expanded content with room card
-    expect(el.querySelector('.floor-room-grid')).not.toBeNull();
-    const roomCard = el.querySelector('.room-card') as HTMLElement;
-    expect(roomCard).not.toBeNull();
-    expect(roomCard.classList.contains('room-occupied')).toBe(false);
+    // Should now have expanded content with room items
+    expect(el.querySelector('.floor-room-list')).not.toBeNull();
+    const roomItem = el.querySelector('.room-item') as HTMLElement;
+    expect(roomItem).not.toBeNull();
+    expect(roomItem.classList.contains('room-item-occupied')).toBe(true);
 
-    // Add an agent to that room
-    store.set('building.agentPositions', {
-      a1: { agentId: 'a1', name: 'Alice', floorId: 'f1', roomId: 'r1', status: 'active' }
-    });
-
-    // Room card should now be occupied with avatar
-    expect(roomCard.classList.contains('room-occupied')).toBe(true);
-    const avatarRow = roomCard.querySelector('.room-agent-avatars');
-    expect(avatarRow).not.toBeNull();
-    expect(avatarRow!.querySelector('.agent-avatar')!.textContent).toBe('A');
+    // Should have agent dots
+    const agentDots = roomItem.querySelector('.room-item-agents');
+    expect(agentDots).not.toBeNull();
   });
 
-  it('shows overflow indicator when more than 8 agents on a floor', async () => {
-    const { BuildingView } = await import('../../../public/ui/views/building-view.js');
-    const el = document.createElement('div');
-    const view = new BuildingView(el);
-    view.mount();
-
-    const store = OverlordUI.getStore();
-    store.set('building.data', { name: 'B' });
-    store.set('building.floors', [
-      { id: 'f1', ordinal: 1, rooms: [] }
-    ]);
-
-    // Add 10 agents to one floor
-    const positions: Record<string, unknown> = {};
-    for (let i = 1; i <= 10; i++) {
-      positions[`a${i}`] = { agentId: `a${i}`, name: `Agent ${i}`, floorId: 'f1', status: 'active' };
-    }
-    store.set('building.agentPositions', positions);
-
-    const dotsRow = el.querySelector('.floor-agent-dots');
-    expect(dotsRow).not.toBeNull();
-    // Only 8 dots rendered, plus overflow
-    expect(dotsRow!.querySelectorAll('.agent-dot').length).toBe(8);
-    const overflow = dotsRow!.querySelector('.agent-dot-overflow');
-    expect(overflow).not.toBeNull();
-    expect(overflow!.textContent).toBe('+2');
-  });
-
-  it('sorts floors by ordinal (highest at top)', async () => {
+  it('sorts floors by ordinal (lowest first — top-down reading order)', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -267,12 +232,12 @@ describe('BuildingView', () => {
       { id: 'f2', name: 'Execution', type: 'execution', ordinal: 2, rooms: [] }
     ]);
 
-    const bars = el.querySelectorAll('.floor-bar');
-    expect(bars.length).toBe(3);
-    // Highest ordinal first (Strategy 3, Execution 2, Operations 1)
-    expect(bars[0].querySelector('.floor-bar-name')!.textContent).toBe('Strategy');
-    expect(bars[1].querySelector('.floor-bar-name')!.textContent).toBe('Execution');
-    expect(bars[2].querySelector('.floor-bar-name')!.textContent).toBe('Operations');
+    const sections = el.querySelectorAll('.floor-section');
+    expect(sections.length).toBe(3);
+    // Lowest ordinal first (top-down: Operations 1, Execution 2, Strategy 3)
+    expect(sections[0].querySelector('.floor-section-name')!.textContent).toBe('Operations');
+    expect(sections[1].querySelector('.floor-section-name')!.textContent).toBe('Execution');
+    expect(sections[2].querySelector('.floor-section-name')!.textContent).toBe('Strategy');
   });
 
   it('applies floor type data-attribute for CSS coloring', async () => {
@@ -287,11 +252,11 @@ describe('BuildingView', () => {
       { id: 'f1', name: 'Strat', type: 'strategy', ordinal: 1, rooms: [] }
     ]);
 
-    const bar = el.querySelector('.floor-bar') as HTMLElement;
-    expect(bar.dataset.type).toBe('strategy');
+    const section = el.querySelector('.floor-section') as HTMLElement;
+    expect(section.dataset.type).toBe('strategy');
   });
 
-  it('dispatches building:floor-selected on floor bar click', async () => {
+  it('dispatches building:floor-selected on floor header click', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -306,15 +271,15 @@ describe('BuildingView', () => {
     const dispatched: any[] = [];
     OverlordUI.subscribe('building:floor-selected', (data: any) => dispatched.push(data));
 
-    const bar = el.querySelector('.floor-bar') as HTMLElement;
-    bar.click();
+    const header = el.querySelector('.floor-section-header') as HTMLElement;
+    header.click();
 
     expect(dispatched.length).toBe(1);
     expect(dispatched[0].floorId).toBe('f1');
     expect(dispatched[0].expanded).toBe(true);
   });
 
-  it('renders room cards with status badges in expanded floor', async () => {
+  it('renders room items with status dots in expanded floor', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -330,19 +295,18 @@ describe('BuildingView', () => {
     ]);
 
     // Expand floor
-    (el.querySelector('.floor-bar') as HTMLElement).click();
+    (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    const roomCards = el.querySelectorAll('.room-card');
-    expect(roomCards.length).toBe(2);
+    const roomItems = el.querySelectorAll('.room-item');
+    expect(roomItems.length).toBe(2);
 
-    // Both rooms should have idle status (no agents)
-    const badges = el.querySelectorAll('.room-status-badge');
-    expect(badges.length).toBe(2);
-    expect(badges[0].textContent).toBe('idle');
-    expect(badges[0].classList.contains('room-status-idle')).toBe(true);
+    // Both rooms should have idle status dots (no agents)
+    const dots = el.querySelectorAll('.room-status-dot');
+    expect(dots.length).toBe(2);
+    expect(dots[0].classList.contains('room-dot-idle')).toBe(true);
   });
 
-  it('room card shows active status badge when agents are present', async () => {
+  it('room item shows active status when agents are present', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -358,14 +322,13 @@ describe('BuildingView', () => {
     ]);
 
     // Expand floor
-    (el.querySelector('.floor-bar') as HTMLElement).click();
+    (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    const badge = el.querySelector('.room-status-badge')!;
-    expect(badge.textContent).toBe('active');
-    expect(badge.classList.contains('room-status-active')).toBe(true);
+    const dot = el.querySelector('.room-status-dot')!;
+    expect(dot.classList.contains('room-dot-active')).toBe(true);
   });
 
-  it('room card shows error status badge when an agent has error status', async () => {
+  it('room item shows error status when an agent has error status', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -381,14 +344,13 @@ describe('BuildingView', () => {
     ]);
 
     // Expand floor
-    (el.querySelector('.floor-bar') as HTMLElement).click();
+    (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    const badge = el.querySelector('.room-status-badge')!;
-    expect(badge.textContent).toBe('error');
-    expect(badge.classList.contains('room-status-error')).toBe(true);
+    const dot = el.querySelector('.room-status-dot')!;
+    expect(dot.classList.contains('room-dot-error')).toBe(true);
   });
 
-  it('room card displays agent count', async () => {
+  it('room item displays agent dots for occupied rooms', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -408,15 +370,18 @@ describe('BuildingView', () => {
       ]}
     ]);
 
-    (el.querySelector('.floor-bar') as HTMLElement).click();
+    (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    const agentCounts = el.querySelectorAll('.room-card-agent-count');
-    expect(agentCounts.length).toBe(2);
-    expect(agentCounts[0].textContent).toBe('2 agents');
-    expect(agentCounts[1].textContent).toBe('1 agent');
+    // First room should have 2 agent dots
+    const items = el.querySelectorAll('.room-item');
+    expect(items.length).toBe(2);
+    const firstRoomAgents = items[0].querySelectorAll('.room-item-agent-dot');
+    expect(firstRoomAgents.length).toBe(2);
+    const secondRoomAgents = items[1].querySelectorAll('.room-item-agent-dot');
+    expect(secondRoomAgents.length).toBe(1);
   });
 
-  it('room card shows type tag', async () => {
+  it('room item shows type icon from ROOM_TYPE_INFO', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -428,36 +393,15 @@ describe('BuildingView', () => {
       { id: 'f1', ordinal: 1, rooms: [{ id: 'r1', type: 'code-lab' }] }
     ]);
 
-    (el.querySelector('.floor-bar') as HTMLElement).click();
+    (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    const typeTag = el.querySelector('.room-card-type-tag');
-    expect(typeTag).not.toBeNull();
-    expect(typeTag!.textContent).toBe('Code Lab');
+    const icon = el.querySelector('.room-item-icon');
+    expect(icon).not.toBeNull();
+    // code-lab icon is the laptop emoji
+    expect(icon!.textContent).toBeTruthy();
   });
 
-  it('room card shows last activity when available', async () => {
-    const { BuildingView } = await import('../../../public/ui/views/building-view.js');
-    const el = document.createElement('div');
-    const view = new BuildingView(el);
-    view.mount();
-
-    const store = OverlordUI.getStore();
-    store.set('building.data', { name: 'B' });
-    store.set('building.floors', [
-      { id: 'f1', ordinal: 1, rooms: [
-        { id: 'r1', type: 'code-lab', lastActivity: '2026-03-12T10:30:00Z' }
-      ]}
-    ]);
-
-    (el.querySelector('.floor-bar') as HTMLElement).click();
-
-    const activityEl = el.querySelector('.room-card-activity');
-    expect(activityEl).not.toBeNull();
-    expect(el.querySelector('.room-card-activity-label')!.textContent).toBe('Last:');
-    expect(el.querySelector('.room-card-activity-time')).not.toBeNull();
-  });
-
-  it('room card does not show last activity when not available', async () => {
+  it('room item formats room type slug as title when no name given', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -469,30 +413,13 @@ describe('BuildingView', () => {
       { id: 'f1', ordinal: 1, rooms: [{ id: 'r1', type: 'code-lab' }] }
     ]);
 
-    (el.querySelector('.floor-bar') as HTMLElement).click();
+    (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    expect(el.querySelector('.room-card-activity')).toBeNull();
-  });
-
-  it('room card formats room type slug as title when no name given', async () => {
-    const { BuildingView } = await import('../../../public/ui/views/building-view.js');
-    const el = document.createElement('div');
-    const view = new BuildingView(el);
-    view.mount();
-
-    const store = OverlordUI.getStore();
-    store.set('building.data', { name: 'B' });
-    store.set('building.floors', [
-      { id: 'f1', ordinal: 1, rooms: [{ id: 'r1', type: 'code-lab' }] }
-    ]);
-
-    (el.querySelector('.floor-bar') as HTMLElement).click();
-
-    const name = el.querySelector('.room-card-name')!;
+    const name = el.querySelector('.room-item-name')!;
     expect(name.textContent).toBe('Code Lab');
   });
 
-  it('dispatches building:room-selected on room card click', async () => {
+  it('dispatches building:room-selected on room item click', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -505,20 +432,20 @@ describe('BuildingView', () => {
     ]);
 
     // Expand floor
-    (el.querySelector('.floor-bar') as HTMLElement).click();
+    (el.querySelector('.floor-section-header') as HTMLElement).click();
 
     const dispatched: any[] = [];
     OverlordUI.subscribe('building:room-selected', (data: any) => dispatched.push(data));
 
-    const roomCard = el.querySelector('.room-card') as HTMLElement;
-    roomCard.click();
+    const roomItem = el.querySelector('.room-item') as HTMLElement;
+    roomItem.click();
 
     expect(dispatched.length).toBe(1);
     expect(dispatched[0].roomId).toBe('r1');
     expect(dispatched[0].floorId).toBe('f1');
   });
 
-  it('updates room status badge on agentPositions change', async () => {
+  it('updates room status on agentPositions change', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -531,52 +458,22 @@ describe('BuildingView', () => {
     ]);
 
     // Expand floor
-    (el.querySelector('.floor-bar') as HTMLElement).click();
+    (el.querySelector('.floor-section-header') as HTMLElement).click();
 
     // Initially idle
-    let badge = el.querySelector('.room-status-badge')!;
-    expect(badge.textContent).toBe('idle');
+    let dot = el.querySelector('.room-status-dot')!;
+    expect(dot.classList.contains('room-dot-idle')).toBe(true);
 
     // Add an active agent
     store.set('building.agentPositions', {
       a1: { agentId: 'a1', name: 'Coder', floorId: 'f1', roomId: 'r1', status: 'working' }
     });
 
-    badge = el.querySelector('.room-status-badge')!;
-    expect(badge.textContent).toBe('active');
-    expect(badge.classList.contains('room-status-active')).toBe(true);
+    dot = el.querySelector('.room-status-dot')!;
+    expect(dot.classList.contains('room-dot-active')).toBe(true);
   });
 
-  it('updates room agent count on agentPositions change', async () => {
-    const { BuildingView } = await import('../../../public/ui/views/building-view.js');
-    const el = document.createElement('div');
-    const view = new BuildingView(el);
-    view.mount();
-
-    const store = OverlordUI.getStore();
-    store.set('building.data', { name: 'B' });
-    store.set('building.floors', [
-      { id: 'f1', ordinal: 1, rooms: [{ id: 'r1', type: 'code-lab' }] }
-    ]);
-
-    // Expand floor
-    (el.querySelector('.floor-bar') as HTMLElement).click();
-
-    // Initially 0 agents
-    let count = el.querySelector('.room-card-agent-count')!;
-    expect(count.textContent).toBe('0 agents');
-
-    // Add agents
-    store.set('building.agentPositions', {
-      a1: { agentId: 'a1', floorId: 'f1', roomId: 'r1', status: 'active' },
-      a2: { agentId: 'a2', floorId: 'f1', roomId: 'r1', status: 'idle' }
-    });
-
-    count = el.querySelector('.room-card-agent-count')!;
-    expect(count.textContent).toBe('2 agents');
-  });
-
-  it('renders foundation element at the bottom', async () => {
+  it('renders foundation element', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -589,6 +486,30 @@ describe('BuildingView', () => {
     const foundation = el.querySelector('.building-foundation');
     expect(foundation).not.toBeNull();
     expect(foundation!.textContent).toContain('Foundation');
+  });
+
+  it('supports multiple floors expanded simultaneously', async () => {
+    const { BuildingView } = await import('../../../public/ui/views/building-view.js');
+    const el = document.createElement('div');
+    const view = new BuildingView(el);
+    view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('building.data', { name: 'B' });
+    store.set('building.floors', [
+      { id: 'f1', name: 'Floor A', ordinal: 1, rooms: [{ id: 'r1', type: 'code-lab' }] },
+      { id: 'f2', name: 'Floor B', ordinal: 2, rooms: [{ id: 'r2', type: 'review' }] }
+    ]);
+
+    // Expand both floors
+    const headers = el.querySelectorAll('.floor-section-header');
+    (headers[0] as HTMLElement).click();
+    (headers[1] as HTMLElement).click();
+
+    // Both should be expanded
+    const expanded = el.querySelectorAll('.floor-section.expanded');
+    expect(expanded.length).toBe(2);
+    expect(el.querySelectorAll('.room-item').length).toBe(2);
   });
 
   it('cleans up on destroy', async () => {
