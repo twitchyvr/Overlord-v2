@@ -4,7 +4,7 @@
  * Tests install_plugin, uninstall_plugin, configure_plugin, test_plugin, list_plugins.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   installPlugin,
   uninstallPlugin,
@@ -69,7 +69,7 @@ describe('Plugin Bay Tool Provider', () => {
 
   describe('uninstallPlugin', () => {
     it('uninstalls an installed plugin by name', async () => {
-      const installed = await installPlugin({ name: 'to-remove', source: 'builtin:noop' });
+      await installPlugin({ name: 'to-remove', source: 'builtin:noop' });
       const result = await uninstallPlugin({ name: 'to-remove' });
       expect(result.status).toBe('uninstalled');
       expect(result.name).toBe('to-remove');
@@ -87,7 +87,7 @@ describe('Plugin Bay Tool Provider', () => {
     });
 
     it('delegates to plugin loader when available', async () => {
-      const installed = await installPlugin({ name: 'loader-uninstall', source: 'builtin:noop' });
+      await installPlugin({ name: 'loader-uninstall', source: 'builtin:noop' });
       const mockLoader = {
         unloadPlugin: vi.fn().mockResolvedValue({ ok: true }),
       };

@@ -103,8 +103,7 @@ function basicSyntaxCheck(code: string): LuaValidationResult {
     // Count block openers
     const openers = trimmed.match(/\b(function|if|do|for|while|repeat)\b/g);
     if (openers) {
-      for (const _opener of openers) {
-        // "if" only opens a block if not a single-line if..then..end
+      for (let j = 0; j < openers.length; j++) {
         blockDepth++;
         blockStarts.push(i + 1);
       }
@@ -113,7 +112,7 @@ function basicSyntaxCheck(code: string): LuaValidationResult {
     // Count block closers
     const closers = trimmed.match(/\bend\b/g);
     if (closers) {
-      for (const _closer of closers) {
+      for (let j = 0; j < closers.length; j++) {
         blockDepth--;
         blockStarts.pop();
         if (blockDepth < 0) {
@@ -126,7 +125,7 @@ function basicSyntaxCheck(code: string): LuaValidationResult {
     // "until" closes "repeat"
     const untils = trimmed.match(/\buntil\b/g);
     if (untils) {
-      for (const _until of untils) {
+      for (let j = 0; j < untils.length; j++) {
         blockDepth--;
         blockStarts.pop();
         if (blockDepth < 0) {

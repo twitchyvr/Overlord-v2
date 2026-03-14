@@ -150,7 +150,7 @@ describe('AgentActivityTracker — lifecycle', () => {
 
   it('cleans up subscriptions and state on unmount', () => {
     tracker.mount();
-    const card = createAgentCard('agent-1');
+    createAgentCard('agent-1');
     emit('chat:stream-start', { agentId: 'agent-1' });
     expect(tracker.getState('agent-1')).toBe('thinking');
 

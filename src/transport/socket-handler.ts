@@ -76,7 +76,7 @@ import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeav
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
 import { getQualityConfig } from '../tools/quality-defaults.js';
 import { globalSearch } from '../storage/global-search.js';
-import { listPlugins, getPlugin, loadPlugin, unloadPlugin, reloadPlugin, getPluginDir, getPluginLogs } from '../plugins/plugin-loader.js';
+import { listPlugins, getPlugin, loadPlugin, unloadPlugin, reloadPlugin, getPluginLogs } from '../plugins/plugin-loader.js';
 import { validateLuaSyntax } from '../plugins/lua-validator.js';
 import { exportBundle, importBundle } from '../plugins/plugin-bundler.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
@@ -194,7 +194,7 @@ function handle<S extends z.ZodTypeAny>(
 
 // ─── Main transport initialization ───
 
-export function initTransport({ io, bus, rooms, agents, tools, ai }: InitTransportParams): void {
+export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: InitTransportParams): void {
   io.on('connection', (socket: Socket) => {
     log.info({ id: socket.id }, 'Client connected');
     broadcastLog('info', `Client connected (${socket.id})`, 'transport');

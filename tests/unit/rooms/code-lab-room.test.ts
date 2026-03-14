@@ -5,7 +5,7 @@
  * Full implementation workspace with assigned file scope enforcement.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { CodeLab } from '../../../src/rooms/room-types/code-lab.js';
 import { EventEmitter } from 'eventemitter3';
 import type { Bus } from '../../../src/core/bus.js';

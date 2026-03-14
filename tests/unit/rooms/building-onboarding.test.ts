@@ -105,7 +105,7 @@ function createMockAgents(): AgentRegistryAPI {
       return { ok: true, data: { id } };
     }),
     getAgent: vi.fn((id: string) => registeredAgents.get(id) || null),
-    listAgents: vi.fn(({ roomId }: { roomId?: string }) => {
+    listAgents: vi.fn(({ roomId: _roomId }: { roomId?: string }) => {
       return Array.from(registeredAgents.values());
     }),
   } as unknown as AgentRegistryAPI;

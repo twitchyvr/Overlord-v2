@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter, Readable, Writable } from 'node:stream';
+import { EventEmitter } from 'node:stream';
 
 // Mock child_process before importing
 const mockStdin = { writable: true, write: vi.fn() };
@@ -56,7 +56,8 @@ const testConfig: McpServerConfig = {
  * Simulate the MCP server responding to a JSON-RPC request.
  * Intercepts stdin.write, reads the request ID, and emits a response on stdout.
  */
-function simulateResponse(response: unknown): void {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _simulateResponse(response: unknown): void {
   // The last call to stdin.write contains the JSON-RPC request
   const lastCall = mockStdin.write.mock.calls[mockStdin.write.mock.calls.length - 1];
   if (!lastCall) return;
@@ -69,9 +70,7 @@ function simulateResponse(response: unknown): void {
  * Set up auto-response for initialize + tools/list sequence
  */
 function setupInitResponses(): void {
-  let callCount = 0;
   mockStdin.write.mockImplementation((data: string) => {
-    callCount++;
     const msg = JSON.parse(data.trim());
 
     // Skip notifications (no id)

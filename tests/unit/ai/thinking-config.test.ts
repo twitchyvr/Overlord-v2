@@ -12,8 +12,6 @@ import {
   getThinkingConfig,
   applyThinkingToRequest,
 } from '../../../src/ai/thinking-config.js';
-import type { ThinkingConfig } from '../../../src/ai/thinking-config.js';
-
 describe('Thinking Config', () => {
   describe('getThinkingConfig', () => {
     it('returns enabled config for Anthropic', () => {

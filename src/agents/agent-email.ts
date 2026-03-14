@@ -282,7 +282,7 @@ export function markAsRead(emailId: string, agentId: string): Result {
     }
 
     // Mark the recipient's copy as read
-    const result = db.prepare(`
+    db.prepare(`
       UPDATE agent_email_recipients SET read_at = datetime('now')
       WHERE email_id = ? AND agent_id = ? AND read_at IS NULL
     `).run(emailId, agentId);

@@ -114,7 +114,6 @@ describe('Rate Limiter', () => {
       await acquireSlot('slow');
 
       // Next acquire should wait (we test it resolves eventually)
-      const start = Date.now();
       // Use a fake timer to avoid actual waiting
       vi.useFakeTimers();
       const acquirePromise = acquireSlot('slow');

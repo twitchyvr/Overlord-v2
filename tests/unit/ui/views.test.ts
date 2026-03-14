@@ -24,7 +24,7 @@ beforeEach(async () => {
   try {
     const { Modal } = await import('../../../public/ui/components/modal.js');
     Modal.closeAll();
-  } catch (_) { /* ignore if not yet loaded */ }
+  } catch { /* ignore if not yet loaded */ }
 
   // Clear DOM
   document.body.textContent = '';

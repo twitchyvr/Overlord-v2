@@ -20,7 +20,7 @@ vi.mock('../../../src/rooms/building-manager.js', () => ({
   getHealthScore: vi.fn().mockReturnValue({ ok: true, data: { buildingId: 'bld_1', score: { phaseProgress: 8, taskCompletion: 12, raidHealth: 25, agentActivity: 5, total: 50 } } }),
 }));
 
-import { createBuilding, getBuilding, listBuildings, listFloors, getFloor, getHealthScore } from '../../../src/rooms/building-manager.js';
+import { createBuilding, getBuilding, listBuildings, listFloors, getFloor } from '../../../src/rooms/building-manager.js';
 
 // Mock phase-gate — imported directly by socket-handler
 vi.mock('../../../src/rooms/phase-gate.js', () => ({
@@ -30,7 +30,7 @@ vi.mock('../../../src/rooms/phase-gate.js', () => ({
   createGate: vi.fn().mockReturnValue({ ok: true, data: { id: 'gate_1', phase: 'strategy', status: 'pending' } }),
 }));
 
-import { getGates, canAdvance, signoffGate, createGate } from '../../../src/rooms/phase-gate.js';
+import { getGates, canAdvance, signoffGate } from '../../../src/rooms/phase-gate.js';
 
 // Mock raid-log — imported directly by socket-handler
 vi.mock('../../../src/rooms/raid-log.js', () => ({
@@ -39,7 +39,7 @@ vi.mock('../../../src/rooms/raid-log.js', () => ({
   updateRaidStatus: vi.fn().mockReturnValue({ ok: true, data: { id: 'raid_1', status: 'closed' } }),
 }));
 
-import { searchRaid, addRaidEntry, updateRaidStatus } from '../../../src/rooms/raid-log.js';
+import { searchRaid, addRaidEntry } from '../../../src/rooms/raid-log.js';
 
 // Mock room-manager — submitExitDocument imported directly by socket-handler
 vi.mock('../../../src/rooms/room-manager.js', () => ({

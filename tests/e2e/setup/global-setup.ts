@@ -25,7 +25,6 @@ const POLL_INTERVAL_MS = 500;
 
 // Store server process globally so teardown can access it
 declare global {
-  // eslint-disable-next-line no-var
   var __OVERLORD_SERVER_PROCESS__: ChildProcess | undefined;
 }
 

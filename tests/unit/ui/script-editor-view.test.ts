@@ -77,7 +77,6 @@ let ScriptEditorView: any;
 
 // ── Mock socket / globals ──────────────────────────────────
 
-type Callback = (...args: unknown[]) => unknown;
 let mockSocket: {
   emit: ReturnType<typeof vi.fn>;
   on: ReturnType<typeof vi.fn>;

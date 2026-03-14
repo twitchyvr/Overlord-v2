@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'eventemitter3';
-import type { Bus, BusEventData } from '../../../src/core/bus.js';
+import type { Bus } from '../../../src/core/bus.js';
 
 // Mock getStalePendingGates
 vi.mock('../../../src/rooms/phase-gate.js', () => ({

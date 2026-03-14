@@ -35,7 +35,6 @@ import {
   createAgentDirect,
   openTaskDetailDrawer,
   openAgentDetailDrawer,
-  closeDrawer,
 } from './helpers/overlord.js';
 
 // ────────────────────────────────────────────────────────────────
@@ -112,7 +111,7 @@ test.describe('Epic 3: Task Assignment & Todo Management', () => {
 
   test('filter tabs filter tasks by status', async ({ page }) => {
     // Create tasks with different statuses
-    const taskId1 = await createTaskDirect(page, buildingId, 'Pending Task', '', 'normal');
+    await createTaskDirect(page, buildingId, 'Pending Task', '', 'normal');
     const taskId2 = await createTaskDirect(page, buildingId, 'Another Pending', '', 'low');
 
     // Update one task to "done" status
@@ -238,7 +237,7 @@ test.describe('Epic 3: Task Assignment & Todo Management', () => {
   // ────────────────────────────────────────────────────────────
 
   test('adds a todo item via the checklist inline form', async ({ page }) => {
-    const taskId = await createTaskDirect(page, buildingId, 'Todo Form Task', 'Task for testing todo creation');
+    await createTaskDirect(page, buildingId, 'Todo Form Task', 'Task for testing todo creation');
 
     await navigateToView(page, 'dashboard');
     await navigateToView(page, 'tasks');
@@ -411,10 +410,10 @@ test.describe('Epic 3: Task Assignment & Todo Management', () => {
   // ────────────────────────────────────────────────────────────
 
   test('progress bar updates as todos are completed', async ({ page }) => {
-    const taskId = await createTaskDirect(page, buildingId, 'Progress Task', '');
-    const todoId1 = await createTodoDirect(page, taskId, 'First item');
-    const todoId2 = await createTodoDirect(page, taskId, 'Second item');
-    await createTodoDirect(page, taskId, 'Third item');
+    const _taskId = await createTaskDirect(page, buildingId, 'Progress Task', '');
+    await createTodoDirect(page, _taskId, 'First item');
+    await createTodoDirect(page, _taskId, 'Second item');
+    await createTodoDirect(page, _taskId, 'Third item');
 
     await navigateToView(page, 'dashboard');
     await navigateToView(page, 'tasks');
@@ -559,7 +558,7 @@ test.describe('Epic 3: Task Assignment & Todo Management', () => {
   // ────────────────────────────────────────────────────────────
 
   test('todo can be added by pressing Enter in the input', async ({ page }) => {
-    const taskId = await createTaskDirect(page, buildingId, 'Enter Key Task', '');
+    await createTaskDirect(page, buildingId, 'Enter Key Task', '');
 
     await navigateToView(page, 'dashboard');
     await navigateToView(page, 'tasks');

@@ -5,7 +5,7 @@
  * command injection prevention, bash timeout validation
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { initTools, registerTool, getTool, getToolsForRoom, executeInRoom } from '../../../src/tools/tool-registry.js';
 import type { Config, ToolDefinition } from '../../../src/core/contracts.js';
 

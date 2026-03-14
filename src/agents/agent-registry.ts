@@ -12,7 +12,7 @@ import { logger, broadcastLog } from '../core/logger.js';
 import { ok, err } from '../core/contracts.js';
 import type { Result, AgentRow, ParsedAgent, AgentRegistryAPI, AgentProfileFields, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Bus } from '../core/bus.js';
-import { parseBadge, serializeBadge, validateBadge } from './security-badge.js';
+import { serializeBadge, validateBadge } from './security-badge.js';
 import type { SecurityBadge } from './security-badge.js';
 import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
 import { isImageGenerationAvailable } from '../ai/minimax-image.js';

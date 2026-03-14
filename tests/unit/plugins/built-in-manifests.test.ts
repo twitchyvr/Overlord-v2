@@ -17,9 +17,6 @@ const VALID_PERMISSIONS = new Set([
   'bus:emit', 'storage:read', 'storage:write', 'fs:read', 'fs:write', 'net:http',
 ]);
 
-// Valid lifecycle hooks
-const VALID_HOOKS = ['onLoad', 'onUnload', 'onRoomEnter', 'onRoomExit', 'onToolExecute', 'onPhaseAdvance'];
-
 // Regex for valid plugin IDs (kebab-case)
 const ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 

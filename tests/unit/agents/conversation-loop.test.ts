@@ -5,7 +5,7 @@
  * Uses mocked AI provider to simulate the loop without real API calls.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { runConversationLoop } from '../../../src/agents/conversation-loop.js';
 import { ok, err } from '../../../src/core/contracts.js';
 import { EventEmitter } from 'eventemitter3';

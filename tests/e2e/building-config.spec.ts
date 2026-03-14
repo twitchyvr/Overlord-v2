@@ -25,7 +25,6 @@
 import { test, expect } from '@playwright/test';
 import {
   gotoAppAndConnect,
-  navigateToView,
   createBuildingDirect,
   selectBuilding,
   createFloorDirect,
@@ -239,7 +238,7 @@ test.describe('Epic 2: Building Configuration UI', () => {
   // ────────────────────────────────────────────────────────────
 
   test('edit floor modal allows renaming and toggling active state', async ({ page }) => {
-    const floorId = await createFloorDirect(page, buildingId, 'governance', 'Governance Floor');
+    await createFloorDirect(page, buildingId, 'governance', 'Governance Floor');
 
     await page.waitForTimeout(1000);
 
@@ -292,7 +291,7 @@ test.describe('Epic 2: Building Configuration UI', () => {
   // ────────────────────────────────────────────────────────────
 
   test('add room modal creates a room on the selected floor', async ({ page }) => {
-    const floorId = await createFloorDirect(page, buildingId, 'execution', 'Room Test Floor');
+    await createFloorDirect(page, buildingId, 'execution', 'Room Test Floor');
 
     await page.waitForTimeout(1000);
 

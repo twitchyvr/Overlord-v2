@@ -4,13 +4,10 @@
  * Tests fetch_url, transform_data, export_data, validate_schema tools.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   transformData,
   validateSchema,
-} from '../../../src/tools/providers/data-exchange.js';
-import type {
-  TransformOperation,
 } from '../../../src/tools/providers/data-exchange.js';
 
 describe('Data Exchange Tool Provider', () => {

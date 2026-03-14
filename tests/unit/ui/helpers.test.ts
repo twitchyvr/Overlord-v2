@@ -216,9 +216,6 @@ describe('formatTime()', () => {
 
   it('returns relative hours for timestamps under 24 hours', () => {
     // Use a timestamp that's definitely "today" — set to noon today minus 3 hours = 9 AM today
-    const today = new Date();
-    today.setHours(12, 0, 0, 0);
-    const threeHoursBeforeNoon = new Date(today.getTime() - 3 * 3600000);
     // Only test if we're past noon (so 3h ago is still today)
     if (new Date().getHours() >= 12) {
       const d = new Date(Date.now() - 3 * 3600000);

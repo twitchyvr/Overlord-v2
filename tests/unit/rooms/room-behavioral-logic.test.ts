@@ -14,7 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { EventEmitter } from 'eventemitter3';
 import type { Bus } from '../../../src/core/bus.js';
-import { ok, err } from '../../../src/core/contracts.js';
+import { ok } from '../../../src/core/contracts.js';
 
 // Room imports
 import { DiscoveryRoom } from '../../../src/rooms/room-types/discovery.js';

@@ -12,7 +12,7 @@
  */
 
 import { fetchWebpage } from './web.js';
-import { writeFileImpl, readFileImpl } from './filesystem.js';
+import { writeFileImpl } from './filesystem.js';
 import { logger } from '../../core/logger.js';
 
 const log = logger.child({ module: 'tool:data-exchange' });
