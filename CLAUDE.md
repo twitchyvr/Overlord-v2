@@ -31,6 +31,38 @@ The process of exercising every feature, dialog, modal form, and interaction thr
 
 ---
 
+## 0.4. Continuous Development Loop — THE INNER LOOP
+
+Every coding session follows this **mandatory inner loop**. This is not optional — it is the heartbeat of development. After every meaningful code change, Claude executes all 8 stages before moving on:
+
+```
+┌─→ 1. CODE ──→ 2. ITERATE ──→ 3. STATIC TEST ──→ 4. DEEP STATIC TEST ─┐
+│                                                                         │
+│   5. CHECK SYNTAX ──→ 6. CODE REVIEW ──→ 7. E2E ──→ 8. DOGFOOD ──────┘
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+| Stage | What | Commands / Actions |
+|-------|------|--------------------|
+| **1. Code** | Write or modify code to fix a bug, add a feature, or refactor | Edit files directly |
+| **2. Iterate** | Re-read the change, look for edge cases, refine | Read changed files, tighten logic |
+| **3. Static Test** | Run the unit/integration test suite | `npm test` — zero failures required |
+| **4. Deep Static Test** | Type checking + layer architecture validation | `npx tsc --noEmit && npm run validate` |
+| **5. Check Syntax** | Lint and formatting verification | `npx eslint src/ tests/ --ext .ts` |
+| **6. Code Review** | Launch subagent to review the diff for correctness, security, edge cases | Subagent with `git diff` context |
+| **7. E2E** | Runtime verification — boot the server, verify the change works live | `npm run dev` + manual/automated checks |
+| **8. Dogfood** | Use the feature through the Overlord UI as a real user would | Exercise the changed feature end-to-end |
+
+### Rules
+
+- **Never skip stages.** A code change that passes tests but wasn't dogfooded is incomplete.
+- **Failures at any stage loop back to Stage 1.** Fix → re-run the full pipeline.
+- **This loop runs inside the Autonomous Work Loop.** Every Issue/fix/feature goes through all 8 stages before the outer loop advances.
+- **Report the stage you're on** so the user always knows where you are in the pipeline.
+
+---
+
 ## 0.5. Autonomous Work Loop
 
 When Claude completes any task — a bug fix, a feature, a review, a dogfooding cycle — Claude does NOT stop and wait. Claude continues working by cycling through this priority queue:
