@@ -75,35 +75,10 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
-  // 2. Build TypeScript if dist/ is missing or stale
-  const distDir = path.join(PROJECT_ROOT, 'dist');
-  const srcDir = path.join(PROJECT_ROOT, 'src');
+  // 2. Start the server using tsx (no tsc build needed — tsx compiles on the fly)
+  console.log('[E2E Setup] Starting Overlord v2 server via tsx...');
 
-  let needsBuild = !fs.existsSync(distDir);
-  if (!needsBuild) {
-    // Check if any src file is newer than dist/server.js
-    const distServerStat = fs.statSync(path.join(distDir, 'server.js'), { throwIfNoEntry: false });
-    if (!distServerStat) {
-      needsBuild = true;
-    } else {
-      // Simple heuristic: compare src/ mtime against dist/server.js mtime
-      const srcStat = fs.statSync(srcDir);
-      if (srcStat.mtimeMs > distServerStat.mtimeMs) {
-        needsBuild = true;
-      }
-    }
-  }
-
-  if (needsBuild) {
-    console.log('[E2E Setup] Building TypeScript...');
-    execFileSync('npx', ['tsc'], { cwd: PROJECT_ROOT, stdio: 'pipe' });
-    console.log('[E2E Setup] Build complete.');
-  }
-
-  // 3. Start the server
-  console.log('[E2E Setup] Starting Overlord v2 server...');
-
-  const serverProcess = spawn('node', ['dist/server.js'], {
+  const serverProcess = spawn('npx', ['tsx', 'src/server.ts'], {
     cwd: PROJECT_ROOT,
     env: {
       ...process.env,
