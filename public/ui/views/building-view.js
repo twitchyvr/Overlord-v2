@@ -870,7 +870,8 @@ export class BuildingView extends Component {
 
   _openAddRoomModal(floor) {
     const floorType = floor.type || 'default';
-    const suggested = FLOOR_ROOM_SUGGESTIONS[floorType] || [];
+    const existingTypes = new Set((floor.rooms || []).map(r => r.type));
+    const suggested = (FLOOR_ROOM_SUGGESTIONS[floorType] || []).filter(t => !existingTypes.has(t));
     const allTypes = Object.entries(ROOM_TYPE_INFO);
 
     const sorted = [...allTypes].sort((a, b) => {
@@ -909,25 +910,30 @@ export class BuildingView extends Component {
 
     for (const [typeKey, info] of sorted) {
       const isSuggested = suggested.includes(typeKey);
+      const alreadyExists = existingTypes.has(typeKey);
       const card = h('div', {
-        class: `add-room-type-card${selectedType === typeKey ? ' selected' : ''}${isSuggested ? ' suggested' : ''}`,
-        'data-type': typeKey
+        class: `add-room-type-card${selectedType === typeKey ? ' selected' : ''}${isSuggested ? ' suggested' : ''}${alreadyExists ? ' disabled' : ''}`,
+        'data-type': typeKey,
+        title: alreadyExists ? `${info.label} already exists on this floor` : info.desc,
       },
         h('div', { class: 'add-room-type-icon' }, info.icon),
         h('div', { class: 'add-room-type-info' },
           h('div', { class: 'add-room-type-label' },
             info.label,
-            isSuggested ? h('span', { class: 'add-room-type-badge' }, 'Recommended') : null
+            isSuggested ? h('span', { class: 'add-room-type-badge' }, 'Recommended') : null,
+            alreadyExists ? h('span', { class: 'add-room-type-badge add-room-type-exists' }, 'Already added') : null,
           ),
           h('div', { class: 'add-room-type-desc' }, info.desc)
         )
       );
 
-      card.addEventListener('click', () => {
-        selectedType = typeKey;
-        typeGrid.querySelectorAll('.add-room-type-card').forEach(c => c.classList.remove('selected'));
-        card.classList.add('selected');
-      });
+      if (!alreadyExists) {
+        card.addEventListener('click', () => {
+          selectedType = typeKey;
+          typeGrid.querySelectorAll('.add-room-type-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+        });
+      }
 
       typeGrid.appendChild(card);
     }

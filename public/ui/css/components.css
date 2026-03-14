@@ -2242,6 +2242,16 @@
 .add-room-type-card.suggested {
   border-color: color-mix(in srgb, var(--electric) 30%, var(--border-secondary));
 }
+.add-room-type-card.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: default;
+}
+.add-room-type-exists {
+  background: var(--surface-tertiary, #333);
+  color: var(--text-muted);
+  font-size: 0.65rem;
+}
 .add-room-type-icon {
   font-size: 1.5rem;
   flex-shrink: 0;
