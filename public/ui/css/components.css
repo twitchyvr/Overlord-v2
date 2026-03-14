@@ -498,7 +498,7 @@
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(2px);
-  z-index: var(--z-modal);
+  z-index: 3000;
   opacity: 0;
   transition: opacity var(--duration-normal) var(--ease-default);
   pointer-events: none;
@@ -518,7 +518,7 @@
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-primary);
   box-shadow: var(--shadow-xl);
-  z-index: calc(var(--z-modal) + 1);
+  z-index: 3001;
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
@@ -537,6 +537,8 @@
   border-bottom: 1px solid var(--border-secondary);
   background: var(--bg-tertiary);
   flex-shrink: 0;
+  position: relative;
+  z-index: 2; /* Above body content to ensure close button is always clickable */
 }
 .drawer-title {
   font-size: var(--text-lg);

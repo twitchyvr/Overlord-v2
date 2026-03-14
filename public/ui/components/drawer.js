@@ -100,7 +100,11 @@ function open(id, opts = {}) {
   _drawerEl.appendChild(body);
 
   // ── Mount ──
-  const root = document.getElementById('drawer-root') || document.getElementById('modal-root') || document.body;
+  // Mount directly on document.body to avoid stacking context issues.
+  // #main-layout has overflow:hidden which creates a stacking context,
+  // trapping z-index values inside it. Mounting on body ensures the
+  // drawer is always above all other content.
+  const root = document.body;
   root.appendChild(_backdropEl);
   root.appendChild(_drawerEl);
 
