@@ -166,15 +166,18 @@ export class ChatView extends Component {
     this._listeners.push(
       OverlordUI.subscribe('chat:stream-start', (data) => {
         this._handleStreamStart(data);
+        this._updateSuggestionsBar(); // Hide suggestions while streaming (#553)
       }),
       OverlordUI.subscribe('chat:stream-chunk', (data) => {
         this._handleStreamChunk(data);
       }),
       OverlordUI.subscribe('chat:stream-end', (data) => {
         this._handleStreamEnd(data);
+        this._updateSuggestionsBar(); // Show suggestions again (#553)
       }),
       OverlordUI.subscribe('chat:response', (data) => {
         this._handleResponse(data);
+        this._updateSuggestionsBar(); // Show suggestions after response (#553)
       }),
       OverlordUI.subscribe('plan:submitted', (data) => {
         this._handlePlanSubmitted(data);
@@ -1173,6 +1176,14 @@ export class ChatView extends Component {
   /** Rebuild the suggestions bar when room context changes. */
   _updateSuggestionsBar() {
     if (!this._suggestionsBarEl) return;
+    const store = OverlordUI.getStore();
+    const isProcessing = store?.get('ui.processing') || store?.get('ui.streaming');
+    // Hide suggestions while agent is actively responding (#553)
+    if (isProcessing) {
+      this._suggestionsBarEl.style.display = 'none';
+      return;
+    }
+    this._suggestionsBarEl.style.display = '';
     const newBar = this._buildSuggestionsBar();
     this._suggestionsBarEl.replaceWith(newBar);
     this._suggestionsBarEl = newBar;
