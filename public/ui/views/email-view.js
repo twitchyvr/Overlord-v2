@@ -283,18 +283,7 @@ export class EmailView extends Component {
       return;
     }
 
-    if (items.length === 0) {
-      this._listEl.appendChild(
-        h('div', { class: 'email-view-empty' },
-          h('div', { class: 'email-view-empty-icon' }, '\u{1F4EC}'),
-          h('p', { class: 'email-view-empty-title' }, this._getEmptyTitle()),
-          h('p', { class: 'email-view-empty-desc' }, this._getEmptyDesc())
-        )
-      );
-      return;
-    }
-
-    // Search bar (#566)
+    // Search bar — always visible, even on empty inbox (#566)
     const searchBar = h('div', { class: 'email-search-bar' });
     const searchInput = h('input', {
       type: 'text',
@@ -314,6 +303,17 @@ export class EmailView extends Component {
       searchBar.appendChild(clearBtn);
     }
     this._listEl.appendChild(searchBar);
+
+    if (items.length === 0) {
+      this._listEl.appendChild(
+        h('div', { class: 'email-view-empty' },
+          h('div', { class: 'email-view-empty-icon' }, '\u{1F4EC}'),
+          h('p', { class: 'email-view-empty-title' }, this._getEmptyTitle()),
+          h('p', { class: 'email-view-empty-desc' }, this._getEmptyDesc())
+        )
+      );
+      return;
+    }
 
     // Column headers
     this._listEl.appendChild(
