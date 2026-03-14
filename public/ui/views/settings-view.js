@@ -51,6 +51,7 @@ export class SettingsView extends Component {
     super(el, opts);
     this._activeTab = 'general';
     this._serverConfig = null;
+    this._tabGeneration = 0; // Incremented on every tab switch to cancel stale async ops
   }
 
   mount() {
@@ -119,6 +120,7 @@ export class SettingsView extends Component {
       );
       tabBtn.addEventListener('click', () => {
         this._activeTab = tab.id;
+        this._tabGeneration++;
         this._updateModalContent();
       });
       tabBar.appendChild(tabBtn);
@@ -272,9 +274,9 @@ export class SettingsView extends Component {
     wdRow.appendChild(wdInfo);
     section.appendChild(wdRow);
 
-    // Detect git status for working directory
+    // Detect git status for working directory (guarded by generation counter)
     if (workingDir !== '(not set)' && window.overlordSocket) {
-      this._detectGitStatus(workingDir);
+      this._detectGitStatus(workingDir, this._tabGeneration);
     }
 
     // Allowed paths section
@@ -286,8 +288,8 @@ export class SettingsView extends Component {
     const pathList = h('div', { class: 'settings-folder-list', id: 'settings-folder-list' });
     section.appendChild(pathList);
 
-    // Load and render existing paths
-    this._loadAllowedPaths(buildingId, pathList);
+    // Load and render existing paths (guarded by generation counter)
+    this._loadAllowedPaths(buildingId, pathList, this._tabGeneration);
 
     // Add folder button
     const addRow = h('div', { class: 'settings-folder-add-row' });
@@ -318,12 +320,14 @@ export class SettingsView extends Component {
     return section;
   }
 
-  async _detectGitStatus(dirPath) {
+  async _detectGitStatus(dirPath, gen) {
     if (!window.overlordSocket?.socket) return;
     try {
       const result = await new Promise((resolve) => {
         window.overlordSocket.socket.emit('git:detect', { path: dirPath }, resolve);
       });
+      // Bail if user switched tabs while we were waiting
+      if (gen !== this._tabGeneration) return;
       const badge = document.getElementById('settings-git-status');
       if (!badge) return;
 
@@ -348,12 +352,14 @@ export class SettingsView extends Component {
     }
   }
 
-  async _loadAllowedPaths(buildingId, listEl) {
+  async _loadAllowedPaths(buildingId, listEl, gen) {
     if (!window.overlordSocket?.socket) return;
     try {
       const result = await new Promise((resolve) => {
         window.overlordSocket.socket.emit('folder:list-paths', { buildingId }, resolve);
       });
+      // Bail if user switched tabs while we were waiting
+      if (gen !== this._tabGeneration) return;
 
       listEl.textContent = '';
 
@@ -439,11 +445,21 @@ export class SettingsView extends Component {
       minCoverage: 80,
     };
 
+    const gen = this._tabGeneration;
     if (window.overlordSocket?.socket) {
       window.overlordSocket.socket.emit('quality:config:get', {}, (res) => {
+        // Bail if user switched tabs while waiting
+        if (gen !== this._tabGeneration) return;
         if (res?.ok && res.data) {
           this._qualityConfig = { ...this._qualityConfig, ...res.data };
-          if (this._activeTab === 'quality') this._updateModalContent();
+          // Update toggle states in-place rather than rebuilding the entire modal
+          const switches = document.querySelectorAll('.settings-switch[data-quality-key]');
+          for (const sw of switches) {
+            const key = sw.getAttribute('data-quality-key');
+            const isOn = this._qualityConfig[key] !== false;
+            sw.classList.toggle('on', isOn);
+            sw.setAttribute('aria-checked', String(isOn));
+          }
         }
       });
     }
@@ -463,6 +479,7 @@ export class SettingsView extends Component {
           const current = this._qualityConfig[item.key] !== false;
           const toggle = h('button', {
             class: `settings-switch${current ? ' on' : ''}`,
+            'data-quality-key': item.key,
             role: 'switch',
             'aria-checked': current ? 'true' : 'false'
           });
