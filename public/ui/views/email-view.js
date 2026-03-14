@@ -55,6 +55,7 @@ export class EmailView extends Component {
     this._selectedEmailId = null;
     this._selectedThreadId = null;
     this._fetchGen = 0;
+    this._searchQuery = '';
   }
 
   // ── Lifecycle ────────────────────────────────────────────────
@@ -293,6 +294,27 @@ export class EmailView extends Component {
       return;
     }
 
+    // Search bar (#566)
+    const searchBar = h('div', { class: 'email-search-bar' });
+    const searchInput = h('input', {
+      type: 'text',
+      class: 'email-search-input',
+      placeholder: 'Search emails...',
+      value: this._searchQuery,
+    });
+    searchInput.addEventListener('input', () => {
+      this._searchQuery = searchInput.value;
+      this._renderList();
+    });
+    searchBar.appendChild(h('span', { class: 'email-search-icon' }, '\u{1F50D}'));
+    searchBar.appendChild(searchInput);
+    if (this._searchQuery) {
+      const clearBtn = h('button', { class: 'email-search-clear', type: 'button' }, '\u2715');
+      clearBtn.addEventListener('click', () => { this._searchQuery = ''; this._renderList(); });
+      searchBar.appendChild(clearBtn);
+    }
+    this._listEl.appendChild(searchBar);
+
     // Column headers
     this._listEl.appendChild(
       h('div', { class: 'email-row email-row--header' },
@@ -310,23 +332,32 @@ export class EmailView extends Component {
   }
 
   _getFilteredItems() {
-    if (this._filter === 'inbox') return this._inbox;
-    if (this._filter === 'sent') return this._sent;
-    // 'all' — merge and sort by date descending
-    const merged = [...this._inbox, ...this._sent];
-    // De-duplicate by id (an email can appear in both inbox and sent if self-CC'd somehow)
-    const seen = new Set();
-    const unique = merged.filter((e) => {
-      if (seen.has(e.id)) return false;
-      seen.add(e.id);
-      return true;
-    });
-    unique.sort((a, b) => {
-      const da = a.created_at || '';
-      const db = b.created_at || '';
-      return db.localeCompare(da);
-    });
-    return unique;
+    let items;
+    if (this._filter === 'inbox') items = this._inbox;
+    else if (this._filter === 'sent') items = this._sent;
+    else {
+      // 'all' — merge and sort by date descending
+      const merged = [...this._inbox, ...this._sent];
+      const seen = new Set();
+      items = merged.filter((e) => {
+        if (seen.has(e.id)) return false;
+        seen.add(e.id);
+        return true;
+      });
+      items.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    }
+
+    // Apply search filter (#566)
+    const query = (this._searchQuery || '').toLowerCase().trim();
+    if (query) {
+      items = items.filter(e => {
+        const subject = (e.subject || '').toLowerCase();
+        const body = (e.body || '').toLowerCase();
+        const from = (e.from_name || '').toLowerCase();
+        return subject.includes(query) || body.includes(query) || from.includes(query);
+      });
+    }
+    return items;
   }
 
   _getEmptyTitle() {
@@ -363,6 +394,13 @@ export class EmailView extends Component {
         threadId: email.thread_id || email.id,
       }
     });
+
+    // Unread indicator dot (#566)
+    if (isUnread) {
+      row.appendChild(h('span', { class: 'email-unread-dot' }));
+    } else {
+      row.appendChild(h('span', { class: 'email-read-spacer' }));
+    }
 
     // From / To column
     const senderText = this._filter === 'sent'

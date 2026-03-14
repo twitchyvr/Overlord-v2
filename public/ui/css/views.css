@@ -3948,6 +3948,52 @@
 }
 
 /* Unread styling — bold text */
+/* ── Unread dot indicator (#566) ── */
+.email-unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent, #6366f1);
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+.email-read-spacer {
+  width: 8px;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+/* ── Email search bar (#566) ── */
+.email-search-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.email-search-icon {
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.email-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+}
+.email-search-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 4px;
+}
+.email-search-clear:hover {
+  color: var(--text-primary);
+}
 .email-row.unread {
   font-weight: var(--font-bold);
   color: var(--text-primary);
