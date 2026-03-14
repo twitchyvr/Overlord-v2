@@ -302,6 +302,9 @@ export class StrategistView extends Component {
     this._projectName = '';
     this._projectGoals = '';
     this._successCriteria = '';
+    this._projectSource = 'fresh'; // 'fresh' | 'local' | 'clone'
+    this._localPath = '';
+    this._cloneUrl = '';
   }
 
   mount() {
@@ -658,6 +661,64 @@ export class StrategistView extends Component {
     });
     form.appendChild(criteriaGroup);
 
+    // Project source (#614)
+    const sourceGroup = h('div', { class: 'form-group' },
+      h('label', { class: 'form-label' }, 'Project Source'),
+      h('p', { class: 'form-hint' }, 'Where should the project files live?'),
+    );
+    const sourceOptions = h('div', { class: 'project-source-options' });
+
+    for (const opt of [
+      { id: 'fresh', icon: '\u2728', label: 'Start Fresh', desc: 'Create a new empty project directory' },
+      { id: 'local', icon: '\u{1F4C2}', label: 'Link Local Directory', desc: 'Point to an existing folder on your machine' },
+      { id: 'clone', icon: '\u{1F517}', label: 'Clone from URL', desc: 'Clone a Git repository by URL' },
+    ]) {
+      const isSelected = this._projectSource === opt.id;
+      const card = h('div', {
+        class: `project-source-card${isSelected ? ' selected' : ''}`,
+        role: 'radio',
+        'aria-checked': String(isSelected),
+        tabindex: '0',
+      },
+        h('span', { class: 'project-source-icon' }, opt.icon),
+        h('div', { class: 'project-source-info' },
+          h('strong', null, opt.label),
+          h('span', { class: 'project-source-desc' }, opt.desc),
+        ),
+        isSelected ? h('span', { class: 'project-source-check' }, '\u2713') : null,
+      );
+      card.addEventListener('click', () => {
+        this._projectSource = opt.id;
+        this._renderSourceOptions(sourceGroup, sourceOptions);
+      });
+      sourceOptions.appendChild(card);
+    }
+    sourceGroup.appendChild(sourceOptions);
+
+    // Conditional input for local path or clone URL
+    const sourceInput = h('div', { class: 'project-source-input' });
+    if (this._projectSource === 'local') {
+      const pathInput = h('input', {
+        class: 'form-input mono',
+        type: 'text',
+        placeholder: '/path/to/your/project',
+        value: this._localPath,
+      });
+      pathInput.addEventListener('input', (e) => { this._localPath = e.target.value; });
+      sourceInput.appendChild(pathInput);
+    } else if (this._projectSource === 'clone') {
+      const urlInput = h('input', {
+        class: 'form-input mono',
+        type: 'text',
+        placeholder: 'https://github.com/owner/repo.git',
+        value: this._cloneUrl,
+      });
+      urlInput.addEventListener('input', (e) => { this._cloneUrl = e.target.value; });
+      sourceInput.appendChild(urlInput);
+    }
+    sourceGroup.appendChild(sourceInput);
+    form.appendChild(sourceGroup);
+
     // Blueprint preview
     const previewSection = h('div', { class: 'blueprint-preview' },
       h('h3', null, 'Blueprint Preview')
@@ -720,6 +781,12 @@ export class StrategistView extends Component {
     ));
   }
 
+  /** Re-render source option cards without full page rebuild */
+  _renderSourceOptions(group, optionsContainer) {
+    // Full re-render of the configure step is simplest
+    this.render();
+  }
+
   async _createProject() {
     const template = this._selectedTemplate;
     if (!template) return;
@@ -738,16 +805,23 @@ export class StrategistView extends Component {
         throw new Error('Socket not connected');
       }
 
-      // Step 1: Create building (include effortLevel in config)
-      const buildResult = await window.overlordSocket.createBuilding({
+      // Step 1: Create building with project source (#614)
+      const buildParams = {
         name: projectName,
         effortLevel: this._effortLevel,
         config: {
           projectDescription: this._projectGoals || `${template.name} project`,
           template: template.id,
           effortLevel: this._effortLevel,
-        }
-      });
+        },
+      };
+      if (this._projectSource === 'local' && this._localPath.trim()) {
+        buildParams.workingDirectory = this._localPath.trim();
+      }
+      if (this._projectSource === 'clone' && this._cloneUrl.trim()) {
+        buildParams.repoUrl = this._cloneUrl.trim();
+      }
+      const buildResult = await window.overlordSocket.createBuilding(buildParams);
 
       if (!buildResult || !buildResult.ok) {
         throw new Error(buildResult?.error?.message || 'Failed to create building');

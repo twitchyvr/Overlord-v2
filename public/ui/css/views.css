@@ -512,6 +512,64 @@
   font-size: var(--text-sm);
   font-weight: var(--font-bold);
 }
+/* ── Project Source Selector (#614) ── */
+.project-source-options {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.project-source-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--duration-fast);
+  position: relative;
+}
+.project-source-card:hover {
+  border-color: var(--border-accent);
+}
+.project-source-card.selected {
+  border-color: var(--accent-blue);
+  background: var(--bg-accent, rgba(56, 189, 248, 0.05));
+}
+.project-source-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.project-source-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.project-source-info strong {
+  font-size: var(--text-sm);
+}
+.project-source-desc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.project-source-check {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 0.75rem;
+  color: var(--accent-blue);
+  font-weight: bold;
+}
+.project-source-input {
+  margin-top: var(--sp-2);
+}
+.form-hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-1) 0;
+}
 
 /* Effort level badge (shown in configure step) */
 .effort-level-badge {
