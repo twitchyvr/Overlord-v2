@@ -524,13 +524,23 @@ export function applyBlueprint(buildingId: string, blueprint: BlueprintData): Re
     }
   }
 
-  // 4. Create agent DB rows with room access
+  // 4. Create agent DB rows with room access — disambiguate duplicate names (#575)
+  const nameCount: Record<string, number> = {};
+  for (const agent of blueprint.agentRoster) {
+    nameCount[agent.name] = (nameCount[agent.name] || 0) + 1;
+  }
+  const nameIndex: Record<string, number> = {};
   for (const agent of blueprint.agentRoster) {
     const agentId = uid('agent');
+    let displayName: string | null = null;
+    if (nameCount[agent.name] > 1) {
+      nameIndex[agent.name] = (nameIndex[agent.name] || 0) + 1;
+      displayName = `${agent.name} ${nameIndex[agent.name]}`;
+    }
     db.prepare(`
-      INSERT INTO agents (id, name, role, building_id, room_access)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(agentId, agent.name, agent.role, buildingId, JSON.stringify(agent.rooms));
+      INSERT INTO agents (id, name, role, building_id, room_access, display_name)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(agentId, agent.name, agent.role, buildingId, JSON.stringify(agent.rooms), displayName);
     agentsCreated++;
   }
 
