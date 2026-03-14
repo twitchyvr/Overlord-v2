@@ -87,8 +87,9 @@ When Claude completes any task — a bug fix, a feature, a review, a dogfooding 
 2. **Open PRs awaiting review** — Check for PRs that need code review. Launch subagent reviewers per Section 5 (Git Workflow). Approve or request changes.
 3. **PRs with approved reviews** — Merge approved PRs that have passing CI. Update CHANGELOG.md.
 4. **E2E / Runtime verification** — Run the runtime verification checklist (Section 10). Any bug found is immediately triaged as a new Issue and fixed.
-5. **Open GitHub Issues** — Check the current Milestone for unstarted or in-progress Issues, sorted by priority labels. Pick the highest priority Issue, create a feature branch, and begin the Git Workflow.
-6. **Dogfooding** — If no Issues remain, exercise every Overlord feature through the UI. Bugs found become new Issues filed on GitHub, then fixed immediately.
+5. **Stale issue audit** — Run `gh issue list --state open --label "priority: critical,priority: high" --json number,title,comments,createdAt` and check for high-priority issues with zero comments or no activity in 24+ hours. These are orphaned — decompose epics into sub-issues, add comments, or begin work immediately. This prevents #480-style stalls where high-priority work is filed and forgotten across context compaction boundaries.
+6. **Open GitHub Issues** — Check the current Milestone for unstarted or in-progress Issues, sorted by priority labels. Pick the highest priority Issue, create a feature branch, and begin the Git Workflow.
+7. **Dogfooding** — If no Issues remain, exercise every Overlord feature through the UI. Bugs found become new Issues filed on GitHub, then fixed immediately.
 
 ### Rules
 
@@ -298,6 +299,92 @@ npm run validate
 | `tests/unit/storage/` | Persistence, state management |
 | `tests/unit/core/` | Contracts, shared utilities |
 | `tests/unit/ui/` | Views, socket bridge, DOM rendering |
+| `tests/e2e/` | **Playwright E2E tests — real browser, real UI** |
+
+### Playwright E2E Test Requirement — MANDATORY FOR EVERY ISSUE
+
+**For every Issue completed, Claude MUST write a Playwright E2E test suite that exercises the fix through the real UI.** This is non-negotiable. Unit tests verify logic in isolation; E2E tests prove the fix actually works when a real user interacts with the app in a real browser.
+
+#### What This Means
+
+- **Every bug fix** gets an E2E test that reproduces the bug scenario and verifies the fix.
+- **Every feature** gets an E2E test suite that exercises the feature through the UI end-to-end.
+- **Every UI change** gets an E2E test that verifies the visual and interactive behavior.
+- **"It passes unit tests"** is not sufficient. The Playwright test must prove it works in the actual browser with the actual server running.
+
+#### How to Write E2E Tests
+
+**Config:** `playwright.config.ts` — tests run against `http://localhost:4000` with Chromium.
+
+**Helpers:** Use the page object helpers in `tests/e2e/helpers/overlord.ts`:
+- `gotoAppAndConnect(page)` — Navigate to app, wait for Socket.IO connection
+- `navigateToView(page, viewName)` — Switch toolbar views
+- `createBuildingDirect(page, name)` — Create test data via socket
+- `selectBuilding(page, buildingId)` — Activate a building
+- `createAgentDirect(page, name, role)` — Create agents for test setup
+- `createTaskDirect(page, buildingId, title)` — Create tasks for test setup
+- `openAgentDetailDrawer(page, name)` / `closeDrawer(page)` — Drawer interactions
+- `waitForToast(page, pattern)` / `expectSuccessToast(page)` — Toast verification
+- `expandFloor(page, name)` — Building tree interactions
+
+**Pattern:** Follow the established pattern in `tests/e2e/dogfood-fixes.spec.ts`:
+
+```typescript
+import { test, expect } from '@playwright/test';
+import { gotoAppAndConnect, createBuildingDirect, selectBuilding } from './helpers/overlord.js';
+
+test.describe('Issue #NNN: Brief description', () => {
+  let buildingId: string;
+
+  test.beforeEach(async ({ page }) => {
+    await gotoAppAndConnect(page);
+    buildingId = await createBuildingDirect(page, 'Test Building');
+    await selectBuilding(page, buildingId);
+  });
+
+  test('#NNN: What the test verifies in user-facing terms', async ({ page }) => {
+    // 1. Set up the scenario (navigate, create data)
+    // 2. Perform the action the user would take
+    // 3. Assert the expected outcome is visible in the UI
+    // 4. Assert negative cases (old broken behavior does NOT appear)
+  });
+});
+```
+
+**Naming:** Test files go in `tests/e2e/` and are named by feature area or issue batch:
+- `tests/e2e/settings-panel.spec.ts` — Settings-related fixes
+- `tests/e2e/navigation.spec.ts` — Nav and routing fixes
+- `tests/e2e/dogfood-fixes.spec.ts` — Batch of dogfood session fixes
+
+**Running:**
+```bash
+# Run all E2E tests
+npm run test:e2e
+
+# Run a specific spec
+npx playwright test tests/e2e/settings-panel.spec.ts
+
+# Run with headed browser (for debugging)
+npx playwright test --headed
+
+# View the HTML report
+npx playwright show-report test-results/html-report
+```
+
+#### E2E Test Quality Standards
+
+- **Test through the UI, not just the socket.** Use `page.click()`, `page.fill()`, `page.locator()` — not just `page.evaluate()` with socket calls. Socket helpers are for TEST SETUP only (creating buildings/agents/tasks as prerequisites).
+- **Assert what the user sees.** Check `toBeVisible()`, `toContainText()`, `toHaveCount()` — not internal state.
+- **Assert the old broken behavior is gone.** If the bug showed a blank screen, assert the screen is NOT blank. If the bug caused a hang, assert the UI responds within a timeout.
+- **Reference the Issue number.** Every test title starts with `#NNN:` so the test traces back to the Issue.
+- **Do NOT write tests that always pass.** If a test uses `if (element.isVisible())` to skip the actual assertion, it's not testing anything. Make the test fail when the feature is broken.
+
+#### What Happens If You Skip This
+
+If an Issue is closed without a Playwright E2E test:
+- The Issue is NOT actually closed. Re-open it.
+- The Inner Loop Stage 7 (E2E) has not been satisfied.
+- The fix is considered unverified and the pipeline is incomplete.
 
 ---
 
