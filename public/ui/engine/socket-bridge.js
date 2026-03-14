@@ -970,7 +970,7 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithFeedback('room:exit', { roomId, agentId });
     },
 
-    async moveAgent(agentId, roomId, tableType = 'focus') {
+    async moveAgent(agentId, roomId, tableType = null) {
       const res = await _emitWithFeedback('agent:move', { agentId, roomId, tableType });
       if (res && res.ok) {
         this.fetchAgents({});

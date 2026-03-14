@@ -211,15 +211,10 @@ describe('Room Manager', () => {
       expect(table.chairs).toBe(1);
     });
 
-    it('rejects invalid table type', () => {
+    it('auto-resolves invalid table type to first valid table (#573)', () => {
       const result = enterRoom({ roomId, agentId: 'agent_1', tableType: 'nonexistent' });
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error.code).toBe('INVALID_TABLE_TYPE');
-        expect(result.error.message).toContain('nonexistent');
-        expect(result.error.message).toContain('focus');
-        expect(result.error.message).toContain('pair');
-      }
+      // Should succeed by falling back to first valid table instead of rejecting
+      expect(result.ok).toBe(true);
     });
 
     it('enforces chair capacity on focus table (1 chair)', () => {

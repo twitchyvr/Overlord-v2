@@ -121,22 +121,26 @@ interface EnterRoomParams {
  * Agent enters a room — room's tools merge into agent's context.
  * Validates table type exists in room's contract and checks chair capacity.
  */
-export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomParams): Result {
+export function enterRoom({ roomId, agentId, tableType }: EnterRoomParams): Result {
   const room = activeRooms.get(roomId);
   if (!room) {
     return err('ROOM_NOT_FOUND', `Room ${roomId} does not exist`);
   }
 
-  // Validate table type exists in room's contract
-  const tableConfig = room.tables[tableType];
-  if (!tableConfig) {
-    const validTables = Object.keys(room.tables);
-    return err(
-      'INVALID_TABLE_TYPE',
-      `Table type "${tableType}" does not exist in ${room.type} room. Valid tables: ${validTables.join(', ')}`,
-      { context: { validTables, requestedTable: tableType } },
-    );
+  // Auto-resolve table type: use requested, fall back to first valid table (#573)
+  const validTables = Object.keys(room.tables);
+  let resolvedTable = tableType || validTables[0] || 'focus';
+  if (!room.tables[resolvedTable]) {
+    // Requested table doesn't exist — use first available instead of failing
+    resolvedTable = validTables[0] || 'focus';
+    if (!room.tables[resolvedTable]) {
+      return err(
+        'NO_TABLES',
+        `Room ${room.type} has no valid table types`,
+      );
+    }
   }
+  const tableConfig = room.tables[resolvedTable];
 
   try {
     // Check agent has badge/access to this room type
@@ -182,14 +186,14 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
     const seatAgent = db.transaction(() => {
       let tableRow = db
         .prepare('SELECT id FROM tables_v2 WHERE room_id = ? AND type = ?')
-        .get(roomId, tableType) as { id: string } | undefined;
+        .get(roomId, resolvedTable) as { id: string } | undefined;
 
       if (!tableRow) {
         const tableId = `table_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         db.prepare('INSERT INTO tables_v2 (id, room_id, type, chairs, description) VALUES (?, ?, ?, ?, ?)').run(
           tableId,
           roomId,
-          tableType,
+          resolvedTable,
           tableConfig.chairs,
           tableConfig.description,
         );
@@ -220,15 +224,15 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
     if (seatResult.error) {
       return err(
         'TABLE_FULL',
-        `Table "${tableType}" in ${room.type} room is full (${tableConfig.chairs} chair${tableConfig.chairs === 1 ? '' : 's'})`,
-        { context: { tableType, maxChairs: tableConfig.chairs, currentOccupancy: seatResult.occupancy } },
+        `Table "${resolvedTable}" in ${room.type} room is full (${tableConfig.chairs} chair${tableConfig.chairs === 1 ? '' : 's'})`,
+        { context: { tableType: resolvedTable, maxChairs: tableConfig.chairs, currentOccupancy: seatResult.occupancy } },
       );
     }
 
     const tableId = seatResult.tableId;
 
     // Fire lifecycle hook — room can track agent, emit bus events, run setup logic
-    const enterResult = room.onAgentEnter(agentId, tableType);
+    const enterResult = room.onAgentEnter(agentId, resolvedTable);
     if (!enterResult.ok) {
       // Roll back DB change if room rejects entry
       db.prepare('UPDATE agents SET current_room_id = NULL, current_table_id = NULL, status = ? WHERE id = ?').run(
@@ -238,11 +242,11 @@ export function enterRoom({ roomId, agentId, tableType = 'focus' }: EnterRoomPar
       return enterResult;
     }
 
-    log.info({ roomId, agentId, tableType, tableId }, 'Agent entered room');
+    log.info({ roomId, agentId, tableType: resolvedTable, tableId }, 'Agent entered room');
     return ok({ roomId, agentId, tableId, tools: room.getAllowedTools(), fileScope: room.fileScope });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    log.error({ roomId, agentId, tableType, err: msg }, 'Failed to enter room');
+    log.error({ roomId, agentId, tableType: resolvedTable, err: msg }, 'Failed to enter room');
     return err('DB_ERROR', `Failed to enter room: ${msg}`);
   }
 }
