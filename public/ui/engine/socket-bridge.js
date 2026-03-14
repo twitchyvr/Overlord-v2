@@ -190,10 +190,26 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('phase:advanced', (data) => {
-    store.set('building.activePhase', data.to || data.nextPhase || data.phase);
+    const newPhase = data.to || data.nextPhase || data.phase;
+    store.set('building.activePhase', newPhase);
     store.update('activity.items', (items) => [{ event: 'phase:advanced', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('phase:advanced', data);
     engine.dispatch('activity:new', { event: 'phase:advanced', ...data });
+
+    // Auto-switch chat to a room matching the new phase
+    const PHASE_TO_ROOM_TYPE = {
+      discovery: 'discovery', architecture: 'architecture',
+      execution: 'code-lab', review: 'review', deploy: 'deploy',
+    };
+    const targetRoomType = PHASE_TO_ROOM_TYPE[newPhase];
+    if (targetRoomType) {
+      const rooms = store.get('rooms.list') || [];
+      const targetRoom = rooms.find(r => r.type === targetRoomType);
+      if (targetRoom) {
+        store.set('rooms.active', targetRoom.id);
+        engine.dispatch('building:room-selected', { roomId: targetRoom.id, roomType: targetRoom.type });
+      }
+    }
   });
 
   socket.on('raid:entry:added', (data) => {
