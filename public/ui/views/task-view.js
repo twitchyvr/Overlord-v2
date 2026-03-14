@@ -188,6 +188,11 @@ export class TaskView extends Component {
     );
     this.el.appendChild(header);
 
+    // Progress bar (#514)
+    const progressContainer = h('div', { class: 'task-progress-bar-container', id: 'task-progress-bar' });
+    this.el.appendChild(progressContainer);
+    this._updateProgressBar();
+
     // Search bar with table filter, presets, and scope badge
     const searchRow = h('div', { class: 'task-search-row' });
     const searchInput = h('input', {
@@ -456,6 +461,35 @@ export class TaskView extends Component {
     this._tabs.setBadge('in-progress', this._countByStatus('in-progress') || null);
     this._tabs.setBadge('done', this._countByStatus('done') || null);
     this._tabs.setBadge('blocked', this._countByStatus('blocked') || null);
+    this._updateProgressBar();
+  }
+
+  /** Render a progress bar showing task completion (#514). */
+  _updateProgressBar() {
+    const container = this.$('#task-progress-bar');
+    if (!container) return;
+    container.textContent = '';
+
+    const total = this._tasks.length;
+    const done = this._countByStatus('done');
+
+    if (total === 0) return;
+
+    const pct = Math.round((done / total) * 100);
+
+    const bar = h('div', { class: 'task-progress-bar' },
+      h('div', { class: 'task-progress-bar-label' },
+        `${pct}% complete (${done}/${total} tasks done)`
+      ),
+      h('div', { class: 'task-progress-bar-track' },
+        h('div', {
+          class: 'task-progress-bar-fill',
+          style: { width: `${pct}%` }
+        })
+      )
+    );
+
+    container.appendChild(bar);
   }
 
   // ── Task Detail Drawer ─────────────────────────────────────

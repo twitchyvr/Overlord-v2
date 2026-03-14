@@ -262,6 +262,21 @@ export class AgentsView extends Component {
     const workingSection = this._renderWorkingSection(roomNameMap);
     if (workingSection) this.el.appendChild(workingSection);
 
+    // ── Unassigned agents banner (#512) ──
+    const unassigned = this._agents.filter(a => !this._resolveRoomId(a));
+    if (unassigned.length > 0) {
+      const banner = h('div', { class: 'agents-unassigned-banner' },
+        h('span', { class: 'agents-unassigned-banner-text' },
+          `${unassigned.length} agent${unassigned.length === 1 ? ' is' : 's are'} waiting for work. Click 'Assign' to put them in a room.`
+        ),
+        h('button', {
+          class: 'btn btn-primary btn-sm',
+          onClick: () => this._autoAssignAll(unassigned)
+        }, 'Auto-Assign All')
+      );
+      this.el.appendChild(banner);
+    }
+
     // ── Agent grid ──
     const filtered = this._getFilteredAgents();
 
@@ -1617,6 +1632,68 @@ export class AgentsView extends Component {
       size: 'md',
       position: window.innerWidth < 768 ? 'fullscreen' : 'center',
     });
+  }
+
+  // ── Auto-Assign All (#512) ─────────────────────────────────────
+
+  /**
+   * Auto-assign each unassigned agent to the first room in their room_access list.
+   * Falls back to the first available room if room_access is empty or wildcard.
+   */
+  async _autoAssignAll(unassigned) {
+    if (!window.overlordSocket) {
+      Toast.error('Not connected');
+      return;
+    }
+    if (this._rooms.length === 0) {
+      Toast.warning('No rooms available. Create rooms first.');
+      return;
+    }
+
+    const roomMap = {};
+    for (const room of this._rooms) {
+      roomMap[room.type] = room.id;
+    }
+    const fallbackRoomId = this._rooms[0]?.id;
+
+    let assigned = 0;
+    let failed = 0;
+
+    for (const agent of unassigned) {
+      const roomAccess = this._parseArray(agent.room_access);
+      let targetRoomId = null;
+
+      // Find the first matching room from the agent's room_access
+      for (const accessType of roomAccess) {
+        if (accessType === '*') {
+          targetRoomId = fallbackRoomId;
+          break;
+        }
+        if (roomMap[accessType]) {
+          targetRoomId = roomMap[accessType];
+          break;
+        }
+      }
+
+      // Fall back to first available room if no match found
+      if (!targetRoomId) targetRoomId = fallbackRoomId;
+
+      try {
+        const result = await window.overlordSocket.moveAgent(agent.id, targetRoomId);
+        if (result && result.ok) {
+          assigned++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    if (assigned > 0) Toast.success(`${assigned} agent${assigned === 1 ? '' : 's'} assigned to rooms`);
+    if (failed > 0) Toast.warning(`${failed} agent${failed === 1 ? '' : 's'} could not be assigned`);
+
+    this._fetchAgents();
   }
 
 }
