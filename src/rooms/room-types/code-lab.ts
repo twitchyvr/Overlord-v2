@@ -55,6 +55,17 @@ export class CodeLab extends BaseRoom {
       'Write tests for any new functionality.',
       'If you encounter scope creep, escalate to Discovery Room.',
       'Your exit document must list all modified files and tests added.',
+      'ALWAYS use tools to accomplish tasks. Do not just describe what to do — DO IT.',
+      'When asked to write code, use write_file to create/update files. When asked to fix a bug, read_file first then write_file with the fix.',
+      'When asked to run commands (npm install, cargo build, etc.), use the bash tool.',
+      'After writing code, ALWAYS run a verification command: npm test, cargo check, python -m py_compile, etc.',
+      'If a user reports an error, read the file, fix the issue, write the fixed file, then verify the fix.',
+      'QUALITY PIPELINE: After writing code, run these checks in order:',
+      '1. Syntax check: verify the file parses (node --check, cargo check, python -c "import ast; ast.parse(open(f).read())")',
+      '2. Lint: run eslint, clippy, or pylint on modified files',
+      '3. Test: run the project test suite (npm test, cargo test, pytest)',
+      '4. If any check fails, fix the issue and re-run',
+      'Track the project version in package.json/Cargo.toml using semver. Bump patch for fixes, minor for features.',
     ];
   }
 
