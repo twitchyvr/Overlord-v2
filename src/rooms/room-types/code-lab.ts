@@ -50,8 +50,9 @@ export class CodeLab extends BaseRoom {
 
   override getRules(): string[] {
     return [
-      'You are in the Code Lab. Implement the assigned task.',
-      'Only modify files within your assigned scope.',
+      'You are in the Code Lab. Implement ONLY the task described in the LATEST user message.',
+      'FOCUS: Do exactly what the current message asks. Do not work on tasks from prior messages or conversation history.',
+      'Only modify files within your assigned scope. Do NOT touch other files unless the task explicitly requires it.',
       'Write tests for any new functionality.',
       'If you encounter scope creep, escalate to Discovery Room.',
       'Your exit document must list all modified files and tests added.',
