@@ -38,6 +38,25 @@ const ROLES = [
   'tester', 'reviewer', 'operator', 'lead'
 ];
 
+/** Human-readable role labels (#576) */
+const ROLE_LABELS = {
+  'strategist': 'Strategist',
+  'analyst': 'Business Analyst',
+  'architect': 'Solutions Architect',
+  'developer': 'Developer',
+  'tester': 'QA Engineer',
+  'reviewer': 'Code Reviewer',
+  'operator': 'DevOps Engineer',
+  'lead': 'Team Lead',
+  'agent': 'Agent',
+};
+
+/** Format a raw role string into a human-readable label. */
+function formatRole(role) {
+  if (!role) return 'Agent';
+  return ROLE_LABELS[role] || role.charAt(0).toUpperCase() + role.slice(1).replace(/-/g, ' ');
+}
+
 const CAPABILITIES = [
   'chat', 'analysis', 'code-generation', 'code-review',
   'testing', 'deployment', 'documentation', 'planning'
@@ -452,7 +471,7 @@ export class AgentsView extends Component {
         ? h('div', { class: 'agents-view-card-specialization' }, agent.specialization)
         : null,
       h('div', { class: 'agents-view-card-role' },
-        h('span', { class: 'agents-view-role-badge' }, agent.role || 'agent')
+        h('span', { class: 'agents-view-role-badge' }, formatRole(agent.role))
       )
     );
     cardHeader.appendChild(nameGroup);
@@ -676,7 +695,7 @@ export class AgentsView extends Component {
     // Role badge + status
     identityGroup.appendChild(
       h('div', { class: 'agents-view-detail-meta' },
-        h('span', { class: 'agents-view-role-badge' }, agent.role || 'agent'),
+        h('span', { class: 'agents-view-role-badge' }, formatRole(agent.role)),
         h('span', {
           class: `agents-view-status-label agents-view-status-label-${status}`,
           style: { marginLeft: 'var(--sp-2)' }
@@ -806,7 +825,7 @@ export class AgentsView extends Component {
       profileRows.push(['Specialization', agent.specialization]);
     }
     profileRows.push(['Status', statusCfg.label]);
-    profileRows.push(['Role', agent.role || 'agent']);
+    profileRows.push(['Role', formatRole(agent.role)]);
     profileRows.push(['Personality', derivePersonality(agent.name || agent.id)]);
     profileRows.push(['Profile Generated', agent.profile_generated ? 'Yes' : 'No']);
 
@@ -1558,7 +1577,7 @@ export class AgentsView extends Component {
     container.appendChild(h('div', { class: 'assign-agent-guidance' },
       h('p', null, 'Select a room for '),
       h('strong', null, agent.name || agent.id),
-      h('span', null, ` (${agent.role || 'agent'}).`),
+      h('span', null, ` (${formatRole(agent.role)}).`),
     ));
 
     container.appendChild(h('label', { class: 'form-label' }, 'Available Rooms'));
