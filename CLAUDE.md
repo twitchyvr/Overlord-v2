@@ -54,12 +54,26 @@ Every coding session follows this **mandatory inner loop**. This is not optional
 | **7. E2E** | Runtime verification — boot the server, verify the change works live | `npm run dev` + manual/automated checks |
 | **8. Dogfood** | Use the feature through the Overlord UI as a real user would | Exercise the changed feature end-to-end |
 
+### Why This Loop Exists
+
+There have been too many instances of AI claiming a bug is "fixed" but actually making it worse, or breaking something else. This loop catches those failures early:
+
+- **Static tests** catch logic regressions but miss runtime issues.
+- **Type checking** catches contract violations but misses live behavior.
+- **Lint** catches style issues but misses semantic bugs.
+- **Code review** catches design flaws but misses integration failures.
+- **E2E** catches server-side failures but misses UI-side experience.
+- **Dogfooding** catches everything the other stages miss — it exercises the actual user workflow.
+
+No single stage is sufficient. The loop ensures high code quality, security, and user experience. It prevents unchecked changes from reaching production and maintains accountability within the agentic ecosystem.
+
 ### Rules
 
 - **Never skip stages.** A code change that passes tests but wasn't dogfooded is incomplete.
 - **Failures at any stage loop back to Stage 1.** Fix → re-run the full pipeline.
 - **This loop runs inside the Autonomous Work Loop.** Every Issue/fix/feature goes through all 8 stages before the outer loop advances.
 - **Report the stage you're on** so the user always knows where you are in the pipeline.
+- **Dogfood each fix individually.** Do not batch-verify fixes. Each fix gets its own dedicated test proving the before/after behavior through the live system.
 
 ---
 
