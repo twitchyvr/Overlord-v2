@@ -326,7 +326,7 @@ export class BuildingView extends Component {
     return section;
   }
 
-  // ── Room Item (compact single-line) ────────────────────
+  // ── Room Item (detail-rich mini card) ────────────────────
 
   _renderRoomItem(room, floorId) {
     const agentsInRoom = this._getAgentsInRoom(room.id);
@@ -339,40 +339,84 @@ export class BuildingView extends Component {
     const item = h('div', {
       class: `room-item${isActiveRoom ? ' room-item-active' : ''}${agentsInRoom.length > 0 ? ' room-item-occupied' : ''}`,
       'data-room-id': room.id,
-      title: `${roomName} (${typeInfo.label || room.type}) — ${agentsInRoom.length} agent${agentsInRoom.length !== 1 ? 's' : ''}`,
     });
 
-    // Status dot
-    const statusDot = h('span', { class: `room-status-dot room-dot-${roomStatus}` });
+    // ── Row 1: Status badge + Room name ──
+    const row1 = h('div', { class: 'room-item-row1' });
 
-    // Room icon (from type)
-    const icon = h('span', { class: 'room-item-icon' }, typeInfo.icon || '\u{1F4C4}');
+    // Status badge (Active / Idle / Error)
+    const statusBadge = h('span', {
+      class: `room-item-status room-item-status-${roomStatus}`
+    }, roomStatus.charAt(0).toUpperCase() + roomStatus.slice(1));
 
     // Room name
-    const name = h('span', { class: 'room-item-name' }, roomName);
+    const nameEl = h('span', { class: 'room-item-name', title: roomName }, roomName);
 
-    // Agent count (only if agents present)
-    const agentBadge = agentsInRoom.length > 0
-      ? h('span', { class: 'room-item-agents' },
-          ...agentsInRoom.slice(0, 3).map(a =>
-            h('span', {
-              class: `room-item-agent-dot room-dot-${a.status || 'idle'}`,
-              title: a.name || a.agentId,
-            })
-          ),
-          agentsInRoom.length > 3
-            ? h('span', { class: 'room-item-agent-overflow' }, `+${agentsInRoom.length - 3}`)
-            : null
-        )
-      : null;
+    row1.appendChild(statusBadge);
+    row1.appendChild(nameEl);
+    item.appendChild(row1);
 
-    item.appendChild(statusDot);
-    item.appendChild(icon);
-    item.appendChild(name);
-    if (agentBadge) item.appendChild(agentBadge);
+    // ── Row 2: Type tag + Agent count ──
+    const row2 = h('div', { class: 'room-item-row2' });
+
+    // Room type tag
+    const typeTag = h('span', { class: 'room-item-type' }, typeInfo.label || this._formatRoomType(room.type));
+    row2.appendChild(typeTag);
+
+    // Agent count
+    const agentCount = h('span', { class: 'room-item-agent-count' },
+      `${agentsInRoom.length} agent${agentsInRoom.length !== 1 ? 's' : ''}`
+    );
+    row2.appendChild(agentCount);
+
+    item.appendChild(row2);
+
+    // ── Row 3: Agent avatars (if agents present) ──
+    if (agentsInRoom.length > 0) {
+      const avatarRow = h('div', { class: 'room-item-avatars' });
+      for (const agent of agentsInRoom.slice(0, 5)) {
+        const initial = (agent.name || '?')[0].toUpperCase();
+        const avatar = h('span', {
+          class: `room-item-avatar room-item-avatar-${agent.status || 'idle'}`,
+          title: agent.name || agent.agentId,
+        }, initial);
+        avatarRow.appendChild(avatar);
+      }
+      if (agentsInRoom.length > 5) {
+        avatarRow.appendChild(h('span', { class: 'room-item-avatar-overflow' }, `+${agentsInRoom.length - 5}`));
+      }
+      item.appendChild(avatarRow);
+    }
+
+    // ── Last activity (if available) ──
+    if (room.lastActivity) {
+      const activity = h('div', { class: 'room-item-activity' },
+        h('span', { class: 'room-item-activity-label' }, 'Last:'),
+        h('span', { class: 'room-item-activity-time' }, formatTime(room.lastActivity))
+      );
+      item.appendChild(activity);
+    }
+
+    // ── Hover action buttons ──
+    const actions = h('div', { class: 'room-item-actions' });
+    const editBtn = h('button', { class: 'room-item-action-btn', title: 'Edit room' }, '\u270F\uFE0F');
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._openEditRoomModal(room, floorId);
+    });
+    actions.appendChild(editBtn);
+
+    const deleteBtn = h('button', { class: 'room-item-action-btn room-item-action-danger', title: 'Delete room' }, '\u{1F5D1}\uFE0F');
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._confirmDeleteRoom(room);
+    });
+    actions.appendChild(deleteBtn);
+    item.appendChild(actions);
 
     // Click to select room
     item.addEventListener('click', (e) => {
+      if (e.target.closest('.room-item-actions')) return;
       e.stopPropagation();
       const st = OverlordUI.getStore();
       if (st) {

@@ -213,9 +213,9 @@ describe('BuildingView', () => {
     expect(roomItem).not.toBeNull();
     expect(roomItem.classList.contains('room-item-occupied')).toBe(true);
 
-    // Should have agent dots
-    const agentDots = roomItem.querySelector('.room-item-agents');
-    expect(agentDots).not.toBeNull();
+    // Should have agent avatars
+    const agentAvatars = roomItem.querySelector('.room-item-avatars');
+    expect(agentAvatars).not.toBeNull();
   });
 
   it('sorts floors by ordinal (lowest first — top-down reading order)', async () => {
@@ -279,7 +279,7 @@ describe('BuildingView', () => {
     expect(dispatched[0].expanded).toBe(true);
   });
 
-  it('renders room items with status dots in expanded floor', async () => {
+  it('renders room items with status badges in expanded floor', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -300,10 +300,11 @@ describe('BuildingView', () => {
     const roomItems = el.querySelectorAll('.room-item');
     expect(roomItems.length).toBe(2);
 
-    // Both rooms should have idle status dots (no agents)
-    const dots = el.querySelectorAll('.room-status-dot');
-    expect(dots.length).toBe(2);
-    expect(dots[0].classList.contains('room-dot-idle')).toBe(true);
+    // Both rooms should have idle status badge (no agents)
+    const badges = el.querySelectorAll('.room-item-status');
+    expect(badges.length).toBe(2);
+    expect(badges[0].textContent).toBe('Idle');
+    expect(badges[0].classList.contains('room-item-status-idle')).toBe(true);
   });
 
   it('room item shows active status when agents are present', async () => {
@@ -324,8 +325,9 @@ describe('BuildingView', () => {
     // Expand floor
     (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    const dot = el.querySelector('.room-status-dot')!;
-    expect(dot.classList.contains('room-dot-active')).toBe(true);
+    const badge = el.querySelector('.room-item-status')!;
+    expect(badge.textContent).toBe('Active');
+    expect(badge.classList.contains('room-item-status-active')).toBe(true);
   });
 
   it('room item shows error status when an agent has error status', async () => {
@@ -346,11 +348,12 @@ describe('BuildingView', () => {
     // Expand floor
     (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    const dot = el.querySelector('.room-status-dot')!;
-    expect(dot.classList.contains('room-dot-error')).toBe(true);
+    const badge = el.querySelector('.room-item-status')!;
+    expect(badge.textContent).toBe('Error');
+    expect(badge.classList.contains('room-item-status-error')).toBe(true);
   });
 
-  it('room item displays agent dots for occupied rooms', async () => {
+  it('room item displays agent count and type tag', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -372,16 +375,20 @@ describe('BuildingView', () => {
 
     (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    // First room should have 2 agent dots
-    const items = el.querySelectorAll('.room-item');
-    expect(items.length).toBe(2);
-    const firstRoomAgents = items[0].querySelectorAll('.room-item-agent-dot');
-    expect(firstRoomAgents.length).toBe(2);
-    const secondRoomAgents = items[1].querySelectorAll('.room-item-agent-dot');
-    expect(secondRoomAgents.length).toBe(1);
+    // Agent counts
+    const agentCounts = el.querySelectorAll('.room-item-agent-count');
+    expect(agentCounts.length).toBe(2);
+    expect(agentCounts[0].textContent).toBe('2 agents');
+    expect(agentCounts[1].textContent).toBe('1 agent');
+
+    // Type tags
+    const typeTags = el.querySelectorAll('.room-item-type');
+    expect(typeTags.length).toBe(2);
+    expect(typeTags[0].textContent).toBe('Code Lab');
+    expect(typeTags[1].textContent).toBe('War Room');
   });
 
-  it('room item shows type icon from ROOM_TYPE_INFO', async () => {
+  it('room item shows agent avatars for occupied rooms', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -389,16 +396,18 @@ describe('BuildingView', () => {
 
     const store = OverlordUI.getStore();
     store.set('building.data', { name: 'B' });
+    store.set('building.agentPositions', {
+      a1: { agentId: 'a1', name: 'Alice', floorId: 'f1', roomId: 'r1', status: 'active' }
+    });
     store.set('building.floors', [
-      { id: 'f1', ordinal: 1, rooms: [{ id: 'r1', type: 'code-lab' }] }
+      { id: 'f1', ordinal: 1, rooms: [{ id: 'r1', name: 'Code Lab', type: 'code-lab' }] }
     ]);
 
     (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    const icon = el.querySelector('.room-item-icon');
-    expect(icon).not.toBeNull();
-    // code-lab icon is the laptop emoji
-    expect(icon!.textContent).toBeTruthy();
+    const avatars = el.querySelectorAll('.room-item-avatar');
+    expect(avatars.length).toBe(1);
+    expect(avatars[0].textContent).toBe('A');
   });
 
   it('room item formats room type slug as title when no name given', async () => {
@@ -461,16 +470,17 @@ describe('BuildingView', () => {
     (el.querySelector('.floor-section-header') as HTMLElement).click();
 
     // Initially idle
-    let dot = el.querySelector('.room-status-dot')!;
-    expect(dot.classList.contains('room-dot-idle')).toBe(true);
+    let badge = el.querySelector('.room-item-status')!;
+    expect(badge.textContent).toBe('Idle');
 
     // Add an active agent
     store.set('building.agentPositions', {
       a1: { agentId: 'a1', name: 'Coder', floorId: 'f1', roomId: 'r1', status: 'working' }
     });
 
-    dot = el.querySelector('.room-status-dot')!;
-    expect(dot.classList.contains('room-dot-active')).toBe(true);
+    badge = el.querySelector('.room-item-status')!;
+    expect(badge.textContent).toBe('Active');
+    expect(badge.classList.contains('room-item-status-active')).toBe(true);
   });
 
   it('renders foundation element', async () => {

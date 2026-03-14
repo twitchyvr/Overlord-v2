@@ -248,84 +248,93 @@
    ROOM ITEMS — Compact, single-line tree items
    ═══════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════
+   ROOM ITEMS — Detail-rich mini cards in sidebar
+   ═══════════════════════════════════════════════════ */
+
 .floor-room-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: var(--sp-1) var(--sp-2);
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) calc(var(--sp-2) + 20px);
 }
 
 .room-item {
   display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: 5px var(--sp-3) 5px var(--sp-3);
-  margin-left: 22px; /* indent under floor chevron+dot */
-  border-radius: var(--radius-sm);
+  flex-direction: column;
+  gap: 3px;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-default);
   position: relative;
+  background: var(--floor-bg);
 }
 .room-item::before {
-  /* Tree branch line */
+  /* Tree branch connector line */
   content: '';
   position: absolute;
-  left: -10px;
-  top: 50%;
-  width: 8px;
+  left: -12px;
+  top: 14px;
+  width: 10px;
   height: 1px;
   background: var(--border-primary);
 }
 .room-item:hover {
-  background: var(--bg-hover);
+  background: var(--floor-bg-hover);
+  border-color: var(--border-primary);
+}
+.room-item:hover .room-item-actions {
+  opacity: 1;
 }
 .room-item-active {
-  background: rgba(78, 205, 196, 0.08);
-  border: 1px solid rgba(78, 205, 196, 0.25);
+  background: rgba(78, 205, 196, 0.06);
+  border-color: rgba(78, 205, 196, 0.25);
 }
-.room-item-active::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--color-primary, #4ECDC4);
-  border-radius: 1px;
+.room-item-active .room-item-name {
+  color: var(--color-primary, #4ECDC4);
+  font-weight: var(--font-semibold);
 }
 .room-item-occupied {
-  /* Subtle glow for rooms with agents */
+  background: var(--room-bg-occupied, rgba(0, 212, 255, 0.04));
 }
 
-/* Room status dot */
-.room-status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.room-dot-active {
-  background: var(--status-active);
-  box-shadow: 0 0 5px rgba(74, 222, 128, 0.5);
-}
-.room-dot-idle {
-  background: var(--status-idle);
-}
-.room-dot-error {
-  background: var(--status-error);
-  box-shadow: 0 0 5px rgba(248, 113, 113, 0.5);
+/* Row 1: Status badge + Room name */
+.room-item-row1 {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
 }
 
-/* Room icon */
-.room-item-icon {
-  font-size: 13px;
+/* Status badge (Active / Idle / Error) */
+.room-item-status {
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  text-transform: capitalize;
+  letter-spacing: 0.03em;
   flex-shrink: 0;
-  line-height: 1;
+  line-height: 1.4;
+}
+.room-item-status-active {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--status-active);
+}
+.room-item-status-idle {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--status-idle);
+}
+.room-item-status-error {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--status-error);
 }
 
 /* Room name */
 .room-item-name {
   font-size: var(--text-sm);
+  font-weight: var(--font-medium);
   color: var(--text-primary);
   flex: 1;
   min-width: 0;
@@ -333,28 +342,112 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.room-item-active .room-item-name {
-  color: var(--color-primary, #4ECDC4);
-  font-weight: var(--font-medium);
+
+/* Row 2: Type tag + Agent count */
+.room-item-row2 {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
 }
 
-/* Room agent mini-dots (shows who's in the room) */
-.room-item-agents {
+/* Room type tag */
+.room-item-type {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+}
+
+/* Agent count */
+.room-item-agent-count {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* Row 3: Agent avatars */
+.room-item-avatars {
   display: flex;
   align-items: center;
   gap: 2px;
-  flex-shrink: 0;
+  margin-top: 2px;
 }
-.room-item-agent-dot {
-  width: 6px;
-  height: 6px;
+.room-item-avatar {
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: var(--font-bold);
+  color: var(--bg-primary);
+  background: var(--accent-blue);
+  border: 1.5px solid var(--bg-secondary);
 }
-.room-item-agent-overflow {
+.room-item-avatar-active,
+.room-item-avatar-working {
+  background: var(--accent-green);
+}
+.room-item-avatar-error {
+  background: var(--accent-red);
+}
+.room-item-avatar-idle {
+  background: var(--status-idle);
+}
+.room-item-avatar-overflow {
   font-size: 9px;
   color: var(--text-muted);
-  margin-left: 1px;
+  padding-left: 3px;
+}
+
+/* Last activity */
+.room-item-activity {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.room-item-activity-label {
+  opacity: 0.7;
+}
+.room-item-activity-time {
+  color: var(--text-secondary);
+}
+
+/* Hover action buttons */
+.room-item-actions {
+  position: absolute;
+  top: var(--sp-1);
+  right: var(--sp-1);
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-default);
+  z-index: 2;
+}
+.room-item-action-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  border: none;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.room-item-action-btn:hover {
+  background: var(--bg-tertiary);
+}
+.room-item-action-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
 }
 
 /* ═══════════════════════════════════════════════════
