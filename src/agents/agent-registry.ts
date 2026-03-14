@@ -279,6 +279,33 @@ export function removeAgent(agentId: string): Result {
   return ok({ id: agentId });
 }
 
+/**
+ * Reset all agents for a building — clear status, room assignments, and activity.
+ * Agents remain registered but return to idle state (#559).
+ */
+export function resetBuildingAgents(buildingId: string): Result {
+  const db = getDb();
+
+  // Reset agent status to idle and clear current room
+  const updated = db.prepare(`
+    UPDATE agents SET status = 'idle', current_room_id = NULL
+    WHERE building_id = ?
+  `).run(buildingId);
+
+  // Clear activity log for this building
+  db.prepare('DELETE FROM agent_activity_log WHERE building_id = ?').run(buildingId);
+
+  // Reset stats for agents in this building
+  const agentIds = db.prepare('SELECT id FROM agents WHERE building_id = ?')
+    .all(buildingId) as Array<{ id: string }>;
+  for (const { id } of agentIds) {
+    db.prepare('DELETE FROM agent_stats WHERE agent_id = ?').run(id);
+  }
+
+  log.info({ buildingId, count: updated.changes }, 'Building agents reset');
+  return ok({ buildingId, agentsReset: updated.changes });
+}
+
 // ─── Auto Profile Photo Generation ───
 
 /**

@@ -171,7 +171,13 @@ export class ActivityView extends Component {
     if (this._items.length > 0) this._loading = false;
 
     // No building selected — nothing to load, clear loading state
+    const buildingId = store.get('activeBuildingId');
     if (!store.get('building.active')) this._loading = false;
+
+    // Fetch historical activities from DB on mount (#565)
+    if (buildingId && window.overlordSocket?.fetchActivityHistory) {
+      window.overlordSocket.fetchActivityHistory(buildingId);
+    }
 
     // Subscribe to bulk store updates
     this.subscribe(store, 'activity.items', (items) => {

@@ -71,8 +71,11 @@ import {
   PluginDeleteSchema, PluginValidateSchema, PluginExportSchema,
   PluginImportSchema, PluginLogSubscribeSchema,
   QualityConfigGetSchema, QualityConfigSetSchema,
+  ActivityHistorySchema,
+  AgentResetSchema,
 } from './schemas.js';
-import { getStatsSummary, getActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
+import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
+import { resetBuildingAgents } from '../agents/agent-registry.js';
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
 import { getQualityConfig } from '../tools/quality-defaults.js';
 import { globalSearch } from '../storage/global-search.js';
@@ -1077,6 +1080,27 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         buildingId: parsed.buildingId,
       });
       if (ack) ack({ ok: true, data: leaderboard });
+    });
+
+    // ─── Agent Reset (#559) ───
+
+    handle(socket, 'agent:reset-all', AgentResetSchema, (parsed, ack) => {
+      const result = resetBuildingAgents(parsed.buildingId);
+      if (result.ok) {
+        io.emit('agents:reset', { buildingId: parsed.buildingId });
+      }
+      if (ack) ack(result);
+    });
+
+    // ─── Activity History (#565) ───
+
+    handle(socket, 'activity:history', ActivityHistorySchema, (parsed, ack) => {
+      const entries = getBuildingActivityLog(parsed.buildingId, {
+        limit: parsed.limit,
+        offset: parsed.offset,
+        eventType: parsed.eventType,
+      });
+      if (ack) ack({ ok: true, data: entries });
     });
 
     // ─── Agent Email Events ───

@@ -123,6 +123,45 @@ export function getActivityLog(
   }));
 }
 
+/**
+ * Get activity history for a building — all agents, sorted by time.
+ * Used by the Activity view to load historical events on mount (#565).
+ */
+export function getBuildingActivityLog(
+  buildingId: string,
+  opts: { limit?: number; offset?: number; eventType?: string } = {},
+): ActivityLogEntry[] {
+  const db = getDb();
+  const limit = opts.limit ?? 100;
+  const offset = opts.offset ?? 0;
+
+  let sql = 'SELECT * FROM agent_activity_log WHERE building_id = ?';
+  const params: unknown[] = [buildingId];
+
+  if (opts.eventType) {
+    sql += ' AND event_type = ?';
+    params.push(opts.eventType);
+  }
+
+  sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const rows = db.prepare(sql).all(...params) as Array<{
+    id: string;
+    agent_id: string;
+    event_type: string;
+    event_data: string;
+    building_id: string | null;
+    room_id: string | null;
+    created_at: string;
+  }>;
+
+  return rows.map((row) => ({
+    ...row,
+    event_data: safeJsonParse(row.event_data),
+  }));
+}
+
 // ─── Stats Aggregation ───
 
 /**

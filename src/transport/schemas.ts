@@ -786,6 +786,21 @@ export const SearchGlobalSchema = z.object({
 });
 
 
+// ─── Agent Reset Schema (#559) ───
+
+export const AgentResetSchema = z.object({
+  buildingId: id(),
+});
+
+// ─── Activity History Schema (#565) ───
+
+export const ActivityHistorySchema = z.object({
+  buildingId: id(),
+  limit: z.number().int().min(1).max(200).optional().default(100),
+  offset: z.number().int().min(0).optional().default(0),
+  eventType: z.string().max(100).optional(),
+});
+
 // ─── Plugin Management Schemas ───
 
 export const PluginListSchema = z.object({

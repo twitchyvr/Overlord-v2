@@ -895,6 +895,20 @@ export function initSocketBridge(socket, store, engine) {
       });
     },
 
+    fetchActivityHistory(buildingId, opts = {}) {
+      return _emitWithTimeout('activity:history', {
+        buildingId,
+        limit: opts.limit || 100,
+        offset: opts.offset || 0,
+        eventType: opts.eventType,
+      }).then((res) => {
+        if (res && res.ok) {
+          store.set('activity.items', res.data);
+        }
+        return res;
+      });
+    },
+
     fetchRaidEntries(buildingId) {
       return _emitWithTimeout('raid:list', { buildingId }).then((res) => {
         if (res && res.ok) {

@@ -239,6 +239,30 @@ export class AgentsView extends Component {
     });
     header.querySelector('.agents-view-actions').appendChild(refreshBtn);
 
+    // Reset agents button (#559)
+    const resetBtn = h('button', {
+      class: 'btn btn-ghost btn-md',
+      title: 'Reset all agents to idle — clears assignments and activity',
+      style: { color: 'var(--c-danger, #e74c3c)' }
+    }, '\u21BA Reset');
+    resetBtn.addEventListener('click', () => {
+      const store = OverlordUI.getStore();
+      const buildingId = store?.get('activeBuildingId');
+      if (!buildingId) { Toast.warning('No active building'); return; }
+      if (!confirm('Reset all agents to idle? This clears assignments and activity history.')) return;
+      if (window.overlordSocket?.socket) {
+        window.overlordSocket.socket.emit('agent:reset-all', { buildingId }, (res) => {
+          if (res?.ok) {
+            Toast.success(`${res.data.agentsReset} agents reset to idle`);
+            this._fetchAgents();
+          } else {
+            Toast.error(res?.error?.message || 'Reset failed');
+          }
+        });
+      }
+    });
+    header.querySelector('.agents-view-actions').appendChild(resetBtn);
+
     this.el.appendChild(header);
 
     // ── Filter tabs ──
