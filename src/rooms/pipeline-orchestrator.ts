@@ -45,6 +45,8 @@ interface OrchestratorConfig {
 
 let _bus: Bus | null = null;
 let _executeTool: OrchestratorConfig['executeTool'] | null = null;
+let _evidenceListener: ((...args: unknown[]) => void) | null = null;
+let _stageListener: ((...args: unknown[]) => void) | null = null;
 
 /**
  * Initialize the pipeline orchestrator.
@@ -54,8 +56,12 @@ export function initPipelineOrchestrator(config: OrchestratorConfig): void {
   _bus = config.bus;
   _executeTool = config.executeTool || null;
 
+  // Clean up previous listeners if re-initialized (hot reload / test safety)
+  if (_evidenceListener && _bus) _bus.off('pipeline:evidence-recorded', _evidenceListener);
+  if (_stageListener && _bus) _bus.off('pipeline:stage-entered', _stageListener);
+
   // When evidence is recorded, check if the stage passed and trigger next stage
-  _bus.on('pipeline:evidence-recorded', (data: { taskId: string; stage: string; status: string }) => {
+  _evidenceListener = ((data: { taskId: string; stage: string; status: string }) => {
     if (data.status === 'passed') {
       const stageIndex = PIPELINE_STAGES.indexOf(data.stage as PipelineStage);
       if (stageIndex >= 0 && stageIndex < PIPELINE_STAGES.length - 1) {
@@ -64,10 +70,11 @@ export function initPipelineOrchestrator(config: OrchestratorConfig): void {
         _bus!.emit('pipeline:stage-entered', { taskId: data.taskId, stage: nextStage });
       }
     }
-  });
+  }) as (...args: unknown[]) => void;
+  _bus.on('pipeline:evidence-recorded', _evidenceListener);
 
   // When a stage is entered, auto-invoke its tools
-  _bus.on('pipeline:stage-entered', async (data: { taskId: string; stage: string; buildingId?: string }) => {
+  _stageListener = (async (data: { taskId: string; stage: string; buildingId?: string }) => {
     const toolConfig = STAGE_TOOLS[data.stage];
     if (!toolConfig || !toolConfig.autoInvoke || toolConfig.tools.length === 0) {
       return; // Agent-driven stages — no auto-invocation
@@ -122,9 +129,23 @@ export function initPipelineOrchestrator(config: OrchestratorConfig): void {
         }
       }
     }
-  });
+  }) as (...args: unknown[]) => void;
+  _bus.on('pipeline:stage-entered', _stageListener);
 
   log.info('Pipeline orchestrator initialized');
+}
+
+/**
+ * Tear down the orchestrator — remove listeners and clear state.
+ * Required for test isolation and hot-reload safety.
+ */
+export function destroyPipelineOrchestrator(): void {
+  if (_bus && _evidenceListener) _bus.off('pipeline:evidence-recorded', _evidenceListener);
+  if (_bus && _stageListener) _bus.off('pipeline:stage-entered', _stageListener);
+  _bus = null;
+  _executeTool = null;
+  _evidenceListener = null;
+  _stageListener = null;
 }
 
 /**
