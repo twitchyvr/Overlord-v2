@@ -94,7 +94,7 @@
 .building-tree {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-2);
   flex: 1;
   overflow-y: auto;
@@ -117,7 +117,14 @@
 .floor-section {
   border-radius: var(--radius-md);
   overflow: hidden;
-  margin-bottom: 2px;
+  margin-bottom: 0;
+  border: 1px solid var(--border-secondary);
+  border-left: 3px solid var(--floor-section-color, var(--border-secondary));
+  transition: border-color var(--duration-fast) var(--ease-default);
+}
+.floor-section.expanded {
+  border-color: var(--border-primary);
+  border-left-color: var(--floor-section-color, var(--border-primary));
 }
 
 /* ── Floor section header ── */
@@ -142,16 +149,17 @@
 
 /* Chevron */
 .floor-chevron {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-muted);
-  width: 14px;
+  width: 16px;
   text-align: center;
   flex-shrink: 0;
-  transition: color var(--duration-fast);
+  transition: color var(--duration-fast), transform var(--duration-normal) var(--ease-default);
 }
 .floor-section.expanded > .floor-section-header .floor-chevron {
-  color: var(--text-secondary);
+  transform: rotate(90deg);
 }
+/* (chevron rotation handled above) */
 
 /* Floor color dot — type indicator */
 .floor-color-dot {
@@ -221,12 +229,21 @@
 .floor-section-body {
   background: rgba(0, 0, 0, 0.12);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
-  padding: var(--sp-1) 0;
-  animation: treeSlideDown 200ms var(--ease-default);
+  padding: var(--sp-2) 0;
+  overflow: hidden;
+  animation: treeSlideDown 200ms var(--ease-default) forwards;
 }
 @keyframes treeSlideDown {
-  from { opacity: 0; max-height: 0; }
-  to   { opacity: 1; max-height: 600px; }
+  from { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
+  to   { opacity: 1; max-height: 600px; padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
+}
+/* Collapse animation — applied via JS when collapsing */
+.floor-section-body.collapsing {
+  animation: treeSlideUp 200ms var(--ease-default) forwards;
+}
+@keyframes treeSlideUp {
+  from { opacity: 1; max-height: 600px; padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
+  to   { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
 }
 
 /* Empty floor hint */
@@ -267,7 +284,7 @@
 .room-item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--sp-1);
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--radius-md);
   border: 1px solid transparent;
