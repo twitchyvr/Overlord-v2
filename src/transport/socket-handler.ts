@@ -74,6 +74,7 @@ import {
   ActivityHistorySchema,
   AgentResetSchema,
   RoomProviderSetSchema,
+  RoomEscalateSchema,
   LogLevelSetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
@@ -554,6 +555,48 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         }
       }
       if (ack) ack(result);
+    });
+
+    // ─── Room-to-Room Escalation (#589) ───
+
+    handle(socket, 'room:escalate', RoomEscalateSchema, (parsed, ack) => {
+      const db = getDb();
+
+      // Find the target room by type within this building
+      const targetRoom = db.prepare(`
+        SELECT r.id, r.type, r.name FROM rooms r
+        JOIN floors f ON r.floor_id = f.id
+        WHERE f.building_id = ? AND r.type = ?
+        LIMIT 1
+      `).get(parsed.buildingId, parsed.toRoomType) as { id: string; type: string; name: string } | undefined;
+
+      if (!targetRoom) {
+        if (ack) ack({ ok: false, error: { code: 'ROOM_NOT_FOUND', message: `No ${parsed.toRoomType} room found in this building`, retryable: false } });
+        return;
+      }
+
+      // Store the escalation context as a message in the target room
+      if (parsed.contextSummary) {
+        const msgId = randomUUID();
+        db.prepare(`
+          INSERT INTO messages (id, room_id, agent_id, role, content, created_at)
+          VALUES (?, ?, NULL, 'system', ?, datetime('now'))
+        `).run(msgId, targetRoom.id, `[Escalation] ${parsed.reason}\n\nContext:\n${parsed.contextSummary}`);
+      }
+
+      log.info({ from: parsed.fromRoomId, to: targetRoom.id, toType: parsed.toRoomType, reason: parsed.reason }, 'Room escalation');
+      broadcastLog('info', `Escalation: ${parsed.toRoomType} (${parsed.reason})`, 'rooms');
+
+      bus.emit('room:escalated', {
+        fromRoomId: parsed.fromRoomId,
+        toRoomId: targetRoom.id,
+        toRoomType: parsed.toRoomType,
+        toRoomName: targetRoom.name,
+        buildingId: parsed.buildingId,
+        reason: parsed.reason,
+      });
+
+      if (ack) ack({ ok: true, data: { toRoomId: targetRoom.id, toRoomName: targetRoom.name, toRoomType: parsed.toRoomType } });
     });
 
     handle(socket, 'room:update', RoomUpdateSchema, (parsed, ack) => {

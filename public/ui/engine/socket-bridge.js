@@ -581,6 +581,17 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'room:deleted', ...data });
   });
 
+  // ── Room escalation (#589) ──
+  socket.on('room:escalated', (data) => {
+    store.update('activity.items', (items) => [{ event: 'room:escalated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('room:escalated', data);
+    engine.dispatch('activity:new', { event: 'room:escalated', ...data });
+    // Auto-switch chat to the target room
+    if (data.toRoomId) {
+      store.set('rooms.active', data.toRoomId);
+    }
+  });
+
   // ── Table events ──
 
   socket.on('table:created', (data) => {
@@ -960,6 +971,10 @@ export function initSocketBridge(socket, store, engine) {
         if (buildingId) this.fetchFloors(buildingId);
       }
       return res;
+    },
+
+    escalateToRoom(fromRoomId, toRoomType, buildingId, reason, contextSummary) {
+      return _emitWithFeedback('room:escalate', { fromRoomId, toRoomType, buildingId, reason, contextSummary });
     },
 
     enterRoom(roomId, agentId, tableType) {

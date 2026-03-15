@@ -792,6 +792,16 @@ export const LogLevelSetSchema = z.object({
   level: z.enum(['error', 'warn', 'info', 'debug']),
 });
 
+// ─── Room Escalation Schema (#589) ───
+
+export const RoomEscalateSchema = z.object({
+  fromRoomId: id(),
+  toRoomType: z.string().min(1).max(50),
+  buildingId: id(),
+  reason: z.string().max(500).optional().default('Escalation requested'),
+  contextSummary: z.string().max(5000).optional(),
+});
+
 // ─── Room Provider Override Schema (#555) ───
 
 export const RoomProviderSetSchema = z.object({
