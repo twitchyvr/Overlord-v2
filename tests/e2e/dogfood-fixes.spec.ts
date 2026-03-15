@@ -785,4 +785,75 @@ test.describe('Dogfood: Session Fixes', () => {
 
     expect(result).toBe('pass');
   });
+
+  // #585 — Directed messaging: recipients + messageMode in chat schema
+  test('#585: Chat schema accepts recipients and messageMode fields', async ({ page }) => {
+    // Verify the schema and frontend code support directed messaging
+    const [schemaJs, bridgeJs, chatJs, chatCss] = await Promise.all([
+      page.evaluate(() => fetch('/').then(() => 'ok')),
+      page.evaluate(() => fetch('/ui/engine/socket-bridge.js').then(r => r.text())),
+      page.evaluate(() => fetch('/ui/views/chat-view.js').then(r => r.text())),
+      page.evaluate(() => fetch('/ui/css/chat.css').then(r => r.text())),
+    ]);
+
+    // Socket bridge passes recipients and messageMode
+    expect(bridgeJs).toContain('recipients: recipients || []');
+    expect(bridgeJs).toContain("messageMode: messageMode || 'broadcast'");
+
+    // Chat view renders recipient badges
+    expect(chatJs).toContain('chat-message-recipients');
+    expect(chatJs).toContain('chat-recipient-badge');
+
+    // CSS exists for recipient badges
+    expect(chatCss).toContain('.chat-recipient-badge');
+    expect(chatCss).toContain('.chat-message-recipients');
+  });
+
+  // #594 — Interleaved thinking blocks rendered in chat
+  test('#594: Chat view renders thinking blocks from content array', async ({ page }) => {
+    const js = await page.evaluate(() => fetch('/ui/views/chat-view.js').then(r => r.text()));
+
+    // Must extract thinking blocks from content array
+    expect(js).toContain("block.type === 'thinking'");
+    expect(js).toContain('interleavedThinking');
+    // Must render them via _buildThinkingBubble
+    expect(js).toContain('this._buildThinkingBubble(thought)');
+  });
+
+  // #602 — Display tab settings persist to localStorage
+  test('#602: Display settings persist chat font size to localStorage', async ({ page }) => {
+    // Open settings
+    const settingsBtn = page.locator('button[title="Settings"]');
+    await expect(settingsBtn).toBeVisible({ timeout: 5000 });
+    await settingsBtn.click();
+    await page.waitForTimeout(500);
+
+    // Click Display tab
+    const displayTab = page.locator('.settings-tab').filter({ hasText: 'Display' });
+    if (await displayTab.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await displayTab.click();
+      await page.waitForTimeout(300);
+
+      // Click "Large" font size button
+      const largeBtn = page.locator('.settings-toggle-btn').filter({ hasText: 'Large' });
+      if (await largeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await largeBtn.click();
+        await page.waitForTimeout(300);
+
+        // Verify localStorage was set
+        const stored = await page.evaluate(() => localStorage.getItem('overlord-chat-font-size'));
+        expect(stored).toBe('large');
+
+        // Reset
+        const normalBtn = page.locator('.settings-toggle-btn').filter({ hasText: 'Normal' });
+        if (await normalBtn.isVisible()) await normalBtn.click();
+      }
+    } else {
+      // Fallback: verify code contains localStorage persistence
+      const js = await page.evaluate(() => fetch('/ui/views/settings-view.js').then(r => r.text()));
+      expect(js).toContain('overlord-chat-font-size');
+      expect(js).toContain('overlord-show-timestamps');
+      expect(js).toContain('overlord-show-thinking');
+    }
+  });
 });

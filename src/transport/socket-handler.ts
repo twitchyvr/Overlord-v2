@@ -1805,10 +1805,20 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         url: att.url || null,
       }));
 
-      // 5. Regular message — forward to bus (include threadId for persistence)
+      // 5. Validate recipient agent IDs if present (#585 review finding)
+      let validatedRecipients = parsed.recipients || [];
+      if (validatedRecipients.length > 0) {
+        const db = getDb();
+        validatedRecipients = validatedRecipients.filter((rid: string) => {
+          return !!db.prepare('SELECT id FROM agents WHERE id = ?').get(rid);
+        });
+      }
+
+      // 6. Regular message — forward to bus (include threadId for persistence)
       bus.emit('chat:message', {
         socketId: socket.id,
         ...parsed,
+        recipients: validatedRecipients,
         attachments: attachmentsMeta,
       });
 

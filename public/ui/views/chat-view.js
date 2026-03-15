@@ -14,7 +14,7 @@ import { h, setTrustedContent, escapeHtml, formatTime, debounce, linkEntities } 
 import { TokenInput } from '../components/token-input.js';
 import { Table } from '../components/table.js';
 import { Toast } from '../components/toast.js';
-import { EntityLink } from '../engine/entity-nav.js';
+import { EntityLink, resolveAgent } from '../engine/entity-nav.js';
 
 
 /**
@@ -462,7 +462,7 @@ export class ChatView extends Component {
       );
       for (const rid of msg.recipients) {
         const rAgent = resolveAgent(rid);
-        const rName = rAgent?.display_name || rAgent?.name || rid;
+        const rName = rAgent?.name || rid;
         recipientRow.appendChild(h('span', { class: 'chat-recipient-badge' }, `@${rName}`));
       }
       contentWrap.appendChild(recipientRow);
