@@ -28,6 +28,10 @@ interface AgentIdentity {
   gender: string;
   bio: string;
   specialization: string;
+  age: number;
+  backstory: string;
+  communicationStyle: string;
+  expertiseAreas: string[];
 }
 
 const FIRST_NAMES_F = ['Aria', 'Maya', 'Elena', 'Zara', 'Nadia', 'Sierra', 'Luna', 'Freya', 'Ivy', 'Cora', 'Iris', 'Sage', 'Nova', 'Ada', 'Vera', 'Mila', 'Leah', 'Rosa', 'Tara', 'Kira'];
@@ -63,9 +67,28 @@ function generateAgentIdentity(archetype: string, role: string, usedNames: Set<s
 
   const specs = ROLE_SPECIALIZATIONS[role] || ROLE_SPECIALIZATIONS.developer || ['General expertise'];
   const specialization = specs[Math.floor(Math.random() * specs.length)];
-  const bio = `${displayName} is a ${specialization.toLowerCase()} specialist serving as ${archetype}. Focused, methodical, and collaborative.`;
 
-  return { firstName, lastName, displayName, gender, bio, specialization };
+  // Age diversity: 25-60 range with experience scaling (#562)
+  const age = 25 + Math.floor(Math.random() * 36);
+  const yearsExp = Math.max(1, age - 22 - Math.floor(Math.random() * 5));
+  const seniority = yearsExp >= 15 ? 'senior' : yearsExp >= 8 ? 'mid-level' : 'early-career';
+
+  const STYLES = ['Analytical and precise', 'Collaborative and empathetic', 'Direct and action-oriented', 'Thoughtful and methodical', 'Creative and experimental'];
+  const communicationStyle = STYLES[Math.floor(Math.random() * STYLES.length)];
+
+  const expertiseAreas = [specialization, ...specs.filter(s => s !== specialization).slice(0, 2)];
+
+  const backstory = `${yearsExp} years of experience in ${specialization.toLowerCase()}. Previously worked on ${
+    ['enterprise SaaS platforms', 'open-source developer tools', 'fintech applications', 'healthcare systems', 'e-commerce platforms', 'IoT infrastructure'][Math.floor(Math.random() * 6)]
+  }. Known for ${communicationStyle.toLowerCase()} approach.`;
+
+  const bio = `${displayName} is a ${seniority} ${specialization.toLowerCase()} specialist (${yearsExp}y exp). ${communicationStyle}. ${
+    seniority === 'senior' ? 'Mentors junior team members and drives architectural decisions.' :
+    seniority === 'mid-level' ? 'Balances independent work with team collaboration.' :
+    'Eager learner who brings fresh perspectives to the team.'
+  }`;
+
+  return { firstName, lastName, displayName, gender, bio, specialization, age, backstory, communicationStyle, expertiseAreas };
 }
 
 const log = logger.child({ module: 'building-manager' });
@@ -582,12 +605,14 @@ export function applyBlueprint(buildingId: string, blueprint: BlueprintData): Re
 
     db.prepare(`
       INSERT INTO agents (id, name, role, building_id, room_access,
-        first_name, last_name, display_name, gender, bio, specialization)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        first_name, last_name, display_name, gender, bio, specialization,
+        age, backstory, communication_style, expertise_areas)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       agentId, agent.name, agent.role, buildingId, JSON.stringify(agent.rooms),
       profile.firstName, profile.lastName, profile.displayName,
       profile.gender, profile.bio, profile.specialization,
+      profile.age, profile.backstory, profile.communicationStyle, JSON.stringify(profile.expertiseAreas),
     );
     agentsCreated++;
   }

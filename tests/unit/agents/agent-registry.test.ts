@@ -42,6 +42,8 @@ describe('Agent Registry', () => {
         specialization TEXT,
         gender TEXT,
         profile_generated INTEGER DEFAULT 0,
+        age INTEGER, backstory TEXT, communication_style TEXT,
+        expertise_areas TEXT DEFAULT '[]', subject_reference TEXT,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       );

@@ -124,10 +124,15 @@ export function registerAgent({
     || (firstName && lastName ? `${firstName} ${lastName}` : null)
     || (firstName || null);
 
+  // Auto-generate age and bio if not provided (#562)
+  const autoAge = 25 + Math.floor(Math.random() * 36);
+  const autoYears = Math.max(1, autoAge - 22 - Math.floor(Math.random() * 5));
+  const autoBio = bio || `${computedDisplayName || name} is a ${specialization || role} specialist with ${autoYears} years of experience.`;
+
   db.prepare(`
     INSERT INTO agents (id, name, role, building_id, capabilities, room_access, badge, config,
-      first_name, last_name, display_name, nickname, bio, photo_url, specialization, gender, profile_generated)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      first_name, last_name, display_name, nickname, bio, photo_url, specialization, gender, profile_generated, age)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name,
@@ -141,11 +146,12 @@ export function registerAgent({
     lastName || null,
     computedDisplayName,
     nickname || null,
-    bio || null,
+    autoBio,
     photoUrl || null,
     specialization || null,
     gender || null,
     0,
+    autoAge,
   );
 
   log.info({ id, name, role, buildingId, roomAccess, hasBadge: !!badgeStr }, 'Agent registered');

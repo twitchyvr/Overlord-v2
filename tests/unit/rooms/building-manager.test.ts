@@ -56,6 +56,8 @@ function setupDb(): Database.Database {
     first_name TEXT, last_name TEXT, display_name TEXT, nickname TEXT,
     bio TEXT, photo_url TEXT, specialization TEXT, gender TEXT,
     profile_generated INTEGER DEFAULT 0,
+    age INTEGER, backstory TEXT, communication_style TEXT,
+    expertise_areas TEXT DEFAULT '[]', subject_reference TEXT,
     created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
   )`).run();
 
