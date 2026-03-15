@@ -55,6 +55,7 @@ export class BuildingView extends Component {
     this._floors = [];
     this._expandedFloors = new Set(); // allow multiple floors expanded
     this._agentPositions = {};
+    this._collapsed = false;
   }
 
   mount() {
@@ -225,8 +226,23 @@ export class BuildingView extends Component {
     );
     this.el.appendChild(stats);
 
+    // ── Collapse toggle button ──
+    const collapseBtn = h('button', {
+      class: 'sidebar-collapse-toggle',
+      title: this._collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+      'aria-label': this._collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+    }, this._collapsed ? '\u25B6' : '\u25C0');
+    collapseBtn.addEventListener('click', () => {
+      this._collapsed = !this._collapsed;
+      this.el.classList.toggle('collapsed', this._collapsed);
+      this.render();
+    });
+    this.el.appendChild(collapseBtn);
+
     // ── Resize handle ──
-    this._initResizeHandle();
+    if (!this._collapsed) {
+      this._initResizeHandle();
+    }
   }
 
   // ── Floor Section (collapsible) ────────────────────────
@@ -293,6 +309,14 @@ export class BuildingView extends Component {
 
     // Toggle expand/collapse — shared logic for click and keyboard
     const toggleFloor = () => {
+      // If sidebar is collapsed, expand it and this floor
+      if (this._collapsed) {
+        this._collapsed = false;
+        this.el.classList.remove('collapsed');
+        this._expandedFloors.add(floor.id);
+        this.render();
+        return;
+      }
       // Cancel any in-flight collapse animation to prevent double-body race condition
       const inflightBody = section.querySelector('.floor-section-body.collapsing');
       if (inflightBody) inflightBody.remove();

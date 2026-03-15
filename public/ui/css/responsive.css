@@ -31,6 +31,71 @@
   position: relative; /* For resize handle positioning */
 }
 
+/* ── Collapsed sidebar ── */
+#building-panel.collapsed {
+  width: var(--sidebar-collapsed-width);
+  min-width: var(--sidebar-collapsed-width);
+  max-width: var(--sidebar-collapsed-width);
+  transition: width var(--duration-normal, 200ms) var(--ease-default, ease);
+}
+#building-panel.collapsed .building-header,
+#building-panel.collapsed .building-stats,
+#building-panel.collapsed .building-foundation,
+#building-panel.collapsed .sidebar-resize-handle {
+  display: none;
+}
+#building-panel.collapsed .building-tree {
+  padding: var(--sp-1);
+  gap: var(--sp-1);
+}
+#building-panel.collapsed .floor-section {
+  border: none;
+  border-left: 3px solid var(--floor-section-color, var(--border-secondary));
+  border-radius: var(--radius-sm);
+}
+#building-panel.collapsed .floor-section-header {
+  padding: var(--sp-2);
+  justify-content: center;
+}
+#building-panel.collapsed .floor-chevron,
+#building-panel.collapsed .floor-section-name,
+#building-panel.collapsed .floor-section-count,
+#building-panel.collapsed .floor-agent-indicator {
+  display: none;
+}
+#building-panel.collapsed .floor-type-icon {
+  font-size: 18px;
+  width: auto;
+}
+#building-panel.collapsed .floor-section-body {
+  display: none;
+}
+
+/* Collapse toggle button */
+.sidebar-collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: var(--sp-2) 0;
+  border: none;
+  border-top: 1px solid var(--border-secondary);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  transition: color var(--duration-fast), background var(--duration-fast);
+  flex-shrink: 0;
+}
+.sidebar-collapse-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+.sidebar-collapse-toggle:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: -2px;
+}
+
 /* ── Center: Chat or Dashboard ── */
 #center-panel {
   flex: 1;
