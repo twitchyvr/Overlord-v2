@@ -4116,6 +4116,99 @@
   align-content: start;
 }
 
+/* ── Pipeline Stepper (#611) ──── */
+.pipeline-stepper {
+  padding: var(--space-4, 16px);
+}
+.pipeline-stages-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+.pipeline-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 8px 6px;
+  border-radius: var(--radius-md, 6px);
+  transition: background var(--duration-fast, 0.15s);
+  min-width: 56px;
+}
+.pipeline-stage:hover {
+  background: var(--surface-hover, rgba(255,255,255,0.05));
+}
+.pipeline-stage-icon {
+  font-size: 1.2rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid var(--border-secondary, #333);
+}
+.pipeline-stage--pending .pipeline-stage-icon {
+  color: var(--text-muted);
+  border-color: var(--border-secondary, #333);
+}
+.pipeline-stage--active .pipeline-stage-icon {
+  border-color: var(--accent-blue, #38bdf8);
+  animation: pipeline-pulse 1.5s ease-in-out infinite;
+}
+.pipeline-stage--passed .pipeline-stage-icon {
+  border-color: var(--accent-green, #22c55e);
+  background: rgba(34, 197, 94, 0.1);
+}
+.pipeline-stage--failed .pipeline-stage-icon {
+  border-color: var(--accent-red, #ef4444);
+  background: rgba(239, 68, 68, 0.1);
+}
+.pipeline-stage--waiting .pipeline-stage-icon {
+  border-color: var(--accent-yellow, #f59e0b);
+  animation: pipeline-pulse-warn 2s ease-in-out infinite;
+}
+@keyframes pipeline-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(56, 189, 248, 0); }
+}
+@keyframes pipeline-pulse-warn {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+}
+.pipeline-stage-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+.pipeline-stage--active .pipeline-stage-label,
+.pipeline-stage--passed .pipeline-stage-label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.pipeline-stage-attempts {
+  font-size: 0.6rem;
+  color: var(--accent-yellow, #f59e0b);
+}
+.pipeline-connector {
+  width: 20px;
+  height: 2px;
+  background: var(--border-secondary, #333);
+  flex-shrink: 0;
+}
+.pipeline-connector--done {
+  background: var(--accent-green, #22c55e);
+}
+.pipeline-current-indicator {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: var(--space-2, 8px);
+}
+
 /* ── Script Category Groups (#569) ──── */
 .scripts-category-section {
   margin-bottom: var(--space-2, 8px);

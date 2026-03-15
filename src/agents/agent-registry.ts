@@ -128,7 +128,7 @@ export function registerAgent({
   const autoAge = 25 + Math.floor(Math.random() * 36);
   const autoYears = Math.max(1, autoAge - 22 - Math.floor(Math.random() * 5));
   // Only auto-generate bio when not explicitly provided (bio param defaults to null)
-  const autoBio = bio != null ? bio : `${computedDisplayName || name} is a ${specialization || role} specialist with ${autoYears} years of experience.`;
+  const autoBio = bio !== null && bio !== undefined ? bio : `${computedDisplayName || name} is a ${specialization || role} specialist with ${autoYears} years of experience.`;
 
   db.prepare(`
     INSERT INTO agents (id, name, role, building_id, capabilities, room_access, badge, config,

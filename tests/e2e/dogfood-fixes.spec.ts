@@ -856,4 +856,42 @@ test.describe('Dogfood: Session Fixes', () => {
       expect(js).toContain('overlord-show-thinking');
     }
   });
+
+  // #611 — Pipeline UI stepper component
+  test('#611: Pipeline stepper component renders 8 stages with correct states', async ({ page }) => {
+    // Verify the component exists and is importable
+    const js = await page.evaluate(() => fetch('/ui/components/pipeline-stepper.js').then(r => r.text()));
+
+    // Must have 8 stage definitions
+    expect(js).toContain("id: 'code'");
+    expect(js).toContain("id: 'iterate'");
+    expect(js).toContain("id: 'static-test'");
+    expect(js).toContain("id: 'deep-test'");
+    expect(js).toContain("id: 'syntax'");
+    expect(js).toContain("id: 'review'");
+    expect(js).toContain("id: 'e2e'");
+    expect(js).toContain("id: 'dogfood'");
+
+    // Must have state configuration
+    expect(js).toContain('not-reached');
+    expect(js).toContain('pipeline-stage--active');
+    expect(js).toContain('pipeline-stage--passed');
+    expect(js).toContain('pipeline-stage--failed');
+
+    // Must export the class
+    expect(js).toContain('export class PipelineStepper');
+
+    // Must have render/update methods
+    expect(js).toContain('render()');
+    expect(js).toContain('update(');
+
+    // Verify CSS exists
+    const css = await page.evaluate(() => fetch('/ui/css/components.css').then(r => r.text()));
+    expect(css).toContain('.pipeline-stepper');
+    expect(css).toContain('.pipeline-stage-icon');
+    expect(css).toContain('@keyframes pipeline-pulse');
+    expect(css).toContain('.pipeline-connector');
+    // Review fix: separate amber pulse for waiting state
+    expect(css).toContain('@keyframes pipeline-pulse-warn');
+  });
 });
