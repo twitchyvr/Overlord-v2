@@ -78,7 +78,7 @@ import {
   PipelineRecordSchema, PipelineGetSchema, PipelineBuildingSchema, PipelineLoopBackSchema,
   MemorySearchSchema, MemoryContextSchema, MemoryStatsSchema,
   ModelProviderSchema, ModelRecommendSchema, ModelGetSchema, ModelCompareSchema,
-  MessagingModeSchema,
+  MessagingModeSchema, GnapBuildingSchema,
   LogLevelSetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
@@ -1154,32 +1154,44 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       if (ack) ack({ ok: true, data: { mode: parsed.mode } });
     });
 
-    handle(socket, 'gnap:status', EmptyPayloadSchema, (_data, ack) => {
+    handle(socket, 'gnap:status', GnapBuildingSchema, (parsed, ack) => {
       const mode = process.env.MESSAGING_MODE || 'internal';
       if (mode !== 'gnap') {
         if (ack) ack({ ok: true, data: { enabled: false, mode, message: 'GNAP is not the active messaging mode' } });
         return;
       }
-      // Try to instantiate adapter for the active building's working directory
+      // Look up the building's working directory
+      const db = getDb();
+      const building = db.prepare('SELECT working_directory FROM buildings WHERE id = ?').get(parsed.buildingId) as { working_directory: string | null } | undefined;
+      if (!building?.working_directory) {
+        if (ack) ack({ ok: true, data: { enabled: false, mode, error: 'Building has no working directory set' } });
+        return;
+      }
       try {
-        const adapter = new GnapMessagingAdapter({ repoPath: process.env.GNAP_REPO_PATH || '/tmp/overlord-gnap' });
+        const adapter = new GnapMessagingAdapter({ repoPath: building.working_directory });
         const status = adapter.getStatus();
-        if (ack) ack({ ok: true, data: { ...status, mode } });
+        if (ack) ack({ ok: true, data: { ...status, mode, buildingId: parsed.buildingId } });
       } catch (e) {
         if (ack) ack({ ok: true, data: { enabled: false, mode, error: e instanceof Error ? e.message : String(e) } });
       }
     });
 
-    handle(socket, 'gnap:test', EmptyPayloadSchema, async (_data, ack) => {
+    handle(socket, 'gnap:test', GnapBuildingSchema, async (parsed, ack) => {
       const mode = process.env.MESSAGING_MODE || 'internal';
       if (mode !== 'gnap') {
         if (ack) ack({ ok: false, error: { code: 'GNAP_DISABLED', message: 'Switch to GNAP mode first in Settings', retryable: false } });
         return;
       }
+      const db = getDb();
+      const building = db.prepare('SELECT working_directory FROM buildings WHERE id = ?').get(parsed.buildingId) as { working_directory: string | null } | undefined;
+      if (!building?.working_directory) {
+        if (ack) ack({ ok: false, error: { code: 'NO_WORKING_DIR', message: 'Building has no working directory — set one in Settings > Folders', retryable: false } });
+        return;
+      }
       try {
-        const adapter = new GnapMessagingAdapter({ repoPath: process.env.GNAP_REPO_PATH || '/tmp/overlord-gnap' });
+        const adapter = new GnapMessagingAdapter({ repoPath: building.working_directory });
         const result = await adapter.sendTest();
-        if (ack) ack({ ok: result.ok, data: result });
+        if (ack) ack({ ok: result.ok, data: { ...result, buildingId: parsed.buildingId, directory: building.working_directory } });
       } catch (e) {
         if (ack) ack({ ok: false, error: { code: 'GNAP_ERROR', message: e instanceof Error ? e.message : String(e), retryable: false } });
       }

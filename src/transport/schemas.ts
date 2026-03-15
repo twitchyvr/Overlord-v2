@@ -822,6 +822,10 @@ export const MessagingModeSchema = z.object({
   mode: z.enum(['internal', 'gnap']),
 });
 
+export const GnapBuildingSchema = z.object({
+  buildingId: id(),
+});
+
 // ─── Model Registry Schemas (#556) ───
 
 export const ModelProviderSchema = z.object({ provider: z.string().max(50) });
