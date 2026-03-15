@@ -1,29 +1,68 @@
-name: Phase Work Item
-description: Track work for a specific implementation phase
-title: "phase: "
-labels: ["phase-work"]
+name: Task / Work Item
+description: Track a specific implementation task within a milestone
+title: "[task]: "
+labels: ["triage"]
 body:
-  - type: dropdown
-    id: phase
+  - type: markdown
     attributes:
-      label: Implementation Phase
+      value: |
+        Define a concrete, deliverable work item. Every task goes through the
+        8-stage Continuous Development Loop before it can be closed.
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Work Type
       options:
-        - "Phase 0: Stabilize v1"
-        - "Phase 1: Foundation (Bus + Storage + Config)"
-        - "Phase 2: Rooms (Room Manager + Testing Lab + Exit Protocol)"
-        - "Phase 3: Agents + AI (Registry + Providers + Tool Executor)"
-        - "Phase 4: All Rooms + RAID (Remaining Rooms + Phase Gates)"
-        - "Phase 5: Phase Zero (Strategist + Building Architect)"
-        - "Phase 6: UI (Building-Themed Frontend)"
-        - "Phase 7: Plugins + Polish (Scripting + Integration)"
+        - Feature implementation
+        - Bug fix
+        - UI/UX improvement
+        - Performance optimization
+        - Testing (unit, integration, E2E)
+        - Infrastructure / DevOps
+        - Spike / Research
+        - Documentation
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Target Layer(s)
+      multiple: true
+      options:
+        - Core
+        - Transport
+        - Rooms
+        - Agents
+        - Tools
+        - AI
+        - Storage
+        - Plugins
+        - UI
+        - E2E Tests
+        - CI/CD
+        - Infrastructure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Critical
+        - High
+        - Medium
+        - Low
     validations:
       required: true
 
   - type: textarea
     id: description
     attributes:
-      label: Work Description
-      description: What needs to be done?
+      label: Description
+      description: What needs to be done? Be specific.
     validations:
       required: true
 
@@ -31,11 +70,12 @@ body:
     id: deliverables
     attributes:
       label: Deliverables
-      description: What artifacts will this produce?
+      description: What files/modules will this produce or modify?
       placeholder: |
-        - [ ] File: src/core/bus.js
-        - [ ] File: src/storage/db.js
-        - [ ] Test: tests/unit/core/bus.test.js
+        - [ ] src/rooms/pipeline.ts (new)
+        - [ ] src/storage/db.ts (modify — add table)
+        - [ ] tests/unit/rooms/pipeline.test.ts (new)
+        - [ ] tests/e2e/pipeline.spec.ts (new — Playwright)
     validations:
       required: true
 
@@ -44,15 +84,24 @@ body:
     attributes:
       label: Dependencies
       description: What must be completed before this can start?
-      placeholder: "Requires Phase 1 foundation to be complete"
+      placeholder: |
+        - Depends on #NNN
+        - Requires database migration from #NNN
 
   - type: textarea
     id: acceptance
     attributes:
       label: Acceptance Criteria
-      description: How do we know this is done?
+      description: |
+        How do we know this is done? Remember: every task must pass all 8 stages
+        of the CDL (Code → Iterate → Static Test → Deep Static Test → Check Syntax →
+        Code Review → E2E → Dogfood) before closure.
       placeholder: |
-        - [ ] All tests pass
-        - [ ] Integration test demonstrates end-to-end flow
+        - [ ] Implementation complete
+        - [ ] Unit tests pass (npm test)
+        - [ ] Type check passes (tsc --noEmit)
+        - [ ] Lint passes (eslint)
+        - [ ] Playwright E2E test written and passing
+        - [ ] Dogfooded through the UI
     validations:
       required: true

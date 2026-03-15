@@ -1,0 +1,61 @@
+name: Documentation
+description: Report missing, outdated, or incorrect documentation
+title: "[docs]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us keep documentation accurate and complete.
+
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: Documentation Type
+      options:
+        - README.md
+        - CHANGELOG.md
+        - CONTRIBUTING.md
+        - CLAUDE.md (project instructions)
+        - GitHub Wiki
+        - Inline code comments / JSDoc
+        - Issue templates / PR templates
+        - Architecture docs
+        - API documentation
+        - User guide
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: problem_type
+    attributes:
+      label: Problem Type
+      options:
+        - Missing — Documentation doesn't exist for this feature
+        - Outdated — Documentation exists but describes old behavior
+        - Incorrect — Documentation says one thing, code does another
+        - Unclear — Documentation exists but is confusing
+        - Incomplete — Documentation covers the topic but misses important details
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to change?
+      description: Describe what's wrong and what the documentation should say
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: Where is (or should be) this documentation?
+      placeholder: |
+        File: README.md, Section: "Setup"
+        OR
+        This doesn't exist yet — should be added to the Wiki
+    validations:
+      required: true

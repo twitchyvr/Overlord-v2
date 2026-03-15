@@ -1,7 +1,7 @@
 name: Feature Request
 description: Propose a new feature or enhancement
-title: "feat: "
-labels: ["enhancement"]
+title: "[feature]: "
+labels: ["feature", "triage"]
 body:
   - type: markdown
     attributes:
@@ -19,11 +19,19 @@ body:
         - Room Contract / Exit Document
         - Phase Gate Enhancement
         - RAID Log Enhancement
+        - Pipeline / Quality Enforcement
         - Plugin / Scripting
         - AI Provider Integration
-        - UI / Dashboard
+        - UI / Dashboard / Views
+        - Navigation / Layout
+        - Settings / Configuration
+        - Cloud / Deployment
+        - Gateway / Remote Execution
+        - Multi-Repo / Project Composition
         - CLI / Commands
         - Performance / Scalability
+        - Accessibility
+        - Mobile / Responsive
         - Other
     validations:
       required: true
@@ -31,7 +39,9 @@ body:
   - type: dropdown
     id: layer
     attributes:
-      label: Target Layer
+      label: Target Layer(s)
+      description: Which architectural layers will this touch?
+      multiple: true
       options:
         - Core
         - Transport
@@ -42,7 +52,34 @@ body:
         - Storage
         - Plugins
         - UI
-        - Multiple Layers
+        - E2E Tests
+        - CI/CD
+        - Infrastructure / Cloud
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Suggested Priority
+      options:
+        - Critical — Must have for current milestone
+        - High — Should have for current milestone
+        - Medium — Next milestone
+        - Low — Nice to have, no rush
+    validations:
+      required: true
+
+  - type: dropdown
+    id: effort
+    attributes:
+      label: Estimated Effort
+      description: How large is this feature?
+      options:
+        - Small — Single file change, < 1 hour
+        - Medium — Multiple files, < 1 day
+        - Large — Multiple modules, multi-day
+        - Epic — Cross-cutting, needs breakdown into sub-issues
     validations:
       required: true
 
@@ -50,8 +87,8 @@ body:
     id: problem
     attributes:
       label: Problem Statement
-      description: What problem does this feature solve?
-      placeholder: "Currently, agents cannot... This means..."
+      description: What problem does this feature solve? Who is affected?
+      placeholder: "Currently, users cannot... This means..."
     validations:
       required: true
 
@@ -59,7 +96,7 @@ body:
     id: solution
     attributes:
       label: Proposed Solution
-      description: How should this feature work?
+      description: How should this feature work? Include UI mockups, API design, or architecture notes.
     validations:
       required: true
 
@@ -67,15 +104,26 @@ body:
     id: alternatives
     attributes:
       label: Alternatives Considered
-      description: What other approaches did you consider?
+      description: What other approaches were considered and why were they rejected?
 
   - type: textarea
     id: acceptance
     attributes:
       label: Acceptance Criteria
-      description: How do we know this feature is complete?
+      description: How do we know this feature is complete? Include E2E test expectations.
       placeholder: |
         - [ ] Criterion 1
         - [ ] Criterion 2
+        - [ ] Playwright E2E test verifies the feature works through the UI
     validations:
       required: true
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related Issues
+      description: Link any related issues, epics, or discussions
+      placeholder: |
+        - Related to #NNN
+        - Part of epic #NNN
+        - Depends on #NNN

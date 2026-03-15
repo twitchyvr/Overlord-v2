@@ -14,6 +14,7 @@
     "test:e2e": "npx playwright test",
     "test:e2e:headed": "npx playwright test --headed",
     "test:e2e:debug": "npx playwright test --debug",
+    "test:e2e:new": "tsx scripts/new-e2e-test.ts",
     "lint": "eslint src/ tests/",
     "lint:fix": "eslint src/ tests/ --fix",
     "typecheck": "tsc --noEmit",

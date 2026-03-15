@@ -1,0 +1,91 @@
+name: Refactor / Technical Debt
+description: Propose code restructuring or technical debt cleanup
+title: "[refactor]: "
+labels: ["refactor", "tech-debt"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe code that needs restructuring. Refactors should not change behavior —
+        only improve code quality, maintainability, or architecture compliance.
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Affected Layer(s)
+      multiple: true
+      options:
+        - Core
+        - Transport
+        - Rooms
+        - Agents
+        - Tools
+        - AI
+        - Storage
+        - Plugins
+        - UI
+        - Tests
+    validations:
+      required: true
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: Urgency
+      options:
+        - Blocking — Prevents other work from proceeding
+        - High — Accumulating technical debt, slowing development
+        - Medium — Should be cleaned up, but not urgent
+        - Low — Nice to have, opportunistic cleanup
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_state
+    attributes:
+      label: Current State
+      description: What does the code look like now? What's wrong with it?
+      placeholder: |
+        The current implementation in `src/rooms/room-manager.ts` has...
+    validations:
+      required: true
+
+  - type: textarea
+    id: target_state
+    attributes:
+      label: Target State
+      description: What should the code look like after the refactor?
+    validations:
+      required: true
+
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Why This Matters
+      description: What problems does this refactor solve? What does it unblock?
+    validations:
+      required: true
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks
+      description: What could go wrong? What regressions should we watch for?
+      placeholder: |
+        - Risk: Breaking existing room lifecycle
+        - Mitigation: Full test suite covers room enter/exit
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How do we know the refactor is complete and correct?
+      placeholder: |
+        - [ ] All existing tests still pass (zero regressions)
+        - [ ] Architecture layer ordering preserved (npm run validate)
+        - [ ] No behavior changes (same inputs produce same outputs)
+        - [ ] Playwright E2E tests pass
+    validations:
+      required: true
