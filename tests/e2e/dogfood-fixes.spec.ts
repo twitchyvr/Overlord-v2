@@ -959,4 +959,68 @@ test.describe('Dogfood: Session Fixes', () => {
 
     expect(result).toBe('pass');
   });
+
+  // #613 — Failure loop-back mechanism
+  test('#613: Pipeline loop-back records failure and returns context', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      if (!window.overlordSocket) return 'no socket';
+
+      const b = await window.overlordSocket.createBuilding({
+        name: 'LoopBackE2E', config: { projectDescription: 'x', template: 'web-app', effortLevel: 'easy' }
+      });
+      if (!b?.ok) return 'create failed';
+      const bid = b.data.id;
+
+      // Create a task
+      const task = await new Promise(r =>
+        window.overlordSocket.socket.emit('task:create', {
+          buildingId: bid, title: 'LoopBack Task', status: 'pending', priority: 'normal',
+        }, r)
+      );
+      const taskId = (task as any)?.data?.id;
+      if (!taskId) return 'no task id';
+
+      // Record a passing code stage first
+      await new Promise(r =>
+        window.overlordSocket.socket.emit('pipeline:record', {
+          taskId, buildingId: bid, stage: 'code', status: 'passed', attempt: 1,
+        }, r)
+      );
+
+      // Now trigger a loop-back from static-test failure
+      const lb = await new Promise(r =>
+        window.overlordSocket.socket.emit('pipeline:loop-back', {
+          taskId, buildingId: bid,
+          failedStage: 'static-test',
+          errors: ['Test suite failed: 3 tests', 'Expected true to be false'],
+          attempt: 1,
+        }, r)
+      );
+
+      const data = (lb as any)?.data;
+      if (!data) return 'no loop-back data';
+      if (data.action !== 'loop-back') return 'wrong action: ' + data.action;
+      if (data.targetStage !== 'code') return 'wrong target: ' + data.targetStage;
+      if (data.nextAttempt !== 2) return 'wrong attempt: ' + data.nextAttempt;
+      if (!data.failureContext) return 'no failure context';
+      if (data.failureContext.failedStage !== 'static-test') return 'wrong failed stage';
+      if (!data.failureContext.suggestion) return 'no suggestion';
+
+      // Test escalation at max attempts
+      const esc = await new Promise(r =>
+        window.overlordSocket.socket.emit('pipeline:loop-back', {
+          taskId, buildingId: bid,
+          failedStage: 'static-test',
+          errors: ['Still failing'],
+          attempt: 5,
+        }, r)
+      );
+      const escData = (esc as any)?.data;
+      if (escData?.action !== 'escalate') return 'should escalate at attempt 5: ' + escData?.action;
+
+      return 'pass';
+    });
+
+    expect(result).toBe('pass');
+  });
 });

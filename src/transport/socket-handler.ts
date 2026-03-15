@@ -75,7 +75,7 @@ import {
   AgentResetSchema,
   RoomProviderSetSchema,
   RoomEscalateSchema,
-  PipelineRecordSchema, PipelineGetSchema, PipelineBuildingSchema,
+  PipelineRecordSchema, PipelineGetSchema, PipelineBuildingSchema, PipelineLoopBackSchema,
   LogLevelSetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
@@ -87,7 +87,7 @@ import { listPlugins, getPlugin, loadPlugin, unloadPlugin, reloadPlugin, getPlug
 import { validateLuaSyntax } from '../plugins/lua-validator.js';
 import { exportBundle, importBundle } from '../plugins/plugin-bundler.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
-import { recordEvidence, getTaskEvidence, getTaskPipelineStatus, getBuildingEvidence } from '../rooms/pipeline-evidence.js';
+import { recordEvidence, getTaskEvidence, getTaskPipelineStatus, getBuildingEvidence, loopBackToCode } from '../rooms/pipeline-evidence.js';
 import type { PipelineStage } from '../rooms/pipeline-evidence.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
@@ -1168,6 +1168,21 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
 
     handle(socket, 'pipeline:building-evidence', PipelineBuildingSchema, (parsed, ack) => {
       if (ack) ack(getBuildingEvidence(parsed.buildingId, parsed.stage as PipelineStage | undefined));
+    });
+
+    handle(socket, 'pipeline:loop-back', PipelineLoopBackSchema, (parsed, ack) => {
+      const result = loopBackToCode({
+        taskId: parsed.taskId,
+        buildingId: parsed.buildingId,
+        failedStage: parsed.failedStage as PipelineStage,
+        errors: parsed.errors,
+        attempt: parsed.attempt,
+      });
+      if (result.ok) {
+        const data = result.data as Record<string, unknown>;
+        bus.emit('pipeline:loop-back', { taskId: parsed.taskId, stage: parsed.failedStage, action: data.action });
+      }
+      if (ack) ack(result);
     });
 
     // ─── Agent Reset (#559) ───

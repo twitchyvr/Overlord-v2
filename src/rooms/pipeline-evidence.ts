@@ -122,3 +122,90 @@ export function getTaskPipelineStatus(taskId: string): Result {
     totalAttempts: stages.reduce((sum, s) => sum + s.attempts, 0),
   });
 }
+
+// ─── Failure Loop-Back (#613) ───
+
+const MAX_ATTEMPTS = 5;
+
+export interface FailureContext {
+  failedStage: PipelineStage;
+  failedAtAttempt: number;
+  errors: string[];
+  previousAttempts: Array<{ stage: string; status: string; attempt: number }>;
+  suggestion: string;
+}
+
+/**
+ * Record a stage failure and prepare context for loop-back to Stage 1.
+ * Returns structured failure context that agents can use to fix the issue.
+ */
+export function loopBackToCode(params: {
+  taskId: string;
+  buildingId: string;
+  failedStage: PipelineStage;
+  errors: string[];
+  attempt: number;
+}): Result {
+  const { taskId, buildingId, failedStage, errors, attempt } = params;
+
+  // Record the failure as evidence
+  const failResult = recordEvidence({
+    taskId,
+    buildingId,
+    stage: failedStage,
+    status: 'failed',
+    evidenceData: { errors, loopBack: true },
+    attempt,
+  });
+
+  if (!failResult.ok) return failResult;
+
+  // Check if max attempts exceeded
+  if (attempt >= MAX_ATTEMPTS) {
+    log.warn({ taskId, failedStage, attempt }, 'Max pipeline attempts exceeded — escalating');
+    return ok({
+      action: 'escalate',
+      reason: `Stage "${failedStage}" has failed ${attempt} times. Manual intervention required.`,
+      failureContext: buildFailureContext(taskId, failedStage, errors, attempt),
+    });
+  }
+
+  // Prepare loop-back context for the code stage
+  const context = buildFailureContext(taskId, failedStage, errors, attempt);
+
+  log.info({ taskId, failedStage, attempt, nextAttempt: attempt + 1 }, 'Pipeline loop-back to Stage 1');
+
+  return ok({
+    action: 'loop-back',
+    targetStage: 'code',
+    nextAttempt: attempt + 1,
+    failureContext: context,
+  });
+}
+
+function buildFailureContext(taskId: string, failedStage: PipelineStage, errors: string[], attempt: number): FailureContext {
+  const db = getDb();
+
+  // Get previous attempts for this task
+  const previousAttempts = db.prepare(
+    'SELECT stage, status, attempt FROM pipeline_evidence WHERE task_id = ? ORDER BY stage_index, attempt',
+  ).all(taskId) as Array<{ stage: string; status: string; attempt: number }>;
+
+  // Generate a suggestion based on the failed stage
+  const suggestions: Record<string, string> = {
+    'static-test': 'Fix the failing tests. Do NOT weaken tests or skip them.',
+    'deep-test': 'Fix type errors or layer violations. Run tsc --noEmit locally.',
+    'syntax': 'Fix lint/formatting errors. Run eslint with --fix if possible.',
+    'review': 'Address code review feedback. Re-read the review comments.',
+    'e2e': 'The feature broke at runtime. Boot the server and verify manually.',
+    'dogfood': 'The feature does not work as expected through the UI. Test it yourself.',
+  };
+
+  return {
+    failedStage,
+    failedAtAttempt: attempt,
+    errors,
+    previousAttempts,
+    suggestion: suggestions[failedStage] || 'Review the errors and fix the root cause.',
+  };
+}

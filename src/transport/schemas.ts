@@ -816,6 +816,14 @@ export const PipelineBuildingSchema = z.object({
   stage: z.enum(['code', 'iterate', 'static-test', 'deep-test', 'syntax', 'review', 'e2e', 'dogfood']).optional(),
 });
 
+export const PipelineLoopBackSchema = z.object({
+  taskId: id(),
+  buildingId: id(),
+  failedStage: z.enum(['code', 'iterate', 'static-test', 'deep-test', 'syntax', 'review', 'e2e', 'dogfood']),
+  errors: z.array(z.string().max(2000)).max(50),
+  attempt: z.number().int().min(1).max(100),
+});
+
 // ─── Room Escalation Schema (#589) ───
 
 export const RoomEscalateSchema = z.object({
