@@ -671,17 +671,44 @@ export class ChatView extends Component {
     }).catch(() => { Toast.error('Failed to submit plan review'); });
   }
 
-  /** Build a thinking bubble. */
+  /** Build a thinking bubble — supports plain text and structured thread data (#558). */
   _buildThinkingBubble(thinking) {
     const bubble = h('div', { class: 'thinking-bubble' });
-    const toggle = h('div', { class: 'thinking-bubble-toggle' },
-      h('span', { class: 'thinking-bubble-icon' }, '\u{1F4AD}'),
-      h('span', null, 'Thinking'),
+
+    // Determine if this is a structured thinking object or plain text
+    const isStructured = thinking && typeof thinking === 'object' && !Array.isArray(thinking);
+    const text = typeof thinking === 'string' ? thinking
+      : isStructured && thinking.text ? thinking.text
+      : typeof thinking === 'object' ? JSON.stringify(thinking, null, 2)
+      : String(thinking);
+
+    // Thread label (if structured)
+    const threadLabel = isStructured && thinking.thread ? ` \u2014 ${thinking.thread}` : '';
+    const thinkingType = isStructured && thinking.type ? thinking.type : 'reasoning';
+
+    // Type-based color classes
+    const typeClass = {
+      analysis: 'thinking-type-analysis',
+      synthesis: 'thinking-type-synthesis',
+      evaluation: 'thinking-type-evaluation',
+      planning: 'thinking-type-planning',
+      reasoning: 'thinking-type-reasoning',
+    }[thinkingType] || 'thinking-type-reasoning';
+
+    const toggle = h('div', { class: `thinking-bubble-toggle ${typeClass}` },
+      h('span', { class: 'thinking-bubble-icon' }, '\u{1F9E0}'),
+      h('span', { class: 'thinking-bubble-label' }, `Thinking${threadLabel}`),
+      isStructured && thinking.duration_ms
+        ? h('span', { class: 'thinking-bubble-duration' }, `${thinking.duration_ms}ms`)
+        : null,
       h('span', { class: 'thinking-bubble-chevron' }, '\u25B6')
     );
 
     const body = h('div', { class: 'thinking-bubble-body', style: { display: 'none' } });
-    body.textContent = typeof thinking === 'string' ? thinking : JSON.stringify(thinking, null, 2);
+    // Render as preformatted text for readability
+    const pre = h('pre', { class: 'thinking-bubble-text' });
+    pre.textContent = text;
+    body.appendChild(pre);
 
     toggle.addEventListener('click', () => {
       const isOpen = body.style.display !== 'none';

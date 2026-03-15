@@ -266,6 +266,30 @@
   overflow-y: auto;
 }
 
+/* ── Thinking type colors (#558) ── */
+.thinking-type-analysis .thinking-bubble-icon { color: var(--accent-blue, #38bdf8); }
+.thinking-type-synthesis .thinking-bubble-icon { color: var(--accent-green, #22c55e); }
+.thinking-type-evaluation .thinking-bubble-icon { color: var(--accent-yellow, #f59e0b); }
+.thinking-type-planning .thinking-bubble-icon { color: var(--accent-purple, #a78bfa); }
+.thinking-type-reasoning .thinking-bubble-icon { color: var(--text-muted); }
+.thinking-bubble-label {
+  font-weight: 500;
+}
+.thinking-bubble-duration {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  background: var(--surface-secondary);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.thinking-bubble-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
 /* ── Tool chips ── */
 .chat-tool-calls {
   display: flex;

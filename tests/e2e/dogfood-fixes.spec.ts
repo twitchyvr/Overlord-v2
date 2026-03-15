@@ -1116,4 +1116,29 @@ test.describe('Dogfood: Session Fixes', () => {
     expect(src).toContain('export function getStageTools');
     expect(src).toContain('export function getAllStageTools');
   });
+
+  // #558 — Multi-threaded thinking visualization
+  test('#558: Thinking bubble supports structured threads with type colors', async ({ page }) => {
+    const js = await page.evaluate(() => fetch('/ui/views/chat-view.js').then(r => r.text()));
+    const css = await page.evaluate(() => fetch('/ui/css/chat.css').then(r => r.text()));
+
+    // JS: handles structured thinking objects
+    expect(js).toContain('thinking.thread');
+    expect(js).toContain('thinking.type');
+    expect(js).toContain('thinking.duration_ms');
+    expect(js).toContain('thinking-type-analysis');
+    expect(js).toContain('thinking-type-synthesis');
+    // JS: uses textContent for XSS safety
+    expect(js).toContain('pre.textContent');
+    // JS: backward compatible with plain strings
+    expect(js).toContain("typeof thinking === 'string'");
+
+    // CSS: type-based color classes exist
+    expect(css).toContain('.thinking-type-analysis');
+    expect(css).toContain('.thinking-type-synthesis');
+    expect(css).toContain('.thinking-type-evaluation');
+    expect(css).toContain('.thinking-type-planning');
+    expect(css).toContain('.thinking-bubble-duration');
+    expect(css).toContain('.thinking-bubble-text');
+  });
 });
