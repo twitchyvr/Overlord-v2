@@ -77,6 +77,7 @@ import {
   RoomEscalateSchema,
   PipelineRecordSchema, PipelineGetSchema, PipelineBuildingSchema, PipelineLoopBackSchema,
   MemorySearchSchema, MemoryContextSchema, MemoryStatsSchema,
+  ModelProviderSchema, ModelRecommendSchema, ModelGetSchema, ModelCompareSchema,
   LogLevelSetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
@@ -90,6 +91,7 @@ import { exportBundle, importBundle } from '../plugins/plugin-bundler.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
 import { recordEvidence, getTaskEvidence, getTaskPipelineStatus, getBuildingEvidence, loopBackToCode } from '../rooms/pipeline-evidence.js';
 import { searchMemory, getRecentContext, getMemoryStats } from '../agents/agent-memory.js';
+import { listModels, getProviderModels, getRecommendedModel, getModel, compareModels } from '../ai/model-registry.js';
 import type { PipelineStage } from '../rooms/pipeline-evidence.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
@@ -1140,6 +1142,28 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         buildingId: parsed.buildingId,
       });
       if (ack) ack({ ok: true, data: leaderboard });
+    });
+
+    // ─── Model Registry (#556) ───
+
+    handle(socket, 'models:list', EmptyPayloadSchema, (_data, ack) => {
+      if (ack) ack(listModels());
+    });
+
+    handle(socket, 'models:provider', ModelProviderSchema, (parsed, ack) => {
+      if (ack) ack(getProviderModels(parsed.provider));
+    });
+
+    handle(socket, 'models:recommend', ModelRecommendSchema, (parsed, ack) => {
+      if (ack) ack(getRecommendedModel(parsed.roomType, parsed.provider));
+    });
+
+    handle(socket, 'models:get', ModelGetSchema, (parsed, ack) => {
+      if (ack) ack(getModel(parsed.modelId));
+    });
+
+    handle(socket, 'models:compare', ModelCompareSchema, (parsed, ack) => {
+      if (ack) ack(compareModels(parsed.modelIds));
     });
 
     // ─── Agent Memory (#557) ───

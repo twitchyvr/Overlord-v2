@@ -816,6 +816,18 @@ export const PipelineBuildingSchema = z.object({
   stage: z.enum(['code', 'iterate', 'static-test', 'deep-test', 'syntax', 'review', 'e2e', 'dogfood']).optional(),
 });
 
+// ─── Model Registry Schemas (#556) ───
+
+export const ModelProviderSchema = z.object({ provider: z.string().max(50) });
+export const ModelRecommendSchema = z.object({
+  roomType: z.string().max(50),
+  provider: z.string().max(50).optional(),
+});
+export const ModelGetSchema = z.object({ modelId: z.string().max(100) });
+export const ModelCompareSchema = z.object({
+  modelIds: z.array(z.string().max(100)).max(10),
+});
+
 // ─── Agent Memory Schemas (#557) ───
 
 export const MemorySearchSchema = z.object({

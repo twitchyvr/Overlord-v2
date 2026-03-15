@@ -1181,4 +1181,54 @@ test.describe('Dogfood: Session Fixes', () => {
 
     expect(result).toBe('pass');
   });
+
+  // #556 — Model registry: list, recommend, compare
+  test('#556: Model registry returns models and recommendations', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      if (!window.overlordSocket) return 'no socket';
+
+      // Test 1: models:list returns all models
+      const list = await new Promise(r =>
+        window.overlordSocket.socket.emit('models:list', {}, r)
+      );
+      if (!(list as any)?.ok) return 'list failed';
+      const models = (list as any).data;
+      if (!Array.isArray(models) || models.length < 5) return 'too few models: ' + models?.length;
+
+      // Verify model structure
+      const first = models[0];
+      if (!first.id || !first.name || !first.provider) return 'bad model structure';
+      if (typeof first.contextWindow !== 'number') return 'no contextWindow';
+      if (!Array.isArray(first.capabilities)) return 'no capabilities';
+
+      // Test 2: models:recommend returns a model for code-lab
+      const rec = await new Promise(r =>
+        window.overlordSocket.socket.emit('models:recommend', { roomType: 'code-lab' }, r)
+      );
+      if (!(rec as any)?.ok) return 'recommend failed';
+      const recommended = (rec as any).data;
+      if (!recommended?.id) return 'no recommended model';
+
+      // Test 3: models:provider filters by provider
+      const anthropic = await new Promise(r =>
+        window.overlordSocket.socket.emit('models:provider', { provider: 'anthropic' }, r)
+      );
+      if (!(anthropic as any)?.ok) return 'provider failed';
+      const anthropicModels = (anthropic as any).data;
+      if (!anthropicModels.every((m: any) => m.provider === 'anthropic')) return 'wrong provider filter';
+
+      // Test 4: models:compare returns multiple models
+      const compare = await new Promise(r =>
+        window.overlordSocket.socket.emit('models:compare', {
+          modelIds: ['claude-opus-4-6', 'MiniMax-M2.5'],
+        }, r)
+      );
+      if (!(compare as any)?.ok) return 'compare failed';
+      if ((compare as any).data.length !== 2) return 'wrong compare count';
+
+      return 'pass';
+    });
+
+    expect(result).toBe('pass');
+  });
 });
