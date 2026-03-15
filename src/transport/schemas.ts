@@ -318,6 +318,9 @@ export const ChatMessageSchema = z.object({
   roomId: z.string().max(MAX_ID).optional().default(''),
   agentId: z.string().max(MAX_ID).optional().default(''),
   threadId: z.string().max(MAX_ID).optional().default(''),
+  // Directed messaging (#585): recipient agent IDs for multicast
+  recipients: z.array(z.string().max(MAX_ID)).max(20).optional().default([]),
+  messageMode: z.enum(['broadcast', 'multicast', 'direct']).optional().default('broadcast'),
 }).passthrough();
 
 // ─── Conversation Schemas ───

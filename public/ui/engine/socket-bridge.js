@@ -1086,15 +1086,24 @@ export function initSocketBridge(socket, store, engine) {
     },
 
     sendMessage(params) {
-      const { content, text, agentId, tokens, buildingId, roomId, attachments } = params;
+      const { content, text, agentId, tokens, buildingId, roomId, attachments, recipients, messageMode } = params;
       const messageText = text || content || '';
       const activeRoom = roomId || store.get('rooms.active') || '';
       const activeBuilding = buildingId || store.get('building.active') || '';
       const threadId = store.get('conversations.active') || '';
       const attachMeta = (attachments || []).map((a) => ({ id: a.id, fileName: a.fileName, mimeType: a.mimeType, size: a.size }));
-      store.update('chat.messages', (msgs) => [...(msgs || []), { id: Date.now().toString(), role: 'user', content: messageText, agentId, attachments: attachMeta, type: 'user', timestamp: Date.now() }]);
+      store.update('chat.messages', (msgs) => [...(msgs || []), {
+        id: Date.now().toString(), role: 'user', content: messageText, agentId,
+        attachments: attachMeta, type: 'user', timestamp: Date.now(),
+        recipients: recipients || [], messageMode: messageMode || 'broadcast',
+      }]);
       store.set('ui.processing', true);
-      socket.emit('chat:message', { text: messageText, agentId: agentId || '', tokens: tokens || [], attachments: attachments || [], buildingId: activeBuilding, roomId: activeRoom, threadId });
+      socket.emit('chat:message', {
+        text: messageText, agentId: agentId || '', tokens: tokens || [],
+        attachments: attachments || [], buildingId: activeBuilding,
+        roomId: activeRoom, threadId,
+        recipients: recipients || [], messageMode: messageMode || 'broadcast',
+      });
     },
 
     // ── Conversation methods ──

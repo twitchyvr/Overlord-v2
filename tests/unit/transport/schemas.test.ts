@@ -132,6 +132,8 @@ describe('validate()', () => {
       roomId: '',
       agentId: '',
       threadId: '',
+      recipients: [],
+      messageMode: 'broadcast',
     });
   });
 });

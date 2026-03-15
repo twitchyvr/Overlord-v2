@@ -992,7 +992,7 @@ describe('window.overlordSocket.sendMessage()', () => {
     expect(mockStore.update).toHaveBeenCalledWith('chat.messages', expect.any(Function));
     const updaterFn = mockStore.update.mock.calls.find((c: any) => c[0] === 'chat.messages')![1];
     const result = updaterFn([]);
-    expect(result[0]).toEqual({ id: String(now), role: 'user', content: 'hello', agentId: 'a1', attachments: [], type: 'user', timestamp: now });
+    expect(result[0]).toEqual({ id: String(now), role: 'user', content: 'hello', agentId: 'a1', attachments: [], type: 'user', timestamp: now, recipients: [], messageMode: 'broadcast' });
   });
 
   it('sets ui.processing to true', () => {
@@ -1006,7 +1006,7 @@ describe('window.overlordSocket.sendMessage()', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
     api.sendMessage({ content: 'hello world', agentId: 'agent-5' });
-    expect(mockSocket.emit).toHaveBeenCalledWith('chat:message', { text: 'hello world', agentId: 'agent-5', tokens: [], attachments: [], buildingId: '', roomId: '', threadId: '' });
+    expect(mockSocket.emit).toHaveBeenCalledWith('chat:message', { text: 'hello world', agentId: 'agent-5', tokens: [], attachments: [], buildingId: '', roomId: '', threadId: '', recipients: [], messageMode: 'broadcast' });
   });
 
   it('does not return a promise (synchronous fire-and-forget)', () => {

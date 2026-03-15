@@ -149,6 +149,27 @@
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
+/* ── Directed message recipients (#585) ── */
+.chat-message-recipients {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: var(--sp-1);
+  flex-wrap: wrap;
+}
+.chat-recipient-arrow {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.chat-recipient-badge {
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  background: var(--accent-bg, rgba(99, 102, 241, 0.12));
+  border: 1px solid var(--accent-dim, rgba(99, 102, 241, 0.25));
+  border-radius: 8px;
+  color: var(--accent, #6366f1);
+  font-weight: 500;
+}
 .chat-message-content {
   font-size: var(--text-base);
   line-height: var(--leading-normal);

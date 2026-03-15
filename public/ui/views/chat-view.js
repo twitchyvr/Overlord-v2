@@ -455,6 +455,19 @@ export class ChatView extends Component {
     );
     contentWrap.appendChild(meta);
 
+    // Recipient badges for multicast/direct messages (#585)
+    if (msg.recipients && msg.recipients.length > 0 && msg.messageMode !== 'broadcast') {
+      const recipientRow = h('div', { class: 'chat-message-recipients' },
+        h('span', { class: 'chat-recipient-arrow' }, '\u2192'),
+      );
+      for (const rid of msg.recipients) {
+        const rAgent = resolveAgent(rid);
+        const rName = rAgent?.display_name || rAgent?.name || rid;
+        recipientRow.appendChild(h('span', { class: 'chat-recipient-badge' }, `@${rName}`));
+      }
+      contentWrap.appendChild(recipientRow);
+    }
+
     // Message content — handle both string and array-of-blocks formats (#532)
     const content = h('div', { class: 'chat-message-content' });
 
