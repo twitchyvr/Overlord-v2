@@ -152,6 +152,11 @@ export interface AgentRow {
   bio: string | null;
   photo_url: string | null;
   specialization: string | null;
+  gender: string | null;
+  age: number | null;
+  backstory: string | null;
+  communication_style: string | null;
+  expertise_areas: string;
   profile_generated: number;
   created_at: string;
   updated_at: string;

@@ -111,9 +111,9 @@ export function registerAgent({
   if (!firstName) {
     const g = gender || (Math.random() < 0.5 ? 'female' : 'male');
     const fNames = g === 'female'
-      ? ['Aria', 'Maya', 'Elena', 'Zara', 'Nadia', 'Sierra', 'Luna', 'Freya', 'Ivy', 'Cora']
-      : ['Leo', 'Kai', 'Ravi', 'Omar', 'Felix', 'Jace', 'Marco', 'Theo', 'Ezra', 'Dion'];
-    const lNames = ['Chen', 'Park', 'Santos', 'Andersen', 'Russo', 'Okafor', 'Nakamura', 'Levy', 'Rivera', 'Singh'];
+      ? ['Aria', 'Maya', 'Elena', 'Zara', 'Nadia', 'Sierra', 'Luna', 'Freya', 'Ivy', 'Cora', 'Iris', 'Sage', 'Nova', 'Ada', 'Vera', 'Mila', 'Leah', 'Rosa', 'Tara', 'Kira']
+      : ['Leo', 'Kai', 'Ravi', 'Omar', 'Felix', 'Jace', 'Marco', 'Theo', 'Ezra', 'Dion', 'Cole', 'Atlas', 'Nico', 'Reid', 'Quinn', 'Soren', 'Arlo', 'Dean', 'Rhys', 'Elio'];
+    const lNames = ['Chen', 'Park', 'Santos', 'Andersen', 'Russo', 'Okafor', 'Nakamura', 'Levy', 'Rivera', 'Singh', 'Kim', 'Weber', 'Torres', 'Laurent', 'Yamamoto', 'Shah', 'Moreau', 'Petrov', 'Ngozi', 'Alvarez'];
     firstName = fNames[Math.floor(Math.random() * fNames.length)];
     lastName = lastName || lNames[Math.floor(Math.random() * lNames.length)];
     if (!gender) gender = g;
@@ -127,7 +127,8 @@ export function registerAgent({
   // Auto-generate age and bio if not provided (#562)
   const autoAge = 25 + Math.floor(Math.random() * 36);
   const autoYears = Math.max(1, autoAge - 22 - Math.floor(Math.random() * 5));
-  const autoBio = bio || `${computedDisplayName || name} is a ${specialization || role} specialist with ${autoYears} years of experience.`;
+  // Only auto-generate bio when not explicitly provided (bio param defaults to null)
+  const autoBio = bio != null ? bio : `${computedDisplayName || name} is a ${specialization || role} specialist with ${autoYears} years of experience.`;
 
   db.prepare(`
     INSERT INTO agents (id, name, role, building_id, capabilities, room_access, badge, config,

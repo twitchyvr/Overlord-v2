@@ -745,4 +745,44 @@ test.describe('Dogfood: Session Fixes', () => {
     expect(css).toContain('.agent-chat-bubble');
     expect(css).toContain('chat-bubble-in');
   });
+
+  // #562 — Rich agent identities: age, backstory, expertise
+  test('#562: Agents have age, backstory, and consistent name fields', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      if (!window.overlordSocket) return 'no socket';
+      const b = await window.overlordSocket.createBuilding({
+        name: 'IdentityE2E', config: { projectDescription: 'x', template: 'web-app', effortLevel: 'easy' }
+      });
+      if (!b?.ok) return 'create failed';
+      await window.overlordSocket.applyBlueprint({
+        buildingId: b.data.id,
+        blueprint: {
+          mode: 'quickStart', floorsNeeded: ['execution'],
+          roomConfig: [{ floor: 'execution', rooms: ['code-lab'] }],
+          agentRoster: [
+            { name: 'Dev', role: 'developer', rooms: ['code-lab'] },
+            { name: 'Dev', role: 'developer', rooms: ['code-lab'] },
+          ],
+          projectGoals: 'x', successCriteria: ''
+        },
+        agentId: 'user'
+      });
+      const agents = await new Promise(r =>
+        window.overlordSocket.socket.emit('agent:list', { buildingId: b.data.id }, r)
+      );
+      const list = (agents as any)?.data || [];
+      const issues: string[] = [];
+      for (const a of list) {
+        if (!a.age || a.age < 25 || a.age > 60) issues.push(a.display_name + ': bad age ' + a.age);
+        if (!a.bio || a.bio.length < 10) issues.push(a.display_name + ': missing bio');
+        if (!a.first_name || !a.last_name) issues.push(a.display_name + ': missing first/last');
+        // Check displayName = firstName + lastName (suffix consistency)
+        const expected = a.first_name + ' ' + a.last_name;
+        if (a.display_name && a.display_name !== expected) issues.push(a.display_name + ': name mismatch vs ' + expected);
+      }
+      return issues.length === 0 ? 'pass' : issues.join('; ');
+    });
+
+    expect(result).toBe('pass');
+  });
 });

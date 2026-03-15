@@ -58,11 +58,12 @@ function generateAgentIdentity(archetype: string, role: string, usedNames: Set<s
     displayName = `${firstName} ${lastName}`;
     if (!usedNames.has(displayName)) break;
   }
-  // Guarantee uniqueness: if still colliding, append numeric suffix
+  // Guarantee uniqueness: append suffix to lastName so first+last stays consistent
   if (usedNames.has(displayName)) {
     let suffix = 2;
-    while (usedNames.has(`${displayName} ${suffix}`)) suffix++;
-    displayName = `${displayName} ${suffix}`;
+    while (usedNames.has(`${firstName} ${lastName}-${suffix}`)) suffix++;
+    lastName = `${lastName}-${suffix}`;
+    displayName = `${firstName} ${lastName}`;
   }
 
   const specs = ROLE_SPECIALIZATIONS[role] || ROLE_SPECIALIZATIONS.developer || ['General expertise'];
@@ -679,19 +680,25 @@ export function applyCustomPlan(buildingId: string, plan: CustomPlanData): Resul
     roomsCreated++;
   }
 
-  // 4. Create agent DB rows with capabilities and room access
+  // 4. Create agent DB rows with rich identities (same as applyBlueprint, #562)
+  const usedNames = new Set<string>();
   for (const agentDef of plan.agentDefinitions) {
     const agentId = uid('agent');
+    const profile = generateAgentIdentity(agentDef.name, agentDef.role, usedNames);
+    usedNames.add(profile.displayName);
+
     db.prepare(`
-      INSERT INTO agents (id, name, role, building_id, capabilities, room_access)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO agents (id, name, role, building_id, capabilities, room_access,
+        first_name, last_name, display_name, gender, bio, specialization,
+        age, backstory, communication_style, expertise_areas)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      agentId,
-      agentDef.name,
-      agentDef.role,
-      buildingId,
+      agentId, agentDef.name, agentDef.role, buildingId,
       JSON.stringify(agentDef.capabilities || []),
       JSON.stringify(agentDef.roomAccess || []),
+      profile.firstName, profile.lastName, profile.displayName,
+      profile.gender, profile.bio, profile.specialization,
+      profile.age, profile.backstory, profile.communicationStyle, JSON.stringify(profile.expertiseAreas),
     );
     agentsCreated++;
   }
