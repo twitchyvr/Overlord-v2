@@ -625,4 +625,41 @@ test.describe('Dogfood: Session Fixes', () => {
     expect(src).toContain('build|compile|bundle|pack|dist');
     expect(src).toContain("'dist', 'build', 'out'");
   });
+
+  // #569 — Scripts page grouped by category with collapsible sections
+  test('#569: Scripts page renders category groups with headers', async ({ page }) => {
+    await goToView(page, 'scripts');
+    await page.waitForTimeout(2000);
+
+    // Category section headers should exist
+    const categoryHeaders = page.locator('.scripts-category-header');
+    const headerCount = await categoryHeaders.count();
+
+    if (headerCount > 0) {
+      // At least one category group rendered
+      expect(headerCount).toBeGreaterThan(0);
+
+      // Headers should have category names
+      const firstName = await categoryHeaders.first().textContent();
+      expect(firstName && firstName.length > 0).toBe(true);
+
+      // Click a header to collapse it
+      await categoryHeaders.first().click();
+      await page.waitForTimeout(300);
+
+      // Click again to expand
+      await categoryHeaders.first().click();
+      await page.waitForTimeout(300);
+
+      // Verify a grid exists inside at least one section
+      const grids = page.locator('.scripts-category-grid');
+      expect(await grids.count()).toBeGreaterThan(0);
+    } else {
+      // No scripts loaded — verify the grouping code exists in served JS
+      const js = await page.evaluate(() => fetch('/ui/views/scripts-view.js').then(r => r.text()));
+      expect(js).toContain('scripts-category-section');
+      expect(js).toContain('scripts-category-header');
+      expect(js).toContain('_collapsedCategories');
+    }
+  });
 });

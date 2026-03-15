@@ -328,7 +328,7 @@ export class ScriptsView extends Component {
         h('span', { class: 'scripts-category-name' }, cat),
         h('span', { class: 'scripts-category-count' }, `${plugins.length}`),
       );
-      header.addEventListener('click', () => {
+      const toggleCategory = () => {
         if (!this._collapsedCategories) this._collapsedCategories = new Set();
         if (this._collapsedCategories.has(cat)) {
           this._collapsedCategories.delete(cat);
@@ -336,6 +336,10 @@ export class ScriptsView extends Component {
           this._collapsedCategories.add(cat);
         }
         this._renderGrid();
+      };
+      header.addEventListener('click', toggleCategory);
+      header.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCategory(); }
       });
       section.appendChild(header);
 
