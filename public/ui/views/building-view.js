@@ -421,6 +421,7 @@ export class BuildingView extends Component {
       tabindex: '0',
       role: 'button',
       'aria-label': `${roomName}, ${roomStatus}, ${agentsInRoom.length} agents`,
+      ...(isActiveRoom ? { 'aria-current': 'true' } : {}),
     });
 
     // ── Row 1: Status badge + Room name ──
@@ -515,14 +516,26 @@ export class BuildingView extends Component {
         item.click();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        const next = item.nextElementSibling;
-        if (next) /** @type {HTMLElement} */ (next).focus();
+        // Find next .room-item sibling (skip non-room elements)
+        let next = item.nextElementSibling;
+        while (next && !next.classList.contains('room-item')) next = next.nextElementSibling;
+        if (next) {
+          /** @type {HTMLElement} */ (next).focus();
+        } else {
+          // Last room in floor — jump to next floor header
+          const floorSection = item.closest('.floor-section');
+          const nextFloor = floorSection?.nextElementSibling?.querySelector('.floor-section-header');
+          if (nextFloor) /** @type {HTMLElement} */ (nextFloor).focus();
+        }
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        const prev = item.previousElementSibling;
-        if (prev) /** @type {HTMLElement} */ (prev).focus();
-        else {
-          // Focus back to floor header
+        // Find previous .room-item sibling
+        let prev = item.previousElementSibling;
+        while (prev && !prev.classList.contains('room-item')) prev = prev.previousElementSibling;
+        if (prev) {
+          /** @type {HTMLElement} */ (prev).focus();
+        } else {
+          // First room — focus back to floor header
           const floorSection = item.closest('.floor-section');
           const header = floorSection?.querySelector('.floor-section-header');
           if (header) /** @type {HTMLElement} */ (header).focus();
