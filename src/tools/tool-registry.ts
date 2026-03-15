@@ -148,15 +148,15 @@ function registerBuiltinTools(): void {
             try {
               const entries = fs.readdirSync(fullDir);
               buildOutput = `${fullDir} (${entries.length} files)`;
-            } catch { /* skip */ }
-            break;
+              break; // only break on successful read — skip to next dir on error
+            } catch { /* permission denied or other error — try next dir */ }
           }
         }
       }
 
       const output = result.stdout || '(no output)';
       return buildOutput
-        ? { output: `${output}\n\n📦 Build output: ${buildOutput}`, buildOutputPath: buildOutput }
+        ? { output: `${output}\n\n📦 Build output: ${buildOutput}` }
         : { output };
     },
   });

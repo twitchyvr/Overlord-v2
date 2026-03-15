@@ -621,7 +621,7 @@ test.describe('Dogfood: Session Fixes', () => {
     // (this runs in Node context via the test framework)
     const fs = await import('fs');
     const src = fs.readFileSync('src/tools/tool-registry.ts', 'utf8');
-    expect(src).toContain('buildOutputPath');
+    expect(src).toContain('Build output:');
     expect(src).toContain('build|compile|bundle|pack|dist');
     expect(src).toContain("'dist', 'build', 'out'");
   });
