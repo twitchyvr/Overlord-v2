@@ -1,0 +1,84 @@
+name: Epic
+description: Track a large initiative broken into multiple sub-issues
+title: "[epic]: "
+labels: ["epic"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Epics track large initiatives that span multiple issues and potentially multiple milestones.
+        Break the epic down into concrete sub-issues with clear acceptance criteria.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this epic solve? Why is it important?
+    validations:
+      required: true
+
+  - type: textarea
+    id: vision
+    attributes:
+      label: Vision / End State
+      description: What does the world look like when this epic is complete?
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is included in this epic? What is explicitly excluded?
+      placeholder: |
+        **In scope:**
+        - ...
+
+        **Out of scope:**
+        - ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: sub_issues
+    attributes:
+      label: Sub-Issues
+      description: Break the epic into concrete issues. Each should be independently deliverable.
+      placeholder: |
+        - [ ] #NNN — Sub-issue title
+        - [ ] #NNN — Sub-issue title
+        - [ ] #NNN — Sub-issue title
+    validations:
+      required: true
+
+  - type: textarea
+    id: architecture
+    attributes:
+      label: Architecture Notes
+      description: Key architectural decisions, constraints, or patterns for this epic
+
+  - type: dropdown
+    id: target_milestone
+    attributes:
+      label: Target Milestone
+      options:
+        - "v2.4.0 — UX Quality & Feature Completeness"
+        - "v2.5.0 — Cloud Deployment & Hybrid Execution"
+        - "v2.6.0 — Pipeline Enforcement & Quality Automation"
+        - "v3.0.0 — Overlord as a Service"
+        - "Future / Unscheduled"
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How do we know the entire epic is done?
+      placeholder: |
+        - [ ] All sub-issues closed
+        - [ ] E2E tests pass for all sub-features
+        - [ ] Documentation updated
+        - [ ] Dogfooded end-to-end
+    validations:
+      required: true

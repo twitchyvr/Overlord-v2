@@ -1,18 +1,19 @@
 name: New Room Type
 description: Propose a new room type for the Building
-title: "room: "
-labels: ["enhancement", "rooms"]
+title: "[room]: "
+labels: ["feature", "rooms"]
 body:
   - type: markdown
     attributes:
       value: |
         Define a new room type for the Overlord v2 Building system.
+        Rooms define behavior — agents receive tools, rules, and output templates from the room they're in.
 
   - type: input
     id: room-name
     attributes:
       label: Room Name
-      placeholder: "e.g., Documentation Lab"
+      placeholder: "e.g., Documentation Lab, Security Audit Room"
     validations:
       required: true
 
@@ -21,7 +22,6 @@ body:
     attributes:
       label: Target Floor
       options:
-        - Lobby
         - Strategy Floor
         - Collaboration Floor
         - Execution Floor
@@ -36,7 +36,7 @@ body:
     id: purpose
     attributes:
       label: Room Purpose
-      description: What work happens in this room?
+      description: What work happens in this room? What problem does it solve?
     validations:
       required: true
 
@@ -44,11 +44,26 @@ body:
     id: tools
     attributes:
       label: Allowed Tools
-      description: Which tools should be available in this room?
+      description: |
+        Which tools should be available in this room?
+        Remember: tool access is STRUCTURAL — if a tool isn't listed here, it doesn't exist for agents in this room.
       placeholder: |
         - read_file
         - list_dir
-        - web_search
+        - bash (read-only commands)
+        - qa_run_tests
+    validations:
+      required: true
+
+  - type: dropdown
+    id: write_access
+    attributes:
+      label: Write Access
+      description: Can agents write/modify files in this room?
+      options:
+        - "No — Read-only (like Testing Lab, Review Room)"
+        - "Yes — Scoped to assigned files (like Code Lab)"
+        - "Yes — Unrestricted (elevated, like War Room)"
     validations:
       required: true
 
@@ -56,23 +71,36 @@ body:
     id: tables
     attributes:
       label: Table Configuration
-      description: What table modes should this room support?
+      description: What table modes should this room support? (Defines agent capacity)
       placeholder: |
-        - focus: 1 agent, solo work
+        - focus: 1 agent, solo deep work
         - collab: 4 agents, shared context
+        - boardroom: 6 agents, group review
 
   - type: textarea
     id: exit-doc
     attributes:
       label: Exit Document Template
-      description: What structured output must agents produce to leave this room?
+      description: |
+        What structured output must agents produce to leave this room?
+        Exit documents are REQUIRED — agents cannot leave without submitting one.
       placeholder: |
         {
           "type": "documentation-report",
-          "fields": ["docsCreated", "docsUpdated", "coverageGaps"]
+          "fields": ["docsCreated", "docsUpdated", "coverageGaps", "recommendations"]
         }
     validations:
       required: true
+
+  - type: textarea
+    id: rules
+    attributes:
+      label: Room Rules
+      description: What behavioral rules are injected into the agent's system prompt when in this room?
+      placeholder: |
+        - You are in the Documentation Lab. Produce clear, accurate documentation.
+        - Do NOT modify source code. Read code only to understand it.
+        - Every document must include examples.
 
   - type: textarea
     id: escalation
@@ -82,3 +110,16 @@ body:
       placeholder: |
         - onError: war-room
         - onScopeChange: discovery
+        - onTestFailure: code-lab
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      placeholder: |
+        - [ ] Room type registered in room-types/index.ts
+        - [ ] Contract defines tools, fileScope, exitRequired, escalation
+        - [ ] Unit tests cover room lifecycle (enter, work, exit doc, exit)
+        - [ ] Playwright E2E test verifies room creation and agent entry through UI
+    validations:
+      required: true
