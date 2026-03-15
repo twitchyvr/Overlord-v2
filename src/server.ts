@@ -97,7 +97,16 @@ async function start(): Promise<void> {
   // 3. HTTP + Socket.IO
   const app = express();
   app.use(express.json());
-  app.use(express.static('public'));
+  // Disable caching in development so code changes are picked up immediately
+  app.use(express.static('public', {
+    etag: false,
+    lastModified: false,
+    setHeaders: (res) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    },
+  }));
 
   // Serve agent profile photos from data/agent-photos/
   app.use(getPhotosUrlPrefix(), express.static(getPhotosDirectory()));
