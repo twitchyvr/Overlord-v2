@@ -238,17 +238,28 @@ export class BuildingView extends Component {
     const agentsOnFloor = this._getAgentsOnFloor(floor.id);
     const floorIcon = FLOOR_TYPE_ICONS[floorType] || '\u{1F3E2}';
 
+    // Map floor type to its CSS color variable for the left border
+    const floorColorMap = {
+      'strategy': 'var(--floor-strategy)',
+      'collaboration': 'var(--floor-collaboration)',
+      'execution': 'var(--floor-execution)',
+      'governance': 'var(--floor-governance)',
+      'operations': 'var(--floor-operations)',
+      'integration': 'var(--floor-integration)',
+    };
+
     const section = h('div', {
       class: `floor-section${isExpanded ? ' expanded' : ''}`,
       'data-floor-id': floor.id,
       'data-type': floorType,
+      style: `--floor-section-color: ${floorColorMap[floorType] || 'var(--border-secondary)'}`,
     });
 
     // Floor header row — clickable to expand/collapse
     const header = h('div', { class: 'floor-section-header' });
 
-    // Chevron
-    const chevron = h('span', { class: 'floor-chevron' }, isExpanded ? '\u25BE' : '\u25B8');
+    // Chevron — uses CSS rotation for smooth animation
+    const chevron = h('span', { class: 'floor-chevron' }, '\u25B8');
 
     // Floor color indicator
     const colorBar = h('span', { class: `floor-color-dot floor-dot-${floorType}` });
@@ -274,15 +285,34 @@ export class BuildingView extends Component {
     if (agentIndicator) header.appendChild(agentIndicator);
     header.appendChild(countPill);
 
-    // Click to expand/collapse
+    // Click to expand/collapse — targeted DOM update with animation
     header.addEventListener('click', () => {
-      if (this._expandedFloors.has(floor.id)) {
+      // Cancel any in-flight collapse animation to prevent double-body race condition
+      const inflightBody = section.querySelector('.floor-section-body.collapsing');
+      if (inflightBody) inflightBody.remove();
+
+      const wasExpanded = this._expandedFloors.has(floor.id);
+      if (wasExpanded) {
         this._expandedFloors.delete(floor.id);
+        // Animate collapse: add collapsing class, then remove body after animation
+        const body = section.querySelector('.floor-section-body');
+        if (body) {
+          body.classList.add('collapsing');
+          body.addEventListener('animationend', () => {
+            body.remove();
+            section.classList.remove('expanded');
+          }, { once: true });
+        } else {
+          section.classList.remove('expanded');
+        }
       } else {
         this._expandedFloors.add(floor.id);
+        // Build and append the body content
+        section.classList.add('expanded');
+        const body = this._buildFloorBody(floor);
+        section.appendChild(body);
       }
       OverlordUI.dispatch('building:floor-selected', { floorId: floor.id, expanded: this._expandedFloors.has(floor.id) });
-      this.render();
     });
 
     // Context menu on right-click
@@ -295,49 +325,54 @@ export class BuildingView extends Component {
 
     // Expanded content: room list + actions
     if (isExpanded) {
-      const body = h('div', { class: 'floor-section-body' });
-
-      if (floor.rooms && floor.rooms.length > 0) {
-        const roomList = h('div', { class: 'floor-room-list' });
-        for (const room of floor.rooms) {
-          roomList.appendChild(this._renderRoomItem(room, floor.id));
-        }
-        body.appendChild(roomList);
-      } else {
-        body.appendChild(h('div', { class: 'floor-empty' },
-          'No rooms yet'
-        ));
-      }
-
-      // Floor actions (compact)
-      const actions = h('div', { class: 'floor-section-actions' });
-
-      const addRoomBtn = h('button', { class: 'btn btn-ghost btn-xs floor-add-room-btn' }, '+ Room');
-      addRoomBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._openAddRoomModal(floor);
-      });
-      actions.appendChild(addRoomBtn);
-
-      const editFloorBtn = h('button', { class: 'btn btn-ghost btn-xs' }, 'Edit');
-      editFloorBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._openEditFloorModal(floor);
-      });
-      actions.appendChild(editFloorBtn);
-
-      const deleteFloorBtn = h('button', { class: 'btn btn-ghost btn-xs btn-danger-ghost' }, 'Delete');
-      deleteFloorBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._confirmDeleteFloor(floor);
-      });
-      actions.appendChild(deleteFloorBtn);
-
-      body.appendChild(actions);
-      section.appendChild(body);
+      section.appendChild(this._buildFloorBody(floor));
     }
 
     return section;
+  }
+
+  /** Build the expandable body content for a floor section. */
+  _buildFloorBody(floor) {
+    const body = h('div', { class: 'floor-section-body' });
+
+    if (floor.rooms && floor.rooms.length > 0) {
+      const roomList = h('div', { class: 'floor-room-list' });
+      for (const room of floor.rooms) {
+        roomList.appendChild(this._renderRoomItem(room, floor.id));
+      }
+      body.appendChild(roomList);
+    } else {
+      body.appendChild(h('div', { class: 'floor-empty' },
+        'No rooms yet'
+      ));
+    }
+
+    // Floor actions (compact)
+    const actions = h('div', { class: 'floor-section-actions' });
+
+    const addRoomBtn = h('button', { class: 'btn btn-ghost btn-xs floor-add-room-btn' }, '+ Room');
+    addRoomBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._openAddRoomModal(floor);
+    });
+    actions.appendChild(addRoomBtn);
+
+    const editFloorBtn = h('button', { class: 'btn btn-ghost btn-xs' }, 'Edit');
+    editFloorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._openEditFloorModal(floor);
+    });
+    actions.appendChild(editFloorBtn);
+
+    const deleteFloorBtn = h('button', { class: 'btn btn-ghost btn-xs btn-danger-ghost' }, 'Delete');
+    deleteFloorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._confirmDeleteFloor(floor);
+    });
+    actions.appendChild(deleteFloorBtn);
+
+    body.appendChild(actions);
+    return body;
   }
 
   // ── Room Item (detail-rich mini card) ────────────────────
