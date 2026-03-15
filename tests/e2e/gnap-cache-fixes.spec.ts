@@ -14,13 +14,6 @@ import {
   selectBuilding,
 } from './helpers/overlord.js';
 
-/** Click a toolbar button and wait for content to render. */
-async function goToView(page: import('@playwright/test').Page, viewName: string) {
-  const btn = page.locator(`#app-toolbar .toolbar-btn[data-view="${viewName}"]`);
-  await btn.click();
-  await page.waitForTimeout(1500);
-}
-
 test.describe('Issue #623: GNAP Scoping & Cache Fixes', () => {
 
   // ─── Cache Headers ──────────────────────────────────────────────
