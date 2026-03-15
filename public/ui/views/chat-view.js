@@ -474,12 +474,20 @@ export class ChatView extends Component {
     const rawContent = msg.content;
     let textContent = '';
 
+    // Collect interleaved thinking blocks for inline display (#594)
+    const interleavedThinking = [];
+
     if (Array.isArray(rawContent)) {
-      // Content is an array of blocks (e.g. [{type:'text', text:'...'}, {type:'tool_use',...}])
-      textContent = rawContent
-        .filter((b) => b.type === 'text' && b.text)
-        .map((b) => b.text)
-        .join('\n');
+      // Content is an array of blocks (e.g. [{type:'text', text:'...'}, {type:'thinking',...}, {type:'tool_use',...}])
+      const textBlocks = [];
+      for (const block of rawContent) {
+        if (block.type === 'text' && block.text) {
+          textBlocks.push(block.text);
+        } else if (block.type === 'thinking' && block.thinking) {
+          interleavedThinking.push(block.thinking);
+        }
+      }
+      textContent = textBlocks.join('\n');
     } else if (rawContent && typeof rawContent === 'string') {
       textContent = rawContent;
     }
@@ -498,7 +506,14 @@ export class ChatView extends Component {
     }
     contentWrap.appendChild(content);
 
-    // Thinking indicator (if present)
+    // Interleaved thinking blocks from content array (#594)
+    if (interleavedThinking.length > 0) {
+      for (const thought of interleavedThinking) {
+        contentWrap.appendChild(this._buildThinkingBubble(thought));
+      }
+    }
+
+    // Thinking indicator (if present as top-level field)
     if (msg.thinking) {
       const thinkingEl = this._buildThinkingBubble(msg.thinking);
       contentWrap.appendChild(thinkingEl);
