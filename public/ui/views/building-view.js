@@ -255,8 +255,14 @@ export class BuildingView extends Component {
       style: `--floor-section-color: ${floorColorMap[floorType] || 'var(--border-secondary)'}`,
     });
 
-    // Floor header row — clickable to expand/collapse
-    const header = h('div', { class: 'floor-section-header' });
+    // Floor header row — clickable/keyboard-navigable to expand/collapse
+    const header = h('div', {
+      class: 'floor-section-header',
+      tabindex: '0',
+      role: 'button',
+      'aria-expanded': isExpanded ? 'true' : 'false',
+      'aria-label': `${floor.name || floorType} floor, ${roomCount} rooms`,
+    });
 
     // Chevron — uses CSS rotation for smooth animation
     const chevron = h('span', { class: 'floor-chevron' }, '\u25B8');
@@ -285,8 +291,8 @@ export class BuildingView extends Component {
     if (agentIndicator) header.appendChild(agentIndicator);
     header.appendChild(countPill);
 
-    // Click to expand/collapse — targeted DOM update with animation
-    header.addEventListener('click', () => {
+    // Toggle expand/collapse — shared logic for click and keyboard
+    const toggleFloor = () => {
       // Cancel any in-flight collapse animation to prevent double-body race condition
       const inflightBody = section.querySelector('.floor-section-body.collapsing');
       if (inflightBody) inflightBody.remove();
@@ -294,6 +300,7 @@ export class BuildingView extends Component {
       const wasExpanded = this._expandedFloors.has(floor.id);
       if (wasExpanded) {
         this._expandedFloors.delete(floor.id);
+        header.setAttribute('aria-expanded', 'false');
         // Animate collapse: add collapsing class, then remove body after animation
         const body = section.querySelector('.floor-section-body');
         if (body) {
@@ -307,12 +314,35 @@ export class BuildingView extends Component {
         }
       } else {
         this._expandedFloors.add(floor.id);
+        header.setAttribute('aria-expanded', 'true');
         // Build and append the body content
         section.classList.add('expanded');
         const body = this._buildFloorBody(floor);
         section.appendChild(body);
       }
       OverlordUI.dispatch('building:floor-selected', { floorId: floor.id, expanded: this._expandedFloors.has(floor.id) });
+    };
+
+    // Click to expand/collapse
+    header.addEventListener('click', toggleFloor);
+
+    // Keyboard: Enter/Space to toggle, Arrow keys to navigate
+    header.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleFloor();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        // Focus next focusable element (next floor header or first room in expanded body)
+        const next = section.querySelector('.room-item[tabindex]') ||
+                     section.nextElementSibling?.querySelector('.floor-section-header');
+        if (next) /** @type {HTMLElement} */ (next).focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        // Focus previous floor header
+        const prev = section.previousElementSibling?.querySelector('.floor-section-header');
+        if (prev) /** @type {HTMLElement} */ (prev).focus();
+      }
     });
 
     // Context menu on right-click
@@ -388,6 +418,10 @@ export class BuildingView extends Component {
     const item = h('div', {
       class: `room-item${isActiveRoom ? ' room-item-active' : ''}${agentsInRoom.length > 0 ? ' room-item-occupied' : ''}`,
       'data-room-id': room.id,
+      tabindex: '0',
+      role: 'button',
+      'aria-label': `${roomName}, ${roomStatus}, ${agentsInRoom.length} agents`,
+      ...(isActiveRoom ? { 'aria-current': 'true' } : {}),
     });
 
     // ── Row 1: Status badge + Room name ──
@@ -473,6 +507,40 @@ export class BuildingView extends Component {
       }
       OverlordUI.dispatch('building:room-selected', { roomId: room.id, floorId });
       this.render();
+    });
+
+    // Keyboard: Enter to select room, arrow keys to navigate
+    item.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        item.click();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        // Find next .room-item sibling (skip non-room elements)
+        let next = item.nextElementSibling;
+        while (next && !next.classList.contains('room-item')) next = next.nextElementSibling;
+        if (next) {
+          /** @type {HTMLElement} */ (next).focus();
+        } else {
+          // Last room in floor — jump to next floor header
+          const floorSection = item.closest('.floor-section');
+          const nextFloor = floorSection?.nextElementSibling?.querySelector('.floor-section-header');
+          if (nextFloor) /** @type {HTMLElement} */ (nextFloor).focus();
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        // Find previous .room-item sibling
+        let prev = item.previousElementSibling;
+        while (prev && !prev.classList.contains('room-item')) prev = prev.previousElementSibling;
+        if (prev) {
+          /** @type {HTMLElement} */ (prev).focus();
+        } else {
+          // First room — focus back to floor header
+          const floorSection = item.closest('.floor-section');
+          const header = floorSection?.querySelector('.floor-section-header');
+          if (header) /** @type {HTMLElement} */ (header).focus();
+        }
+      }
     });
 
     // Right-click context menu
