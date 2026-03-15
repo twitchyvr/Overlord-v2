@@ -562,6 +562,17 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
     handle(socket, 'room:escalate', RoomEscalateSchema, (parsed, ack) => {
       const db = getDb();
 
+      // Validate fromRoomId exists in this building (review finding #2)
+      const fromRoom = db.prepare(`
+        SELECT r.id FROM rooms r
+        JOIN floors f ON r.floor_id = f.id
+        WHERE r.id = ? AND f.building_id = ?
+      `).get(parsed.fromRoomId, parsed.buildingId) as { id: string } | undefined;
+      if (!fromRoom) {
+        if (ack) ack({ ok: false, error: { code: 'INVALID_SOURCE', message: `Source room ${parsed.fromRoomId} not found in this building`, retryable: false } });
+        return;
+      }
+
       // Find the target room by type within this building
       const targetRoom = db.prepare(`
         SELECT r.id, r.type, r.name FROM rooms r
@@ -2943,6 +2954,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
   forward('floor:sorted');
   forward('room:updated');
   forward('room:deleted');
+  forward('room:escalated');
   forward('plan:submitted');
   forward('plan:reviewed');
   forward('email:dispatched');

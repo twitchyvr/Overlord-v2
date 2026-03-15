@@ -662,4 +662,65 @@ test.describe('Dogfood: Session Fixes', () => {
       expect(js).toContain('_collapsedCategories');
     }
   });
+
+  // #589 — Room-to-room escalation
+  test('#589: Room escalation transfers context to target room', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      if (!window.overlordSocket) return 'no socket';
+      const b = await window.overlordSocket.createBuilding({
+        name: 'EscE2E', config: { projectDescription: 'x', template: 'web-app', effortLevel: 'easy' }
+      });
+      if (!b?.ok) return 'create failed';
+      const bid = b.data.id;
+
+      await window.overlordSocket.applyBlueprint({
+        buildingId: bid,
+        blueprint: {
+          mode: 'quickStart', floorsNeeded: ['strategy', 'execution'],
+          roomConfig: [
+            { floor: 'strategy', rooms: ['strategist'] },
+            { floor: 'execution', rooms: ['code-lab'] },
+          ],
+          agentRoster: [], projectGoals: 'x', successCriteria: ''
+        },
+        agentId: 'user'
+      });
+
+      // Find rooms
+      const bldg = await new Promise(r => window.overlordSocket.socket.emit('building:get', { buildingId: bid }, r));
+      const floorIds = new Set(((bldg as any)?.data?.floors || []).map((f: any) => f.id));
+      const rooms = await new Promise(r => window.overlordSocket.socket.emit('room:list', {}, r));
+      const strat = ((rooms as any)?.data || []).find((r: any) => r.type === 'strategist' && floorIds.has(r.floor_id));
+      if (!strat) return 'no strategist room';
+
+      // Escalate from strategist to code-lab
+      const esc = await new Promise(r => window.overlordSocket.socket.emit('room:escalate', {
+        fromRoomId: strat.id,
+        toRoomType: 'code-lab',
+        buildingId: bid,
+        reason: 'Ready for implementation',
+        contextSummary: 'Build a REST API',
+      }, r));
+
+      if (!(esc as any)?.ok) return 'escalate failed: ' + (esc as any)?.error?.message;
+
+      // Verify target room was found
+      const target = (esc as any).data;
+      if (!target?.toRoomId) return 'no target room id';
+      if (target.toRoomType !== 'code-lab') return 'wrong type: ' + target.toRoomType;
+
+      // Verify invalid source room is rejected
+      const bad = await new Promise(r => window.overlordSocket.socket.emit('room:escalate', {
+        fromRoomId: 'fake_room_id',
+        toRoomType: 'code-lab',
+        buildingId: bid,
+        reason: 'test',
+      }, r));
+      if ((bad as any)?.ok) return 'should reject invalid fromRoomId';
+
+      return 'pass';
+    });
+
+    expect(result).toBe('pass');
+  });
 });

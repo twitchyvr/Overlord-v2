@@ -586,8 +586,8 @@ export function initSocketBridge(socket, store, engine) {
     store.update('activity.items', (items) => [{ event: 'room:escalated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('room:escalated', data);
     engine.dispatch('activity:new', { event: 'room:escalated', ...data });
-    // Auto-switch chat to the target room
-    if (data.toRoomId) {
+    // Auto-switch chat to the target room (only if same building)
+    if (data.toRoomId && data.buildingId === store.get('building.active')) {
       store.set('rooms.active', data.toRoomId);
     }
   });
