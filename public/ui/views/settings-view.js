@@ -677,7 +677,7 @@ export class SettingsView extends Component {
       label: 'Chat Font Size',
       description: 'Adjust the chat message text size',
       control: () => {
-        const current = store?.get('ui.chatFontSize') || 'normal';
+        const current = localStorage.getItem('overlord-chat-font-size') || store?.get('ui.chatFontSize') || 'normal';
         const toggle = h('div', { class: 'settings-toggle-group' });
 
         for (const size of ['small', 'normal', 'large']) {
@@ -688,6 +688,7 @@ export class SettingsView extends Component {
           btn.addEventListener('click', () => {
             const store = OverlordUI.getStore();
             if (store) store.set('ui.chatFontSize', size);
+            localStorage.setItem('overlord-chat-font-size', size);
             toggle.querySelectorAll('.settings-toggle-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
 
@@ -710,7 +711,8 @@ export class SettingsView extends Component {
       label: 'Show Timestamps',
       description: 'Display timestamps on chat messages',
       control: () => {
-        const current = store?.get('ui.showTimestamps') !== false;
+        const stored = localStorage.getItem('overlord-show-timestamps');
+        const current = stored !== null ? stored === 'true' : store?.get('ui.showTimestamps') !== false;
         const toggle = h('button', {
           class: `settings-switch${current ? ' on' : ''}`,
           role: 'switch',
@@ -724,6 +726,7 @@ export class SettingsView extends Component {
           toggle.classList.toggle('on', nowOn);
           toggle.setAttribute('aria-checked', nowOn ? 'true' : 'false');
           if (store) store.set('ui.showTimestamps', nowOn);
+          localStorage.setItem('overlord-show-timestamps', String(nowOn));
         });
         return toggle;
       }
@@ -734,7 +737,8 @@ export class SettingsView extends Component {
       label: 'Show AI Thinking',
       description: 'Display AI thinking/reasoning blocks in chat',
       control: () => {
-        const current = store?.get('ui.showThinking') !== false;
+        const storedThink = localStorage.getItem('overlord-show-thinking');
+        const current = storedThink !== null ? storedThink === 'true' : store?.get('ui.showThinking') !== false;
         const toggle = h('button', {
           class: `settings-switch${current ? ' on' : ''}`,
           role: 'switch',
@@ -748,6 +752,7 @@ export class SettingsView extends Component {
           toggle.classList.toggle('on', nowOn);
           toggle.setAttribute('aria-checked', nowOn ? 'true' : 'false');
           if (store) store.set('ui.showThinking', nowOn);
+          localStorage.setItem('overlord-show-thinking', String(nowOn));
         });
         return toggle;
       }
