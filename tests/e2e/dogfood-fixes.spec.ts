@@ -1023,4 +1023,67 @@ test.describe('Dogfood: Session Fixes', () => {
 
     expect(result).toBe('pass');
   });
+
+  // #610 — Per-issue dogfood enforcement blocks task closure
+  test('#610: Task closure blocked when pipeline stages incomplete', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      if (!window.overlordSocket) return 'no socket';
+
+      const b = await window.overlordSocket.createBuilding({
+        name: 'DogfoodEnforce', config: { projectDescription: 'x', template: 'web-app', effortLevel: 'easy' }
+      });
+      if (!b?.ok) return 'create failed';
+      const bid = b.data.id;
+
+      // Create a task
+      const task = await new Promise(r =>
+        window.overlordSocket.socket.emit('task:create', {
+          buildingId: bid, title: 'Enforced Task', status: 'pending', priority: 'normal',
+        }, r)
+      );
+      const taskId = (task as any)?.data?.id;
+      if (!taskId) return 'no task id';
+
+      // Record only 3 of 8 stages
+      for (const stage of ['code', 'iterate', 'static-test']) {
+        await new Promise(r =>
+          window.overlordSocket.socket.emit('pipeline:record', {
+            taskId, buildingId: bid, stage, status: 'passed', attempt: 1,
+          }, r)
+        );
+      }
+
+      // Try to close the task — should be BLOCKED
+      const closeAttempt = await new Promise(r =>
+        window.overlordSocket.socket.emit('task:update', {
+          id: taskId, status: 'done',
+        }, r)
+      );
+      if ((closeAttempt as any)?.ok) return 'should have blocked closure';
+      if ((closeAttempt as any)?.error?.code !== 'PIPELINE_INCOMPLETE') {
+        return 'wrong error: ' + (closeAttempt as any)?.error?.code;
+      }
+
+      // Now complete all 8 stages
+      for (const stage of ['deep-test', 'syntax', 'review', 'e2e', 'dogfood']) {
+        await new Promise(r =>
+          window.overlordSocket.socket.emit('pipeline:record', {
+            taskId, buildingId: bid, stage, status: 'passed', attempt: 1,
+          }, r)
+        );
+      }
+
+      // Now closing should succeed
+      const closeSuccess = await new Promise(r =>
+        window.overlordSocket.socket.emit('task:update', {
+          id: taskId, status: 'done',
+        }, r)
+      );
+      if (!(closeSuccess as any)?.ok) return 'should allow closure after all stages pass';
+
+      return 'pass';
+    });
+
+    expect(result).toBe('pass');
+  });
 });

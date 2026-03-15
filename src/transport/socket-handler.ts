@@ -2251,6 +2251,28 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         return;
       }
 
+      // Per-issue dogfood enforcement (#610): block closure without pipeline completion
+      const terminalStatuses = ['done', 'completed', 'finished', 'closed'];
+      if (parsed.status && terminalStatuses.includes(parsed.status)) {
+        const pipelineResult = getTaskPipelineStatus(taskId);
+        if (pipelineResult.ok) {
+          const pipelineData = pipelineResult.data as { allPassed: boolean; currentStage: number; stages: Array<{ stage: string; status: string }> };
+          if (!pipelineData.allPassed) {
+            const incomplete = pipelineData.stages.filter(s => s.status !== 'passed').map(s => s.stage);
+            if (ack) ack({
+              ok: false,
+              error: {
+                code: 'PIPELINE_INCOMPLETE',
+                message: `Task cannot be closed — pipeline stages incomplete: ${incomplete.join(', ')}. Complete all 8 stages including dogfood.`,
+                retryable: false,
+              },
+            });
+            return;
+          }
+        }
+        // If no pipeline exists, allow closure (task may not require pipeline)
+      }
+
       fields.push("updated_at = datetime(?)");
       values.push(new Date().toISOString());
       values.push(taskId);
@@ -2262,7 +2284,6 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       bus.emit('task:updated', task as Record<string, unknown>);
 
       // Track stats when task reaches a terminal status
-      const terminalStatuses = ['done', 'completed', 'finished', 'closed'];
       if (task && parsed.status && terminalStatuses.includes(parsed.status) && task.assignee_id) {
         onTaskComplete(task.assignee_id as string, taskId, (task.title as string) || '', (task.building_id as string) || undefined);
       }
