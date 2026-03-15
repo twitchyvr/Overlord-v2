@@ -37,6 +37,7 @@ export class AgentActivityTracker extends Component {
     // Map of agentId → { state, timer }
     this._agentStates = new Map();
     this._activityTimers = new Map(); // agentId → setTimeout handle for badge auto-hide
+    this._bubbleTimers = new Map();   // agentId → setTimeout handle for chat bubble auto-hide
   }
 
   mount() {
@@ -70,7 +71,7 @@ export class AgentActivityTracker extends Component {
             const text = typeof data.content === 'string'
               ? data.content
               : Array.isArray(data.content)
-                ? data.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
+                ? data.content.filter(b => b.type === 'text' && b.text).map(b => b.text).join(' ')
                 : '';
             if (text) this._showChatBubble(data.agentId, text);
           }
@@ -134,11 +135,17 @@ export class AgentActivityTracker extends Component {
 
   unmount() {
     this._mounted = false;
-    // Clear all timers
+    // Clear all state timers
     for (const [, entry] of this._agentStates) {
       if (entry.timer) clearTimeout(entry.timer);
     }
     this._agentStates.clear();
+    // Clear activity badge timers
+    for (const [, timer] of this._activityTimers) clearTimeout(timer);
+    this._activityTimers.clear();
+    // Clear chat bubble timers (review finding #1)
+    for (const [, timer] of this._bubbleTimers) clearTimeout(timer);
+    this._bubbleTimers.clear();
     this._listeners.forEach(fn => fn());
     this._listeners = [];
   }
@@ -248,8 +255,11 @@ export class AgentActivityTracker extends Component {
     const preview = text.length > 80 ? text.slice(0, 77) + '...' : text;
     const elements = document.querySelectorAll(`[data-agent-id="${agentId}"]`);
 
+    // Clear previous bubble timer to prevent stale closures (review finding #1)
+    const prevTimer = this._bubbleTimers.get(agentId);
+    if (prevTimer) clearTimeout(prevTimer);
+
     for (const el of elements) {
-      // Remove existing bubble
       const old = el.querySelector('.agent-chat-bubble');
       if (old) old.remove();
 
@@ -257,10 +267,14 @@ export class AgentActivityTracker extends Component {
       bubble.className = 'agent-chat-bubble';
       bubble.textContent = `\u{1F4AC} ${preview}`;
       el.appendChild(bubble);
-
-      // Auto-remove after 8 seconds
-      setTimeout(() => bubble.remove(), 8000);
     }
+
+    // Store timer handle so it can be cancelled on unmount or replacement
+    this._bubbleTimers.set(agentId, setTimeout(() => {
+      const els = document.querySelectorAll(`[data-agent-id="${agentId}"] .agent-chat-bubble`);
+      for (const b of els) b.remove();
+      this._bubbleTimers.delete(agentId);
+    }, 8000));
   }
 
   // ── DOM Class Application ─────────────────────────────────

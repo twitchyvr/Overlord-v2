@@ -723,4 +723,26 @@ test.describe('Dogfood: Session Fixes', () => {
 
     expect(result).toBe('pass');
   });
+
+  // #584 — Agent chat bubbles appear on agent cards
+  test('#584: Agent activity tracker has chat bubble mechanism', async ({ page }) => {
+    // Verify the served JS has the chat bubble implementation
+    const js = await page.evaluate(() => fetch('/ui/components/agent-activity-tracker.js').then(r => r.text()));
+
+    // Must have _showChatBubble method
+    expect(js).toContain('_showChatBubble');
+    // Must have the bubble CSS class
+    expect(js).toContain('agent-chat-bubble');
+    // Must use textContent (not innerHTML) — XSS safe
+    expect(js).toContain('bubble.textContent');
+    // Must store timer for cleanup (review finding fix)
+    expect(js).toContain('_bubbleTimers');
+    // Must clear bubble timers on unmount
+    expect(js).toContain('this._bubbleTimers.clear()');
+
+    // Verify CSS exists
+    const css = await page.evaluate(() => fetch('/ui/css/fullpage-views.css').then(r => r.text()));
+    expect(css).toContain('.agent-chat-bubble');
+    expect(css).toContain('chat-bubble-in');
+  });
 });
