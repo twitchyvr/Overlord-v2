@@ -1157,14 +1157,14 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
     handle(socket, 'gnap:status', GnapBuildingSchema, (parsed, ack) => {
       const mode = process.env.MESSAGING_MODE || 'internal';
       if (mode !== 'gnap') {
-        if (ack) ack({ ok: true, data: { enabled: false, mode, message: 'GNAP is not the active messaging mode' } });
+        if (ack) ack({ ok: false, error: { code: 'GNAP_DISABLED', message: 'GNAP is not the active messaging mode', retryable: false } });
         return;
       }
       // Look up the building's working directory
       const db = getDb();
       const building = db.prepare('SELECT working_directory FROM buildings WHERE id = ?').get(parsed.buildingId) as { working_directory: string | null } | undefined;
       if (!building?.working_directory) {
-        if (ack) ack({ ok: true, data: { enabled: false, mode, error: 'Building has no working directory set' } });
+        if (ack) ack({ ok: false, error: { code: 'NO_WORKING_DIR', message: 'Building has no working directory set', retryable: false } });
         return;
       }
       try {
@@ -1172,7 +1172,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         const status = adapter.getStatus();
         if (ack) ack({ ok: true, data: { ...status, mode, buildingId: parsed.buildingId } });
       } catch (e) {
-        if (ack) ack({ ok: true, data: { enabled: false, mode, error: e instanceof Error ? e.message : String(e) } });
+        if (ack) ack({ ok: false, error: { code: 'GNAP_ERROR', message: e instanceof Error ? e.message : String(e), retryable: false } });
       }
     });
 
