@@ -894,4 +894,69 @@ test.describe('Dogfood: Session Fixes', () => {
     // Review fix: separate amber pulse for waiting state
     expect(css).toContain('@keyframes pipeline-pulse-warn');
   });
+
+  // #612 — Pipeline evidence collection and storage
+  test('#612: Pipeline evidence can be recorded and queried', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      if (!window.overlordSocket) return 'no socket';
+
+      // Create a building and a task
+      const b = await window.overlordSocket.createBuilding({
+        name: 'EvidenceE2E', config: { projectDescription: 'x', template: 'web-app', effortLevel: 'easy' }
+      });
+      if (!b?.ok) return 'create failed';
+      const bid = b.data.id;
+
+      // Create a task to attach evidence to
+      const task = await new Promise(r =>
+        window.overlordSocket.socket.emit('task:create', {
+          buildingId: bid, title: 'Test Task', status: 'pending', priority: 'normal',
+        }, r)
+      );
+      const taskId = (task as any)?.data?.id;
+      if (!taskId) return 'no task id';
+
+      // Record evidence for stage 1 (code)
+      const rec = await new Promise(r =>
+        window.overlordSocket.socket.emit('pipeline:record', {
+          taskId, buildingId: bid, stage: 'code', status: 'passed',
+          evidenceData: { diff: '+ added line' }, attempt: 1, durationMs: 500,
+        }, r)
+      );
+      if (!(rec as any)?.ok) return 'record failed: ' + (rec as any)?.error?.message;
+
+      // Record evidence for stage 2 (iterate)
+      await new Promise(r =>
+        window.overlordSocket.socket.emit('pipeline:record', {
+          taskId, buildingId: bid, stage: 'iterate', status: 'passed',
+          evidenceData: { reviewed: true }, attempt: 1,
+        }, r)
+      );
+
+      // Query pipeline status
+      const status = await new Promise(r =>
+        window.overlordSocket.socket.emit('pipeline:status', { taskId }, r)
+      );
+      const data = (status as any)?.data;
+      if (!data) return 'no status data';
+      if (!data.stages || data.stages.length !== 8) return 'wrong stage count: ' + data.stages?.length;
+
+      // First two should be passed
+      if (data.stages[0].status !== 'passed') return 'stage 0 not passed: ' + data.stages[0].status;
+      if (data.stages[1].status !== 'passed') return 'stage 1 not passed: ' + data.stages[1].status;
+      // Third should be not-reached
+      if (data.stages[2].status !== 'not-reached') return 'stage 2 not not-reached: ' + data.stages[2].status;
+
+      // Query evidence
+      const evidence = await new Promise(r =>
+        window.overlordSocket.socket.emit('pipeline:evidence', { taskId }, r)
+      );
+      const rows = (evidence as any)?.data || [];
+      if (rows.length !== 2) return 'wrong evidence count: ' + rows.length;
+
+      return 'pass';
+    });
+
+    expect(result).toBe('pass');
+  });
 });

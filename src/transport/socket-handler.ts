@@ -75,6 +75,7 @@ import {
   AgentResetSchema,
   RoomProviderSetSchema,
   RoomEscalateSchema,
+  PipelineRecordSchema, PipelineGetSchema, PipelineBuildingSchema,
   LogLevelSetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
@@ -86,6 +87,8 @@ import { listPlugins, getPlugin, loadPlugin, unloadPlugin, reloadPlugin, getPlug
 import { validateLuaSyntax } from '../plugins/lua-validator.js';
 import { exportBundle, importBundle } from '../plugins/plugin-bundler.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
+import { recordEvidence, getTaskEvidence, getTaskPipelineStatus, getBuildingEvidence } from '../rooms/pipeline-evidence.js';
+import type { PipelineStage } from '../rooms/pipeline-evidence.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
 import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
@@ -1135,6 +1138,36 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         buildingId: parsed.buildingId,
       });
       if (ack) ack({ ok: true, data: leaderboard });
+    });
+
+    // ─── Pipeline Evidence (#612) ───
+
+    handle(socket, 'pipeline:record', PipelineRecordSchema, (parsed, ack) => {
+      const result = recordEvidence({
+        taskId: parsed.taskId,
+        buildingId: parsed.buildingId,
+        stage: parsed.stage as PipelineStage,
+        status: parsed.status as 'passed' | 'failed' | 'skipped',
+        evidenceData: parsed.evidenceData,
+        attempt: parsed.attempt,
+        durationMs: parsed.durationMs,
+      });
+      if (result.ok) {
+        bus.emit('pipeline:evidence-recorded', { taskId: parsed.taskId, stage: parsed.stage, status: parsed.status });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'pipeline:status', PipelineGetSchema, (parsed, ack) => {
+      if (ack) ack(getTaskPipelineStatus(parsed.taskId));
+    });
+
+    handle(socket, 'pipeline:evidence', PipelineGetSchema, (parsed, ack) => {
+      if (ack) ack(getTaskEvidence(parsed.taskId));
+    });
+
+    handle(socket, 'pipeline:building-evidence', PipelineBuildingSchema, (parsed, ack) => {
+      if (ack) ack(getBuildingEvidence(parsed.buildingId, parsed.stage as PipelineStage | undefined));
     });
 
     // ─── Agent Reset (#559) ───

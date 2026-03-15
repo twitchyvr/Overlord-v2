@@ -294,6 +294,25 @@ const SCHEMA_SQL = `
     applied_at TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS pipeline_evidence (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id),
+    building_id TEXT NOT NULL REFERENCES buildings(id),
+    stage TEXT NOT NULL,
+    stage_index INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    evidence_data TEXT DEFAULT '{}',
+    validator_result TEXT,
+    attempt INTEGER DEFAULT 1,
+    started_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT,
+    duration_ms INTEGER
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pipeline_task ON pipeline_evidence(task_id);
+  CREATE INDEX IF NOT EXISTS idx_pipeline_building ON pipeline_evidence(building_id);
+  CREATE INDEX IF NOT EXISTS idx_pipeline_stage ON pipeline_evidence(stage);
+
   CREATE INDEX IF NOT EXISTS idx_rooms_floor ON rooms(floor_id);
   CREATE INDEX IF NOT EXISTS idx_rooms_type ON rooms(type);
   CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id);

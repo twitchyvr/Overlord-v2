@@ -795,6 +795,27 @@ export const LogLevelSetSchema = z.object({
   level: z.enum(['error', 'warn', 'info', 'debug']),
 });
 
+// ─── Pipeline Evidence Schemas (#612) ───
+
+export const PipelineRecordSchema = z.object({
+  taskId: id(),
+  buildingId: id(),
+  stage: z.enum(['code', 'iterate', 'static-test', 'deep-test', 'syntax', 'review', 'e2e', 'dogfood']),
+  status: z.enum(['passed', 'failed', 'skipped']),
+  evidenceData: z.record(z.unknown()).optional().default({}),
+  attempt: z.number().int().min(1).optional().default(1),
+  durationMs: z.number().int().min(0).optional(),
+});
+
+export const PipelineGetSchema = z.object({
+  taskId: id(),
+});
+
+export const PipelineBuildingSchema = z.object({
+  buildingId: id(),
+  stage: z.enum(['code', 'iterate', 'static-test', 'deep-test', 'syntax', 'review', 'e2e', 'dogfood']).optional(),
+});
+
 // ─── Room Escalation Schema (#589) ───
 
 export const RoomEscalateSchema = z.object({
