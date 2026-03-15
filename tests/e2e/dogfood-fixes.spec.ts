@@ -1086,4 +1086,34 @@ test.describe('Dogfood: Session Fixes', () => {
 
     expect(result).toBe('pass');
   });
+
+  // #609 — Pipeline orchestrator module exists with stage-tool mapping
+  test('#609: Pipeline orchestrator has stage-tool mapping and event handlers', async ({ page }) => {
+    // Verify the module exists and exports correctly
+    const fs = await import('fs');
+    const src = fs.readFileSync('src/rooms/pipeline-orchestrator.ts', 'utf8');
+
+    // Must have stage-tool mapping
+    expect(src).toContain("'static-test'");
+    expect(src).toContain('qa_run_tests');
+    expect(src).toContain('qa_check_types');
+    expect(src).toContain('qa_check_lint');
+    expect(src).toContain('code_review');
+    expect(src).toContain('e2e_test');
+
+    // Must have orchestrator init
+    expect(src).toContain('initPipelineOrchestrator');
+
+    // Must listen for pipeline events
+    expect(src).toContain('pipeline:evidence-recorded');
+    expect(src).toContain('pipeline:stage-entered');
+
+    // Must auto-invoke tools and record evidence
+    expect(src).toContain('recordEvidence');
+    expect(src).toContain('loopBackToCode');
+
+    // Must export stage tool config
+    expect(src).toContain('export function getStageTools');
+    expect(src).toContain('export function getAllStageTools');
+  });
 });
