@@ -93,6 +93,7 @@ import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, ge
 import { recordEvidence, getTaskEvidence, getTaskPipelineStatus, getBuildingEvidence, loopBackToCode } from '../rooms/pipeline-evidence.js';
 import { searchMemory, getRecentContext, getMemoryStats } from '../agents/agent-memory.js';
 import { listModels, getProviderModels, getRecommendedModel, getModel, compareModels } from '../ai/model-registry.js';
+import { GnapMessagingAdapter } from '../agents/gnap-messaging-adapter.js';
 import type { PipelineStage } from '../rooms/pipeline-evidence.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
@@ -1145,12 +1146,43 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       if (ack) ack({ ok: true, data: leaderboard });
     });
 
-    // ─── Messaging Mode (#601) ───
+    // ─── Messaging Mode + GNAP Status (#601, #622) ───
 
     handle(socket, 'settings:messaging-mode', MessagingModeSchema, (parsed, ack) => {
       process.env.MESSAGING_MODE = parsed.mode;
       log.info({ mode: parsed.mode }, 'Messaging mode changed');
       if (ack) ack({ ok: true, data: { mode: parsed.mode } });
+    });
+
+    handle(socket, 'gnap:status', EmptyPayloadSchema, (_data, ack) => {
+      const mode = process.env.MESSAGING_MODE || 'internal';
+      if (mode !== 'gnap') {
+        if (ack) ack({ ok: true, data: { enabled: false, mode, message: 'GNAP is not the active messaging mode' } });
+        return;
+      }
+      // Try to instantiate adapter for the active building's working directory
+      try {
+        const adapter = new GnapMessagingAdapter({ repoPath: process.env.GNAP_REPO_PATH || '/tmp/overlord-gnap' });
+        const status = adapter.getStatus();
+        if (ack) ack({ ok: true, data: { ...status, mode } });
+      } catch (e) {
+        if (ack) ack({ ok: true, data: { enabled: false, mode, error: e instanceof Error ? e.message : String(e) } });
+      }
+    });
+
+    handle(socket, 'gnap:test', EmptyPayloadSchema, async (_data, ack) => {
+      const mode = process.env.MESSAGING_MODE || 'internal';
+      if (mode !== 'gnap') {
+        if (ack) ack({ ok: false, error: { code: 'GNAP_DISABLED', message: 'Switch to GNAP mode first in Settings', retryable: false } });
+        return;
+      }
+      try {
+        const adapter = new GnapMessagingAdapter({ repoPath: process.env.GNAP_REPO_PATH || '/tmp/overlord-gnap' });
+        const result = await adapter.sendTest();
+        if (ack) ack({ ok: result.ok, data: result });
+      } catch (e) {
+        if (ack) ack({ ok: false, error: { code: 'GNAP_ERROR', message: e instanceof Error ? e.message : String(e), retryable: false } });
+      }
     });
 
     // ─── Model Registry (#556) ───

@@ -10,7 +10,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { logger } from '../core/logger.js';
 import type { MessagingPort, AgentMessage } from '../core/messaging-port.js';
@@ -137,6 +137,67 @@ export class GnapMessagingAdapter implements MessagingPort {
       return messages;
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Get GNAP status — directory exists, writable, message count, last write (#622)
+   */
+  getStatus(): { enabled: boolean; directory: string; messageCount: number; lastWrite: string | null; error: string | null } {
+    try {
+      if (!existsSync(this._messagesDir)) {
+        return { enabled: false, directory: this._messagesDir, messageCount: 0, lastWrite: null, error: 'Directory does not exist' };
+      }
+
+      const files = readdirSync(this._messagesDir).filter(f => f.endsWith('.json'));
+      let lastWrite: string | null = null;
+      if (files.length > 0) {
+        const lastFile = files.sort().reverse()[0];
+        try {
+          const content = readFileSync(join(this._messagesDir, lastFile), 'utf8');
+          const msg = JSON.parse(content);
+          lastWrite = msg.timestamp ? new Date(msg.timestamp).toISOString() : null;
+        } catch { /* skip */ }
+      }
+
+      // Test writability
+      const testFile = join(this._messagesDir, '.write-test');
+      try {
+        writeFileSync(testFile, 'test', 'utf8');
+        unlinkSync(testFile);
+      } catch {
+        return { enabled: true, directory: this._messagesDir, messageCount: files.length, lastWrite, error: 'Directory not writable' };
+      }
+
+      return { enabled: true, directory: this._messagesDir, messageCount: files.length, lastWrite, error: null };
+    } catch (e) {
+      return { enabled: false, directory: this._messagesDir, messageCount: 0, lastWrite: null, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
+   * Send a test message to verify the pipeline works end-to-end (#622)
+   */
+  async sendTest(): Promise<{ ok: boolean; messageId?: string; error?: string }> {
+    try {
+      const testMsg = {
+        from: 'system',
+        to: 'system',
+        type: 'notification' as const,
+        subject: 'GNAP Test',
+        body: `Test message sent at ${new Date().toISOString()}`,
+      };
+      await this.send('system', testMsg);
+
+      // Verify it was written
+      const received = await this.receive('system');
+      const found = received.find(m => m.subject === 'GNAP Test');
+      if (found) {
+        return { ok: true, messageId: found.id };
+      }
+      return { ok: false, error: 'Message written but not found on read-back' };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
   }
 }
