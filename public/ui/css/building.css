@@ -229,7 +229,6 @@
 .floor-section-body {
   background: rgba(0, 0, 0, 0.12);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
-  padding: var(--sp-2) 0;
   overflow: hidden;
   animation: treeSlideDown 200ms var(--ease-default) forwards;
 }

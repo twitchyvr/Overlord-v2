@@ -287,6 +287,10 @@ export class BuildingView extends Component {
 
     // Click to expand/collapse — targeted DOM update with animation
     header.addEventListener('click', () => {
+      // Cancel any in-flight collapse animation to prevent double-body race condition
+      const inflightBody = section.querySelector('.floor-section-body.collapsing');
+      if (inflightBody) inflightBody.remove();
+
       const wasExpanded = this._expandedFloors.has(floor.id);
       if (wasExpanded) {
         this._expandedFloors.delete(floor.id);
