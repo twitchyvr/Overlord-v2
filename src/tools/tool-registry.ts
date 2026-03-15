@@ -134,7 +134,30 @@ function registerBuiltinTools(): void {
       if (result.exitCode !== 0) {
         return { output: `Exit code ${result.exitCode}\nstdout: ${result.stdout}\nstderr: ${result.stderr}` };
       }
-      return { output: result.stdout || '(no output)' };
+
+      // Detect build output directories in successful commands (#607)
+      const cmd = (p.command as string).toLowerCase();
+      const isBuild = /\b(build|compile|bundle|pack|dist)\b/.test(cmd);
+      let buildOutput: string | undefined;
+      if (isBuild && ctx?.workingDirectory) {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        for (const dir of ['dist', 'build', 'out', 'target/release', 'target/debug', '.next', '.output']) {
+          const fullDir = path.resolve(ctx.workingDirectory, dir);
+          if (fs.existsSync(fullDir)) {
+            try {
+              const entries = fs.readdirSync(fullDir);
+              buildOutput = `${fullDir} (${entries.length} files)`;
+            } catch { /* skip */ }
+            break;
+          }
+        }
+      }
+
+      const output = result.stdout || '(no output)';
+      return buildOutput
+        ? { output: `${output}\n\n📦 Build output: ${buildOutput}`, buildOutputPath: buildOutput }
+        : { output };
     },
   });
 
