@@ -299,8 +299,55 @@ export class ScriptsView extends Component {
       return;
     }
 
+    // Group by category (#569)
+    const groups = {};
     for (const plugin of filtered) {
-      this._gridEl.appendChild(this._buildCard(plugin));
+      const cat = CATEGORY_MAP[plugin.id] || 'Other';
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(plugin);
+    }
+
+    // Render each category as a collapsible section
+    const categoryOrder = ['Agents', 'Code', 'Project', 'Rooms', 'Comms', 'UI', 'Other'];
+    for (const cat of categoryOrder) {
+      const plugins = groups[cat];
+      if (!plugins || plugins.length === 0) continue;
+
+      const icon = CATEGORY_ICONS[cat] || '\u{1F4E6}';
+      const isCollapsed = this._collapsedCategories?.has(cat);
+
+      const section = h('div', { class: 'scripts-category-section' });
+
+      const header = h('div', {
+        class: 'scripts-category-header',
+        role: 'button',
+        tabindex: '0',
+      },
+        h('span', { class: 'scripts-category-chevron' }, isCollapsed ? '\u25B8' : '\u25BE'),
+        h('span', { class: 'scripts-category-icon' }, icon),
+        h('span', { class: 'scripts-category-name' }, cat),
+        h('span', { class: 'scripts-category-count' }, `${plugins.length}`),
+      );
+      header.addEventListener('click', () => {
+        if (!this._collapsedCategories) this._collapsedCategories = new Set();
+        if (this._collapsedCategories.has(cat)) {
+          this._collapsedCategories.delete(cat);
+        } else {
+          this._collapsedCategories.add(cat);
+        }
+        this._renderGrid();
+      });
+      section.appendChild(header);
+
+      if (!isCollapsed) {
+        const grid = h('div', { class: 'scripts-category-grid' });
+        for (const plugin of plugins) {
+          grid.appendChild(this._buildCard(plugin));
+        }
+        section.appendChild(grid);
+      }
+
+      this._gridEl.appendChild(section);
     }
   }
 

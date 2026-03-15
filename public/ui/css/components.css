@@ -4116,6 +4116,51 @@
   align-content: start;
 }
 
+/* ── Script Category Groups (#569) ──── */
+.scripts-category-section {
+  margin-bottom: var(--space-2, 8px);
+}
+.scripts-category-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 4px);
+  user-select: none;
+  transition: background var(--duration-fast, 0.15s);
+}
+.scripts-category-header:hover {
+  background: var(--surface-hover, rgba(255,255,255,0.05));
+}
+.scripts-category-chevron {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  width: 12px;
+}
+.scripts-category-icon {
+  font-size: 1.1rem;
+}
+.scripts-category-name {
+  font-weight: 600;
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-primary);
+}
+.scripts-category-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--surface-secondary, #2a2a3e);
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: auto;
+}
+.scripts-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3, 12px);
+  padding: var(--space-2, 8px) var(--space-3, 12px) var(--space-4, 16px);
+}
+
 /* ── Script Card ─────────────────────── */
 
 .scripts-card {
