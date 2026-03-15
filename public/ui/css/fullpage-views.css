@@ -3502,6 +3502,31 @@
   from { opacity: 0; transform: translateX(-50%) translateY(4px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
+/* ── Agent chat bubble (#584) ── */
+.agent-chat-bubble {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-primary, #1e1e2e);
+  border: 1px solid var(--border-accent, rgba(99, 102, 241, 0.3));
+  border-radius: 8px 8px 8px 0;
+  padding: 4px 8px;
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: var(--shadow-md);
+  animation: chat-bubble-in 0.3s ease;
+  z-index: 10;
+  pointer-events: none;
+}
+@keyframes chat-bubble-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px) scale(0.9); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
 .agent-activity-thinking.agents-view-card-avatar {
   animation: agent-think-glow 1.8s ease-in-out infinite;
   border-color: var(--accent-purple);

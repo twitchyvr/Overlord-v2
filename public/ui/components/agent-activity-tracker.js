@@ -60,11 +60,20 @@ export class AgentActivityTracker extends Component {
       })
     );
 
-    // ── Response complete: back to idle ──
+    // ── Response complete: back to idle + show chat bubble (#584) ──
     this._listeners.push(
       OverlordUI.subscribe('chat:response', (data) => {
         if (data && data.agentId) {
           this._setState(data.agentId, 'idle');
+          // Show a chat bubble with the first ~80 chars of the response
+          if (data.content) {
+            const text = typeof data.content === 'string'
+              ? data.content
+              : Array.isArray(data.content)
+                ? data.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
+                : '';
+            if (text) this._showChatBubble(data.agentId, text);
+          }
         }
       })
     );
@@ -230,6 +239,28 @@ export class AgentActivityTracker extends Component {
       for (const b of elements2) b.style.display = 'none';
       this._activityTimers.delete(agentId);
     }, WORKING_TIMEOUT));
+  }
+
+  /**
+   * Show a chat bubble on agent cards with a message preview (#584).
+   */
+  _showChatBubble(agentId, text) {
+    const preview = text.length > 80 ? text.slice(0, 77) + '...' : text;
+    const elements = document.querySelectorAll(`[data-agent-id="${agentId}"]`);
+
+    for (const el of elements) {
+      // Remove existing bubble
+      const old = el.querySelector('.agent-chat-bubble');
+      if (old) old.remove();
+
+      const bubble = document.createElement('div');
+      bubble.className = 'agent-chat-bubble';
+      bubble.textContent = `\u{1F4AC} ${preview}`;
+      el.appendChild(bubble);
+
+      // Auto-remove after 8 seconds
+      setTimeout(() => bubble.remove(), 8000);
+    }
   }
 
   // ── DOM Class Application ─────────────────────────────────
