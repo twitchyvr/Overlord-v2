@@ -88,7 +88,7 @@ export class GnapMessagingAdapter implements MessagingPort {
         try {
           const content = readFileSync(join(this._messagesDir, file), 'utf8');
           const msg = JSON.parse(content) as AgentMessage;
-          if (msg.to === agentId || msg.from === agentId) {
+          if (msg.to === agentId) { // Only messages TO this agent (matches bus adapter contract)
             messages.push(msg);
           }
         } catch { /* skip malformed files */ }
@@ -115,7 +115,28 @@ export class GnapMessagingAdapter implements MessagingPort {
   }
 
   async history(agentId: string, limit: number = 50): Promise<AgentMessage[]> {
-    const all = await this.receive(agentId);
-    return all.slice(0, limit);
+    // History includes both sent AND received (unlike receive which is incoming only)
+    try {
+      const files = readdirSync(this._messagesDir)
+        .filter(f => f.endsWith('.json'))
+        .sort()
+        .reverse()
+        .slice(0, 200);
+
+      const messages: AgentMessage[] = [];
+      for (const file of files) {
+        if (messages.length >= limit) break;
+        try {
+          const content = readFileSync(join(this._messagesDir, file), 'utf8');
+          const msg = JSON.parse(content) as AgentMessage;
+          if (msg.to === agentId || msg.from === agentId) {
+            messages.push(msg);
+          }
+        } catch { /* skip malformed files */ }
+      }
+      return messages;
+    } catch {
+      return [];
+    }
   }
 }
