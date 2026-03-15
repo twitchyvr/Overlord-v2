@@ -261,8 +261,8 @@ export class BuildingView extends Component {
     // Chevron — uses CSS rotation for smooth animation
     const chevron = h('span', { class: 'floor-chevron' }, '\u25B8');
 
-    // Floor color indicator
-    const colorBar = h('span', { class: `floor-color-dot floor-dot-${floorType}` });
+    // Floor type icon (replaces the old 8px color dot) — reuses floorIcon from line above
+    const iconEl = h('span', { class: 'floor-type-icon', title: floorType }, floorIcon);
 
     // Floor name + room count
     const floorLabel = floor.name || `${floorType.charAt(0).toUpperCase() + floorType.slice(1)} Floor`;
@@ -280,7 +280,7 @@ export class BuildingView extends Component {
       : null;
 
     header.appendChild(chevron);
-    header.appendChild(colorBar);
+    header.appendChild(iconEl);
     header.appendChild(nameEl);
     if (agentIndicator) header.appendChild(agentIndicator);
     header.appendChild(countPill);
