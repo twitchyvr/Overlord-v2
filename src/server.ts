@@ -98,7 +98,8 @@ async function start(): Promise<void> {
   const app = express();
   app.use(express.json());
   // Disable caching in development so code changes are picked up immediately
-  app.use(express.static('public', {
+  const isDev = config.get('NODE_ENV') !== 'production';
+  app.use(express.static('public', isDev ? {
     etag: false,
     lastModified: false,
     setHeaders: (res) => {
@@ -106,7 +107,7 @@ async function start(): Promise<void> {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
     },
-  }));
+  } : {}));
 
   // Serve agent profile photos from data/agent-photos/
   app.use(getPhotosUrlPrefix(), express.static(getPhotosDirectory()));

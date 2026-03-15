@@ -193,6 +193,9 @@ export class GnapMessagingAdapter implements MessagingPort {
       const received = await this.receive('system');
       const found = received.find(m => m.subject === 'GNAP Test');
       if (found) {
+        // Clean up test message to avoid polluting the message directory
+        const filename = `${found.timestamp}-${found.id.slice(0, 8)}.json`;
+        try { unlinkSync(join(this._messagesDir, filename)); } catch { /* cleanup best-effort */ }
         return { ok: true, messageId: found.id };
       }
       return { ok: false, error: 'Message written but not found on read-back' };
