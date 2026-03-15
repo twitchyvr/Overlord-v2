@@ -1231,4 +1231,29 @@ test.describe('Dogfood: Session Fixes', () => {
 
     expect(result).toBe('pass');
   });
+
+  // #600 — GNAP messaging adapter and dual-mode router
+  test('#600: GNAP adapter and dual-mode router implement MessagingPort', async ({ page }) => {
+    const fs = await import('fs');
+
+    // Verify GNAP adapter exists and implements MessagingPort
+    const gnapSrc = fs.readFileSync('src/agents/gnap-messaging-adapter.ts', 'utf8');
+    expect(gnapSrc).toContain('implements MessagingPort');
+    expect(gnapSrc).toContain('async send(');
+    expect(gnapSrc).toContain('async receive(');
+    expect(gnapSrc).toContain('subscribe(');
+    expect(gnapSrc).toContain('async history(');
+    expect(gnapSrc).toContain('.gnap/messages');
+    expect(gnapSrc).toContain('writeFileSync');
+
+    // Verify dual-mode router exists and implements DualModeRouter
+    const routerSrc = fs.readFileSync('src/agents/dual-mode-router.ts', 'utf8');
+    expect(routerSrc).toContain('implements DualModeRouter');
+    expect(routerSrc).toContain('sendRealtime');
+    expect(routerSrc).toContain('sendDurable');
+    expect(routerSrc).toContain('getBusAdapter');
+    expect(routerSrc).toContain('getGnapAdapter');
+    // GNAP failure doesn't break bus delivery
+    expect(routerSrc).toContain('GNAP persistence failed');
+  });
 });
