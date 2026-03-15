@@ -816,6 +816,27 @@ export const PipelineBuildingSchema = z.object({
   stage: z.enum(['code', 'iterate', 'static-test', 'deep-test', 'syntax', 'review', 'e2e', 'dogfood']).optional(),
 });
 
+// ─── Agent Memory Schemas (#557) ───
+
+export const MemorySearchSchema = z.object({
+  buildingId: id(),
+  agentId: z.string().max(100).optional(),
+  query: z.string().max(500).optional(),
+  roomId: z.string().max(100).optional(),
+  limit: z.number().int().min(1).max(100).optional().default(20),
+  offset: z.number().int().min(0).optional().default(0),
+});
+
+export const MemoryContextSchema = z.object({
+  buildingId: id(),
+  agentId: z.string().max(100).optional(),
+  limit: z.number().int().min(1).max(200).optional().default(50),
+});
+
+export const MemoryStatsSchema = z.object({
+  buildingId: id(),
+});
+
 export const PipelineLoopBackSchema = z.object({
   taskId: id(),
   buildingId: id(),

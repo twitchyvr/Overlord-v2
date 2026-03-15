@@ -76,6 +76,7 @@ import {
   RoomProviderSetSchema,
   RoomEscalateSchema,
   PipelineRecordSchema, PipelineGetSchema, PipelineBuildingSchema, PipelineLoopBackSchema,
+  MemorySearchSchema, MemoryContextSchema, MemoryStatsSchema,
   LogLevelSetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
@@ -88,6 +89,7 @@ import { validateLuaSyntax } from '../plugins/lua-validator.js';
 import { exportBundle, importBundle } from '../plugins/plugin-bundler.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
 import { recordEvidence, getTaskEvidence, getTaskPipelineStatus, getBuildingEvidence, loopBackToCode } from '../rooms/pipeline-evidence.js';
+import { searchMemory, getRecentContext, getMemoryStats } from '../agents/agent-memory.js';
 import type { PipelineStage } from '../rooms/pipeline-evidence.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
@@ -1138,6 +1140,20 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         buildingId: parsed.buildingId,
       });
       if (ack) ack({ ok: true, data: leaderboard });
+    });
+
+    // ─── Agent Memory (#557) ───
+
+    handle(socket, 'memory:search', MemorySearchSchema, (parsed, ack) => {
+      if (ack) ack(searchMemory(parsed));
+    });
+
+    handle(socket, 'memory:context', MemoryContextSchema, (parsed, ack) => {
+      if (ack) ack(getRecentContext(parsed.buildingId, parsed.agentId, parsed.limit));
+    });
+
+    handle(socket, 'memory:stats', MemoryStatsSchema, (parsed, ack) => {
+      if (ack) ack(getMemoryStats(parsed.buildingId));
     });
 
     // ─── Pipeline Evidence (#612) ───

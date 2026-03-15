@@ -1141,4 +1141,44 @@ test.describe('Dogfood: Session Fixes', () => {
     expect(css).toContain('.thinking-bubble-duration');
     expect(css).toContain('.thinking-bubble-text');
   });
+
+  // #557 — Agent memory system: search, context, stats
+  test('#557: Agent memory search and context retrieval works', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      if (!window.overlordSocket) return 'no socket';
+
+      const b = await window.overlordSocket.createBuilding({
+        name: 'MemoryE2E', config: { projectDescription: 'x', template: 'web-app', effortLevel: 'easy' }
+      });
+      if (!b?.ok) return 'create failed';
+      const bid = b.data.id;
+
+      // Test 1: memory:search returns ok (empty is fine for new building)
+      const search = await new Promise(r =>
+        window.overlordSocket.socket.emit('memory:search', { buildingId: bid, query: 'test' }, r)
+      );
+      if (!(search as any)?.ok) return 'search failed: ' + (search as any)?.error?.message;
+
+      // Test 2: memory:context returns ok
+      const context = await new Promise(r =>
+        window.overlordSocket.socket.emit('memory:context', { buildingId: bid, limit: 10 }, r)
+      );
+      if (!(context as any)?.ok) return 'context failed: ' + (context as any)?.error?.message;
+      if (!Array.isArray((context as any).data)) return 'context not array';
+
+      // Test 3: memory:stats returns ok with structure
+      const stats = await new Promise(r =>
+        window.overlordSocket.socket.emit('memory:stats', { buildingId: bid }, r)
+      );
+      if (!(stats as any)?.ok) return 'stats failed: ' + (stats as any)?.error?.message;
+      const data = (stats as any).data;
+      if (typeof data.totalMessages !== 'number') return 'no totalMessages';
+      if (!Array.isArray(data.byRoom)) return 'no byRoom';
+      if (!Array.isArray(data.byAgent)) return 'no byAgent';
+
+      return 'pass';
+    });
+
+    expect(result).toBe('pass');
+  });
 });
