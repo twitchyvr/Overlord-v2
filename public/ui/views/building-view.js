@@ -55,7 +55,7 @@ export class BuildingView extends Component {
     this._floors = [];
     this._expandedFloors = new Set(); // allow multiple floors expanded
     this._agentPositions = {};
-    this._collapsed = false;
+    this._collapsed = localStorage.getItem('overlord:sidebar-collapsed') === 'true';
   }
 
   mount() {
@@ -104,6 +104,8 @@ export class BuildingView extends Component {
 
   render() {
     this.el.textContent = '';
+    // Apply persisted collapsed state on every render
+    this.el.classList.toggle('collapsed', this._collapsed);
 
     if (!this._buildingData) {
       this.el.appendChild(this._renderEmptyState());
@@ -234,6 +236,7 @@ export class BuildingView extends Component {
     }, this._collapsed ? '\u25B6' : '\u25C0');
     collapseBtn.addEventListener('click', () => {
       this._collapsed = !this._collapsed;
+      localStorage.setItem('overlord:sidebar-collapsed', String(this._collapsed));
       this.el.classList.toggle('collapsed', this._collapsed);
       this.render();
     });
@@ -312,6 +315,7 @@ export class BuildingView extends Component {
       // If sidebar is collapsed, expand it and this floor
       if (this._collapsed) {
         this._collapsed = false;
+        localStorage.setItem('overlord:sidebar-collapsed', 'false');
         this.el.classList.remove('collapsed');
         this._expandedFloors.add(floor.id);
         this.render();
