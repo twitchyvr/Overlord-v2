@@ -1256,4 +1256,32 @@ test.describe('Dogfood: Session Fixes', () => {
     // GNAP failure doesn't break bus delivery
     expect(routerSrc).toContain('GNAP persistence failed');
   });
+
+  // #601 — GNAP settings UI: messaging mode toggle
+  test('#601: Settings has messaging mode toggle (Internal Mail vs GNAP)', async ({ page }) => {
+    // Open settings
+    const settingsBtn = page.locator('button[title="Settings"]');
+    await expect(settingsBtn).toBeVisible({ timeout: 5000 });
+    await settingsBtn.click();
+    await page.waitForTimeout(500);
+
+    // General tab should show messaging section
+    const messagingTitle = page.locator('.settings-section-title').filter({ hasText: 'Messaging' });
+    await expect(messagingTitle).toBeVisible({ timeout: 5000 });
+
+    // Should have Internal Mail and GNAP toggle buttons
+    const internalBtn = page.locator('.settings-toggle-btn').filter({ hasText: /Internal Mail/i });
+    const gnapBtn = page.locator('.settings-toggle-btn').filter({ hasText: /GNAP/i });
+    await expect(internalBtn).toBeVisible();
+    await expect(gnapBtn).toBeVisible();
+
+    // Click GNAP — should become active
+    await gnapBtn.click();
+    await page.waitForTimeout(300);
+    const stored = await page.evaluate(() => localStorage.getItem('overlord-messaging-mode'));
+    expect(stored).toBe('gnap');
+
+    // Reset to internal
+    await internalBtn.click();
+  });
 });

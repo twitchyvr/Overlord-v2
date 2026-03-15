@@ -251,6 +251,40 @@ export class SettingsView extends Component {
       }
     }));
 
+    // Messaging mode (#601)
+    section.appendChild(h('h4', { class: 'settings-section-title', style: { marginTop: 'var(--sp-6)' } }, 'Messaging'));
+    section.appendChild(this._buildSettingRow({
+      label: 'Messaging System',
+      description: 'Choose how agents communicate',
+      control: () => {
+        const current = localStorage.getItem('overlord-messaging-mode') || 'internal';
+        const group = h('div', { class: 'settings-toggle-group' });
+
+        for (const mode of [
+          { id: 'internal', label: '\u{1F4E8} Internal Mail', desc: 'SQLite database — fast, local' },
+          { id: 'gnap', label: '\u{1F517} GNAP', desc: 'Git-backed — persistent, auditable' },
+        ]) {
+          const btn = h('button', {
+            class: `settings-toggle-btn${current === mode.id ? ' active' : ''}`,
+            title: mode.desc,
+          }, mode.label);
+
+          btn.addEventListener('click', () => {
+            localStorage.setItem('overlord-messaging-mode', mode.id);
+            group.querySelectorAll('.settings-toggle-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            // Notify server
+            if (window.overlordSocket?.socket) {
+              window.overlordSocket.socket.emit('settings:messaging-mode', { mode: mode.id });
+            }
+            Toast.success(`Messaging mode set to ${mode.label}`);
+          });
+          group.appendChild(btn);
+        }
+        return group;
+      }
+    }));
+
     return section;
   }
 

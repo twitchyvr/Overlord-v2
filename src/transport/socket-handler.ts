@@ -78,6 +78,7 @@ import {
   PipelineRecordSchema, PipelineGetSchema, PipelineBuildingSchema, PipelineLoopBackSchema,
   MemorySearchSchema, MemoryContextSchema, MemoryStatsSchema,
   ModelProviderSchema, ModelRecommendSchema, ModelGetSchema, ModelCompareSchema,
+  MessagingModeSchema,
   LogLevelSetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
@@ -1142,6 +1143,14 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         buildingId: parsed.buildingId,
       });
       if (ack) ack({ ok: true, data: leaderboard });
+    });
+
+    // ─── Messaging Mode (#601) ───
+
+    handle(socket, 'settings:messaging-mode', MessagingModeSchema, (parsed, ack) => {
+      process.env.MESSAGING_MODE = parsed.mode;
+      log.info({ mode: parsed.mode }, 'Messaging mode changed');
+      if (ack) ack({ ok: true, data: { mode: parsed.mode } });
     });
 
     // ─── Model Registry (#556) ───

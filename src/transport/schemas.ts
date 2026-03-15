@@ -816,6 +816,12 @@ export const PipelineBuildingSchema = z.object({
   stage: z.enum(['code', 'iterate', 'static-test', 'deep-test', 'syntax', 'review', 'e2e', 'dogfood']).optional(),
 });
 
+// ─── Messaging Mode Schema (#601) ───
+
+export const MessagingModeSchema = z.object({
+  mode: z.enum(['internal', 'gnap']),
+});
+
 // ─── Model Registry Schemas (#556) ───
 
 export const ModelProviderSchema = z.object({ provider: z.string().max(50) });
