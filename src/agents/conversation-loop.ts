@@ -18,6 +18,7 @@ import { estimateTokens, allocateBudget, pruneMessages, getContextMetrics } from
 import { buildScratchpadInjection } from '../tools/providers/session-notes.js';
 import { acquireSlot, releaseSlot } from '../ai/rate-limiter.js';
 import { buildPerception, extractToolResults } from './perception-builder.js';
+import { selectToolsForTask } from './tool-selector.js';
 import type { Bus } from '../core/bus.js';
 import type {
   Result,
@@ -287,7 +288,17 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
   // Get room's allowed tools as ToolDefinitions for the AI
   const allowedToolNames = room.getAllowedTools();
-  const roomTools = tools.getToolsForRoom(allowedToolNames);
+  const allRoomTools = tools.getToolsForRoom(allowedToolNames);
+
+  // Intelligent tool selection (#654): filter to task-relevant tools
+  const usedToolNames = new Set<string>();
+  const lastUserMsg = messages.filter(m => m.role === 'user').pop();
+  const userMsgText = typeof lastUserMsg?.content === 'string'
+    ? lastUserMsg.content
+    : Array.isArray(lastUserMsg?.content)
+      ? lastUserMsg.content.filter((b: { type: string; text?: string }) => b.type === 'text').map((b: { type: string; text?: string }) => b.text || '').join(' ')
+      : '';
+  let roomTools = selectToolsForTask(allRoomTools, userMsgText, usedToolNames);
 
   // Build system prompt from room context + agent scratchpad
   const roomContext = room.buildContextInjection();
@@ -326,6 +337,13 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       { iteration, provider, agentId, roomId: room.id, messageCount: messages.length },
       'Conversation loop iteration',
     );
+
+    // On iteration 2+, expand to full tool set (#654). The token savings from
+    // iteration 1 (often the longest turn) are already captured. Subsequent
+    // iterations are shorter tool-call rounds that may need any room tool.
+    if (iteration > 1) {
+      roomTools = allRoomTools;
+    }
 
     // PTA: Inject perception context after the first iteration (#362)
     // On iteration 2+, the AI gets a structured snapshot of what just happened
@@ -553,6 +571,9 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
           logEntry: { name: toolName, input: toolInput, result: { error: errorMsg } },
         };
       }
+
+      // Track tool usage for intelligent tool selection (#654)
+      usedToolNames.add(toolName);
 
       // Room-level observation: onAfterToolCall can trigger escalation
       room.onAfterToolCall(toolName, agentId, toolResult);
