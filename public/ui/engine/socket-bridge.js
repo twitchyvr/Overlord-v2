@@ -89,9 +89,20 @@ export function initSocketBridge(socket, store, engine) {
     });
   }
 
+  // ── Building isolation guard (#666) ──
+  // Events from the server include buildingId. Only process events that match
+  // the currently active building, preventing cross-project data bleed.
+  function isActiveBuilding(data) {
+    if (!data || !data.buildingId) return true; // No buildingId = global event, always process
+    const active = store.get('building.active');
+    if (!active) return true; // No building selected = show everything
+    return data.buildingId === active;
+  }
+
   // ── Server → Client broadcasts ──
 
   socket.on('room:agent:entered', (data) => {
+    if (!isActiveBuilding(data)) return;
     // Update agent positions map
     store.update('building.agentPositions', (positions) => {
       return { ...(positions || {}), [data.agentId]: { roomId: data.roomId, roomType: data.roomType, tableType: data.tableType, status: 'active', name: data.agentName, agentId: data.agentId } };
@@ -102,6 +113,7 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('room:agent:exited', (data) => {
+    if (!isActiveBuilding(data)) return;
     store.update('building.agentPositions', (positions) => {
       const next = { ...(positions || {}) };
       delete next[data.agentId];
@@ -195,6 +207,7 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('tool:executed', (data) => {
+    if (!isActiveBuilding(data)) return;
     store.update('activity.items', (items) => [{ event: 'tool:executed', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('tool:executed', data);
     engine.dispatch('activity:new', { event: 'tool:executed', ...data });
@@ -224,6 +237,7 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('raid:entry:added', (data) => {
+    if (!isActiveBuilding(data)) return;
     store.update('raid.entries', (entries) => [data, ...(entries || [])]);
     store.update('activity.items', (items) => [{ event: 'raid:entry:added', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('raid:entry:added', data);
@@ -231,6 +245,7 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('raid:entry:updated', (data) => {
+    if (!isActiveBuilding(data)) return;
     store.update('raid.entries', (entries) => {
       const list = entries || [];
       const idx = list.findIndex((e) => e.id === data.id);
@@ -263,12 +278,14 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('exit-doc:submitted', (data) => {
+    if (!isActiveBuilding(data)) return;
     store.update('activity.items', (items) => [{ event: 'exit-doc:submitted', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('exit-doc:submitted', data);
     engine.dispatch('activity:new', { event: 'exit-doc:submitted', ...data });
   });
 
   socket.on('task:created', (data) => {
+    if (!isActiveBuilding(data)) return;
     store.update('tasks.list', (tasks) => {
       const list = tasks || [];
       // Deduplicate — createTask() callback may have already added this
@@ -281,6 +298,7 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('task:updated', (data) => {
+    if (!isActiveBuilding(data)) return;
     store.update('tasks.list', (tasks) => {
       const list = tasks || [];
       const idx = list.findIndex((t) => t.id === data.id);
@@ -371,6 +389,7 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('agent:status-changed', (data) => {
+    if (!isActiveBuilding(data)) return;
     store.update('agents.list', (agents) => {
       const list = agents || [];
       const idx = list.findIndex((a) => a.id === data.agentId);
@@ -457,6 +476,7 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('phase:gate:created', (data) => {
+    if (!isActiveBuilding(data)) return;
     store.update('phase.gates', (gates) => [...(gates || []), data]);
     store.update('activity.items', (items) => [{ event: 'phase:gate:created', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('phase:gate:created', data);
@@ -464,6 +484,7 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('phase:gate:signed-off', (data) => {
+    if (!isActiveBuilding(data)) return;
     // Update gates list in store
     store.update('phase.gates', (gates) => {
       const list = gates || [];
@@ -669,6 +690,7 @@ export function initSocketBridge(socket, store, engine) {
   // ── Task/Todo assignment events ──
 
   socket.on('task:assigned', (data) => {
+    if (!isActiveBuilding(data)) return;
     store.update('tasks.list', (tasks) => {
       const list = tasks || [];
       const idx = list.findIndex((t) => t.id === data.taskId || t.id === data.id);
@@ -1024,7 +1046,7 @@ export function initSocketBridge(socket, store, engine) {
     async moveAgent(agentId, roomId, tableType = null) {
       const res = await _emitWithFeedback('agent:move', { agentId, roomId, tableType });
       if (res && res.ok) {
-        this.fetchAgents({});
+        this.fetchAgents({ buildingId: store.get('building.active') || '' });
       }
       return res;
     },
@@ -1108,7 +1130,7 @@ export function initSocketBridge(socket, store, engine) {
     async updateAgentProfile(agentId, profile) {
       const res = await _emitWithFeedback('agent:update-profile', { agentId, ...profile });
       if (res && res.ok) {
-        this.fetchAgents({});
+        this.fetchAgents({ buildingId: store.get('building.active') || '' });
       }
       return res;
     },
@@ -1523,7 +1545,7 @@ export function initSocketBridge(socket, store, engine) {
       const results = await Promise.all([
         this.fetchBuilding(buildingId),
         this.fetchFloors(buildingId),
-        this.fetchAgents({}),
+        this.fetchAgents({ buildingId }),
         this.fetchGates(buildingId),
         this.fetchCanAdvance(buildingId),
         this.fetchRaidEntries(buildingId),
