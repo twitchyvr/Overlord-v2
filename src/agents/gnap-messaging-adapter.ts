@@ -6,6 +6,10 @@
  * within the project's working directory, making them auditable
  * through git history.
  *
+ * Based on GNAP (Git-Native Agent Protocol) by Farol Labs.
+ * GNAP is licensed under the MIT License — Copyright (c) 2026 Farol Labs.
+ * Repository: https://github.com/farol-team/gnap
+ *
  * Layer: Agents (depends on Storage, Core)
  */
 

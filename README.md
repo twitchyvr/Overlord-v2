@@ -638,6 +638,20 @@ Overlord v2 follows [Semantic Versioning](https://semver.org/) — `vMAJOR.MINOR
 
 ---
 
+## 🙏 Acknowledgments
+
+### GNAP (Git-Native Agent Protocol)
+
+Overlord v2's agent messaging system is built on the [**GNAP (Git-Native Agent Protocol)**](https://github.com/farol-team/gnap) created by [**Farol Labs**](https://github.com/farol-team).
+
+GNAP provides a decentralized, git-native coordination protocol for AI agents and humans — messages stored as JSON files in a shared git repo, with push-to-send and pull-to-receive semantics. Overlord integrates GNAP as an optional persistent messaging backend alongside the real-time event bus, giving agents both sub-second communication and a full git-backed audit trail.
+
+> GNAP is licensed under the **MIT License** — Copyright (c) 2026 Farol Labs.
+
+Thank you to the Farol Labs team for creating GNAP and for [collaborating with us](https://github.com/twitchyvr/Overlord-v2/issues/277) on its integration into Overlord.
+
+---
+
 ## 📄 License
 
 [MIT](LICENSE) — Copyright © 2026 Matt Rogers
