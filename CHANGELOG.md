@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Multi-repo support (Epic #605)** — Link multiple GitHub repositories as building blocks during project creation:
+  - **Phase 1: Data model + socket events** — `project_repos` and `repo_file_origins` tables with 5 relationship types (main, dependency, fork, reference, submodule); `repo:add`, `repo:remove`, `repo:list`, `repo:update` socket events with Zod validation (#638, PR #639)
+  - **Phase 2: UI picker** — repo URL input with protocol validation in project creation wizard; relationship dropdown; pending repo list with remove; linked repos display in Settings Folders tab (#640, PR #641)
+  - **Phase 3: AI analysis** — `repo:analyze` socket event calls AI to analyze repo relationships; renders suggestion cards with tech stack, key files, and override dropdowns; async `execFile` for shell-injection-safe GitHub CLI calls (#642, PR #643)
+  - **Phase 4: Agent context injection** — agents receive "Repository Context" section in system prompt listing linked repos + file origins; `ToolContext` extended with `repoContext` for file-aware tools; DB relationship validation; file origins capped at 100 with truncation warning (#644, PR #645)
+- **Sidebar persistence** — sidebar collapsed state persists to localStorage across sessions (#636)
 - **Lua Scripting Platform** — in-browser code editor (IDE) with syntax highlighting, API reference sidebar, live console, save+hot-reload, validate, fork built-in scripts, create from 6 templates, import/export as `.overlord-script` bundles, drag-and-drop import with permission review, marketplace foundation with 26 built-in scripts (#476, #477, #478, #403, #404, #405, #406, PR #485, PR #490)
 - **Scriptable Core Components** — `queryHook()` delegation pattern: Lua plugins can override phase gate decisions, exit document validation, agent assignment. 6 new hook types. TypeScript provides fallback when no script overrides (#478, PR #485)
 - **Native Desktop & Mobile Templates** — 4 new Strategist templates: `desktop-app`, `tauri-app`, `mobile-app`, `macos-widget`. Stack selection rules prefer cross-platform and lighter frameworks (#486, PR #487)

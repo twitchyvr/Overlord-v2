@@ -89,6 +89,17 @@ Socket.IO events are organized by domain. The transport layer maps socket events
 | `exit-doc:get` | `{ roomId }` | `Result<ExitDoc[]>` | Get exit docs for a room |
 | `exit-doc:list` | `{ buildingId }` | `Result<ExitDoc[]>` | List all exit docs |
 
+### Repository Domain (Multi-Repo)
+| Event | Data | Response | Description |
+|-------|------|----------|-------------|
+| `repo:add` | `{ buildingId, repoUrl, name, relationship?, branch? }` | `Result<Repo>` | Link a repo to a building |
+| `repo:remove` | `{ buildingId, repoId }` | `Result<void>` | Unlink a repo from a building |
+| `repo:list` | `{ buildingId }` | `Result<{ repos: Repo[] }>` | List repos linked to a building |
+| `repo:update` | `{ buildingId, repoId, relationship?, branch?, config? }` | `Result<Repo>` | Update repo settings |
+| `repo:analyze` | `{ repos: [{url, name}], projectName, projectGoals? }` | `Result<{ suggestions, summary }>` | AI analysis of repo relationships |
+
+**Relationship types:** `main`, `dependency`, `fork`, `reference`, `submodule`
+
 ### System Domain
 | Event | Data | Response | Description |
 |-------|------|----------|-------------|

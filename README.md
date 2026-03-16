@@ -69,6 +69,26 @@ In-browser Lua IDE with 26 built-in scripts. View, fork, edit, create, import/ex
 
 </td>
 </tr>
+<tr>
+<td width="33%" valign="top">
+
+### 🔗 Multi-Repo Context
+Link multiple GitHub repos to any project. AI analyzes relationships. Agents receive repo context in their system prompts — they know which files came from which repos.
+
+</td>
+<td width="33%" valign="top">
+
+### 📱 Progressive Web App
+Install Overlord on any device. Service worker with cache-first static / network-first API strategy. Works offline for cached views.
+
+</td>
+<td width="33%" valign="top">
+
+### 💡 Non-Technical First
+Tooltip glossary translates 21 jargon terms to plain language. Smart question rules avoid interrogating users. Designed for business users, not just developers.
+
+</td>
+</tr>
 </table>
 
 ---
@@ -107,8 +127,8 @@ graph TD
 | 🏢 **Rooms** | `src/rooms/` | 29 files — room manager, 16 room types, phase gates, RAID, chat orchestrator | Agents, Tools, AI, Storage, Core |
 | 🤖 **Agents** | `src/agents/` | 7 files — registry, email, sessions, conversation loop, stats, routing, badges | Tools, AI, Storage, Core |
 | 🔧 **Tools** | `src/tools/` | 12 files — registry, MCP manager/client, 7 tool providers | AI, Storage, Core |
-| 🧠 **AI** | `src/ai/` | 11 files — 4 adapters, profile generation, image service | Storage, Core |
-| 💾 **Storage** | `src/storage/` | SQLite with WAL, 15+ tables, 30+ indexes | Core |
+| 🧠 **AI** | `src/ai/` | 12 files — 4 adapters, profile generation, image service, repo analysis | Storage, Core |
+| 💾 **Storage** | `src/storage/` | SQLite with WAL, 17+ tables, 35+ indexes | Core |
 | ⚙️ **Core** | `src/core/` | Event bus, config, logger, contracts | Nothing (foundation) |
 
 </details>
@@ -360,7 +380,7 @@ npm run test:coverage   # V8 coverage report
 npm run validate        # Full CI pipeline: typecheck + lint + test
 ```
 
-**89 test files** across unit, integration, and E2E — organized by layer:
+**140 test files** across unit, integration, and E2E — organized by layer:
 
 <details>
 <summary>📁 <b>Test Structure</b></summary>
@@ -382,7 +402,7 @@ tests/
 │   ├── ai-providers.test.ts       # Cross-provider integration
 │   ├── full-lifecycle.test.ts     # End-to-end project lifecycle
 │   └── room-tool-scoping.test.ts  # Structural tool enforcement
-└── e2e/                # Playwright browser automation
+└── e2e/                # Playwright browser automation (multi-repo, settings, etc.)
 ```
 
 </details>
@@ -450,7 +470,8 @@ Overlord-v2/
 │   │   ├── profile-generator.ts   #    AI-generated agent bios
 │   │   ├── profile-name-generator.ts # Agent name generation
 │   │   ├── minimax-image.ts       #    MiniMax headshot generation
-│   │   └── agent-photo-store.ts   #    Photo file management
+│   │   ├── agent-photo-store.ts   #    Photo file management
+│   │   └── repo-analysis-service.ts # Multi-repo AI analysis
 │   │
 │   ├── tools/                     # 🔧 Tools
 │   │   ├── tool-registry.ts       #    Registration & lookup
@@ -514,8 +535,8 @@ Overlord-v2/
 │   │   └── contracts.ts           #    Plugin manifest schema
 │   │
 │   ├── transport/                 # 🌐 Transport
-│   │   ├── socket-handler.ts      #    40+ Socket.IO event handlers
-│   │   └── schemas.ts             #    98 Zod message schemas
+│   │   ├── socket-handler.ts      #    45+ Socket.IO event handlers
+│   │   └── schemas.ts             #    103 Zod message schemas
 │   │
 │   └── server.ts                  #    Entry point
 │

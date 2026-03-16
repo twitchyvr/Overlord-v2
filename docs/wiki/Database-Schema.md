@@ -208,6 +208,50 @@ Database migration tracking.
 | `idx_exit_docs_room` | exit_documents | room_id |
 | `idx_phase_gates_building` | phase_gates | building_id |
 
+### project_repos
+Linked GitHub repositories for a building (multi-repo support).
+
+| Column | Type | Default | Description |
+|--------|------|---------|-------------|
+| `id` | TEXT PK | — | Unique identifier |
+| `building_id` | TEXT FK→buildings | — | Parent building |
+| `repo_url` | TEXT NOT NULL | — | GitHub repository URL (HTTPS) |
+| `name` | TEXT NOT NULL | — | Repository display name (e.g., `org/repo`) |
+| `relationship` | TEXT NOT NULL | `'reference'` | One of: `main`, `dependency`, `fork`, `reference`, `submodule` |
+| `local_path` | TEXT | — | Local clone path (optional) |
+| `branch` | TEXT | `'main'` | Tracked branch |
+| `last_synced_at` | TEXT | — | Last upstream sync timestamp |
+| `last_commit` | TEXT | — | Last known commit SHA |
+| `config` | TEXT | `'{}'` | JSON configuration |
+| `created_at` | TEXT | `datetime('now')` | Creation timestamp |
+| `updated_at` | TEXT | `datetime('now')` | Last update timestamp |
+
+### repo_file_origins
+Tracks which local files originated from linked repositories.
+
+| Column | Type | Default | Description |
+|--------|------|---------|-------------|
+| `id` | TEXT PK | — | Unique identifier |
+| `building_id` | TEXT FK→buildings | — | Parent building |
+| `file_path` | TEXT NOT NULL | — | Local file path |
+| `source_repo_id` | TEXT FK→project_repos | — | Source repository |
+| `source_file_path` | TEXT | — | Original path in source repo |
+| `copied_at` | TEXT | — | When the file was copied |
+| `source_commit` | TEXT | — | Commit SHA at copy time |
+| `modified_locally` | INTEGER | `0` | Whether the file has been modified after copying |
+| `created_at` | TEXT | `datetime('now')` | Creation timestamp |
+
+## Indexes
+
+| Index | Table | Column(s) |
+|-------|-------|-----------|
+| ... | ... | ... |
+| `idx_project_repos_building` | project_repos | building_id |
+| `idx_project_repos_relationship` | project_repos | relationship |
+| `idx_file_origins_building` | repo_file_origins | building_id |
+| `idx_file_origins_repo` | repo_file_origins | source_repo_id |
+| `idx_file_origins_path` | repo_file_origins | file_path |
+
 ## Database Configuration
 
 ```
