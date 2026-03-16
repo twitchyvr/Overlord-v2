@@ -1017,3 +1017,12 @@ export const RepoAnalyzeSchema = z.object({
   projectGoals: z.string().max(2000).default(''),
 });
 
+export const RepoSyncStatusSchema = z.object({
+  buildingId: id(),
+});
+
+export const RepoSyncFetchSchema = z.object({
+  buildingId: id(),
+  repoId: id(),
+});
+

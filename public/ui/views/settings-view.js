@@ -365,6 +365,19 @@ export class SettingsView extends Component {
     section.appendChild(repoListEl);
     this._loadLinkedRepos(buildingId, repoListEl, this._tabGeneration);
 
+    // Sync status section (#649)
+    section.appendChild(h('h4', { class: 'settings-section-title', style: { marginTop: 'var(--sp-6)' } },
+      'Sync Status'));
+    section.appendChild(h('p', { class: 'settings-section-desc' },
+      'Check if linked repos have upstream changes.'));
+    const syncContainer = h('div', { class: 'repo-sync-container', id: 'repo-sync-container' });
+    const checkAllBtn = h('button', { class: 'btn btn-secondary btn-sm', style: { marginBottom: 'var(--sp-3)' } }, 'Check All Repos');
+    checkAllBtn.addEventListener('click', () => {
+      this._loadSyncStatus(buildingId, syncContainer, this._tabGeneration);
+    });
+    section.appendChild(checkAllBtn);
+    section.appendChild(syncContainer);
+
     return section;
   }
 
@@ -415,6 +428,96 @@ export class SettingsView extends Component {
       }
     } catch (err) {
       listEl.appendChild(h('p', { class: 'settings-empty-hint' }, 'Failed to load repos.'));
+    }
+  }
+
+  async _loadSyncStatus(buildingId, container, gen) {
+    if (!window.overlordSocket) return;
+    while (container.firstChild) container.removeChild(container.firstChild);
+    container.appendChild(h('p', { class: 'settings-empty-hint' }, 'Checking upstream...'));
+
+    try {
+      const result = await window.overlordSocket.repoSyncStatus(buildingId);
+      if (gen !== this._tabGeneration) return;
+      while (container.firstChild) container.removeChild(container.firstChild);
+
+      if (!result?.ok) {
+        container.appendChild(h('p', { class: 'settings-empty-hint' },
+          `Failed: ${result?.error?.message || 'Unknown error'}`));
+        return;
+      }
+
+      const { repos, summary, fileOrigins } = result.data;
+
+      if (repos.length === 0) {
+        container.appendChild(h('p', { class: 'settings-empty-hint' }, 'No repos to check.'));
+        return;
+      }
+
+      // Summary bar
+      const summaryParts = [h('span', { class: 'sync-stat sync-synced' }, `${summary.reposSynced} synced`)];
+      if (summary.reposBehind > 0) {
+        summaryParts.push(h('span', { class: 'sync-stat sync-behind' }, `${summary.reposBehind} behind`));
+      }
+      if (summary.reposErrored > 0) {
+        summaryParts.push(h('span', { class: 'sync-stat sync-error' }, `${summary.reposErrored} error`));
+      }
+      if (fileOrigins.total > 0) {
+        summaryParts.push(h('span', { class: 'sync-stat sync-files' },
+          `${fileOrigins.total} tracked files (${fileOrigins.modifiedLocally} modified)`));
+      }
+      const summaryEl = h('div', { class: 'repo-sync-summary' }, ...summaryParts);
+      container.appendChild(summaryEl);
+
+      // Per-repo rows
+      for (const repo of repos) {
+        const statusClass = repo.error ? 'sync-error' : repo.isSynced ? 'sync-synced' : 'sync-behind';
+        const statusText = repo.error
+          ? 'Error'
+          : repo.isSynced
+            ? 'In sync'
+            : `Behind by ${repo.commitsBehind} commit${repo.commitsBehind !== 1 ? 's' : ''}`;
+
+        const row = h('div', { class: 'repo-sync-row' },
+          h('span', { class: 'repo-sync-name' }, repo.name),
+          h('span', { class: `repo-sync-badge ${statusClass}` }, statusText),
+          h('span', { class: 'repo-sync-branch' }, repo.branch),
+          h('span', { class: 'repo-sync-time' },
+            repo.lastSyncedAt ? `Synced: ${new Date(repo.lastSyncedAt).toLocaleDateString()}` : 'Never synced'),
+        );
+
+        // Fetch button for individual repo refresh
+        const fetchBtn = h('button', {
+          class: 'btn btn-ghost btn-xs',
+          title: 'Fetch latest',
+          'aria-label': `Fetch latest for ${repo.name}`,
+        }, 'Fetch');
+        fetchBtn.addEventListener('click', async () => {
+          fetchBtn.disabled = true;
+          fetchBtn.textContent = '...';
+          try {
+            const res = await window.overlordSocket.repoSyncFetch(buildingId, repo.id);
+            if (res?.ok) {
+              Toast.success(`Fetched latest for ${repo.name}`);
+              this._loadSyncStatus(buildingId, container, this._tabGeneration);
+            } else {
+              Toast.error(`Fetch failed: ${res?.error?.message || 'Unknown'}`);
+              fetchBtn.disabled = false;
+              fetchBtn.textContent = 'Fetch';
+            }
+          } catch {
+            Toast.error('Fetch failed');
+            fetchBtn.disabled = false;
+            fetchBtn.textContent = 'Fetch';
+          }
+        });
+        row.appendChild(fetchBtn);
+        container.appendChild(row);
+      }
+    } catch {
+      if (gen !== this._tabGeneration) return;
+      while (container.firstChild) container.removeChild(container.firstChild);
+      container.appendChild(h('p', { class: 'settings-empty-hint' }, 'Failed to check sync status.'));
     }
   }
 

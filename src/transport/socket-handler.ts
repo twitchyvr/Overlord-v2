@@ -80,7 +80,7 @@ import {
   ModelProviderSchema, ModelRecommendSchema, ModelGetSchema, ModelCompareSchema,
   MessagingModeSchema, GnapBuildingSchema,
   LogLevelSetSchema,
-  RepoAddSchema, RepoRemoveSchema, RepoListSchema, RepoUpdateSchema, RepoAnalyzeSchema,
+  RepoAddSchema, RepoRemoveSchema, RepoListSchema, RepoUpdateSchema, RepoAnalyzeSchema, RepoSyncStatusSchema, RepoSyncFetchSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { resetBuildingAgents } from '../agents/agent-registry.js';
@@ -99,6 +99,7 @@ import type { PipelineStage } from '../rooms/pipeline-evidence.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
 import { analyzeRepos } from '../ai/repo-analysis-service.js';
+import { checkSyncStatus, fetchLatestCommit } from '../ai/repo-sync-service.js';
 import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
 import { isImageGenerationAvailable } from '../ai/minimax-image.js';
 import { writeAgentPhoto } from '../ai/agent-photo-store.js';
@@ -3076,6 +3077,79 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         }
       } catch (e) {
         if (ack) ack({ ok: false, error: { code: 'ANALYZE_FAILED', message: e instanceof Error ? e.message : String(e), retryable: false } });
+      }
+    });
+
+    // ─── Repo Sync Events (#649) ───
+
+    handle(socket, 'repo:sync-status', RepoSyncStatusSchema, async (parsed, ack) => {
+      try {
+        const db = getDb();
+        const repoRows = db.prepare(
+          'SELECT id, name, repo_url, branch, last_commit, last_synced_at FROM project_repos WHERE building_id = ?',
+        ).all(parsed.buildingId) as Array<{ id: string; name: string; repo_url: string; branch: string; last_commit: string | null; last_synced_at: string | null }>;
+
+        const result = await checkSyncStatus(repoRows.map(r => ({
+          id: r.id,
+          name: r.name,
+          repoUrl: r.repo_url,
+          branch: r.branch || 'main',
+          lastCommit: r.last_commit,
+          lastSyncedAt: r.last_synced_at,
+        })));
+
+        if (result.ok) {
+          // Also fetch file origin summary
+          const originSummary = db.prepare(`
+            SELECT
+              COUNT(*) as total,
+              SUM(CASE WHEN modified_locally = 1 THEN 1 ELSE 0 END) as modified
+            FROM repo_file_origins WHERE building_id = ?
+          `).get(parsed.buildingId) as { total: number; modified: number } | undefined;
+
+          if (ack) ack({
+            ok: true,
+            data: {
+              ...result.data,
+              fileOrigins: {
+                total: originSummary?.total ?? 0,
+                modifiedLocally: originSummary?.modified ?? 0,
+              },
+            },
+          });
+        } else {
+          if (ack) ack({ ok: false, error: { code: result.error.code, message: result.error.message, retryable: result.error.retryable ?? false } });
+        }
+      } catch (e) {
+        if (ack) ack({ ok: false, error: { code: 'SYNC_STATUS_FAILED', message: e instanceof Error ? e.message : String(e), retryable: false } });
+      }
+    });
+
+    handle(socket, 'repo:sync-fetch', RepoSyncFetchSchema, async (parsed, ack) => {
+      try {
+        const db = getDb();
+        const repo = db.prepare(
+          'SELECT id, repo_url, branch FROM project_repos WHERE id = ? AND building_id = ?',
+        ).get(parsed.repoId, parsed.buildingId) as { id: string; repo_url: string; branch: string } | undefined;
+
+        if (!repo) {
+          if (ack) ack({ ok: false, error: { code: 'REPO_NOT_FOUND', message: 'Repository not found in this building', retryable: false } });
+          return;
+        }
+
+        const result = await fetchLatestCommit(repo.repo_url, repo.branch || 'main');
+        if (result.ok) {
+          // Update DB with latest commit and sync timestamp
+          db.prepare(
+            'UPDATE project_repos SET last_commit = ?, last_synced_at = datetime(\'now\'), updated_at = datetime(\'now\') WHERE id = ?',
+          ).run(result.data.commit, repo.id);
+
+          if (ack) ack({ ok: true, data: { repoId: repo.id, commit: result.data.commit, syncedAt: new Date().toISOString() } });
+        } else {
+          if (ack) ack({ ok: false, error: { code: result.error.code, message: result.error.message, retryable: result.error.retryable ?? false } });
+        }
+      } catch (e) {
+        if (ack) ack({ ok: false, error: { code: 'SYNC_FETCH_FAILED', message: e instanceof Error ? e.message : String(e), retryable: false } });
       }
     });
 
