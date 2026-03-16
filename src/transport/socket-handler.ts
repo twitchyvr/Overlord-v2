@@ -80,6 +80,7 @@ import {
   ModelProviderSchema, ModelRecommendSchema, ModelGetSchema, ModelCompareSchema,
   MessagingModeSchema, GnapBuildingSchema,
   LogLevelSetSchema,
+  RepoAddSchema, RepoRemoveSchema, RepoListSchema, RepoUpdateSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { resetBuildingAgents } from '../agents/agent-registry.js';
@@ -2996,6 +2997,67 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       process.env.LOG_LEVEL = parsed.level;
       log.info({ level: parsed.level }, 'Log level changed via settings');
       if (ack) ack({ ok: true, data: { level: parsed.level } });
+    });
+
+    // ─── Multi-Repo (#605) ───
+
+    handle(socket, 'repo:add', RepoAddSchema, (parsed, ack) => {
+      const db = getDb();
+      const id = `repo_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
+      try {
+        db.prepare(`
+          INSERT INTO project_repos (id, building_id, repo_url, name, relationship, local_path, branch)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(id, parsed.buildingId, parsed.repoUrl, parsed.name, parsed.relationship, parsed.localPath ?? null, parsed.branch);
+        io.emit('repo:added', { id, buildingId: parsed.buildingId, name: parsed.name, relationship: parsed.relationship });
+        if (ack) ack({ ok: true, data: { id, name: parsed.name, relationship: parsed.relationship } });
+      } catch (e) {
+        if (ack) ack({ ok: false, error: { code: 'REPO_ADD_FAILED', message: e instanceof Error ? e.message : String(e), retryable: false } });
+      }
+    });
+
+    handle(socket, 'repo:remove', RepoRemoveSchema, (parsed, ack) => {
+      const db = getDb();
+      try {
+        // Also clean up file origins
+        db.prepare('DELETE FROM repo_file_origins WHERE source_repo_id = ?').run(parsed.repoId);
+        const result = db.prepare('DELETE FROM project_repos WHERE id = ? AND building_id = ?').run(parsed.repoId, parsed.buildingId);
+        if (result.changes === 0) {
+          if (ack) ack({ ok: false, error: { code: 'NOT_FOUND', message: 'Repo not found', retryable: false } });
+          return;
+        }
+        io.emit('repo:removed', { repoId: parsed.repoId, buildingId: parsed.buildingId });
+        if (ack) ack({ ok: true, data: { repoId: parsed.repoId } });
+      } catch (e) {
+        if (ack) ack({ ok: false, error: { code: 'REPO_REMOVE_FAILED', message: e instanceof Error ? e.message : String(e), retryable: false } });
+      }
+    });
+
+    handle(socket, 'repo:list', RepoListSchema, (parsed, ack) => {
+      const db = getDb();
+      const repos = db.prepare('SELECT * FROM project_repos WHERE building_id = ? ORDER BY relationship, name').all(parsed.buildingId);
+      if (ack) ack({ ok: true, data: { repos } });
+    });
+
+    handle(socket, 'repo:update', RepoUpdateSchema, (parsed, ack) => {
+      const db = getDb();
+      const fields: string[] = [];
+      const values: unknown[] = [];
+      if (parsed.relationship !== undefined) { fields.push('relationship = ?'); values.push(parsed.relationship); }
+      if (parsed.branch !== undefined) { fields.push('branch = ?'); values.push(parsed.branch); }
+      if (parsed.localPath !== undefined) { fields.push('local_path = ?'); values.push(parsed.localPath); }
+      if (fields.length === 0) {
+        if (ack) ack({ ok: false, error: { code: 'NO_FIELDS', message: 'No fields to update', retryable: false } });
+        return;
+      }
+      fields.push("updated_at = datetime('now')");
+      values.push(parsed.repoId);
+      try {
+        db.prepare(`UPDATE project_repos SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+        if (ack) ack({ ok: true, data: { repoId: parsed.repoId } });
+      } catch (e) {
+        if (ack) ack({ ok: false, error: { code: 'REPO_UPDATE_FAILED', message: e instanceof Error ? e.message : String(e), retryable: false } });
+      }
     });
 
     // ─── System Events ───
