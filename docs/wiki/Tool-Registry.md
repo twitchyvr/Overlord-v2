@@ -39,6 +39,14 @@ The Tool Registry defines all available tools globally but only exposes them to 
 | `qa_check_types` | Run type checking | qa |
 | `qa_check_coverage` | Check test coverage | qa |
 | `qa_audit_deps` | Audit dependencies for vulnerabilities | qa |
+| `e2e_test` | Auto-detect framework (Playwright/Cypress/Jest/Vitest) and run E2E tests with structured results | qa |
+
+### Browser Tools
+
+| Tool | Description | Category |
+|------|-------------|----------|
+| `screenshot` | Take a real Playwright headless browser screenshot (1280x720 PNG). Returns file path for visual analysis. | browser |
+| `browser_tools` | Browser automation: screenshot, navigate, inspect. Playwright for screenshots, curl for navigate/inspect. | browser |
 
 ### GitHub Tools
 
