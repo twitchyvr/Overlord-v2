@@ -26,6 +26,8 @@ import type {
   BaseRoomLike,
   BuildingRow,
   ParsedAgent,
+  RepoContextEntry,
+  FileOriginEntry,
 } from '../core/contracts.js';
 
 const log = logger.child({ module: 'chat-orchestrator' });
@@ -264,9 +266,10 @@ async function handleChatMessage(
       status: 'thinking',
     });
 
-    // 8. Resolve building working directory and allowed paths for tool scoping
+    // 8. Resolve building working directory, allowed paths, and repo context for tool scoping
     let workingDirectory: string | undefined;
     let allowedPaths: string[] = [];
+    let repoContext: { repos: RepoContextEntry[]; fileOrigins: FileOriginEntry[]; truncatedOrigins?: boolean } | undefined;
     if (buildingId) {
       try {
         const db = getDb();
@@ -279,6 +282,50 @@ async function handleChatMessage(
             const parsed = JSON.parse(building.allowed_paths);
             if (Array.isArray(parsed)) allowedPaths = parsed;
           } catch { /* malformed JSON — use empty array */ }
+        }
+
+        // Fetch linked repos for context injection (#644)
+        const repoRows = db.prepare(
+          'SELECT name, repo_url, relationship, local_path, branch FROM project_repos WHERE building_id = ?',
+        ).all(buildingId) as Array<{ name: string; repo_url: string; relationship: string; local_path: string | null; branch: string | null }>;
+
+        const VALID_RELATIONSHIPS = new Set(['main', 'dependency', 'fork', 'reference', 'submodule']);
+
+        if (repoRows.length > 0) {
+          const repos: RepoContextEntry[] = repoRows.map((r) => ({
+            name: r.name,
+            url: r.repo_url,
+            relationship: VALID_RELATIONSHIPS.has(r.relationship)
+              ? r.relationship as RepoContextEntry['relationship']
+              : 'reference',
+            localPath: r.local_path || undefined,
+            branch: r.branch || undefined,
+          }));
+
+          // Fetch file origins — join with project_repos for repo name (capped at 100 for prompt size)
+          const originRows = db.prepare(`
+            SELECT rfo.file_path, pr.name AS repo_name, rfo.source_file_path, rfo.modified_locally
+            FROM repo_file_origins rfo
+            JOIN project_repos pr ON rfo.source_repo_id = pr.id
+            WHERE rfo.building_id = ?
+            ORDER BY rfo.file_path
+            LIMIT 101
+          `).all(buildingId) as Array<{ file_path: string; repo_name: string; source_file_path: string | null; modified_locally: number }>;
+
+          const truncated = originRows.length > 100;
+          const cappedRows = truncated ? originRows.slice(0, 100) : originRows;
+          if (truncated) {
+            log.warn({ buildingId, total: '100+' }, 'File origins truncated to 100 for prompt size');
+          }
+
+          const fileOrigins: FileOriginEntry[] = cappedRows.map((o) => ({
+            filePath: o.file_path,
+            repoName: o.repo_name,
+            sourceFilePath: o.source_file_path || undefined,
+            modifiedLocally: o.modified_locally === 1,
+          }));
+
+          repoContext = { repos, fileOrigins, truncatedOrigins: truncated };
         }
       } catch {
         // DB not ready — not fatal, tools will use process.cwd()
@@ -316,6 +363,7 @@ async function handleChatMessage(
       bus,
       workingDirectory,
       allowedPaths,
+      repoContext,
       options: {
         buildingId,
         socketId,

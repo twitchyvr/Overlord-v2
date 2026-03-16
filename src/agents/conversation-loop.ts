@@ -24,6 +24,8 @@ import type {
   AIProviderAPI,
   ToolRegistryAPI,
   BaseRoomLike,
+  RepoContextEntry,
+  FileOriginEntry,
 } from '../core/contracts.js';
 
 const log = logger.child({ module: 'conversation-loop' });
@@ -219,6 +221,12 @@ interface ConversationParams {
   workingDirectory?: string;
   /** Additional paths the building has been granted access to */
   allowedPaths?: string[];
+  /** Linked repositories and file origin data for context injection */
+  repoContext?: {
+    repos: RepoContextEntry[];
+    fileOrigins: FileOriginEntry[];
+    truncatedOrigins?: boolean;
+  };
 }
 
 /**
@@ -283,7 +291,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
   // Build system prompt from room context + agent scratchpad
   const roomContext = room.buildContextInjection();
-  const baseSystemPrompt = buildSystemPrompt(roomContext, room);
+  const baseSystemPrompt = buildSystemPrompt(roomContext, room, params.repoContext);
   let scratchpad = '';
   try { scratchpad = buildScratchpadInjection(agentId); } catch { /* DB not ready yet — scratchpad is optional */ }
   const systemPrompt = scratchpad
@@ -524,6 +532,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
               fileScope: room.fileScope,
               workingDirectory: params.workingDirectory,
               allowedPaths: params.allowedPaths,
+              repoContext: params.repoContext,
             },
           }),
           TOOL_TIMEOUT_MS,
@@ -646,6 +655,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 function buildSystemPrompt(
   context: Record<string, unknown>,
   room: BaseRoomLike,
+  repoContext?: { repos: RepoContextEntry[]; fileOrigins: FileOriginEntry[]; truncatedOrigins?: boolean },
 ): string {
   const rules = context.rules as string[] || [];
   const tools = context.tools as string[] || [];
@@ -688,6 +698,31 @@ function buildSystemPrompt(
       sections.push(`- ${condition}: escalate to **${target}** room`);
     }
     sections.push('When an escalation condition is met, report it clearly and request escalation.');
+  }
+
+  // Inject linked repository context (#644)
+  if (repoContext && repoContext.repos.length > 0) {
+    sections.push('', '## Repository Context');
+    sections.push('This project has the following linked repositories:');
+    sections.push('');
+    for (const repo of repoContext.repos) {
+      const pathNote = repo.localPath ? ` (local: ${repo.localPath})` : '';
+      const branchNote = repo.branch && repo.branch !== 'main' ? ` [branch: ${repo.branch}]` : '';
+      sections.push(`- **${repo.name}** — ${repo.relationship}${branchNote}${pathNote}`);
+      sections.push(`  URL: ${repo.url}`);
+    }
+
+    // File origins — show which local files came from which repos
+    if (repoContext.fileOrigins.length > 0) {
+      sections.push('', '### File Origins');
+      const truncNote = repoContext.truncatedOrigins ? ' (showing first 100)' : '';
+      sections.push(`These local files originated from linked repos${truncNote}:`);
+      for (const origin of repoContext.fileOrigins) {
+        const modified = origin.modifiedLocally ? ' (modified locally)' : '';
+        const source = origin.sourceFilePath ? ` ← ${origin.sourceFilePath}` : '';
+        sections.push(`- \`${origin.filePath}\` from **${origin.repoName}**${source}${modified}`);
+      }
+    }
   }
 
   return sections.join('\n');

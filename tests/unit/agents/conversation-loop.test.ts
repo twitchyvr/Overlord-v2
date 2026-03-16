@@ -1064,4 +1064,144 @@ describe('Conversation Loop', () => {
       expect(result.data.finalText).toBe('');
     }
   });
+
+  describe('repo context injection (#644)', () => {
+    it('includes repository context in system prompt when repos are provided', async () => {
+      let capturedSystem = '';
+      const ai: AIProviderAPI = {
+        getAdapter: () => null,
+        registerAdapter: () => {},
+        sendMessage: async (params) => {
+          capturedSystem = (params.options?.system as string) || '';
+          return ok({
+            id: 'msg_repo',
+            role: 'assistant',
+            content: [{ type: 'text', text: 'I see the repo context.' }],
+            model: 'test',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 10, output_tokens: 20 },
+          });
+        },
+      };
+
+      await runConversationLoop({
+        provider: 'anthropic',
+        room: createMockRoom(),
+        agentId: 'agent_1',
+        messages: [{ role: 'user', content: 'Hello' }],
+        ai,
+        tools: createMockTools(),
+        bus: createMockBus(),
+        repoContext: {
+          repos: [
+            { name: 'org/backend', url: 'https://github.com/org/backend', relationship: 'main', branch: 'main' },
+            { name: 'org/shared-utils', url: 'https://github.com/org/shared-utils', relationship: 'dependency', localPath: '/libs/shared' },
+          ],
+          fileOrigins: [
+            { filePath: 'src/utils/helpers.ts', repoName: 'org/shared-utils', sourceFilePath: 'src/helpers.ts', modifiedLocally: true },
+          ],
+        },
+      });
+
+      expect(capturedSystem).toContain('## Repository Context');
+      expect(capturedSystem).toContain('**org/backend** — main');
+      expect(capturedSystem).toContain('**org/shared-utils** — dependency');
+      expect(capturedSystem).toContain('(local: /libs/shared)');
+      expect(capturedSystem).toContain('### File Origins');
+      expect(capturedSystem).toContain('`src/utils/helpers.ts`');
+      expect(capturedSystem).toContain('from **org/shared-utils**');
+      expect(capturedSystem).toContain('(modified locally)');
+    });
+
+    it('omits repository context section when no repos are linked', async () => {
+      let capturedSystem = '';
+      const ai: AIProviderAPI = {
+        getAdapter: () => null,
+        registerAdapter: () => {},
+        sendMessage: async (params) => {
+          capturedSystem = (params.options?.system as string) || '';
+          return ok({
+            id: 'msg_no_repo',
+            role: 'assistant',
+            content: [{ type: 'text', text: 'No repos.' }],
+            model: 'test',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 10, output_tokens: 20 },
+          });
+        },
+      };
+
+      await runConversationLoop({
+        provider: 'anthropic',
+        room: createMockRoom(),
+        agentId: 'agent_1',
+        messages: [{ role: 'user', content: 'Hello' }],
+        ai,
+        tools: createMockTools(),
+        bus: createMockBus(),
+      });
+
+      expect(capturedSystem).not.toContain('## Repository Context');
+    });
+
+    it('passes repoContext to ToolContext during tool execution', async () => {
+      let capturedToolContext: ToolContext | undefined;
+      const repoContext = {
+        repos: [{ name: 'org/lib', url: 'https://github.com/org/lib', relationship: 'dependency' as const }],
+        fileOrigins: [],
+      };
+
+      const toolsRegistry: ToolRegistryAPI = {
+        registerTool: () => {},
+        getTool: () => null,
+        getToolsForRoom: (allowed: string[]) => [{
+          name: 'bash',
+          description: 'Execute bash',
+          category: 'shell',
+          inputSchema: { type: 'object', properties: { command: { type: 'string' } } },
+          execute: async () => ({ output: 'done' }),
+        }].filter(t => allowed.includes(t.name)),
+        executeInRoom: async (params) => {
+          capturedToolContext = params.context;
+          return ok({ output: 'done' });
+        },
+      };
+
+      const ai = createMockAI([
+        {
+          id: 'msg_tool',
+          role: 'assistant',
+          content: [
+            { type: 'tool_use', id: 'tu_1', name: 'bash', input: { command: 'ls' } },
+          ],
+          model: 'test',
+          stop_reason: 'tool_use',
+          usage: { input_tokens: 10, output_tokens: 20 },
+        },
+        {
+          id: 'msg_done',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Done.' }],
+          model: 'test',
+          stop_reason: 'end_turn',
+          usage: { input_tokens: 10, output_tokens: 20 },
+        },
+      ]);
+
+      await runConversationLoop({
+        provider: 'anthropic',
+        room: createMockRoom(),
+        agentId: 'agent_1',
+        messages: [{ role: 'user', content: 'Run ls' }],
+        ai,
+        tools: toolsRegistry,
+        bus: createMockBus(),
+        repoContext,
+      });
+
+      expect(capturedToolContext).toBeDefined();
+      expect(capturedToolContext!.repoContext).toEqual(repoContext);
+      expect(capturedToolContext!.repoContext!.repos[0].name).toBe('org/lib');
+    });
+  });
 });
