@@ -355,6 +355,39 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_email_recipients_email ON agent_email_recipients(email_id);
   CREATE INDEX IF NOT EXISTS idx_email_recipients_agent ON agent_email_recipients(agent_id);
   CREATE INDEX IF NOT EXISTS idx_email_recipients_unread ON agent_email_recipients(agent_id, read_at);
+
+  CREATE TABLE IF NOT EXISTS project_repos (
+    id TEXT PRIMARY KEY,
+    building_id TEXT NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
+    repo_url TEXT NOT NULL,
+    name TEXT NOT NULL,
+    relationship TEXT NOT NULL DEFAULT 'reference' CHECK(relationship IN ('main', 'dependency', 'fork', 'reference', 'submodule')),
+    local_path TEXT,
+    branch TEXT DEFAULT 'main',
+    last_synced_at TEXT,
+    last_commit TEXT,
+    config TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS repo_file_origins (
+    id TEXT PRIMARY KEY,
+    building_id TEXT NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
+    file_path TEXT NOT NULL,
+    source_repo_id TEXT REFERENCES project_repos(id) ON DELETE CASCADE,
+    source_file_path TEXT,
+    copied_at TEXT,
+    source_commit TEXT,
+    modified_locally INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_project_repos_building ON project_repos(building_id);
+  CREATE INDEX IF NOT EXISTS idx_project_repos_relationship ON project_repos(relationship);
+  CREATE INDEX IF NOT EXISTS idx_file_origins_building ON repo_file_origins(building_id);
+  CREATE INDEX IF NOT EXISTS idx_file_origins_repo ON repo_file_origins(source_repo_id);
+  CREATE INDEX IF NOT EXISTS idx_file_origins_path ON repo_file_origins(file_path);
 `;
 
 /**

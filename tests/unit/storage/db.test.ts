@@ -85,7 +85,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 22 tables', () => {
+  describe('schema — all 24 tables', () => {
     const expectedTables = [
       'buildings',
       'floors',
@@ -109,9 +109,11 @@ describe('Storage Layer', () => {
       'agent_email_recipients',
       'migrations',
       'pipeline_evidence',
+      'project_repos',
+      'repo_file_origins',
     ];
 
-    it('creates all 22 tables', async () => {
+    it('creates all 24 tables', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -121,7 +123,7 @@ describe('Storage Layer', () => {
 
       const tableNames = tables.map((t) => t.name).sort();
       expect(tableNames).toEqual(expectedTables.sort());
-      expect(tableNames).toHaveLength(22);
+      expect(tableNames).toHaveLength(24);
     });
 
     it.each(expectedTables)('creates table: %s', async (tableName) => {
@@ -213,7 +215,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 45 indexes', () => {
+  describe('schema — all 50 indexes', () => {
     const expectedIndexes = [
       'idx_rooms_floor',
       'idx_rooms_type',
@@ -260,9 +262,14 @@ describe('Storage Layer', () => {
       'idx_pipeline_task',
       'idx_pipeline_building',
       'idx_pipeline_stage',
+      'idx_project_repos_building',
+      'idx_project_repos_relationship',
+      'idx_file_origins_building',
+      'idx_file_origins_repo',
+      'idx_file_origins_path',
     ];
 
-    it('creates all 45 custom indexes', async () => {
+    it('creates all 50 custom indexes', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -272,7 +279,7 @@ describe('Storage Layer', () => {
 
       const indexNames = indexes.map((i) => i.name).sort();
       expect(indexNames).toEqual(expectedIndexes.sort());
-      expect(indexNames).toHaveLength(45);
+      expect(indexNames).toHaveLength(50);
     });
 
     it.each(expectedIndexes)('creates index: %s', async (indexName) => {
@@ -315,7 +322,7 @@ describe('Storage Layer', () => {
         .prepare("SELECT count(*) as cnt FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         .get() as { cnt: number };
 
-      expect(tables.cnt).toBe(22);
+      expect(tables.cnt).toBe(24);
     });
   });
 

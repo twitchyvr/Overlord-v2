@@ -978,3 +978,30 @@ export const QualityConfigSetSchema = z.object({
   value: z.union([z.boolean(), z.number()]),
 });
 
+// --- Multi-Repo Schemas (#605) ---
+
+export const RepoAddSchema = z.object({
+  buildingId: id(),
+  repoUrl: z.string().min(1).max(1000).url(),
+  name: name(),
+  relationship: z.enum(['main', 'dependency', 'fork', 'reference', 'submodule']).default('reference'),
+  branch: z.string().max(MAX_NAME).default('main'),
+  localPath: z.string().max(1000).optional(),
+});
+
+export const RepoRemoveSchema = z.object({
+  buildingId: id(),
+  repoId: id(),
+});
+
+export const RepoListSchema = z.object({
+  buildingId: id(),
+});
+
+export const RepoUpdateSchema = z.object({
+  repoId: id(),
+  relationship: z.enum(['main', 'dependency', 'fork', 'reference', 'submodule']).optional(),
+  branch: z.string().max(MAX_NAME).optional(),
+  localPath: z.string().max(1000).optional(),
+});
+
