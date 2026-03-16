@@ -46,6 +46,7 @@ The Tool Registry defines all available tools globally but only exposes them to 
 | Tool | Description | Category |
 |------|-------------|----------|
 | `screenshot` | Take a real Playwright headless browser screenshot (1280x720 PNG). Returns file path for visual analysis. | browser |
+| `analyze_screenshot` | Analyze a screenshot with AI vision — returns description, UI elements, and issues. Auto-selects vision-capable provider (Anthropic/OpenAI). | browser |
 | `browser_tools` | Browser automation: screenshot, navigate, inspect. Playwright for screenshots, curl for navigate/inspect. | browser |
 
 ### GitHub Tools
