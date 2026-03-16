@@ -95,4 +95,4 @@ The Folders tab in Settings shows:
 | 2. UI picker in creation wizard | #640 | #641 | Merged |
 | 3. AI analysis service | #642 | #643 | Merged |
 | 4. Agent context injection | #644 | #645 | Merged |
-| 5. Sync & upstream tracking | — | — | Planned |
+| 5. Sync status detection | #649 | #650 | Merged |
