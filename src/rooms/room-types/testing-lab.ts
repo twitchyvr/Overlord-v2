@@ -34,6 +34,7 @@ export class TestingLab extends BaseRoom {
       'qa_audit_deps',
       'e2e_test',
       'screenshot',
+      'analyze_screenshot',
       'session_note',
     ],
     fileScope: 'read-only',

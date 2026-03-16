@@ -16,7 +16,7 @@ import { bus } from './core/bus.js';
 import { logger } from './core/logger.js';
 import { initStorage } from './storage/db.js';
 import { initAI } from './ai/ai-provider.js';
-import { initTools } from './tools/tool-registry.js';
+import { initTools, setToolsAI } from './tools/tool-registry.js';
 import { initAgents } from './agents/agent-registry.js';
 import { initRooms } from './rooms/room-manager.js';
 import { registerBuiltInRoomTypes } from './rooms/room-types/index.js';
@@ -52,6 +52,7 @@ async function start(): Promise<void> {
   log.info('AI layer initialized');
 
   const tools = initTools(config);
+  setToolsAI(ai); // Inject AI for vision-capable tools (analyze_screenshot)
   log.info('Tool registry initialized');
 
   const agents = initAgents({ bus, tools, ai });
