@@ -44,7 +44,7 @@ export function initDevLoopEnforcer(bus: Bus): void {
 
   // ─── Stage 1 → 2: Code Lab exit doc → trigger Review ───
   bus.on('exit-doc:submitted', (data) => {
-    const roomType = data.roomType as string;
+    const roomType = resolveRoomType(data.roomType as string, data.roomId as string);
     if (roomType !== 'code-lab') return;
 
     const buildingId = data.buildingId as string;
@@ -136,7 +136,7 @@ export function initDevLoopEnforcer(bus: Bus): void {
 
   // ─── Stage 3 → 4: Testing Lab exit doc → trigger Dogfood notification ───
   bus.on('exit-doc:submitted', (data) => {
-    const roomType = data.roomType as string;
+    const roomType = resolveRoomType(data.roomType as string, data.roomId as string);
     if (roomType !== 'testing-lab') return;
 
     const buildingId = data.buildingId as string;
@@ -209,6 +209,21 @@ export function initDevLoopEnforcer(bus: Bus): void {
 }
 
 // ─── Helpers ───
+
+/**
+ * Resolve room type from the event data. Falls back to DB lookup if not provided.
+ */
+function resolveRoomType(roomType: string | undefined, roomId: string | undefined): string {
+  if (roomType) return roomType;
+  if (!roomId) return '';
+  try {
+    const db = getDb();
+    const row = db.prepare('SELECT type FROM rooms WHERE id = ?').get(roomId) as { type: string } | undefined;
+    return row?.type || '';
+  } catch {
+    return '';
+  }
+}
 
 /**
  * Find a room of a specific type within a building.
