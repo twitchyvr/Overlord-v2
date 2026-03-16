@@ -81,9 +81,28 @@ Required JSON structure:
 
 Be specific about what you see. If data appears malformed (wrong format, truncated, NaN, undefined), flag it. If sections are empty that should have content, flag it. Return ONLY the JSON.`;
 
+    // Vision requires a provider that supports image content blocks.
+    // MiniMax M2.5 does NOT support vision — it silently ignores image blocks.
+    // Try providers in order: anthropic (Claude) → openai (GPT-4o) → error.
+    const visionProviders = ['anthropic', 'openai'];
+    let usedProvider = provider;
+
+    // If the requested provider isn't vision-capable, try others
+    if (provider === 'minimax') {
+      const visionAdapter = visionProviders.find(p => ai.getAdapter(p) !== null);
+      if (!visionAdapter) {
+        return err('NO_VISION_PROVIDER',
+          'Screenshot analysis requires a vision-capable AI provider (Anthropic Claude or OpenAI GPT-4o). ' +
+          'MiniMax M2.5 does not support image analysis. Configure ANTHROPIC_API_KEY or OPENAI_API_KEY.',
+          { retryable: false });
+      }
+      usedProvider = visionAdapter;
+      log.info({ from: provider, to: usedProvider }, 'Switching to vision-capable provider for screenshot analysis');
+    }
+
     // Send to AI with image content block
     const result = await ai.sendMessage({
-      provider,
+      provider: usedProvider,
       messages: [
         {
           role: 'user',
