@@ -959,6 +959,14 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithFeedback('repo:analyze', params, 30000);
     },
 
+    repoSyncStatus(buildingId) {
+      return _emitWithFeedback('repo:sync-status', { buildingId }, 30000);
+    },
+
+    repoSyncFetch(buildingId, repoId) {
+      return _emitWithFeedback('repo:sync-fetch', { buildingId, repoId }, 20000);
+    },
+
     async registerAgent(params) {
       const res = await _emitWithFeedback('agent:register', params);
       if (res && res.ok) {
