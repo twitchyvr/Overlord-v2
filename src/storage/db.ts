@@ -358,7 +358,7 @@ const SCHEMA_SQL = `
 
   CREATE TABLE IF NOT EXISTS project_repos (
     id TEXT PRIMARY KEY,
-    building_id TEXT NOT NULL REFERENCES buildings(id),
+    building_id TEXT NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
     repo_url TEXT NOT NULL,
     name TEXT NOT NULL,
     relationship TEXT NOT NULL DEFAULT 'reference' CHECK(relationship IN ('main', 'dependency', 'fork', 'reference', 'submodule')),
@@ -373,9 +373,9 @@ const SCHEMA_SQL = `
 
   CREATE TABLE IF NOT EXISTS repo_file_origins (
     id TEXT PRIMARY KEY,
-    building_id TEXT NOT NULL REFERENCES buildings(id),
+    building_id TEXT NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
     file_path TEXT NOT NULL,
-    source_repo_id TEXT REFERENCES project_repos(id),
+    source_repo_id TEXT REFERENCES project_repos(id) ON DELETE CASCADE,
     source_file_path TEXT,
     copied_at TEXT,
     source_commit TEXT,
