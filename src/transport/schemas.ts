@@ -1005,3 +1005,15 @@ export const RepoUpdateSchema = z.object({
   localPath: z.string().max(1000).optional(),
 });
 
+export const RepoAnalyzeSchema = z.object({
+  repos: z.array(z.object({
+    url: z.string().min(1).max(1000).url().refine(
+      (u) => /^https?:\/\//.test(u),
+      { message: 'URL must use HTTP or HTTPS protocol' },
+    ),
+    name: z.string().min(1).max(200),
+  })).min(1).max(20),
+  projectName: z.string().min(1).max(200),
+  projectGoals: z.string().max(2000).default(''),
+});
+

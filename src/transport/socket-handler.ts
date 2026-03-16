@@ -80,7 +80,7 @@ import {
   ModelProviderSchema, ModelRecommendSchema, ModelGetSchema, ModelCompareSchema,
   MessagingModeSchema, GnapBuildingSchema,
   LogLevelSetSchema,
-  RepoAddSchema, RepoRemoveSchema, RepoListSchema, RepoUpdateSchema,
+  RepoAddSchema, RepoRemoveSchema, RepoListSchema, RepoUpdateSchema, RepoAnalyzeSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { resetBuildingAgents } from '../agents/agent-registry.js';
@@ -98,6 +98,7 @@ import { GnapMessagingAdapter } from '../agents/gnap-messaging-adapter.js';
 import type { PipelineStage } from '../rooms/pipeline-evidence.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
+import { analyzeRepos } from '../ai/repo-analysis-service.js';
 import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
 import { isImageGenerationAvailable } from '../ai/minimax-image.js';
 import { writeAgentPhoto } from '../ai/agent-photo-store.js';
@@ -3057,6 +3058,24 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         if (ack) ack({ ok: true, data: { repoId: parsed.repoId } });
       } catch (e) {
         if (ack) ack({ ok: false, error: { code: 'REPO_UPDATE_FAILED', message: e instanceof Error ? e.message : String(e), retryable: false } });
+      }
+    });
+
+    handle(socket, 'repo:analyze', RepoAnalyzeSchema, async (parsed, ack) => {
+      try {
+        const result = await analyzeRepos(
+          ai,
+          parsed.repos,
+          parsed.projectName,
+          parsed.projectGoals,
+        );
+        if (result.ok) {
+          if (ack) ack({ ok: true, data: result.data });
+        } else {
+          if (ack) ack({ ok: false, error: { code: result.error.code, message: result.error.message, retryable: result.error.retryable ?? false } });
+        }
+      } catch (e) {
+        if (ack) ack({ ok: false, error: { code: 'ANALYZE_FAILED', message: e instanceof Error ? e.message : String(e), retryable: false } });
       }
     });
 

@@ -306,6 +306,8 @@ export class StrategistView extends Component {
     this._localPath = '';
     this._cloneUrl = '';
     this._pendingRepos = []; // Array of { url, name, relationship }
+    this._analysisResult = null; // AI analysis result
+    this._analyzing = false;
   }
 
   mount() {
@@ -790,6 +792,29 @@ export class StrategistView extends Component {
     const repoListEl = h('div', { class: 'repo-list' });
     this._renderRepoList(repoListEl);
     repoGroup.appendChild(repoListEl);
+
+    // Analyze button + results container (#642)
+    const analyzeRow = h('div', { class: 'repo-analyze-row' });
+    const analyzeBtn = Button.create('AI: Analyze & Suggest', {
+      variant: 'secondary',
+      size: 'sm',
+      icon: '\u{1F916}',
+      disabled: this._pendingRepos.length === 0 && !this._analysisResult,
+      onClick: () => this._analyzeRepos(analyzeBtn, analysisContainer),
+    });
+    if (this._analyzing) {
+      analyzeBtn.disabled = true;
+      analyzeBtn.textContent = 'Analyzing...';
+    }
+    analyzeRow.appendChild(analyzeBtn);
+    repoGroup.appendChild(analyzeRow);
+
+    const analysisContainer = h('div', { class: 'repo-analysis-results' });
+    if (this._analysisResult) {
+      this._renderAnalysisResults(analysisContainer);
+    }
+    repoGroup.appendChild(analysisContainer);
+
     form.appendChild(repoGroup);
 
     // Blueprint preview
@@ -891,6 +916,133 @@ export class StrategistView extends Component {
       urlInput.addEventListener('input', (e) => { this._cloneUrl = e.target.value; });
       inputArea.appendChild(urlInput);
       requestAnimationFrame(() => urlInput.focus());
+    }
+  }
+
+  /** Call AI to analyze pending repos and suggest integration strategies (#642) */
+  async _analyzeRepos(btn, container) {
+    if (this._pendingRepos.length === 0 || !window.overlordSocket) return;
+
+    this._analyzing = true;
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    container.textContent = '';
+    container.appendChild(h('div', { class: 'repo-analysis-loading' },
+      h('div', { class: 'spinner' }),
+      h('span', null, 'AI is analyzing your repos...')
+    ));
+
+    try {
+      const result = await window.overlordSocket.analyzeRepos({
+        repos: this._pendingRepos.map(r => ({ url: r.url, name: r.name })),
+        projectName: this._projectName || 'New Project',
+        projectGoals: this._projectGoals || '',
+      });
+
+      if (result?.ok && result.data?.suggestions) {
+        this._analysisResult = result.data;
+
+        // Apply AI suggestions to pending repos
+        for (const suggestion of result.data.suggestions) {
+          const pending = this._pendingRepos.find(r => r.url === suggestion.url || r.name === suggestion.name);
+          if (pending) {
+            pending.relationship = suggestion.relationship;
+            pending.aiSuggestion = suggestion;
+          }
+        }
+      } else {
+        this._analysisResult = null;
+        Toast.error(`Analysis failed: ${result?.error?.message || 'Unknown error'}`);
+      }
+    } catch (err) {
+      this._analysisResult = null;
+      Toast.error(`Analysis failed: ${err.message}`);
+    } finally {
+      this._analyzing = false;
+      btn.disabled = false;
+      btn.textContent = 'AI: Analyze & Suggest';
+      container.textContent = '';
+      if (this._analysisResult) {
+        this._renderAnalysisResults(container);
+      }
+    }
+  }
+
+  /** Render AI analysis results (#642) */
+  _renderAnalysisResults(container) {
+    const result = this._analysisResult;
+    if (!result) return;
+
+    // Summary
+    if (result.summary) {
+      container.appendChild(h('div', { class: 'analysis-summary' },
+        h('strong', null, 'Integration Strategy: '),
+        h('span', null, result.summary),
+      ));
+    }
+
+    // Per-repo suggestion cards
+    for (const suggestion of result.suggestions) {
+      const card = h('div', { class: 'analysis-card' },
+        h('div', { class: 'analysis-card-header' },
+          h('span', { class: 'analysis-card-name' }, suggestion.name),
+          h('span', { class: `repo-list-badge rel-${suggestion.relationship}` }, suggestion.relationship),
+        ),
+        h('div', { class: 'analysis-card-body' },
+          h('div', { class: 'analysis-field' },
+            h('strong', null, 'Suggestion: '),
+            h('span', null, suggestion.reason),
+          ),
+          h('div', { class: 'analysis-field' },
+            h('strong', null, 'Action: '),
+            h('span', null, suggestion.action),
+          ),
+        ),
+      );
+
+      // Tech stack badges
+      if (suggestion.techStack?.length > 0) {
+        const techRow = h('div', { class: 'analysis-tech-row' });
+        for (const tech of suggestion.techStack) {
+          techRow.appendChild(h('span', { class: 'analysis-tech-badge' }, tech));
+        }
+        card.querySelector('.analysis-card-body').appendChild(techRow);
+      }
+
+      // Key files
+      if (suggestion.keyFiles?.length > 0) {
+        const filesEl = h('div', { class: 'analysis-field' },
+          h('strong', null, 'Key files: '),
+          h('span', { class: 'mono' }, suggestion.keyFiles.join(', ')),
+        );
+        card.querySelector('.analysis-card-body').appendChild(filesEl);
+      }
+
+      // Override relationship dropdown
+      const overrideRow = h('div', { class: 'analysis-override' },
+        h('label', null, 'Override: '),
+      );
+      const overrideSelect = h('select', { class: 'form-input repo-rel-select' },
+        h('option', { value: 'reference', selected: suggestion.relationship === 'reference' }, 'Reference'),
+        h('option', { value: 'dependency', selected: suggestion.relationship === 'dependency' }, 'Dependency'),
+        h('option', { value: 'fork', selected: suggestion.relationship === 'fork' }, 'Fork'),
+        h('option', { value: 'submodule', selected: suggestion.relationship === 'submodule' }, 'Submodule'),
+      );
+      overrideSelect.value = suggestion.relationship;
+      overrideSelect.addEventListener('change', () => {
+        const pending = this._pendingRepos.find(r => r.url === suggestion.url || r.name === suggestion.name);
+        if (pending) pending.relationship = overrideSelect.value;
+        // Update the badge
+        const badge = card.querySelector('.repo-list-badge');
+        if (badge) {
+          badge.textContent = overrideSelect.value;
+          badge.className = `repo-list-badge rel-${overrideSelect.value}`;
+        }
+      });
+      overrideRow.appendChild(overrideSelect);
+      card.appendChild(overrideRow);
+
+      container.appendChild(card);
     }
   }
 
