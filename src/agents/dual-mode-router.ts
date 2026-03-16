@@ -5,6 +5,10 @@
  * - sendRealtime: bus only (ephemeral, sub-100ms)
  * - sendDurable: bus + GNAP (persistent, auditable)
  *
+ * GNAP transport powered by GNAP (Git-Native Agent Protocol) by Farol Labs.
+ * GNAP is licensed under the MIT License — Copyright (c) 2026 Farol Labs.
+ * Repository: https://github.com/farol-team/gnap
+ *
  * Layer: Agents (depends on Core)
  */
 

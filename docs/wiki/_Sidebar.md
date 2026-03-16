@@ -28,6 +28,7 @@
 - [[Agent System]]
 - [[Agent Router]]
 - [[Badge Access]]
+- [[GNAP Integration]]
 
 **Tools**
 - [[Tool Registry]]

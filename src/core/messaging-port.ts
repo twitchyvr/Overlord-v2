@@ -6,8 +6,10 @@
  * - BusMessagingAdapter: real-time via event bus (< 100ms, ephemeral)
  * - GnapMessagingAdapter: git-backed via GNAP (persistent, auditable)
  *
+ * This interface was designed around the GNAP (Git-Native Agent Protocol)
+ * created by Farol Labs (https://github.com/farol-team).
+ * GNAP is licensed under the MIT License — Copyright (c) 2026 Farol Labs.
  * See: https://github.com/farol-team/gnap
- * Design: https://github.com/twitchyvr/Overlord-v2/wiki/GNAP-Integration
  */
 
 export interface AgentMessage {
