@@ -3263,6 +3263,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
   forward('escalation:stale-gate');
   forward('escalation:war-room');
   forward('escalation:failed');
+  forward('dev-loop:stage-transition'); // #652 — pipeline progression events
   // scope-change:detected already forwarded above — removed duplicate
   forward('system:log');
   forward('building:created');
