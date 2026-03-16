@@ -97,6 +97,8 @@ Socket.IO events are organized by domain. The transport layer maps socket events
 | `repo:list` | `{ buildingId }` | `Result<{ repos: Repo[] }>` | List repos linked to a building |
 | `repo:update` | `{ buildingId, repoId, relationship?, branch?, config? }` | `Result<Repo>` | Update repo settings |
 | `repo:analyze` | `{ repos: [{url, name}], projectName, projectGoals? }` | `Result<{ suggestions, summary }>` | AI analysis of repo relationships |
+| `repo:sync-status` | `{ buildingId }` | `Result<{ repos: SyncStatus[], summary, fileOrigins }>` | Check upstream sync status for all repos |
+| `repo:sync-fetch` | `{ buildingId, repoId }` | `Result<{ repoId, commit, syncedAt }>` | Fetch latest upstream commit and persist |
 
 **Relationship types:** `main`, `dependency`, `fork`, `reference`, `submodule`
 

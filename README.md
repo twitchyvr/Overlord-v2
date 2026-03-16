@@ -127,7 +127,7 @@ graph TD
 | 🏢 **Rooms** | `src/rooms/` | 29 files — room manager, 16 room types, phase gates, RAID, chat orchestrator | Agents, Tools, AI, Storage, Core |
 | 🤖 **Agents** | `src/agents/` | 7 files — registry, email, sessions, conversation loop, stats, routing, badges | Tools, AI, Storage, Core |
 | 🔧 **Tools** | `src/tools/` | 12 files — registry, MCP manager/client, 7 tool providers | AI, Storage, Core |
-| 🧠 **AI** | `src/ai/` | 12 files — 4 adapters, profile generation, image service, repo analysis | Storage, Core |
+| 🧠 **AI** | `src/ai/` | 13 files — 4 adapters, profile generation, image service, repo analysis, repo sync | Storage, Core |
 | 💾 **Storage** | `src/storage/` | SQLite with WAL, 17+ tables, 35+ indexes | Core |
 | ⚙️ **Core** | `src/core/` | Event bus, config, logger, contracts | Nothing (foundation) |
 
@@ -471,7 +471,8 @@ Overlord-v2/
 │   │   ├── profile-name-generator.ts # Agent name generation
 │   │   ├── minimax-image.ts       #    MiniMax headshot generation
 │   │   ├── agent-photo-store.ts   #    Photo file management
-│   │   └── repo-analysis-service.ts # Multi-repo AI analysis
+│   │   ├── repo-analysis-service.ts # Multi-repo AI analysis
+│   │   └── repo-sync-service.ts    # Upstream change detection
 │   │
 │   ├── tools/                     # 🔧 Tools
 │   │   ├── tool-registry.ts       #    Registration & lookup
