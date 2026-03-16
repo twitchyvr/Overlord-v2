@@ -26,6 +26,7 @@ import { initScopeChangeHandler } from './rooms/scope-change.js';
 import { initChatOrchestrator } from './rooms/chat-orchestrator.js';
 import { initBuildingOnboarding } from './rooms/building-onboarding.js';
 import { initEscalationHandler } from './rooms/escalation-handler.js';
+import { initDevLoopEnforcer } from './rooms/dev-loop-enforcer.js';
 import { listBuildings } from './rooms/building-manager.js';
 import { initCommands } from './commands/index.js';
 import { initPlugins } from './plugins/index.js';
@@ -83,6 +84,10 @@ async function start(): Promise<void> {
   // Escalation handler — periodic check for stale pending gates
   initEscalationHandler({ bus });
   log.info('Escalation handler initialized');
+
+  // Dev loop enforcer — auto-route: Code Lab → Review → Testing Lab → Dogfood
+  initDevLoopEnforcer(bus);
+  log.info('Dev loop enforcer initialized');
 
   // 2b. Init commands + plugins (after rooms/agents/tools, before transport)
   initCommands({ bus, rooms, agents, tools });
