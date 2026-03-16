@@ -271,6 +271,21 @@ export interface ToolDefinition {
   execute: (params: Record<string, unknown>, context?: ToolContext) => Promise<unknown>;
 }
 
+export interface RepoContextEntry {
+  name: string;
+  url: string;
+  relationship: 'main' | 'dependency' | 'fork' | 'reference' | 'submodule';
+  localPath?: string;
+  branch?: string;
+}
+
+export interface FileOriginEntry {
+  filePath: string;
+  repoName: string;
+  sourceFilePath?: string;
+  modifiedLocally: boolean;
+}
+
 export interface ToolContext {
   roomId: string;
   roomType: string;
@@ -280,6 +295,12 @@ export interface ToolContext {
   workingDirectory?: string;
   /** Additional paths the building has been granted access to */
   allowedPaths?: string[];
+  /** Linked repos and file origin tracking for this building */
+  repoContext?: {
+    repos: RepoContextEntry[];
+    fileOrigins: FileOriginEntry[];
+    truncatedOrigins?: boolean;
+  };
 }
 
 // ─── AI Types ───
