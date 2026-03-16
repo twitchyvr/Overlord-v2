@@ -204,7 +204,7 @@ Overlord ships with **16 built-in room types**. Custom rooms can be added via th
 | `architecture` | Collaboration | 📖 Read-only | System design — native toolchain planning support |
 | `research` | Collaboration | 📖 Read-only | Requirements gathering, competitive analysis, citations |
 | `code-lab` | Execution | ✏️ **Read-write** | Full write access, scoped to assigned files |
-| `testing-lab` | Execution | 📖 Read-only | **NO `write_file`** — detects any test runner (npm/cargo/swift/etc.) |
+| `testing-lab` | Execution | 📖 Read-only | **NO `write_file`** — E2E tests (Playwright), screenshots, any test runner |
 | `documentation` | Execution | ✏️ **Read-write** | User guides, API docs, READMEs |
 | `review` | Governance | 📖 Read-only | GO/NO-GO decisions with evidence |
 | `security-review` | Governance | 📖 Read-only | Vulnerability assessment, OWASP, dependency scanning |
