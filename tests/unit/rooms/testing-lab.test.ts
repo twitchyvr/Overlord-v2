@@ -82,10 +82,10 @@ describe('TestingLab', () => {
       expect(room.type).toBe('testing-lab');
     });
 
-    it('getAllowedTools returns all 9 QA tools', () => {
+    it('getAllowedTools returns all 11 QA tools', () => {
       const room = new TestingLab('room_1');
       const tools = room.getAllowedTools();
-      expect(tools).toHaveLength(9);
+      expect(tools).toHaveLength(11); // +e2e_test, +screenshot (#655)
     });
 
     it('hasTool is true for QA tools and false for write tools', () => {
@@ -93,6 +93,8 @@ describe('TestingLab', () => {
       expect(room.hasTool('qa_run_tests')).toBe(true);
       expect(room.hasTool('qa_check_lint')).toBe(true);
       expect(room.hasTool('qa_check_types')).toBe(true);
+      expect(room.hasTool('e2e_test')).toBe(true);
+      expect(room.hasTool('screenshot')).toBe(true);
       expect(room.hasTool('write_file')).toBe(false);
       expect(room.hasTool('patch_file')).toBe(false);
     });

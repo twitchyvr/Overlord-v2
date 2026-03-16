@@ -1089,20 +1089,47 @@ function registerBuiltinTools(): void {
   // ─── Browser Tools ───
   registerTool({
     name: 'browser_tools',
-    description: 'Browser automation: screenshot, navigate, inspect (placeholder — Playwright integration later)',
+    description: 'Browser automation: screenshot (Playwright headless), navigate, inspect',
     category: 'browser',
     inputSchema: {
       type: 'object',
       properties: {
         action: { type: 'string', description: 'Action: screenshot, navigate, inspect' },
         url: { type: 'string', description: 'URL to interact with' },
-        selector: { type: 'string', description: 'CSS selector (for inspect)' },
+        selector: { type: 'string', description: 'CSS selector (for screenshot targeting or inspect)' },
       },
       required: ['action', 'url'],
     },
     execute: async (p) => {
       const result = await executeBrowserTools({
         action: p.action as 'screenshot' | 'navigate' | 'inspect',
+        url: p.url as string,
+        selector: p.selector as string | undefined,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const { output: btOutput, ...btRest } = result.data;
+      return { output: btOutput, ...btRest };
+    },
+  });
+
+  // ─── Screenshot (dedicated tool alias for room access) ───
+  registerTool({
+    name: 'screenshot',
+    description: 'Take a real browser screenshot of a URL using Playwright headless. Returns the file path — pass to MiniMax understand_image to analyze visually.',
+    category: 'browser',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'URL to screenshot (e.g., http://localhost:3000 or https://mygardenly.netlify.app)' },
+        selector: { type: 'string', description: 'Optional CSS selector to screenshot a specific element' },
+      },
+      required: ['url'],
+    },
+    execute: async (p) => {
+      const result = await executeBrowserTools({
+        action: 'screenshot',
         url: p.url as string,
         selector: p.selector as string | undefined,
       });

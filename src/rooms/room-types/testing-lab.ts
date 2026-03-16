@@ -32,6 +32,8 @@ export class TestingLab extends BaseRoom {
       'qa_check_types',
       'qa_check_coverage',
       'qa_audit_deps',
+      'e2e_test',
+      'screenshot',
       'session_note',
     ],
     fileScope: 'read-only',
@@ -123,7 +125,7 @@ export class TestingLab extends BaseRoom {
    * After tool call: detect test failures and suggest escalation.
    */
   override onAfterToolCall(toolName: string, agentId: string, result: Result): void {
-    if (toolName !== 'qa_run_tests' && toolName !== 'bash') return;
+    if (toolName !== 'qa_run_tests' && toolName !== 'e2e_test' && toolName !== 'bash') return;
     if (!result.ok) {
       this.bus?.emit('room:escalation:suggested', {
         roomId: this.id,

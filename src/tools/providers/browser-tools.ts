@@ -1,14 +1,17 @@
 /**
  * Browser Tools Provider
  *
- * Foundation for browser automation. Currently uses shell commands (curl)
- * as a placeholder. Full Playwright integration will replace this later.
+ * Real browser automation via Playwright for screenshots, navigation,
+ * and page inspection. Falls back to curl if Playwright is unavailable.
  *
- * Actions: screenshot (basic HTML fetch), navigate (HTTP GET), inspect (HTML structure)
+ * Actions: screenshot (Playwright headless), navigate (HTTP GET), inspect (HTML structure)
  */
 
 import { ok, err } from '../../core/contracts.js';
 import { executeShell } from './shell.js';
+import { existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type { Result } from '../../core/contracts.js';
 
 export type BrowserAction = 'screenshot' | 'navigate' | 'inspect';
@@ -19,6 +22,7 @@ export interface BrowserToolsResult {
   statusCode?: number;
   title?: string;
   html?: string;
+  screenshotPath?: string;
   output: string;
 }
 
@@ -66,6 +70,21 @@ function extractStructure(html: string): string {
   return parts.join('\n') || 'No structural elements found';
 }
 
+/**
+ * Validate URL is HTTP(S) and safe for shell interpolation.
+ */
+function validateUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return 'URL must use http:// or https:// protocol';
+    }
+    return null;
+  } catch {
+    return 'Invalid URL format';
+  }
+}
+
 export async function executeBrowserTools(params: {
   action: BrowserAction;
   url: string;
@@ -77,10 +96,15 @@ export async function executeBrowserTools(params: {
     return err('MISSING_URL', 'URL is required', { retryable: false });
   }
 
+  const urlError = validateUrl(url);
+  if (urlError) {
+    return err('INVALID_URL', urlError, { retryable: false });
+  }
+
   try {
     switch (action) {
       case 'screenshot':
-        return await screenshotAction(url);
+        return await screenshotAction(url, params.selector);
       case 'navigate':
         return await navigateAction(url);
       case 'inspect':
@@ -95,25 +119,73 @@ export async function executeBrowserTools(params: {
 }
 
 /**
- * Screenshot action: Fetch the first 100 lines of HTML as a placeholder.
- * Full Playwright screenshot support will replace this.
+ * Screenshot action: Launch headless Playwright browser, navigate, and take a real screenshot.
+ * Returns the file path so agents can pass it to MiniMax understand_image for visual analysis.
+ * Falls back to curl HTML fetch if Playwright is not installed.
  */
-async function screenshotAction(url: string): Promise<Result<BrowserToolsResult>> {
-  const result = await executeShell({
-    command: `curl -sL -m 10 "${url}" | head -100`,
-    timeout: 15_000,
-  });
+async function screenshotAction(url: string, selector?: string): Promise<Result<BrowserToolsResult>> {
+  // Ensure screenshot output directory exists
+  const screenshotDir = join(tmpdir(), 'overlord-screenshots');
+  if (!existsSync(screenshotDir)) {
+    mkdirSync(screenshotDir, { recursive: true });
+  }
+  const timestamp = Date.now();
+  const filename = `screenshot-${timestamp}.png`;
+  const screenshotPath = join(screenshotDir, filename);
 
-  const html = result.stdout;
-  const title = extractTitle(html);
+  // Step 1: Try to import Playwright (may not be installed)
+  let chromiumModule: { launch: (opts: { headless: boolean }) => Promise<unknown> };
+  try {
+    const pw = await import('playwright');
+    chromiumModule = pw.chromium;
+  } catch {
+    // Playwright not installed — fall back to curl HTML fetch
+    const result = await executeShell({
+      command: `curl -sL -m 10 '${url.replace(/'/g, "'\\''")}' | head -100`,
+      timeout: 15_000,
+    });
 
-  return ok({
-    action: 'screenshot',
-    url,
-    title,
-    html: html.slice(0, 5000),
-    output: `Fetched HTML preview (${html.length} chars)${title ? ` — title: "${title}"` : ''}`,
-  });
+    const html = result.stdout;
+    const title = extractTitle(html);
+
+    return ok({
+      action: 'screenshot',
+      url,
+      title,
+      html: html.slice(0, 5000),
+      output: `[Playwright unavailable — HTML fallback] Fetched HTML preview (${html.length} chars)${title ? ` — title: "${title}"` : ''}. Install Playwright for real screenshots: npx playwright install chromium`,
+    });
+  }
+
+  // Step 2: Playwright is available — launch browser and screenshot
+  const browser = await (chromiumModule as { launch: (o: object) => Promise<{ newPage: (o: object) => Promise<{ goto: (u: string, o: object) => Promise<void>; $: (s: string) => Promise<{ screenshot: (o: object) => Promise<void> } | null>; screenshot: (o: object) => Promise<void>; title: () => Promise<string> }>; close: () => Promise<void> }> }).launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 20_000 });
+
+    if (selector) {
+      const element = await page.$(selector);
+      if (element) {
+        await element.screenshot({ path: screenshotPath });
+      } else {
+        await page.screenshot({ path: screenshotPath, fullPage: false });
+      }
+    } else {
+      await page.screenshot({ path: screenshotPath, fullPage: false });
+    }
+
+    const title = await page.title();
+
+    return ok({
+      action: 'screenshot',
+      url,
+      title,
+      screenshotPath,
+      output: `Screenshot saved to ${screenshotPath} (1280x720)${title ? ` — title: "${title}"` : ''}. Use MiniMax understand_image tool to analyze this screenshot visually.`,
+    });
+  } finally {
+    await browser.close();
+  }
 }
 
 /**
@@ -121,7 +193,7 @@ async function screenshotAction(url: string): Promise<Result<BrowserToolsResult>
  */
 async function navigateAction(url: string): Promise<Result<BrowserToolsResult>> {
   const result = await executeShell({
-    command: `curl -sL -o /dev/null -w "%{http_code}" -m 10 "${url}"`,
+    command: `curl -sL -o /dev/null -w "%{http_code}" -m 10 '${url.replace(/'/g, "'\\''")}'`,
     timeout: 15_000,
   });
 
@@ -129,7 +201,7 @@ async function navigateAction(url: string): Promise<Result<BrowserToolsResult>> 
 
   // Also fetch the page to get the title
   const pageResult = await executeShell({
-    command: `curl -sL -m 10 "${url}" | head -50`,
+    command: `curl -sL -m 10 '${url.replace(/'/g, "'\\''")}' | head -50`,
     timeout: 15_000,
   });
 
@@ -149,7 +221,7 @@ async function navigateAction(url: string): Promise<Result<BrowserToolsResult>> 
  */
 async function inspectAction(url: string): Promise<Result<BrowserToolsResult>> {
   const result = await executeShell({
-    command: `curl -sL -m 10 "${url}"`,
+    command: `curl -sL -m 10 '${url.replace(/'/g, "'\\''")}'`,
     timeout: 15_000,
   });
 

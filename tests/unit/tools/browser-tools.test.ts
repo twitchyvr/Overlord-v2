@@ -3,14 +3,17 @@ import { executeBrowserTools } from '../../../src/tools/providers/browser-tools.
 
 vi.mock('../../../src/tools/providers/shell.js', () => ({ executeShell: vi.fn() }));
 
+// Mock Playwright dynamic import to simulate "not installed" — forces curl fallback
+vi.mock('playwright', () => { throw new Error('Playwright not available in test'); });
+
 import { executeShell } from '../../../src/tools/providers/shell.js';
 const mockShell = vi.mocked(executeShell);
 
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe('Browser Tools', () => {
-  describe('screenshot action', () => {
-    it('fetches HTML preview', async () => {
+  describe('screenshot action (curl fallback)', () => {
+    it('fetches HTML preview when Playwright is unavailable', async () => {
       mockShell.mockResolvedValue({
         stdout: '<html><head><title>Test Page</title></head><body>Hello</body></html>',
         stderr: '',
@@ -25,7 +28,8 @@ describe('Browser Tools', () => {
         expect(r.data.url).toBe('http://localhost:3000');
         expect(r.data.title).toBe('Test Page');
         expect(r.data.html).toContain('<html>');
-        expect(r.data.output).toContain('Fetched HTML preview');
+        expect(r.data.output).toContain('Playwright unavailable');
+        expect(r.data.output).toContain('HTML fallback');
       }
     });
 
@@ -84,7 +88,7 @@ describe('Browser Tools', () => {
         .mockResolvedValueOnce({ stdout: 'error', stderr: '', exitCode: 1, timedOut: false })
         .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 1, timedOut: false });
 
-      const r = await executeBrowserTools({ action: 'navigate', url: 'http://invalid' });
+      const r = await executeBrowserTools({ action: 'navigate', url: 'http://invalid.test' });
       expect(r.ok).toBe(true);
       if (r.ok) {
         expect(r.data.statusCode).toBe(0);
@@ -139,13 +143,39 @@ describe('Browser Tools', () => {
     });
   });
 
-  describe('error handling', () => {
+  describe('URL validation', () => {
     it('rejects missing URL', async () => {
       const r = await executeBrowserTools({ action: 'screenshot', url: '' });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error.code).toBe('MISSING_URL');
     });
 
+    it('rejects non-HTTP URLs', async () => {
+      const r = await executeBrowserTools({ action: 'screenshot', url: 'ftp://evil.com' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.code).toBe('INVALID_URL');
+    });
+
+    it('rejects invalid URL format', async () => {
+      const r = await executeBrowserTools({ action: 'screenshot', url: 'not-a-url' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.code).toBe('INVALID_URL');
+    });
+
+    it('accepts http URLs', async () => {
+      mockShell.mockResolvedValue({ stdout: '<html></html>', stderr: '', exitCode: 0, timedOut: false });
+      const r = await executeBrowserTools({ action: 'navigate', url: 'http://localhost:3000' });
+      expect(r.ok).toBe(true);
+    });
+
+    it('accepts https URLs', async () => {
+      mockShell.mockResolvedValue({ stdout: '<html></html>', stderr: '', exitCode: 0, timedOut: false });
+      const r = await executeBrowserTools({ action: 'navigate', url: 'https://example.com' });
+      expect(r.ok).toBe(true);
+    });
+  });
+
+  describe('error handling', () => {
     it('rejects unknown action', async () => {
       const r = await executeBrowserTools({ action: 'unknown' as 'screenshot', url: 'http://test.com' });
       expect(r.ok).toBe(false);
@@ -154,7 +184,7 @@ describe('Browser Tools', () => {
 
     it('catches shell errors', async () => {
       mockShell.mockRejectedValue(new Error('curl failed'));
-      const r = await executeBrowserTools({ action: 'screenshot', url: 'http://test.com' });
+      const r = await executeBrowserTools({ action: 'navigate', url: 'http://test.com' });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error.code).toBe('BROWSER_ERROR');
     });
