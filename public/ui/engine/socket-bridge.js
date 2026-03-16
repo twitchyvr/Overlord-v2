@@ -522,6 +522,16 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'escalation:war-room', ...data });
   });
 
+  // ── Dev Loop Pipeline ──
+
+  socket.on('dev-loop:stage-transition', (data) => {
+    log.info('Dev loop transition:', data.from, '→', data.to);
+    store.update('devLoop.transitions', (items) => [{ ...data, timestamp: Date.now() }, ...(items || []).slice(0, 50)]);
+    store.update('activity.items', (items) => [{ event: 'dev-loop:stage-transition', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('dev-loop:stage-transition', data);
+    engine.dispatch('activity:new', { event: 'dev-loop:stage-transition', ...data });
+  });
+
   // ── Floor events ──
 
   socket.on('floor:created', (data) => {

@@ -23,6 +23,8 @@ export class DashboardView extends Component {
     this._agents = [];
     this._raidEntries = [];
     this._activeBuilding = null;
+    this._devLoopTransitions = [];
+    this._activityItems = [];
   }
 
   mount() {
@@ -54,12 +56,25 @@ export class DashboardView extends Component {
       this.render();
     });
 
+    this.subscribe(store, 'devLoop.transitions', (transitions) => {
+      this._devLoopTransitions = transitions || [];
+      this._updateDevLoopPipeline();
+    });
+
+    this.subscribe(store, 'activity.items', (items) => {
+      this._activityItems = items || [];
+      this._updateRecentActivity();
+      this._updateToolActivity();
+    });
+
     // Hydrate from store — data may have arrived before this view mounted
     // (navigateTo is async, so store updates can land before subscriptions)
     this._buildings = store.get('building.list') || [];
     this._agents = store.get('agents.list') || [];
     this._raidEntries = store.get('raid.entries') || [];
     this._activeBuilding = store.get('building.active');
+    this._devLoopTransitions = store.get('devLoop.transitions') || [];
+    this._activityItems = store.get('activity.items') || [];
 
     // Fetch agents — scoped to active building when one is selected
     if (window.overlordSocket && this._agents.length === 0) {
@@ -111,6 +126,17 @@ export class DashboardView extends Component {
         this.el.appendChild(this._buildPhaseProgress(building));
       }
     }
+
+    // Dev Loop Pipeline (#661)
+    if (this._activeBuilding) {
+      this.el.appendChild(this._buildDevLoopPipeline());
+    }
+
+    // Tool Activity Summary (#661)
+    this.el.appendChild(this._buildToolActivity());
+
+    // Recent Activity Mini-Feed (#661)
+    this.el.appendChild(this._buildRecentActivity());
 
     // Building List
     this.el.appendChild(this._buildBuildingList());
@@ -364,6 +390,202 @@ export class DashboardView extends Component {
       kpiValues[1].textContent = String(this._getAvgHealth());
       kpiValues[2].textContent = String(this._getAgentCount());
       kpiValues[3].textContent = String(this._raidEntries.length);
+    }
+  }
+
+  // ─── Dev Loop Pipeline (#661) ───
+
+  _buildDevLoopPipeline() {
+    const section = h('div', { class: 'dashboard-section', id: 'dev-loop-pipeline' });
+    section.appendChild(h('h3', { class: 'dashboard-section-title' }, 'Dev Loop Pipeline'));
+    section.appendChild(h('p', { class: 'dashboard-section-desc' },
+      'Code Lab \u2192 Review \u2192 Testing \u2192 Dogfood'));
+
+    const stages = [
+      { id: 'code-lab', label: 'Code Lab', icon: '\u{1F4BB}' },
+      { id: 'review', label: 'Review', icon: '\u{1F50D}' },
+      { id: 'testing-lab', label: 'Testing', icon: '\u{1F9EA}' },
+      { id: 'dogfood', label: 'Dogfood', icon: '\u{1F436}' },
+    ];
+
+    const pipeline = h('div', { class: 'dev-loop-pipeline' });
+
+    // Determine current stage from most recent transition
+    const lastTransition = this._devLoopTransitions[0];
+    const currentStage = lastTransition ? lastTransition.to : null;
+
+    for (let i = 0; i < stages.length; i++) {
+      const stage = stages[i];
+      const isComplete = this._isStageComplete(stage.id);
+      const isCurrent = stage.id === currentStage;
+
+      const stageEl = h('div', {
+        class: `dev-loop-stage${isCurrent ? ' current' : ''}${isComplete ? ' complete' : ''}`,
+      },
+        h('div', { class: 'dev-loop-stage-icon' }, stage.icon),
+        h('div', { class: 'dev-loop-stage-label' }, stage.label),
+      );
+      pipeline.appendChild(stageEl);
+
+      // Connector between stages
+      if (i < stages.length - 1) {
+        pipeline.appendChild(h('div', {
+          class: `dev-loop-connector${isComplete ? ' complete' : ''}`,
+        }));
+      }
+    }
+
+    section.appendChild(pipeline);
+
+    // Show latest transition message
+    if (lastTransition && lastTransition.message) {
+      section.appendChild(h('div', { class: 'dev-loop-message' }, lastTransition.message));
+    }
+
+    return section;
+  }
+
+  _isStageComplete(stageId) {
+    // A stage is complete if there's a transition FROM it
+    return this._devLoopTransitions.some(t => t.from === stageId);
+  }
+
+  _updateDevLoopPipeline() {
+    const existing = this.el.querySelector('#dev-loop-pipeline');
+    if (existing) {
+      const newPipeline = this._buildDevLoopPipeline();
+      existing.replaceWith(newPipeline);
+    }
+  }
+
+  // ─── Tool Activity Summary (#661) ───
+
+  _buildToolActivity() {
+    const section = h('div', { class: 'dashboard-section', id: 'tool-activity' });
+    section.appendChild(h('h3', { class: 'dashboard-section-title' }, 'Tool Activity'));
+
+    const toolEvents = this._activityItems.filter(i => i.event === 'tool:executed');
+    if (toolEvents.length === 0) {
+      section.appendChild(h('p', { class: 'dashboard-empty' }, 'No tool calls yet.'));
+      return section;
+    }
+
+    // Aggregate by tool name
+    const toolCounts = {};
+    for (const evt of toolEvents) {
+      const name = evt.toolName || 'unknown';
+      if (!toolCounts[name]) toolCounts[name] = { calls: 0, success: 0, failed: 0 };
+      toolCounts[name].calls++;
+      if (evt.status === 'error' || evt.status === 'failed') toolCounts[name].failed++;
+      else toolCounts[name].success++;
+    }
+
+    const grid = h('div', { class: 'tool-activity-grid' });
+    const sorted = Object.entries(toolCounts).sort((a, b) => b[1].calls - a[1].calls).slice(0, 8);
+
+    for (const [name, counts] of sorted) {
+      const pct = counts.calls > 0 ? Math.round((counts.success / counts.calls) * 100) : 0;
+      const barColor = counts.failed > 0 ? 'var(--accent-amber)' : 'var(--accent-green)';
+
+      const card = h('div', { class: 'tool-activity-card glass-card' },
+        h('div', { class: 'tool-activity-name' }, name),
+        h('div', { class: 'tool-activity-stats' },
+          h('span', { class: 'tool-activity-count' }, String(counts.calls)),
+          counts.failed > 0
+            ? h('span', { class: 'tool-activity-failed' }, `${counts.failed} failed`)
+            : null,
+        ),
+        h('div', { class: 'tool-activity-bar' },
+          h('div', { class: 'tool-activity-bar-fill', style: { width: `${pct}%`, background: barColor } }),
+        ),
+      );
+      grid.appendChild(card);
+    }
+
+    section.appendChild(grid);
+    return section;
+  }
+
+  _updateToolActivity() {
+    const existing = this.el.querySelector('#tool-activity');
+    if (existing) {
+      const newSection = this._buildToolActivity();
+      existing.replaceWith(newSection);
+    }
+  }
+
+  // ─── Recent Activity Mini-Feed (#661) ───
+
+  _buildRecentActivity() {
+    const section = h('div', { class: 'dashboard-section', id: 'recent-activity' });
+    section.appendChild(h('h3', { class: 'dashboard-section-title' }, 'Recent Activity'));
+
+    const recent = this._activityItems.slice(0, 6);
+    if (recent.length === 0) {
+      section.appendChild(h('p', { class: 'dashboard-empty' }, 'No activity yet.'));
+      return section;
+    }
+
+    const feed = h('div', { class: 'recent-activity-feed' });
+
+    const eventIcons = {
+      'tool:executed': '\u{1F527}',
+      'phase:advanced': '\u{1F6A7}',
+      'phase:gate:created': '\u{1F3C1}',
+      'phase:gate:signed-off': '\u{1F3C6}',
+      'room:agent:entered': '\u{1F6AA}',
+      'room:agent:exited': '\u{1F6AA}',
+      'task:created': '\u{1F4CB}',
+      'task:updated': '\u{1F4CB}',
+      'exit-doc:submitted': '\u{1F4C4}',
+      'dev-loop:stage-transition': '\u{1F504}',
+      'raid:entry:added': '\u26A0\uFE0F',
+      'escalation:stale-gate': '\u23F0',
+    };
+
+    for (const item of recent) {
+      const icon = eventIcons[item.event] || '\u{1F4E1}';
+      const isError = item.status === 'error' || item.status === 'failed';
+      const dotClass = isError ? 'error' : 'success';
+
+      // Build summary text
+      let summary = item.event;
+      if (item.event === 'tool:executed') {
+        summary = `${item.toolName || 'tool'} ${isError ? 'failed' : 'executed'}`;
+      } else if (item.event === 'dev-loop:stage-transition') {
+        summary = `${item.from || '?'} \u2192 ${item.to || '?'}`;
+      } else if (item.event === 'exit-doc:submitted') {
+        summary = `Exit doc submitted`;
+      } else if (item.event === 'phase:gate:signed-off') {
+        summary = `Gate: ${item.verdict || 'signed off'}`;
+      }
+
+      const ts = item.timestamp ? formatTime(item.timestamp) : '';
+
+      const row = h('div', { class: 'recent-activity-row' },
+        h('div', { class: `recent-activity-dot recent-activity-dot--${dotClass}` }),
+        h('span', { class: 'recent-activity-icon' }, icon),
+        h('span', { class: 'recent-activity-summary' }, summary),
+        h('span', { class: 'recent-activity-agent' }, item.agentName || ''),
+        h('span', { class: 'recent-activity-time' }, ts),
+      );
+      feed.appendChild(row);
+    }
+
+    // "View all" link
+    const viewAll = h('button', { class: 'btn btn-ghost btn-sm' }, 'View All Activity');
+    viewAll.addEventListener('click', () => OverlordUI.navigateTo('activity'));
+
+    section.appendChild(feed);
+    section.appendChild(viewAll);
+    return section;
+  }
+
+  _updateRecentActivity() {
+    const existing = this.el.querySelector('#recent-activity');
+    if (existing) {
+      const newSection = this._buildRecentActivity();
+      existing.replaceWith(newSection);
     }
   }
 }
