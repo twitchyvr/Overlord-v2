@@ -55,6 +55,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Agent status changes in Activity feed** — Agents tab in activity view shows real-time status updates (#287)
 
 ### Fixed (Dogfooding Session — Gardenly, March 2026)
+- **CRITICAL: Cross-project data bleed** — 12 socket event handlers processed events globally instead of filtering by active building; agents list returned ALL agents (empty filter); added `isActiveBuilding()` guard on room, tool, task, RAID, phase gate, and agent events; `fetchAgents` now passes buildingId (#666, PR #668)
 - **CRITICAL: Project isolation** — Socket.IO events leaked between buildings; now scoped to building rooms via `io.to()` (#593)
 - **Strategist can't read files** — added `read_file` and `search_files` to Strategist tool set (#587)
 - **Agent timeout streaming** — tool execution progress now streamed to frontend ("Using read_file...") (#591)
