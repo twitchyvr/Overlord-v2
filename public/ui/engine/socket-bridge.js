@@ -941,6 +941,20 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithFeedback('building:apply-blueprint', params, 60000);
     },
 
+    // ── Repo operations (#640) ──
+
+    addRepo(params) {
+      return _emitWithFeedback('repo:add', params);
+    },
+
+    removeRepo(params) {
+      return _emitWithFeedback('repo:remove', params);
+    },
+
+    listRepos(buildingId) {
+      return _emitWithFeedback('repo:list', { buildingId });
+    },
+
     async registerAgent(params) {
       const res = await _emitWithFeedback('agent:register', params);
       if (res && res.ok) {

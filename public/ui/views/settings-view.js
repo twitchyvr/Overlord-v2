@@ -356,7 +356,66 @@ export class SettingsView extends Component {
     addRow.appendChild(addBtn);
     section.appendChild(addRow);
 
+    // Linked repositories section (#640)
+    section.appendChild(h('h4', { class: 'settings-section-title', style: { marginTop: 'var(--sp-6)' } },
+      'Linked Repositories'));
+    section.appendChild(h('p', { class: 'settings-section-desc' },
+      'GitHub repositories linked as building blocks for this project.'));
+    const repoListEl = h('div', { class: 'settings-repo-list', id: 'settings-repo-list' });
+    section.appendChild(repoListEl);
+    this._loadLinkedRepos(buildingId, repoListEl, this._tabGeneration);
+
     return section;
+  }
+
+  async _loadLinkedRepos(buildingId, listEl, gen) {
+    if (!window.overlordSocket) return;
+    try {
+      const result = await window.overlordSocket.listRepos(buildingId);
+      if (gen !== this._tabGeneration) return;
+      if (!result?.ok || !result.data?.repos?.length) {
+        listEl.appendChild(h('p', { class: 'settings-empty-hint' }, 'No repositories linked yet.'));
+        return;
+      }
+      for (const repo of result.data.repos) {
+        const row = h('div', { class: 'repo-list-item' },
+          h('span', { class: 'repo-list-name' }, repo.name),
+          h('span', { class: `repo-list-badge rel-${repo.relationship}` }, repo.relationship),
+          h('span', { class: 'repo-list-url' }, repo.repo_url),
+        );
+        const removeBtn = h('button', {
+          class: 'repo-remove-btn',
+          title: 'Remove',
+          'aria-label': `Remove ${repo.name}`,
+        }, '\u2715');
+        removeBtn.addEventListener('click', async () => {
+          removeBtn.disabled = true;
+          removeBtn.style.opacity = '0.4';
+          try {
+            const res = await window.overlordSocket.removeRepo({ buildingId, repoId: repo.id });
+            if (res?.ok) {
+              row.remove();
+              Toast.success(`Removed ${repo.name}`);
+              if (!listEl.querySelector('.repo-list-item')) {
+                listEl.appendChild(h('p', { class: 'settings-empty-hint' }, 'No repositories linked yet.'));
+              }
+            } else {
+              Toast.error(`Failed to remove: ${res?.error?.message || 'Unknown error'}`);
+              removeBtn.disabled = false;
+              removeBtn.style.opacity = '';
+            }
+          } catch {
+            Toast.error('Failed to remove repository');
+            removeBtn.disabled = false;
+            removeBtn.style.opacity = '';
+          }
+        });
+        row.appendChild(removeBtn);
+        listEl.appendChild(row);
+      }
+    } catch (err) {
+      listEl.appendChild(h('p', { class: 'settings-empty-hint' }, 'Failed to load repos.'));
+    }
   }
 
   async _detectGitStatus(dirPath, gen) {
