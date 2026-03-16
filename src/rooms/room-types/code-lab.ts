@@ -32,6 +32,8 @@ export class CodeLab extends BaseRoom {
       'bash',
       'web_search',
       'fetch_webpage',
+      'e2e_test',
+      'screenshot',
       'session_note',
       'game_engine',
       'dev_server',
