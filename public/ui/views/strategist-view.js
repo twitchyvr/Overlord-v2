@@ -305,6 +305,7 @@ export class StrategistView extends Component {
     this._projectSource = 'fresh'; // 'fresh' | 'local' | 'clone'
     this._localPath = '';
     this._cloneUrl = '';
+    this._pendingRepos = []; // Array of { url, name, relationship }
   }
 
   mount() {
@@ -719,6 +720,78 @@ export class StrategistView extends Component {
     sourceGroup.appendChild(sourceInput);
     form.appendChild(sourceGroup);
 
+    // Component repositories (multi-repo picker) (#640)
+    const repoGroup = h('div', { class: 'form-group' },
+      h('label', { class: 'form-label' }, 'Component Repositories'),
+      h('p', { class: 'form-hint' }, 'Add GitHub repos as building blocks for your project (optional).'),
+    );
+
+    // Add repo input row
+    const repoInputRow = h('div', { class: 'repo-add-row' });
+    const repoUrlInput = h('input', {
+      class: 'form-input mono repo-url-input',
+      type: 'text',
+      placeholder: 'https://github.com/owner/repo',
+    });
+    const repoRelSelect = h('select', { class: 'form-input repo-rel-select' },
+      h('option', { value: 'reference' }, 'Reference'),
+      h('option', { value: 'dependency' }, 'Dependency'),
+      h('option', { value: 'fork' }, 'Fork'),
+      h('option', { value: 'submodule' }, 'Submodule'),
+    );
+    const repoAddBtn = Button.create('Add', {
+      variant: 'secondary',
+      size: 'sm',
+      onClick: () => {
+        const url = repoUrlInput.value.trim();
+        if (!url) return;
+        // Basic URL validation
+        try {
+          const parsed = new URL(url);
+          if (!parsed.hostname || !['http:', 'https:'].includes(parsed.protocol)) throw new Error('Invalid');
+        } catch {
+          repoUrlInput.classList.add('input-error');
+          if (!repoInputRow.querySelector('.repo-error')) {
+            repoInputRow.appendChild(h('span', { class: 'repo-error' }, 'Enter a valid URL'));
+          }
+          return;
+        }
+        repoUrlInput.classList.remove('input-error');
+        const existingError = repoInputRow.querySelector('.repo-error');
+        if (existingError) existingError.remove();
+
+        // Extract name from URL (owner/repo)
+        const pathParts = new URL(url).pathname.replace(/\.git$/, '').split('/').filter(Boolean);
+        const name = pathParts.length >= 2 ? `${pathParts[0]}/${pathParts[1]}` : pathParts.join('/') || url;
+
+        // Check for duplicates
+        if (this._pendingRepos.some(r => r.url === url)) {
+          repoUrlInput.classList.add('input-error');
+          if (!repoInputRow.querySelector('.repo-error')) {
+            repoInputRow.appendChild(h('span', { class: 'repo-error' }, 'Repo already added'));
+          }
+          return;
+        }
+
+        this._pendingRepos.push({ url, name, relationship: repoRelSelect.value });
+        repoUrlInput.value = '';
+        this._renderRepoList(repoListEl);
+      }
+    });
+    repoUrlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); repoAddBtn.click(); }
+    });
+    repoInputRow.appendChild(repoUrlInput);
+    repoInputRow.appendChild(repoRelSelect);
+    repoInputRow.appendChild(repoAddBtn);
+    repoGroup.appendChild(repoInputRow);
+
+    // Pending repo list
+    const repoListEl = h('div', { class: 'repo-list' });
+    this._renderRepoList(repoListEl);
+    repoGroup.appendChild(repoListEl);
+    form.appendChild(repoGroup);
+
     // Blueprint preview
     const previewSection = h('div', { class: 'blueprint-preview' },
       h('h3', null, 'Blueprint Preview')
@@ -821,6 +894,32 @@ export class StrategistView extends Component {
     }
   }
 
+  /** Render the list of pending repos below the add-repo input */
+  _renderRepoList(listEl) {
+    listEl.textContent = '';
+    if (this._pendingRepos.length === 0) return;
+
+    for (let i = 0; i < this._pendingRepos.length; i++) {
+      const repo = this._pendingRepos[i];
+      const row = h('div', { class: 'repo-list-item' },
+        h('span', { class: 'repo-list-name' }, repo.name),
+        h('span', { class: `repo-list-badge rel-${repo.relationship}` }, repo.relationship),
+        h('span', { class: 'repo-list-url' }, repo.url),
+      );
+      const removeBtn = h('button', {
+        class: 'repo-remove-btn',
+        title: 'Remove',
+        'aria-label': `Remove ${repo.name}`,
+      }, '\u2715');
+      removeBtn.addEventListener('click', () => {
+        this._pendingRepos.splice(i, 1);
+        this._renderRepoList(listEl);
+      });
+      row.appendChild(removeBtn);
+      listEl.appendChild(row);
+    }
+  }
+
   async _createProject() {
     const template = this._selectedTemplate;
     if (!template) return;
@@ -862,6 +961,23 @@ export class StrategistView extends Component {
       }
 
       const buildingId = buildResult.data.id;
+
+      // Step 1b: Link pending repos (#640)
+      if (this._pendingRepos.length > 0 && window.overlordSocket) {
+        const repoPromises = this._pendingRepos.map(repo =>
+          window.overlordSocket.addRepo({
+            buildingId,
+            repoUrl: repo.url,
+            name: repo.name,
+            relationship: repo.relationship,
+          })
+        );
+        const repoResults = await Promise.allSettled(repoPromises);
+        const failed = repoResults.filter(r => r.status === 'rejected' || (r.value && !r.value.ok));
+        if (failed.length > 0) {
+          console.warn(`[StrategistView] ${failed.length}/${this._pendingRepos.length} repos failed to link`);
+        }
+      }
 
       // Step 2: Apply blueprint
       const blueprintResult = await window.overlordSocket.applyBlueprint({
