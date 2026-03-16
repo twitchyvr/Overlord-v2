@@ -68,6 +68,7 @@ vi.mock('../../src/tools/tool-registry.js', () => ({
     initOrder.push('tools');
     return { getToolsForRoom: vi.fn(), executeInRoom: vi.fn() };
   }),
+  setToolsAI: vi.fn(),
 }));
 
 vi.mock('../../src/agents/agent-registry.js', () => ({

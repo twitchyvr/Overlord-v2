@@ -27,11 +27,25 @@ import { executeGameEngine } from './providers/game-engine.js';
 import { executeDevServer } from './providers/dev-server.js';
 import { executeBrowserTools } from './providers/browser-tools.js';
 import { executeWorkspaceSandbox } from './providers/workspace-sandbox.js';
-import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
+import { analyzeScreenshot } from './providers/screenshot-analyzer.js';
+import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, AIProviderAPI, Config } from '../core/contracts.js';
 
 const log = logger.child({ module: 'tool-registry' });
 
 const tools = new Map<string, ToolDefinition>();
+
+/** AI provider reference — injected after init via setToolsAI() */
+let aiRef: AIProviderAPI | null = null;
+
+/**
+ * Inject the AI provider into the tool registry.
+ * Called from server.ts after both tools and AI are initialized.
+ * Needed for tools like analyze_screenshot that require vision AI.
+ */
+export function setToolsAI(ai: AIProviderAPI): void {
+  aiRef = ai;
+  log.info('AI provider injected into tool registry');
+}
 
 /**
  * Reject strings containing shell metacharacters that could enable injection.
@@ -1138,6 +1152,45 @@ function registerBuiltinTools(): void {
       }
       const { output: btOutput, ...btRest } = result.data;
       return { output: btOutput, ...btRest };
+    },
+  });
+
+  // ─── Screenshot Analyzer (Vision AI) ───
+  registerTool({
+    name: 'analyze_screenshot',
+    description: 'Analyze a screenshot using AI vision. Reads a PNG/JPG file and returns a description of visible UI elements, data, and any issues. Use after the screenshot tool.',
+    category: 'browser',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        screenshotPath: { type: 'string', description: 'Path to the screenshot PNG/JPG file (from screenshot tool output)' },
+        prompt: { type: 'string', description: 'Optional: specific question about the screenshot (e.g., "Is the weather widget showing data?")' },
+      },
+      required: ['screenshotPath'],
+    },
+    execute: async (p) => {
+      if (!aiRef) {
+        return { output: 'AI provider not available — cannot analyze screenshot. The AI layer may not be configured.', error: true };
+      }
+      const result = await analyzeScreenshot({
+        screenshotPath: p.screenshotPath as string,
+        prompt: p.prompt as string | undefined,
+        ai: aiRef,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      const { description, elements, issues, screenshotPath: path } = result.data;
+      const issuesSummary = issues.length > 0
+        ? `\n\nISSUES FOUND (${issues.length}):\n${issues.map(i => `  - ${i}`).join('\n')}`
+        : '\n\nNo visual issues detected.';
+      return {
+        output: `${description}\n\nUI Elements: ${elements.join(', ')}${issuesSummary}`,
+        description,
+        elements,
+        issues,
+        screenshotPath: path,
+      };
     },
   });
 
