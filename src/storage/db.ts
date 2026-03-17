@@ -154,6 +154,9 @@ const SCHEMA_SQL = `
     description TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
     exit_doc_ref TEXT,
+    locked_by TEXT REFERENCES agents(id),
+    checked_out_at TEXT,
+    lock_expires_at TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     completed_at TEXT
   );
@@ -419,6 +422,10 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['agents', 'communication_style', 'TEXT'],
   ['agents', 'expertise_areas', "TEXT DEFAULT '[]'"],
   ['agents', 'subject_reference', 'TEXT'],
+  // Atomic task checkout (#682)
+  ['todos', 'locked_by', 'TEXT REFERENCES agents(id)'],
+  ['todos', 'checked_out_at', 'TEXT'],
+  ['todos', 'lock_expires_at', 'TEXT'],
 ];
 
 /**

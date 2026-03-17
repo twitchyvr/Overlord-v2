@@ -59,6 +59,8 @@ import {
   TableGetAssignmentsSchema, TableDivideWorkSchema,
   AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema,
   BudgetGetSchema, BudgetSetSchema, BudgetBuildingSchema,
+  TodoCheckoutSchema, TodoReleaseSchema, TodoCompleteCheckoutSchema,
+  TodoLockStatusSchema, CheckedOutTodosSchema,
   PlanSubmitSchema, PlanReviewSchema, PlanGetSchema, PlanListSchema,
   EmailSendSchema, EmailReplySchema, EmailForwardSchema,
   EmailInboxSchema, EmailGetSchema, EmailThreadSchema,
@@ -85,6 +87,7 @@ import {
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { checkBudget, setAgentBudget, getBuildingBudgets } from '../agents/budget-tracker.js';
+import { checkoutTodo, releaseTodo, completeTodo, getLockStatus, getCheckedOutTodos, releaseExpiredLocks } from '../agents/task-checkout.js';
 import { resetBuildingAgents } from '../agents/agent-registry.js';
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
 import { getQualityConfig } from '../tools/quality-defaults.js';
@@ -1171,6 +1174,45 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
     handle(socket, 'budget:building', BudgetBuildingSchema, (parsed, ack) => {
       const budgets = getBuildingBudgets(parsed.buildingId);
       if (ack) ack({ ok: true, data: budgets });
+    });
+
+    // ─── Atomic Task Checkout (#682) ───
+
+    handle(socket, 'todo:checkout', TodoCheckoutSchema, (parsed, ack) => {
+      // Release any expired locks first
+      releaseExpiredLocks();
+      const result = checkoutTodo(parsed.todoId, parsed.agentId, parsed.ttlMs);
+      if (result.ok) {
+        io.emit('todo:checked-out', { todoId: parsed.todoId, agentId: parsed.agentId });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'todo:release', TodoReleaseSchema, (parsed, ack) => {
+      const result = releaseTodo(parsed.todoId, parsed.agentId, parsed.force);
+      if (result.ok) {
+        io.emit('todo:released', { todoId: parsed.todoId, agentId: parsed.agentId });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'todo:complete-checkout', TodoCompleteCheckoutSchema, (parsed, ack) => {
+      const result = completeTodo(parsed.todoId, parsed.agentId);
+      if (result.ok) {
+        io.emit('todo:completed', { todoId: parsed.todoId, agentId: parsed.agentId });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'todo:lock-status', TodoLockStatusSchema, (parsed, ack) => {
+      const result = getLockStatus(parsed.todoId);
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'todo:checked-out-list', CheckedOutTodosSchema, (parsed, ack) => {
+      releaseExpiredLocks();
+      const result = getCheckedOutTodos(parsed.buildingId);
+      if (ack) ack(result);
     });
 
     // ─── Messaging Mode + GNAP Status (#601, #622) ───
