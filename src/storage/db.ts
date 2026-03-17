@@ -470,6 +470,12 @@ export async function initStorage(cfg: Config): Promise<Database.Database> {
 
   // SQLite exec() runs SQL statements — not a shell command
   db.exec(SCHEMA_SQL);
+
+  // Ensure __user__ virtual agent exists for user mail participation (#667)
+  db.prepare(
+    "INSERT OR IGNORE INTO agents (id, name, role, status, capabilities, room_access, config) VALUES ('__user__', 'You (Project Owner)', 'owner', 'active', '[]', '[]', '{}')",
+  ).run();
+
   log.info({ path: dbPath }, 'Database initialized with v2 schema');
 
   return db;
