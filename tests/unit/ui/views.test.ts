@@ -1521,7 +1521,7 @@ describe('TaskView', () => {
     store.set('building.active', null, { silent: true });
   });
 
-  it('shows "Select a project" when no building is active', async () => {
+  it('shows "No Building Selected" when no building is active', async () => {
     const store = OverlordUI.getStore();
     store.set('building.active', null, { silent: true });
 
@@ -1530,9 +1530,9 @@ describe('TaskView', () => {
     const view = new TaskView(el);
     view.mount();
 
-    const list = el.querySelector('#task-list');
-    expect(list!.querySelector('.empty-state')).not.toBeNull();
-    expect(list!.textContent).toContain('Select a project');
+    const emptyState = el.querySelector('.view-empty-state');
+    expect(emptyState).not.toBeNull();
+    expect(el.textContent).toContain('No Building Selected');
   });
 
   it('exports the TaskView class', async () => {
@@ -1704,6 +1704,15 @@ describe('TaskView', () => {
 // ─── RaidLogView ───────────────────────────────────────────
 
 describe('RaidLogView', () => {
+  beforeEach(() => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', 'test-building-1', { silent: true });
+  });
+  afterEach(() => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', null, { silent: true });
+  });
+
   it('exports the RaidLogView class', async () => {
     const mod = await import('../../../public/ui/views/raid-log-view.js');
     expect(mod.RaidLogView).toBeDefined();
@@ -1883,6 +1892,15 @@ describe('RaidLogView', () => {
 // ─── TaskView form validation ──────────────────────────────
 
 describe('TaskView — create form validation', () => {
+  beforeEach(() => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', 'test-building-1', { silent: true });
+  });
+  afterEach(() => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', null, { silent: true });
+  });
+
   it('shows validation error when title is empty on submit', async () => {
     const { TaskView } = await import('../../../public/ui/views/task-view.js');
     const el = document.createElement('div');
@@ -1990,6 +2008,15 @@ describe('TaskView — create form validation', () => {
 // ─── RaidLogView form validation ──────────────────────────────
 
 describe('RaidLogView — create form validation', () => {
+  beforeEach(() => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', 'test-building-1', { silent: true });
+  });
+  afterEach(() => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', null, { silent: true });
+  });
+
   it('shows validation error when summary is empty on submit', async () => {
     const { RaidLogView } = await import('../../../public/ui/views/raid-log-view.js');
     const el = document.createElement('div');
