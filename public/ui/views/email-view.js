@@ -625,7 +625,7 @@ export class EmailView extends Component {
     const tags = [];
     for (const r of recipients) {
       const agent = resolveAgent(r.agent_id);
-      const name = agent?.name || r.agent_id;
+      const name = r.agent_id === '__user__' ? 'You' : (agent?.name || r.agent_id);
       const typeLabel = r.type === 'cc' ? 'CC' : '';
       tags.push(
         h('span', { class: `email-recipient-tag ${r.type === 'cc' ? 'email-recipient-tag--cc' : ''}` },
@@ -1098,7 +1098,7 @@ export class EmailView extends Component {
     const tags = [];
     for (const r of recipients) {
       const agent = resolveAgent(r.agent_id);
-      const name = agent?.name || r.agent_id;
+      const name = r.agent_id === '__user__' ? 'You' : (agent?.name || r.agent_id);
       const typeLabel = r.type === 'cc' ? 'CC' : '';
       tags.push(
         h('span', { class: `email-recipient-tag ${r.type === 'cc' ? 'email-recipient-tag--cc' : ''}` },
