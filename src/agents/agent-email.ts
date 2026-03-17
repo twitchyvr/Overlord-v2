@@ -67,9 +67,10 @@ export interface SendEmailParams {
 export function sendEmail(params: SendEmailParams): Result {
   const db = getDb();
 
-  // Validate sender exists in agent registry
-  const senderAgent = getAgent(params.fromId);
-  if (!senderAgent) {
+  // Validate sender exists in agent registry (allow __user__ for human user mail #667)
+  const isUserSender = params.fromId === '__user__';
+  const senderAgent = isUserSender ? null : getAgent(params.fromId);
+  if (!isUserSender && !senderAgent) {
     return err('AGENT_NOT_FOUND', `Sender agent ${params.fromId} does not exist in registry`);
   }
 
@@ -362,13 +363,12 @@ export function replyToEmail(
   const original = getEmail(emailId);
   if (!original) return err('EMAIL_NOT_FOUND', `Email ${emailId} does not exist`);
 
-  // Validate sender exists in agent registry to prevent fabricated names
-  const senderAgent = getAgent(fromId);
-  if (!senderAgent) return err('AGENT_NOT_FOUND', `Agent ${fromId} does not exist in registry`);
+  // Validate sender exists in agent registry (allow __user__ for human user #667)
+  const isUserSender = fromId === '__user__';
+  const senderAgent = isUserSender ? null : getAgent(fromId);
+  if (!isUserSender && !senderAgent) return err('AGENT_NOT_FOUND', `Agent ${fromId} does not exist in registry`);
 
-  // Use the agent's registered ID (not whatever was passed in) to guarantee
-  // the from_id stored in the database maps to a real agent row.
-  const validatedFromId = senderAgent.id;
+  const validatedFromId = isUserSender ? '__user__' : senderAgent!.id;
 
   // Determine recipients: reply to sender, or reply-all includes all recipients
   const to = [original.from_id];
@@ -406,11 +406,12 @@ export function forwardEmail(
   const original = getEmail(emailId);
   if (!original) return err('EMAIL_NOT_FOUND', `Email ${emailId} does not exist`);
 
-  // Validate sender exists in agent registry to prevent fabricated names
-  const senderAgent = getAgent(fromId);
-  if (!senderAgent) return err('AGENT_NOT_FOUND', `Agent ${fromId} does not exist in registry`);
+  // Validate sender exists in agent registry (allow __user__ for human user #667)
+  const isUserSender = fromId === '__user__';
+  const senderAgent = isUserSender ? null : getAgent(fromId);
+  if (!isUserSender && !senderAgent) return err('AGENT_NOT_FOUND', `Agent ${fromId} does not exist in registry`);
 
-  const validatedFromId = senderAgent.id;
+  const validatedFromId = isUserSender ? '__user__' : senderAgent!.id;
 
   // Resolve original sender name from registry (not from potentially stale email data)
   const originalSenderAgent = getAgent(original.from_id);
