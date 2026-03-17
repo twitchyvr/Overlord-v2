@@ -109,6 +109,16 @@ export class MilestoneView extends Component {
     if (!this._mounted) return;
     this.el.textContent = '';
 
+    // No building selected (#691)
+    if (!this._buildingId) {
+      this.el.appendChild(h('div', { class: 'view-empty-state' },
+        h('div', { class: 'view-empty-icon' }, '\u{1F3AF}'),
+        h('h2', { class: 'view-empty-title' }, 'No Building Selected'),
+        h('p', { class: 'view-empty-text' }, 'Select a project from the Dashboard to view milestones.')
+      ));
+      return;
+    }
+
     // ── Header ──
     const header = h('div', { class: 'milestone-view-header' });
 

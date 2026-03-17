@@ -162,6 +162,17 @@ export class EmailView extends Component {
     this.el.textContent = '';
     this.el.className = 'email-view';
 
+    // No building selected — show empty state (#691)
+    const store = OverlordUI.getStore();
+    if (!store?.get('building.active')) {
+      this.el.appendChild(h('div', { class: 'view-empty-state' },
+        h('div', { class: 'view-empty-icon' }, '\u{1F4EC}'),
+        h('h2', { class: 'view-empty-title' }, 'No Building Selected'),
+        h('p', { class: 'view-empty-text' }, 'Select a project from the Dashboard to view mail.')
+      ));
+      return;
+    }
+
     // ── Header row ──
     const header = h('div', { class: 'email-view-header' },
       h('div', { class: 'email-view-title-row' },

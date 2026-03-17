@@ -100,6 +100,16 @@ export class RaidLogView extends Component {
     this.el.textContent = '';
     this.el.className = 'raid-log-view';
 
+    // No building selected (#691)
+    if (!this._buildingId) {
+      this.el.appendChild(h('div', { class: 'view-empty-state' },
+        h('div', { class: 'view-empty-icon' }, '\u26A0\uFE0F'),
+        h('h2', { class: 'view-empty-title' }, 'No Building Selected'),
+        h('p', { class: 'view-empty-text' }, 'Select a project from the Dashboard to view the RAID log.')
+      ));
+      return;
+    }
+
     // Header
     const header = h('div', { class: 'raid-view-header' },
       h('div', { class: 'raid-view-title-row' },
