@@ -36,6 +36,12 @@ const FOLDERS = [
   { id: 'all',   label: 'All',    icon: '\u{1F4EC}' },
 ];
 
+/** Resolve display name — handles __user__ special ID (#667) */
+function resolveFromName(email) {
+  if (email.from_id === '__user__') return 'You';
+  return email.from_name || resolveAgent(email.from_id)?.name || email.from_id;
+}
+
 
 export class EmailView extends Component {
 
@@ -159,7 +165,7 @@ export class EmailView extends Component {
     // ── Header row ──
     const header = h('div', { class: 'email-view-header' },
       h('div', { class: 'email-view-title-row' },
-        h('h2', { class: 'email-view-title' }, 'Agent Mail'),
+        h('h2', { class: 'email-view-title' }, 'Mail'),
         h('span', { class: 'email-view-unread-badge' },
           this._unreadCount > 0 ? `${this._unreadCount} unread` : '')
       ),
@@ -379,7 +385,7 @@ export class EmailView extends Component {
     const isUnread = email.status === 'unread' || (!email.read_at && this._filter !== 'sent');
     const isSelected = this._selectedEmailId === email.id;
     const fromAgent = resolveAgent(email.from_id);
-    const fromName = email.from_name || fromAgent?.name || email.from_id;
+    const fromName = resolveFromName(email);
     const ts = email.created_at;
 
     let cls = 'email-row';
@@ -561,7 +567,7 @@ export class EmailView extends Component {
    */
   _buildThreadMessage(email) {
     const fromAgent = resolveAgent(email.from_id);
-    const fromName = email.from_name || fromAgent?.name || email.from_id;
+    const fromName = resolveFromName(email);
     const ts = email.created_at;
 
     const msg = h('div', { class: 'email-thread-message' },
@@ -699,7 +705,7 @@ export class EmailView extends Component {
     if (!email) return;
 
     const fromAgent = resolveAgent(email.from_id);
-    const fromName = email.from_name || fromAgent?.name || email.from_id;
+    const fromName = resolveFromName(email);
 
     this._openComposeModal({
       subject: email.subject?.startsWith('Fwd: ') ? email.subject : `Fwd: ${email.subject}`,
@@ -734,14 +740,19 @@ export class EmailView extends Component {
       }
     });
 
-    if (buildingAgents.length === 0) {
-      select.appendChild(h('option', { value: '' }, 'No agents'));
-    } else {
+    // "You" option — the human user's mailbox (#667)
+    const userOpt = h('option', {
+      value: '__user__',
+      selected: this._selectedAgentForContext === '__user__' || !this._selectedAgentForContext,
+    }, 'You (Project Owner)');
+    select.appendChild(userOpt);
+
+    if (buildingAgents.length > 0) {
+      select.appendChild(h('option', { disabled: true }, '\u2500\u2500\u2500 Agents \u2500\u2500\u2500'));
       for (const agent of buildingAgents) {
         const opt = h('option', {
           value: agent.id,
-          selected: this._selectedAgentForContext === agent.id ||
-            (!this._selectedAgentForContext && buildingAgents[0]?.id === agent.id)
+          selected: this._selectedAgentForContext === agent.id,
         }, agent.display_name || agent.name || agent.id);
         select.appendChild(opt);
       }
@@ -763,10 +774,11 @@ export class EmailView extends Component {
 
     // From (read-only display)
     const fromAgent = resolveAgent(fromAgentId);
+    const fromName = fromAgentId === '__user__' ? 'You (Project Owner)' : (fromAgent?.name || fromAgentId);
     content.appendChild(
       h('div', { class: 'email-compose-field' },
         h('label', {}, 'From:'),
-        h('span', { class: 'email-compose-from' }, fromAgent?.name || fromAgentId)
+        h('span', { class: 'email-compose-from' }, fromName)
       )
     );
 
@@ -777,11 +789,16 @@ export class EmailView extends Component {
     const toSearchInput = h('input', {
       type: 'text',
       class: 'email-compose-chip-search',
-      placeholder: 'Search agents...',
+      placeholder: 'Search recipients...',
     });
     const toDropdown = h('div', { class: 'email-compose-chip-dropdown' });
     const selectedTo = new Set(prefill.to || []);
-    const availableAgents = buildingAgents.filter(a => a.id !== fromAgentId);
+    // Include user + all agents except sender as available recipients (#667)
+    const userRecipient = { id: '__user__', name: 'You (Project Owner)', display_name: 'You (Project Owner)', role: 'owner' };
+    const availableAgents = [
+      ...(fromAgentId !== '__user__' ? [userRecipient] : []),
+      ...buildingAgents.filter(a => a.id !== fromAgentId),
+    ];
 
     const renderToChips = () => {
       toChipArea.querySelectorAll('.email-compose-chip').forEach(c => c.remove());
@@ -1025,7 +1042,7 @@ export class EmailView extends Component {
    */
   _buildThreadMessage(email) {
     const fromAgent = resolveAgent(email.from_id);
-    const fromName = email.from_name || fromAgent?.name || email.from_id;
+    const fromName = resolveFromName(email);
     const ts = email.created_at;
 
     const msg = h('div', { class: 'email-thread-message' },

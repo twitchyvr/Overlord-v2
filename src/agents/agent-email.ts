@@ -165,7 +165,7 @@ export function getInbox(
     SELECT DISTINCT e.*, a.name AS from_name
     FROM agent_emails e
     JOIN agent_email_recipients r ON r.email_id = e.id
-    JOIN agents a ON a.id = e.from_id
+    LEFT JOIN agents a ON a.id = e.from_id
     WHERE r.agent_id = ?
   `;
   const params: unknown[] = [agentId];
@@ -204,7 +204,7 @@ export function getSentEmails(
   const emails = db.prepare(`
     SELECT e.*, a.name AS from_name
     FROM agent_emails e
-    JOIN agents a ON a.id = e.from_id
+    LEFT JOIN agents a ON a.id = e.from_id
     WHERE e.from_id = ?
     ORDER BY e.created_at DESC
     LIMIT ? OFFSET ?
@@ -224,7 +224,7 @@ export function getThread(threadId: string): EmailWithRecipients[] {
   const emails = db.prepare(`
     SELECT e.*, a.name AS from_name
     FROM agent_emails e
-    JOIN agents a ON a.id = e.from_id
+    LEFT JOIN agents a ON a.id = e.from_id
     WHERE e.thread_id = ?
     ORDER BY e.created_at ASC
   `).all(threadId) as Array<EmailRow & { from_name: string }>;
@@ -243,7 +243,7 @@ export function getEmail(emailId: string): EmailWithRecipients | null {
   const email = db.prepare(`
     SELECT e.*, a.name AS from_name
     FROM agent_emails e
-    JOIN agents a ON a.id = e.from_id
+    LEFT JOIN agents a ON a.id = e.from_id
     WHERE e.id = ?
   `).get(emailId) as (EmailRow & { from_name: string }) | undefined;
 
@@ -334,7 +334,7 @@ export function getPendingEmails(agentId: string, limit = 10): EmailWithRecipien
     SELECT DISTINCT e.*, a.name AS from_name
     FROM agent_emails e
     JOIN agent_email_recipients r ON r.email_id = e.id
-    JOIN agents a ON a.id = e.from_id
+    LEFT JOIN agents a ON a.id = e.from_id
     WHERE r.agent_id = ? AND r.read_at IS NULL
     ORDER BY
       CASE e.priority WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
