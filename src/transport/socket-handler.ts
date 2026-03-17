@@ -98,7 +98,7 @@ import { listPlugins, getPlugin, loadPlugin, unloadPlugin, reloadPlugin, getPlug
 import { validateLuaSyntax } from '../plugins/lua-validator.js';
 import { exportBundle, importBundle } from '../plugins/plugin-bundler.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
-import { recordEvidence, getTaskEvidence, getTaskPipelineStatus, getBuildingEvidence, loopBackToCode } from '../rooms/pipeline-evidence.js';
+import { recordEvidence, getTaskEvidence, getTaskPipelineStatus, getBuildingEvidence, loopBackToCode, getPipelineDashboard } from '../rooms/pipeline-evidence.js';
 import { searchMemory, getRecentContext, getMemoryStats } from '../agents/agent-memory.js';
 import { listModels, getProviderModels, getRecommendedModel, getModel, compareModels } from '../ai/model-registry.js';
 import { GnapMessagingAdapter } from '../agents/gnap-messaging-adapter.js';
@@ -1385,6 +1385,11 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         bus.emit('pipeline:loop-back', { taskId: parsed.taskId, stage: parsed.failedStage, action: data.action });
       }
       if (ack) ack(result);
+    });
+
+    // Pipeline dashboard (#684)
+    handle(socket, 'pipeline:dashboard', PipelineBuildingSchema, (parsed, ack) => {
+      if (ack) ack(getPipelineDashboard(parsed.buildingId));
     });
 
     // ─── Agent Reset (#559) ───

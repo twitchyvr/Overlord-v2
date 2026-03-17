@@ -1,7 +1,7 @@
 /**
  * Overlord v2 — Pipeline Stepper Component (#611)
  *
- * Visual 8-stage progress indicator for the Continuous Development Loop.
+ * Visual 10-stage progress indicator for the Continuous Development Loop.
  * Renders as a horizontal stepper with stage icons, labels, and states.
  *
  * Usage:
@@ -13,14 +13,16 @@
 import { h } from '../engine/helpers.js';
 
 const STAGE_DEFS = [
-  { id: 'code',        label: 'Code',        icon: '\u270F\uFE0F' },
-  { id: 'iterate',     label: 'Iterate',     icon: '\u{1F504}' },
-  { id: 'static-test', label: 'Static Test', icon: '\u{1F9EA}' },
-  { id: 'deep-test',   label: 'Deep Test',   icon: '\u{1F50D}' },
-  { id: 'syntax',      label: 'Syntax',      icon: '\u2728' },
-  { id: 'review',      label: 'Review',      icon: '\u{1F4DD}' },
-  { id: 'e2e',         label: 'E2E',         icon: '\u{1F680}' },
-  { id: 'dogfood',     label: 'Dogfood',     icon: '\u{1F436}' },
+  { id: 'code',         label: 'Code',         icon: '\u270F\uFE0F' },
+  { id: 'iterate',      label: 'Iterate',      icon: '\u{1F504}' },
+  { id: 'static-test',  label: 'Static Test',  icon: '\u{1F9EA}' },
+  { id: 'deep-test',    label: 'Deep Test',    icon: '\u{1F50D}' },
+  { id: 'syntax',       label: 'Syntax',       icon: '\u2728' },
+  { id: 'review',       label: 'Review',       icon: '\u{1F4DD}' },
+  { id: 'e2e',          label: 'E2E',          icon: '\u{1F680}' },
+  { id: 'visual-test',  label: 'Visual',       icon: '\u{1F4F8}' },
+  { id: 'uat',          label: 'UAT',          icon: '\u{1F464}' },
+  { id: 'dogfood',      label: 'Dogfood',      icon: '\u{1F436}' },
 ];
 
 const STATE_CONFIG = {

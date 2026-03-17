@@ -399,7 +399,7 @@ export class DashboardView extends Component {
     const section = h('div', { class: 'dashboard-section', id: 'dev-loop-pipeline' });
     section.appendChild(h('h3', { class: 'dashboard-section-title' }, 'Dev Loop Pipeline'));
     section.appendChild(h('p', { class: 'dashboard-section-desc' },
-      'Code Lab \u2192 Review \u2192 Testing \u2192 Dogfood'));
+      'Code \u2192 Review \u2192 E2E \u2192 Visual \u2192 UAT \u2192 Dogfood'));
 
     const stages = [
       { id: 'code-lab', label: 'Code Lab', icon: '\u{1F4BB}' },
