@@ -58,6 +58,7 @@ import {
   TableSetContextSchema, TableGetContextSchema, TableClearContextSchema,
   TableGetAssignmentsSchema, TableDivideWorkSchema,
   AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema,
+  BudgetGetSchema, BudgetSetSchema, BudgetBuildingSchema,
   PlanSubmitSchema, PlanReviewSchema, PlanGetSchema, PlanListSchema,
   EmailSendSchema, EmailReplySchema, EmailForwardSchema,
   EmailInboxSchema, EmailGetSchema, EmailThreadSchema,
@@ -83,6 +84,7 @@ import {
   RepoAddSchema, RepoRemoveSchema, RepoListSchema, RepoUpdateSchema, RepoAnalyzeSchema, RepoSyncStatusSchema, RepoSyncFetchSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
+import { checkBudget, setAgentBudget, getBuildingBudgets } from '../agents/budget-tracker.js';
 import { resetBuildingAgents } from '../agents/agent-registry.js';
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
 import { getQualityConfig } from '../tools/quality-defaults.js';
@@ -1147,6 +1149,28 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         buildingId: parsed.buildingId,
       });
       if (ack) ack({ ok: true, data: leaderboard });
+    });
+
+    // ─── Budget Tracking (#680) ───
+
+    handle(socket, 'budget:get', BudgetGetSchema, (parsed, ack) => {
+      const status = checkBudget(parsed.agentId);
+      if (ack) ack({ ok: true, data: status });
+    });
+
+    handle(socket, 'budget:set', BudgetSetSchema, (parsed, ack) => {
+      setAgentBudget(parsed.agentId, {
+        limit: parsed.limit,
+        period: parsed.period,
+        alertAt: parsed.alertAt,
+      });
+      const status = checkBudget(parsed.agentId);
+      if (ack) ack({ ok: true, data: status });
+    });
+
+    handle(socket, 'budget:building', BudgetBuildingSchema, (parsed, ack) => {
+      const budgets = getBuildingBudgets(parsed.buildingId);
+      if (ack) ack({ ok: true, data: budgets });
     });
 
     // ─── Messaging Mode + GNAP Status (#601, #622) ───

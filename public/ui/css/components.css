@@ -4975,3 +4975,46 @@
 .org-branch { position: relative; }
 .org-connector { position: absolute; left: -14px; top: 18px; width: 12px; height: 2px; background: var(--border-primary); }
 .org-connector--short { width: 8px; left: -12px; }
+
+/* ═══════════════════════════════════════════════════
+   BUDGET DASHBOARD — Agent Token Usage (#680)
+   ═══════════════════════════════════════════════════ */
+.budget-dashboard { padding: var(--sp-4); }
+.budget-summary {
+  display: flex; gap: var(--sp-4); margin-bottom: var(--sp-4);
+  padding: var(--sp-3); border-radius: 8px;
+  background: var(--bg-secondary); border: 1px solid var(--border-primary);
+}
+.budget-summary-stat { display: flex; flex-direction: column; gap: 2px; }
+.budget-summary-value { font-size: 1.4rem; font-weight: 700; color: var(--text-primary); }
+.budget-summary-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.budget-summary-stat--danger .budget-summary-value { color: var(--accent-red, #ef4444); }
+.budget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-3); }
+.budget-card {
+  padding: var(--sp-3); border-radius: 8px;
+  background: var(--bg-secondary); border: 1px solid var(--border-primary);
+  transition: border-color 0.15s;
+}
+.budget-card:hover { border-color: var(--accent-blue, #3b82f6); }
+.budget-card--over { border-color: var(--accent-red, #ef4444); background: rgba(239,68,68,0.04); }
+.budget-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-2); }
+.budget-card-name { font-weight: 600; color: var(--text-primary); font-size: var(--text-sm); }
+.budget-card-period {
+  font-size: 0.6rem; font-weight: 600; padding: 1px 6px;
+  border-radius: 999px; background: var(--bg-tertiary);
+  color: var(--text-secondary); text-transform: uppercase;
+}
+.budget-card-stats { display: flex; align-items: baseline; gap: 2px; margin-bottom: var(--sp-2); }
+.budget-card-used { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
+.budget-card-limit { font-size: 0.75rem; color: var(--text-muted); }
+.budget-card-limit--unlimited { font-style: italic; }
+.budget-bar {
+  height: 6px; border-radius: 3px; background: var(--bg-tertiary);
+  overflow: hidden; margin-bottom: 4px;
+}
+.budget-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+.budget-bar--ok { background: var(--accent-green, #22c55e); }
+.budget-bar--warn { background: var(--accent-amber, #f59e0b); }
+.budget-bar--danger { background: var(--accent-red, #ef4444); }
+.budget-card-pct { font-size: 0.65rem; color: var(--text-muted); text-align: right; margin-bottom: var(--sp-2); }
+.budget-card-actions { display: flex; gap: var(--sp-1); }
