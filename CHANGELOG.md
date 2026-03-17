@@ -55,6 +55,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Agent status changes in Activity feed** — Agents tab in activity view shows real-time status updates (#287)
 
 ### Fixed (Dogfooding Session — Gardenly, March 2026)
+- **Building selection required** — Mail, Agents, Tasks, RAID, and Milestones views now show "No Building Selected" empty state instead of cross-project data when no building is active; shared `.view-empty-state` CSS; matches Phase view pattern (#691, #693, PR #694)
+- **Empty room_access grants unrestricted access** — agents created without explicit room restrictions can now enter any room (#690)
+- **Email orchestrator** — agents auto-process received user emails through the conversation loop and auto-reply with results; only user-sent emails trigger work to prevent loops; 5s per-agent cooldown (#670, PR #685)
 - **Mail system revamp** — fixed 60+ broken CSS token references (transparent dropdowns, invisible compose fields); added user mailbox ("You (Project Owner)" as default mail participant); users can send/receive mail with agents; `__user__` ID works with existing email backend via LEFT JOIN; title "Agent Mail" → "Mail"; GNAP backend untouched (#667, PR #669)
 - **CRITICAL: Cross-project data bleed** — 12 socket event handlers processed events globally instead of filtering by active building; agents list returned ALL agents (empty filter); added `isActiveBuilding()` guard on room, tool, task, RAID, phase gate, and agent events; `fetchAgents` now passes buildingId (#666, PR #668)
 - **CRITICAL: Project isolation** — Socket.IO events leaked between buildings; now scoped to building rooms via `io.to()` (#593)
