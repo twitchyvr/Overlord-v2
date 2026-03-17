@@ -235,6 +235,17 @@ export class AgentsView extends Component {
       h('div', { class: 'agents-view-actions' })
     );
 
+    // Org Chart toggle (#678)
+    const orgChartBtn = h('button', {
+      class: `btn btn-ghost btn-md${this._showOrgChart ? ' btn-active' : ''}`,
+      title: 'Toggle org chart view'
+    }, '\u{1F4CA} Org Chart');
+    orgChartBtn.addEventListener('click', () => {
+      this._showOrgChart = !this._showOrgChart;
+      this._render();
+    });
+    header.querySelector('.agents-view-actions').appendChild(orgChartBtn);
+
     const createBtn = h('button', { class: 'btn btn-primary btn-md' }, '+ Create Agent');
     createBtn.addEventListener('click', () => this._openCreateAgentModal());
     header.querySelector('.agents-view-actions').appendChild(createBtn);
