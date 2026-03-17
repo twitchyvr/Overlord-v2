@@ -176,6 +176,8 @@ async function processEmailForAgent(bus: Bus, params: {
       const respSocketId = responseData.socketId as string;
       const respAgentId = responseData.agentId as string;
 
+      log.debug({ respSocketId, emailSocketId, respAgentId, agentId, match: respSocketId === emailSocketId || respAgentId === agentId }, 'Email orchestrator checking chat:response');
+
       if (respSocketId === emailSocketId || respAgentId === agentId) {
         clearTimeout(timeout);
         bus.off('chat:response', handler);
@@ -207,6 +209,7 @@ async function processEmailForAgent(bus: Bus, params: {
 
   // Wait for the agent's response
   const responseText = await responsePromise;
+  log.info({ agentId, emailId, hasResponse: !!responseText, responseLength: responseText.length }, 'Email orchestrator response wait complete');
 
   if (responseText) {
     // Auto-reply to the email with the agent's response
