@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlink
 import { resolve, join } from 'node:path';
 import { logger } from '../core/logger.js';
 import type { MessagingPort, AgentMessage } from '../core/messaging-port.js';
+import { sendEmail } from './agent-email.js';
 
 const log = logger.child({ module: 'gnap-messaging' });
 
@@ -68,6 +69,25 @@ export class GnapMessagingAdapter implements MessagingPort {
       const msg = e instanceof Error ? e.message : String(e);
       log.error({ err: msg, filePath }, 'Failed to write GNAP message');
       throw new Error(`GNAP write failed: ${msg}`);
+    }
+
+    // Bridge to DB so Mail UI can display GNAP messages (#698)
+    try {
+      const result = sendEmail({
+        fromId: message.from,
+        to: [to],
+        subject: message.subject || message.type,
+        body: message.body,
+        priority: 'normal',
+      });
+      if (result.ok) {
+        log.debug({ id: fullMessage.id, emailId: (result.data as { id: string }).id }, 'GNAP message bridged to Mail DB');
+      } else {
+        log.warn({ id: fullMessage.id, code: result.error?.code, msg: result.error?.message }, 'GNAP→Mail bridge skipped (non-fatal)');
+      }
+    } catch (bridgeErr) {
+      const bridgeMsg = bridgeErr instanceof Error ? bridgeErr.message : String(bridgeErr);
+      log.warn({ id: fullMessage.id, err: bridgeMsg }, 'GNAP→Mail bridge failed (non-fatal)');
     }
 
     // Notify subscribers
