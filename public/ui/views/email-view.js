@@ -57,7 +57,7 @@ export class EmailView extends Component {
     this._previewEl = null;
     this._foldersEl = null;
     this._loading = true;
-    this._selectedAgentForContext = null;
+    this._selectedAgentForContext = '__user__';
     this._selectedEmailId = null;
     this._selectedThreadId = null;
     this._fetchGen = 0;
@@ -134,7 +134,7 @@ export class EmailView extends Component {
     const agents = this._getBuildingAgents();
     if (agents.length === 0) { this._loading = false; return; }
 
-    const agentId = this._selectedAgentForContext || agents[0].id;
+    const agentId = this._selectedAgentForContext || '__user__';
     this._loading = true;
     const gen = ++this._fetchGen;
 
@@ -653,7 +653,7 @@ export class EmailView extends Component {
       onClick: async () => {
         const body = replyBody.value.trim();
         if (!body) return;
-        const fromId = this._selectedAgentForContext || this._agents[0]?.id;
+        const fromId = this._selectedAgentForContext || '__user__';
         if (!fromId) { Toast.warning('No agent selected'); return; }
 
         replyBtn.disabled = true;
@@ -707,7 +707,7 @@ export class EmailView extends Component {
         const lastEmail = thread[thread.length - 1];
         if (!lastEmail) return;
 
-        const fromId = this._selectedAgentForContext || this._agents[0]?.id;
+        const fromId = this._selectedAgentForContext || '__user__';
         const allRecipients = (lastEmail.recipients || [])
           .map((r) => r.agent_id)
           .filter((id) => id !== fromId);
@@ -799,7 +799,7 @@ export class EmailView extends Component {
 
   _openComposeModal(prefill = {}) {
     const buildingAgents = this._getBuildingAgents();
-    const fromAgentId = this._selectedAgentForContext || buildingAgents[0]?.id || '';
+    const fromAgentId = this._selectedAgentForContext || '__user__';
 
     const content = h('div', { class: 'email-compose' });
 
@@ -1043,7 +1043,7 @@ export class EmailView extends Component {
         onClick: async () => {
           const body = replyBody.value.trim();
           if (!body) return;
-          const fromId = this._selectedAgentForContext || this._agents[0]?.id;
+          const fromId = this._selectedAgentForContext || '__user__';
           if (!fromId) { Toast.warning('No agent selected'); return; }
 
           const btn = replyActions.querySelector('button');
