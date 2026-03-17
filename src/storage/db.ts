@@ -270,6 +270,22 @@ const SCHEMA_SQL = `
     UNIQUE(agent_id, metric, period)
   );
 
+  CREATE TABLE IF NOT EXISTS visual_tests (
+    id TEXT PRIMARY KEY,
+    building_id TEXT NOT NULL REFERENCES buildings(id),
+    task_id TEXT REFERENCES tasks(id),
+    title TEXT NOT NULL,
+    description TEXT,
+    screenshot_path TEXT,
+    baseline_path TEXT,
+    diff_score REAL,
+    status TEXT DEFAULT 'pending',
+    reviewed_by TEXT,
+    review_notes TEXT,
+    reviewed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS agent_emails (
     id TEXT PRIMARY KEY,
     thread_id TEXT NOT NULL,

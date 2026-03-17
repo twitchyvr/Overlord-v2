@@ -85,7 +85,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 24 tables', () => {
+  describe('schema — all 25 tables', () => {
     const expectedTables = [
       'buildings',
       'floors',
@@ -105,6 +105,7 @@ describe('Storage Layer', () => {
       'citations',
       'agent_activity_log',
       'agent_stats',
+      'visual_tests',
       'agent_emails',
       'agent_email_recipients',
       'migrations',
@@ -113,7 +114,7 @@ describe('Storage Layer', () => {
       'repo_file_origins',
     ];
 
-    it('creates all 24 tables', async () => {
+    it('creates all 25 tables', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -123,7 +124,7 @@ describe('Storage Layer', () => {
 
       const tableNames = tables.map((t) => t.name).sort();
       expect(tableNames).toEqual(expectedTables.sort());
-      expect(tableNames).toHaveLength(24);
+      expect(tableNames).toHaveLength(25);
     });
 
     it.each(expectedTables)('creates table: %s', async (tableName) => {
@@ -322,7 +323,7 @@ describe('Storage Layer', () => {
         .prepare("SELECT count(*) as cnt FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         .get() as { cnt: number };
 
-      expect(tables.cnt).toBe(24);
+      expect(tables.cnt).toBe(25);
     });
   });
 
