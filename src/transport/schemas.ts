@@ -668,6 +668,32 @@ export const BudgetBuildingSchema = z.object({
   buildingId: id(),
 });
 
+// Task checkout schemas (#682)
+export const TodoCheckoutSchema = z.object({
+  todoId: id(),
+  agentId: id(),
+  ttlMs: z.number().int().min(60000).max(86400000).optional(), // 1min to 24h
+});
+
+export const TodoReleaseSchema = z.object({
+  todoId: id(),
+  agentId: id(),
+  force: z.boolean().optional(),
+});
+
+export const TodoCompleteCheckoutSchema = z.object({
+  todoId: id(),
+  agentId: id(),
+});
+
+export const TodoLockStatusSchema = z.object({
+  todoId: id(),
+});
+
+export const CheckedOutTodosSchema = z.object({
+  buildingId: id(),
+});
+
 export const AgentLeaderboardSchema = z.object({
   metric: z.string().max(MAX_NAME),
   limit: z.number().int().min(1).max(50).optional().default(10),
