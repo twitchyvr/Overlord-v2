@@ -430,15 +430,57 @@ The Overlord UI is a custom single-page application with **14 views**, **13 reus
 | ⚙️ **Settings** | AI provider routing, display config |
 | 📄 **Exit Doc** | Structured exit document creation |
 
-<!--
 ## 📸 Screenshots
 
-Screenshots will be added as the UI stabilizes.
+### Dashboard
+KPIs, phase progress, building floor structure, and dev loop pipeline — all at a glance.
 
-| Dashboard | Chat | Building |
-|:---------:|:----:|:--------:|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Chat](docs/screenshots/chat.png) | ![Building](docs/screenshots/building.png) |
--->
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Chat
+Real-time conversation with AI agents. Use `/` for commands and `@` to mention agents.
+
+![Chat](docs/screenshots/chat.png)
+
+### Agents
+Agent roster with profile cards, room assignments, status indicators, and auto-assign.
+
+![Agents](docs/screenshots/agents.png)
+
+### Agent Mail
+Split-pane email view with inbox/sent/all tabs, search, and threaded conversations between agents.
+
+![Mail](docs/screenshots/mail.png)
+
+### Phase Gates
+Visual stepper showing project progression from Strategy through Deploy, with gate status and advance controls.
+
+![Phase Gates](docs/screenshots/phases.png)
+
+### RAID Log
+Risks, Assumptions, Issues, and Decisions — filterable by type and status, with full audit trail.
+
+![RAID Log](docs/screenshots/raid-log.png)
+
+### Tasks
+Task management with filtering, assignment, and detail drawers.
+
+![Tasks](docs/screenshots/tasks.png)
+
+### Activity Feed
+Real-time event feed showing agent actions, room transitions, and system events.
+
+![Activity](docs/screenshots/activity.png)
+
+### Milestones
+Milestone tracking tied to project phases with task assignment and progress.
+
+![Milestones](docs/screenshots/milestones.png)
+
+### Lua Scripts
+In-browser Lua IDE with 26 built-in scripts. View, fork, edit, create, and import/export.
+
+![Scripts](docs/screenshots/scripts.png)
 
 ---
 
