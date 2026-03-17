@@ -158,6 +158,7 @@ export interface AgentRow {
   communication_style: string | null;
   expertise_areas: string;
   profile_generated: number;
+  provider: string;
   created_at: string;
   updated_at: string;
 }
@@ -416,6 +417,7 @@ export interface ParsedAgent {
   photo_url: string | null;
   specialization: string | null;
   profile_generated: boolean;
+  provider: string;
   created_at: string;
   updated_at: string;
 }
