@@ -59,3 +59,59 @@ Welcome to the **Overlord v2** wiki — the comprehensive reference for the Buil
 ### Implementation
 - [[Implementation Phases]] — 8-phase roadmap from v1 stabilization to plugins
 - [[Migration from v1]] — What changed and why
+
+---
+
+## Visual Tour
+
+A walkthrough of Overlord v2's major views and features.
+
+### Dashboard
+KPIs, phase progress, building floor structure, and dev loop pipeline.
+
+![Dashboard](../screenshots/dashboard.png)
+
+### Chat
+Real-time conversation with AI agents. Use `/` for commands and `@` to mention agents.
+
+![Chat](../screenshots/chat.png)
+
+### Agents
+Agent roster with profile cards, room assignments, and status indicators.
+
+![Agents](../screenshots/agents.png)
+
+### Agent Mail
+Split-pane email with inbox/sent/all tabs, search, and threaded agent-to-agent conversations.
+
+![Mail](../screenshots/mail.png)
+
+### Phase Gates
+Visual stepper from Strategy through Deploy with gate status and advance controls.
+
+![Phase Gates](../screenshots/phases.png)
+
+### RAID Log
+Risks, Assumptions, Issues, and Decisions — filterable by type and status.
+
+![RAID Log](../screenshots/raid-log.png)
+
+### Tasks
+Task management with filtering, assignment, and detail drawers.
+
+![Tasks](../screenshots/tasks.png)
+
+### Activity Feed
+Real-time event feed showing agent actions, room transitions, and system events.
+
+![Activity](../screenshots/activity.png)
+
+### Milestones
+Milestone tracking tied to project phases with task assignment and progress.
+
+![Milestones](../screenshots/milestones.png)
+
+### Lua Scripts
+In-browser Lua IDE with 26 built-in scripts for customizing Overlord behavior.
+
+![Scripts](../screenshots/scripts.png)
