@@ -718,6 +718,9 @@ export class EmailView extends Component {
         this._openComposeModal({
           to: uniqueTo,
           subject: lastEmail.subject?.startsWith('Re: ') ? lastEmail.subject : `Re: ${lastEmail.subject}`,
+          replyToEmailId: lastEmail.id,
+          replyAll: true,
+          threadId,
         });
       })
       .catch(() => {});
@@ -949,18 +952,32 @@ export class EmailView extends Component {
         if (!api) { Toast.error('Not connected'); return; }
 
         try {
-          const res = await api.sendAgentEmail({
-            fromId: fromAgentId,
-            to,
-            subject,
-            body,
-            priority: prioritySelect.value,
-          });
+          let res;
+          if (prefill.replyToEmailId) {
+            // Reply to existing thread
+            res = await api.replyToEmail(prefill.replyToEmailId, fromAgentId, body, {
+              replyAll: !!prefill.replyAll,
+              priority: prioritySelect.value,
+            });
+          } else {
+            // New email
+            res = await api.sendAgentEmail({
+              fromId: fromAgentId,
+              to,
+              subject,
+              body,
+              priority: prioritySelect.value,
+            });
+          }
 
           if (res && res.ok) {
-            Toast.success('Email sent');
+            Toast.success(prefill.replyToEmailId ? 'Reply sent' : 'Email sent');
             Modal.close('email-compose');
             this._fetchData();
+            // Reload preview if replying in a thread
+            if (prefill.threadId) {
+              this._loadPreview(prefill.threadId, prefill.replyToEmailId);
+            }
           } else {
             sendBtn.disabled = false;
             sendBtn.textContent = 'Send';
