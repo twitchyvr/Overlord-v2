@@ -30,6 +30,7 @@ import { Modal } from '../components/modal.js';
 import { Drawer } from '../components/drawer.js';
 import { EntityLink, resolveAgent, resolveRoom } from '../engine/entity-nav.js';
 import { OrgChart } from '../components/org-chart.js';
+import { BudgetDashboard } from '../components/budget-dashboard.js';
 
 
 // ── Constants ────────────────────────────────────────────────────
@@ -106,6 +107,8 @@ export class AgentsView extends Component {
     this._filter = 'all';
     this._sort = 'name';     // 'name' | 'status' | 'last-active'
     this._showOrgChart = false;
+    this._showBudgets = false;
+    this._budgets = [];
     this._tabs = null;
   }
 
@@ -169,6 +172,19 @@ export class AgentsView extends Component {
     if (window.overlordSocket) {
       window.overlordSocket.fetchAgents({});
     }
+  }
+
+  /** Fetch budget data for all agents in the building (#680) */
+  _fetchBudgets() {
+    const store = OverlordUI.getStore();
+    const buildingId = store?.get('building.active');
+    if (!buildingId || !window.overlordSocket?.socket) return;
+    window.overlordSocket.socket.emit('budget:building', { buildingId }, (res) => {
+      if (res?.ok) {
+        this._budgets = res.data || [];
+        if (this._showBudgets) this._render();
+      }
+    });
   }
 
   /** Get resolved status for an agent (merges positions overlay). */
@@ -252,9 +268,23 @@ export class AgentsView extends Component {
     }, '\u{1F4CA} Org Chart');
     orgChartBtn.addEventListener('click', () => {
       this._showOrgChart = !this._showOrgChart;
+      this._showBudgets = false;
       this._render();
     });
     header.querySelector('.agents-view-actions').appendChild(orgChartBtn);
+
+    // Budgets toggle (#680)
+    const budgetBtn = h('button', {
+      class: `btn btn-ghost btn-md${this._showBudgets ? ' btn-active' : ''}`,
+      title: 'Toggle budget dashboard'
+    }, '\u{1F4B0} Budgets');
+    budgetBtn.addEventListener('click', () => {
+      this._showBudgets = !this._showBudgets;
+      this._showOrgChart = false;
+      if (this._showBudgets) this._fetchBudgets();
+      this._render();
+    });
+    header.querySelector('.agents-view-actions').appendChild(budgetBtn);
 
     const createBtn = h('button', { class: 'btn btn-primary btn-md' }, '+ Create Agent');
     createBtn.addEventListener('click', () => this._openCreateAgentModal());
@@ -309,6 +339,13 @@ export class AgentsView extends Component {
         agentPositions: this._agentPositions,
       });
       this.el.appendChild(orgChartEl);
+      return;
+    }
+
+    // ── Budget Dashboard mode (#680) ──
+    if (this._showBudgets) {
+      const budgetEl = BudgetDashboard.render(this._budgets, () => this._fetchBudgets());
+      this.el.appendChild(budgetEl);
       return;
     }
 

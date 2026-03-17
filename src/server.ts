@@ -28,6 +28,7 @@ import { initBuildingOnboarding } from './rooms/building-onboarding.js';
 import { initEscalationHandler } from './rooms/escalation-handler.js';
 import { initDevLoopEnforcer } from './rooms/dev-loop-enforcer.js';
 import { initEmailOrchestrator } from './rooms/email-orchestrator.js';
+import { initBudgetTracker } from './agents/budget-tracker.js';
 import { listBuildings } from './rooms/building-manager.js';
 import { initCommands } from './commands/index.js';
 import { initPlugins } from './plugins/index.js';
@@ -93,6 +94,10 @@ async function start(): Promise<void> {
   // Email orchestrator — agents process received emails and auto-reply (#670)
   initEmailOrchestrator({ bus });
   log.info('Email orchestrator initialized');
+
+  // Budget tracker — per-agent token usage and limits (#680)
+  initBudgetTracker(bus);
+  log.info('Budget tracker initialized');
 
   // 2b. Init commands + plugins (after rooms/agents/tools, before transport)
   initCommands({ bus, rooms, agents, tools });

@@ -652,6 +652,22 @@ export const AgentActivityLogSchema = z.object({
   eventType: z.string().max(MAX_NAME).optional(),
 });
 
+// Budget schemas (#680)
+export const BudgetGetSchema = z.object({
+  agentId: id(),
+});
+
+export const BudgetSetSchema = z.object({
+  agentId: id(),
+  limit: z.number().int().min(0).max(100_000_000).optional(),
+  period: z.enum(['daily', 'weekly', 'monthly', 'none']).optional(),
+  alertAt: z.array(z.number().int().min(0).max(100)).optional(),
+});
+
+export const BudgetBuildingSchema = z.object({
+  buildingId: id(),
+});
+
 export const AgentLeaderboardSchema = z.object({
   metric: z.string().max(MAX_NAME),
   limit: z.number().int().min(1).max(50).optional().default(10),
