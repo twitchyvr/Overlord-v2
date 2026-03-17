@@ -4367,10 +4367,11 @@
    EMAIL VIEW — Modern Split-Pane Mail (Redesign)
    ═══════════════════════════════════════════════ */
 
-/* ── Layout grid ── */
+/* ── Layout: Thunderbird/Outlook 3-pane ── */
 .email-layout {
   display: grid;
-  grid-template-columns: minmax(380px, 45%) 1fr;
+  grid-template-columns: 180px 1fr;
+  grid-template-rows: 1fr;
   flex: 1;
   min-height: 0;
   border: 1px solid var(--border-secondary);
@@ -4379,56 +4380,89 @@
   background: var(--bg-primary);
 }
 
-/* ── Folder tabs (inline, replaces sidebar) ── */
-.email-folder-tabs {
+/* Left: Folder tree */
+.email-folders {
   display: flex;
-  gap: var(--sp-1);
+  flex-direction: column;
+  gap: 0;
+  padding: var(--sp-2) 0;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-secondary);
+  overflow-y: auto;
 }
-.email-folder-tab {
+.email-folder-item {
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
-  padding: var(--sp-1) var(--sp-3);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  gap: var(--sp-2);
+  padding: 6px var(--sp-3);
   cursor: pointer;
-  transition: all var(--duration-fast);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  transition: background 0.1s;
+  user-select: none;
 }
-.email-folder-tab:hover {
+.email-folder-item:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
-.email-folder-tab.active {
-  background: var(--accent-blue, #3b82f6);
-  color: #fff;
+.email-folder-item--active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
   font-weight: 600;
+  border-left: 3px solid var(--accent-blue, #3b82f6);
+  padding-left: calc(var(--sp-3) - 3px);
 }
-.email-folder-tab-badge {
-  font-size: 0.65rem;
-  font-weight: 700;
-  background: rgba(255,255,255,0.2);
-  padding: 1px 5px;
-  border-radius: 999px;
-  min-width: 14px;
+.email-folder-icon {
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+  width: 18px;
   text-align: center;
 }
-.email-folder-tab:not(.active) .email-folder-tab-badge {
-  background: var(--bg-tertiary);
+.email-folder-label {
+  flex: 1;
+}
+.email-folder-badge {
+  background: var(--accent-blue, #3b82f6);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  min-width: 16px;
+  text-align: center;
+}
+.email-folder-separator {
+  height: 1px;
+  background: var(--border-secondary);
+  margin: var(--sp-2) var(--sp-3);
+}
+.email-folder-heading {
+  padding: var(--sp-2) var(--sp-3) var(--sp-1);
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--text-muted);
 }
 
-/* Legacy folder sidebar (hidden in new layout) */
-.email-folders { display: none; }
-.email-folder-item, .email-folder-item--active, .email-folder-icon,
-.email-folder-label, .email-folder-badge { display: none; }
+/* Right: list (top) + preview (bottom) stacked */
+.email-main-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
 
-/* ── Email list (left pane) ── */
+/* Inline folder tabs (hidden — using sidebar now) */
+.email-folder-tabs { display: none; }
+.email-folder-tab, .email-folder-tab-badge { display: none; }
+
+/* ── Email list (top of right pane) ── */
 .email-list {
+  flex: 0 0 auto;
+  max-height: 45%;
   overflow-y: auto;
-  border-right: 1px solid var(--border-secondary);
+  border-bottom: 2px solid var(--border-secondary);
 }
 
 /* ── Email row (compact single-line) ── */
@@ -4568,8 +4602,10 @@
   color: #fff;
 }
 
-/* ── Preview pane (right side) ── */
+/* ── Preview pane (bottom of right pane) ── */
 .email-preview {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--sp-4);
   background: var(--bg-primary);

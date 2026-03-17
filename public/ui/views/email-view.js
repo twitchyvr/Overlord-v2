@@ -173,35 +173,13 @@ export class EmailView extends Component {
       return;
     }
 
-    // ── Compact header: title + folder tabs + actions ──
+    // ── Header: title + actions ──
     const header = h('div', { class: 'email-view-header' },
       h('div', { class: 'email-view-title-row' },
         h('h2', { class: 'email-view-title' }, 'Mail'),
         this._unreadCount > 0
           ? h('span', { class: 'email-view-unread-badge' }, String(this._unreadCount))
           : null,
-      ),
-      // Folder tabs inline (replaces sidebar)
-      h('div', { class: 'email-folder-tabs' },
-        ...FOLDERS.map(f => {
-          const count = f.id === 'inbox' ? this._inbox.length
-            : f.id === 'sent' ? this._sent.length
-            : this._inbox.length + this._sent.length;
-          const tab = h('button', {
-            class: `email-folder-tab${this._filter === f.id ? ' active' : ''}`,
-            'data-folder': f.id,
-          }, f.label, count > 0 ? h('span', { class: 'email-folder-tab-badge' }, String(count)) : null);
-          tab.addEventListener('click', () => {
-            this._filter = f.id;
-            this._selectedEmailId = null;
-            this._selectedThreadId = null;
-            this._renderList();
-            this._renderPreviewEmpty();
-            this.el.querySelectorAll('.email-folder-tab').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-          });
-          return tab;
-        }),
       ),
       h('div', { class: 'email-view-actions' },
         this._buildAgentPicker(),
@@ -214,21 +192,25 @@ export class EmailView extends Component {
     );
     this.el.appendChild(header);
 
-    // ── Split pane layout: list (left) + preview (right) ──
+    // ── Thunderbird 3-pane: folders (left) | list+preview (right) ──
     const layout = h('div', { class: 'email-layout' });
 
-    // Left: email list (scrollable)
-    this._listEl = h('div', { class: 'email-list' });
-    layout.appendChild(this._listEl);
+    // Left: folder tree
+    this._foldersEl = h('div', { class: 'email-folders' });
+    this._renderFolderTree();
+    layout.appendChild(this._foldersEl);
 
-    // Right: preview pane (scrollable)
+    // Right: list (top) + preview (bottom)
+    const mainPane = h('div', { class: 'email-main-pane' });
+
+    this._listEl = h('div', { class: 'email-list' });
+    mainPane.appendChild(this._listEl);
+
     this._previewEl = h('div', { class: 'email-preview' });
     this._renderPreviewEmpty();
-    layout.appendChild(this._previewEl);
+    mainPane.appendChild(this._previewEl);
 
-    // Hidden folders element (kept for compatibility but not rendered)
-    this._foldersEl = h('div', { style: { display: 'none' } });
-
+    layout.appendChild(mainPane);
     this.el.appendChild(layout);
 
     // ── Delegated click handlers ──
@@ -261,16 +243,30 @@ export class EmailView extends Component {
   // ── Folder sidebar ────────────────────────────────────────
 
   _renderFolders() {
-    if (!this._foldersEl) return;
-    this._foldersEl.textContent = '';
+    // Legacy — kept for _renderFolderBadges compatibility
+    this._renderFolderTree();
+  }
 
+  _renderFolderTree() {
+    if (!this._foldersEl) return;
+    while (this._foldersEl.firstChild) this._foldersEl.removeChild(this._foldersEl.firstChild);
+
+    const selectFolder = (folderId) => {
+      this._filter = folderId;
+      this._selectedEmailId = null;
+      this._selectedThreadId = null;
+      this._renderList();
+      this._renderPreviewEmpty();
+      this._renderFolderTree();
+    };
+
+    // Standard folders
     for (const folder of FOLDERS) {
       const isActive = this._filter === folder.id;
       const badge = this._getFolderBadge(folder.id);
 
       const item = h('div', {
         class: `email-folder-item${isActive ? ' email-folder-item--active' : ''}`,
-        dataset: { folderId: folder.id },
       },
         h('span', { class: 'email-folder-icon' }, folder.icon),
         h('span', { class: 'email-folder-label' }, folder.label),
@@ -278,6 +274,31 @@ export class EmailView extends Component {
           ? h('span', { class: 'email-folder-badge' }, String(badge))
           : null
       );
+      item.addEventListener('click', () => selectFolder(folder.id));
+      this._foldersEl.appendChild(item);
+    }
+
+    // Separator + custom folders heading
+    this._foldersEl.appendChild(h('div', { class: 'email-folder-separator' }));
+    this._foldersEl.appendChild(h('div', { class: 'email-folder-heading' }, 'Labels'));
+
+    // Custom folders / labels
+    const customFolders = this._customFolders || [
+      { id: 'starred', label: 'Starred', icon: '\u2B50' },
+      { id: 'important', label: 'Important', icon: '\u{1F534}' },
+      { id: 'follow-up', label: 'Follow Up', icon: '\u{1F3F3}\uFE0F' },
+      { id: 'archive', label: 'Archive', icon: '\u{1F4E6}' },
+    ];
+
+    for (const folder of customFolders) {
+      const isActive = this._filter === folder.id;
+      const item = h('div', {
+        class: `email-folder-item${isActive ? ' email-folder-item--active' : ''}`,
+      },
+        h('span', { class: 'email-folder-icon' }, folder.icon),
+        h('span', { class: 'email-folder-label' }, folder.label),
+      );
+      item.addEventListener('click', () => selectFolder(folder.id));
       this._foldersEl.appendChild(item);
     }
   }
