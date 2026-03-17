@@ -20,7 +20,7 @@ const log = logger.child({ module: 'pipeline-evidence' });
 
 export const PIPELINE_STAGES = [
   'code', 'iterate', 'static-test', 'deep-test',
-  'syntax', 'review', 'e2e', 'dogfood',
+  'syntax', 'review', 'e2e', 'visual-test', 'uat', 'dogfood',
 ] as const;
 
 export type PipelineStage = typeof PIPELINE_STAGES[number];
@@ -117,7 +117,7 @@ export function getTaskPipelineStatus(taskId: string): Result {
   return ok({
     taskId,
     stages,
-    currentStage: currentIndex >= 0 ? currentIndex : (allPassed ? 7 : 0),
+    currentStage: currentIndex >= 0 ? currentIndex : (allPassed ? PIPELINE_STAGES.length - 1 : 0),
     allPassed,
     totalAttempts: stages.reduce((sum, s) => sum + s.attempts, 0),
   });
@@ -198,6 +198,8 @@ function buildFailureContext(taskId: string, failedStage: PipelineStage, errors:
     'syntax': 'Fix lint/formatting errors. Run eslint with --fix if possible.',
     'review': 'Address code review feedback. Re-read the review comments.',
     'e2e': 'The feature broke at runtime. Boot the server and verify manually.',
+    'visual-test': 'Screenshot comparison failed. Check the visual diff and fix layout/styling.',
+    'uat': 'User acceptance test not approved. Address reviewer feedback before proceeding.',
     'dogfood': 'The feature does not work as expected through the UI. Test it yourself.',
   };
 
@@ -208,4 +210,65 @@ function buildFailureContext(taskId: string, failedStage: PipelineStage, errors:
     previousAttempts,
     suggestion: suggestions[failedStage] || 'Review the errors and fix the root cause.',
   };
+}
+
+// ─── Pipeline Dashboard (#684) ───
+
+/**
+ * Get a building-level pipeline dashboard summary.
+ * Aggregates pass/fail/total across all tasks for each stage.
+ */
+export function getPipelineDashboard(buildingId: string): Result {
+  const db = getDb();
+
+  // Per-stage aggregate stats
+  const stageStats = PIPELINE_STAGES.map((stage, index) => {
+    const counts = db.prepare(`
+      SELECT status, COUNT(*) as count FROM pipeline_evidence
+      WHERE building_id = ? AND stage = ?
+      GROUP BY status
+    `).all(buildingId, stage) as Array<{ status: string; count: number }>;
+
+    const stats: Record<string, number> = { passed: 0, failed: 0, skipped: 0, total: 0 };
+    for (const c of counts) {
+      stats[c.status] = c.count;
+      stats.total += c.count;
+    }
+
+    const passRate = stats.total > 0 ? Math.round((stats.passed / stats.total) * 100) : 0;
+
+    return { stage, index, ...stats, passRate };
+  });
+
+  // Overall stats
+  const overallCounts = db.prepare(`
+    SELECT status, COUNT(*) as count FROM pipeline_evidence
+    WHERE building_id = ? GROUP BY status
+  `).all(buildingId) as Array<{ status: string; count: number }>;
+
+  const overall: Record<string, number> = { passed: 0, failed: 0, skipped: 0, total: 0 };
+  for (const c of overallCounts) {
+    overall[c.status] = c.count;
+    overall.total += c.count;
+  }
+
+  // Active tasks (have pipeline evidence but not all stages passed)
+  const activeTasks = db.prepare(`
+    SELECT DISTINCT task_id FROM pipeline_evidence
+    WHERE building_id = ?
+    ORDER BY completed_at DESC LIMIT 20
+  `).all(buildingId) as Array<{ task_id: string }>;
+
+  const taskSummaries = activeTasks.map(t => {
+    const status = getTaskPipelineStatus(t.task_id);
+    return status.ok ? status.data : null;
+  }).filter(Boolean);
+
+  return ok({
+    stages: stageStats,
+    overall,
+    stageCount: PIPELINE_STAGES.length,
+    stageNames: [...PIPELINE_STAGES],
+    activeTasks: taskSummaries,
+  });
 }

@@ -858,11 +858,11 @@ test.describe('Dogfood: Session Fixes', () => {
   });
 
   // #611 — Pipeline UI stepper component
-  test('#611: Pipeline stepper component renders 8 stages with correct states', async ({ page }) => {
+  test('#611: Pipeline stepper component renders 10 stages with correct states', async ({ page }) => {
     // Verify the component exists and is importable
     const js = await page.evaluate(() => fetch('/ui/components/pipeline-stepper.js').then(r => r.text()));
 
-    // Must have 8 stage definitions
+    // Must have 10 stage definitions (#684)
     expect(js).toContain("id: 'code'");
     expect(js).toContain("id: 'iterate'");
     expect(js).toContain("id: 'static-test'");
@@ -870,6 +870,8 @@ test.describe('Dogfood: Session Fixes', () => {
     expect(js).toContain("id: 'syntax'");
     expect(js).toContain("id: 'review'");
     expect(js).toContain("id: 'e2e'");
+    expect(js).toContain("id: 'visual-test'");
+    expect(js).toContain("id: 'uat'");
     expect(js).toContain("id: 'dogfood'");
 
     // Must have state configuration
@@ -939,7 +941,7 @@ test.describe('Dogfood: Session Fixes', () => {
       );
       const data = (status as any)?.data;
       if (!data) return 'no status data';
-      if (!data.stages || data.stages.length !== 8) return 'wrong stage count: ' + data.stages?.length;
+      if (!data.stages || data.stages.length !== 10) return 'wrong stage count: ' + data.stages?.length;
 
       // First two should be passed
       if (data.stages[0].status !== 'passed') return 'stage 0 not passed: ' + data.stages[0].status;
@@ -1044,7 +1046,7 @@ test.describe('Dogfood: Session Fixes', () => {
       const taskId = (task as any)?.data?.id;
       if (!taskId) return 'no task id';
 
-      // Record only 3 of 8 stages
+      // Record only 3 of 10 stages
       for (const stage of ['code', 'iterate', 'static-test']) {
         await new Promise(r =>
           window.overlordSocket.socket.emit('pipeline:record', {
@@ -1064,8 +1066,8 @@ test.describe('Dogfood: Session Fixes', () => {
         return 'wrong error: ' + (closeAttempt as any)?.error?.code;
       }
 
-      // Now complete all 8 stages
-      for (const stage of ['deep-test', 'syntax', 'review', 'e2e', 'dogfood']) {
+      // Now complete all 10 stages
+      for (const stage of ['deep-test', 'syntax', 'review', 'e2e', 'visual-test', 'uat', 'dogfood']) {
         await new Promise(r =>
           window.overlordSocket.socket.emit('pipeline:record', {
             taskId, buildingId: bid, stage, status: 'passed', attempt: 1,
