@@ -164,14 +164,19 @@ async function processEmailForAgent(bus: Bus, params: {
   const chatText = `[Email from ${fromId === '__user__' ? 'the project owner' : fromId}]\nSubject: ${subject}\n\n${body}`;
 
   // Listen for the response to this specific message
+  const emailSocketId = `email:${emailId}`;
   const responsePromise = new Promise<string>((resolve) => {
-    const timeout = setTimeout(() => resolve(''), 120_000); // 2 min timeout
+    const timeout = setTimeout(() => {
+      bus.off('chat:response', handler);
+      resolve('');
+    }, 120_000);
 
     const handler = (responseData: BusEventData) => {
+      // Match on socketId (most reliable) or agentId
+      const respSocketId = responseData.socketId as string;
       const respAgentId = responseData.agentId as string;
-      const respRoomId = responseData.roomId as string;
 
-      if (respAgentId === agentId && respRoomId === roomId) {
+      if (respSocketId === emailSocketId || respAgentId === agentId) {
         clearTimeout(timeout);
         bus.off('chat:response', handler);
 
@@ -181,6 +186,7 @@ async function processEmailForAgent(bus: Bus, params: {
           .filter(b => b.type === 'text' && b.text)
           .map(b => b.text)
           .join('\n');
+        log.info({ agentId, emailId, textLength: text.length }, 'Captured agent response for email');
         resolve(text);
       }
     };
