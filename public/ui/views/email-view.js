@@ -173,12 +173,35 @@ export class EmailView extends Component {
       return;
     }
 
-    // ── Header row ──
+    // ── Compact header: title + folder tabs + actions ──
     const header = h('div', { class: 'email-view-header' },
       h('div', { class: 'email-view-title-row' },
         h('h2', { class: 'email-view-title' }, 'Mail'),
-        h('span', { class: 'email-view-unread-badge' },
-          this._unreadCount > 0 ? `${this._unreadCount} unread` : '')
+        this._unreadCount > 0
+          ? h('span', { class: 'email-view-unread-badge' }, String(this._unreadCount))
+          : null,
+      ),
+      // Folder tabs inline (replaces sidebar)
+      h('div', { class: 'email-folder-tabs' },
+        ...FOLDERS.map(f => {
+          const count = f.id === 'inbox' ? this._inbox.length
+            : f.id === 'sent' ? this._sent.length
+            : this._inbox.length + this._sent.length;
+          const tab = h('button', {
+            class: `email-folder-tab${this._filter === f.id ? ' active' : ''}`,
+            'data-folder': f.id,
+          }, f.label, count > 0 ? h('span', { class: 'email-folder-tab-badge' }, String(count)) : null);
+          tab.addEventListener('click', () => {
+            this._filter = f.id;
+            this._selectedEmailId = null;
+            this._selectedThreadId = null;
+            this._renderList();
+            this._renderPreviewEmpty();
+            this.el.querySelectorAll('.email-folder-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+          });
+          return tab;
+        }),
       ),
       h('div', { class: 'email-view-actions' },
         this._buildAgentPicker(),
@@ -191,27 +214,21 @@ export class EmailView extends Component {
     );
     this.el.appendChild(header);
 
-    // ── 3-pane layout ──
+    // ── Split pane layout: list (left) + preview (right) ──
     const layout = h('div', { class: 'email-layout' });
 
-    // Left sidebar — folders
-    this._foldersEl = h('div', { class: 'email-folders' });
-    this._renderFolders();
-    layout.appendChild(this._foldersEl);
-
-    // Right side — list + preview stacked
-    const mainPane = h('div', { class: 'email-main-pane' });
-
-    // Email list
+    // Left: email list (scrollable)
     this._listEl = h('div', { class: 'email-list' });
-    mainPane.appendChild(this._listEl);
+    layout.appendChild(this._listEl);
 
-    // Preview pane
+    // Right: preview pane (scrollable)
     this._previewEl = h('div', { class: 'email-preview' });
     this._renderPreviewEmpty();
-    mainPane.appendChild(this._previewEl);
+    layout.appendChild(this._previewEl);
 
-    layout.appendChild(mainPane);
+    // Hidden folders element (kept for compatibility but not rendered)
+    this._foldersEl = h('div', { style: { display: 'none' } });
+
     this.el.appendChild(layout);
 
     // ── Delegated click handlers ──
