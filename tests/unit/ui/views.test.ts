@@ -2200,7 +2200,7 @@ describe('ActivityView', () => {
     expect(mod.ActivityView).toBeDefined();
   });
 
-  it('shows "Select a project" when no building is active', async () => {
+  it('shows "No Building Selected" when no building is active', async () => {
     const store = OverlordUI.getStore();
     store.set('building.active', null, { silent: true });
     store.set('activity.items', [], { silent: true });
@@ -2210,8 +2210,8 @@ describe('ActivityView', () => {
     const view = new ActivityView(el);
     view.mount();
 
-    const emptyState = el.querySelector('.activity-view-empty');
+    const emptyState = el.querySelector('.view-empty-state');
     expect(emptyState).not.toBeNull();
-    expect(emptyState!.textContent).toContain('Select a project');
+    expect(el.textContent).toContain('No Building Selected');
   });
 });

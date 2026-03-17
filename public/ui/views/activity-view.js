@@ -171,8 +171,8 @@ export class ActivityView extends Component {
     if (this._items.length > 0) this._loading = false;
 
     // No building selected — nothing to load, clear loading state
-    const buildingId = store.get('activeBuildingId');
-    if (!store.get('building.active')) this._loading = false;
+    const buildingId = store.get('building.active');
+    if (!buildingId) this._loading = false;
 
     // Fetch historical activities from DB on mount (#565)
     if (buildingId && window.overlordSocket?.fetchActivityHistory) {
@@ -208,6 +208,17 @@ export class ActivityView extends Component {
   _render() {
     this.el.textContent = '';
     this.el.className = 'activity-view';
+
+    // No building selected (#691)
+    const store = OverlordUI.getStore();
+    if (!store?.get('building.active')) {
+      this.el.appendChild(h('div', { class: 'view-empty-state' },
+        h('div', { class: 'view-empty-icon' }, '\u{1F4E1}'),
+        h('h2', { class: 'view-empty-title' }, 'No Building Selected'),
+        h('p', { class: 'view-empty-text' }, 'Select a project from the Dashboard to view activity.')
+      ));
+      return;
+    }
 
     // ── Header row ──
     const header = h('div', { class: 'activity-view-header' },
