@@ -61,6 +61,7 @@ import {
   BudgetGetSchema, BudgetSetSchema, BudgetBuildingSchema,
   TodoCheckoutSchema, TodoReleaseSchema, TodoCompleteCheckoutSchema,
   TodoLockStatusSchema, CheckedOutTodosSchema,
+  VisualTestCreateSchema, VisualTestReviewSchema, VisualTestListSchema, UATSummarySchema,
   PlanSubmitSchema, PlanReviewSchema, PlanGetSchema, PlanListSchema,
   EmailSendSchema, EmailReplySchema, EmailForwardSchema,
   EmailInboxSchema, EmailGetSchema, EmailThreadSchema,
@@ -88,6 +89,7 @@ import {
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { checkBudget, setAgentBudget, getBuildingBudgets } from '../agents/budget-tracker.js';
 import { checkoutTodo, releaseTodo, completeTodo, getLockStatus, getCheckedOutTodos, releaseExpiredLocks } from '../agents/task-checkout.js';
+import { createVisualTest, reviewVisualTest, listVisualTests, getUATSummary, checkUATGate } from '../rooms/visual-testing.js';
 import { resetBuildingAgents } from '../agents/agent-registry.js';
 import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools/providers/session-notes.js';
 import { getQualityConfig } from '../tools/quality-defaults.js';
@@ -1174,6 +1176,44 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
     handle(socket, 'budget:building', BudgetBuildingSchema, (parsed, ack) => {
       const budgets = getBuildingBudgets(parsed.buildingId);
       if (ack) ack({ ok: true, data: budgets });
+    });
+
+    // ─── Visual Testing & UAT (#681) ───
+
+    handle(socket, 'visual-test:create', VisualTestCreateSchema, (parsed, ack) => {
+      const result = createVisualTest(parsed);
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'visual-test:review', VisualTestReviewSchema, (parsed, ack) => {
+      const result = reviewVisualTest(parsed.testId, {
+        status: parsed.status,
+        reviewedBy: parsed.reviewedBy,
+        notes: parsed.notes,
+      });
+      if (result.ok) {
+        io.emit('visual-test:reviewed', { testId: parsed.testId, status: parsed.status });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'visual-test:list', VisualTestListSchema, (parsed, ack) => {
+      const result = listVisualTests(parsed.buildingId, {
+        status: parsed.status,
+        taskId: parsed.taskId,
+        limit: parsed.limit,
+      });
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'uat:summary', UATSummarySchema, (parsed, ack) => {
+      const result = getUATSummary(parsed.buildingId);
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'uat:gate-check', UATSummarySchema, (parsed, ack) => {
+      const result = checkUATGate(parsed.buildingId);
+      if (ack) ack(result);
     });
 
     // ─── Atomic Task Checkout (#682) ───

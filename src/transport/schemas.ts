@@ -695,6 +695,34 @@ export const CheckedOutTodosSchema = z.object({
   buildingId: id(),
 });
 
+// Visual testing schemas (#681)
+export const VisualTestCreateSchema = z.object({
+  buildingId: id(),
+  taskId: id().optional(),
+  title: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  screenshotPath: z.string().max(500).optional(),
+  baselinePath: z.string().max(500).optional(),
+});
+
+export const VisualTestReviewSchema = z.object({
+  testId: id(),
+  status: z.enum(['passed', 'failed']),
+  reviewedBy: z.string().max(200),
+  notes: z.string().max(2000).optional(),
+});
+
+export const VisualTestListSchema = z.object({
+  buildingId: id(),
+  status: z.string().max(50).optional(),
+  taskId: id().optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+});
+
+export const UATSummarySchema = z.object({
+  buildingId: id(),
+});
+
 export const AgentLeaderboardSchema = z.object({
   metric: z.string().max(MAX_NAME),
   limit: z.number().int().min(1).max(50).optional().default(10),
