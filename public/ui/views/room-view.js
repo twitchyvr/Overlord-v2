@@ -963,15 +963,21 @@ export class RoomView extends Component {
       if (agent) {
         // Occupied chair: solid green border
         const statusClass = STATUS_CLASSES[agent.status] || 'idle';
-        const chair = h('div', { class: `rv-chair rv-chair-occupied rv-chair-${statusClass}`, title: `${agent.name || agent.id} (${agent.status || 'idle'})` },
-          h('div', { class: 'rv-chair-avatar' }, (agent.name || '?')[0].toUpperCase()),
-          h('div', { class: 'rv-chair-name' }, agent.name || agent.id)
+        const displayName = agent.display_name || agent.name || agent.id;
+        const chair = h('div', { class: `rv-chair rv-chair-occupied rv-chair-${statusClass}`, title: `${displayName} (${agent.status || 'idle'})` },
+          h('div', { class: 'rv-chair-circle' },
+            h('div', { class: 'rv-chair-avatar' }, (displayName)[0].toUpperCase()),
+          ),
+          h('div', { class: 'rv-chair-name' }, displayName)
         );
         chairRow.appendChild(chair);
       } else {
         // Empty chair: dashed border
         const chair = h('div', { class: 'rv-chair rv-chair-empty', title: 'Empty seat' },
-          h('div', { class: 'rv-chair-empty-icon' }, '+')
+          h('div', { class: 'rv-chair-circle' },
+            h('div', { class: 'rv-chair-empty-icon' }, '+'),
+          ),
+          h('div', { class: 'rv-chair-name' }, 'Empty')
         );
         chairRow.appendChild(chair);
       }

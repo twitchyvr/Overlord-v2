@@ -4917,3 +4917,61 @@
   font-size: 0.65rem;
   color: var(--text-muted);
 }
+
+/* ═══════════════════════════════════════════════════
+   ORG CHART — Visual Agent Hierarchy (#678)
+   ═══════════════════════════════════════════════════ */
+.org-chart { padding: var(--sp-4); }
+.org-node { margin-bottom: var(--sp-2); }
+.org-node-content {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 8px 14px; border-radius: 8px;
+  background: var(--bg-secondary); border: 1px solid var(--border-primary);
+  transition: all 0.15s;
+}
+.org-node--building .org-node-content {
+  background: linear-gradient(135deg, rgba(56,189,248,0.12), rgba(168,85,247,0.08));
+  border-color: rgba(56,189,248,0.3); font-weight: 600;
+}
+.org-node--floor .org-node-content { background: var(--bg-secondary); }
+.org-node--room .org-node-content { background: var(--bg-tertiary); font-size: var(--text-sm); }
+.org-node--room.org-node--active .org-node-content {
+  border-color: var(--accent-green, #22c55e);
+  box-shadow: 0 0 0 1px rgba(34,197,94,0.2);
+}
+.org-node--agent .org-node-content {
+  background: var(--bg-primary); border-color: transparent;
+  padding: 6px 12px; font-size: var(--text-sm);
+}
+.org-node--agent:hover .org-node-content {
+  border-color: var(--accent-blue, #3b82f6); background: var(--bg-tertiary);
+}
+.org-node--unassigned .org-node-content { border-style: dashed; opacity: 0.7; }
+.org-node-icon { font-size: 16px; flex-shrink: 0; }
+.org-node-label { font-weight: 500; color: var(--text-primary); }
+.org-node-meta { font-size: 0.7rem; color: var(--text-muted); margin-left: auto; }
+.org-node-badge {
+  font-size: 0.6rem; font-weight: 600; padding: 1px 6px;
+  border-radius: 999px; background: var(--bg-secondary);
+  color: var(--text-secondary); margin-left: auto;
+}
+.org-agent-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0;
+  background: var(--accent-blue, #3b82f6);
+}
+.org-agent-avatar.org-status--active { background: var(--accent-green, #22c55e); }
+.org-agent-avatar.org-status--idle { background: var(--text-muted); }
+.org-agent-info { display: flex; flex-direction: column; gap: 1px; }
+.org-agent-name { font-weight: 500; color: var(--text-primary); font-size: var(--text-sm); }
+.org-agent-role { font-size: 0.65rem; color: var(--text-muted); }
+.org-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-left: auto; }
+.org-status-dot.org-status--active { background: var(--accent-green, #22c55e); }
+.org-status-dot.org-status--idle { background: var(--text-muted); }
+.org-status-dot.org-status--offline { background: var(--border-primary); }
+.org-children { margin-left: 24px; border-left: 2px solid var(--border-primary); padding-left: var(--sp-3); }
+.org-children--agents { margin-left: 20px; border-left: 1px dashed var(--border-primary); }
+.org-branch { position: relative; }
+.org-connector { position: absolute; left: -14px; top: 18px; width: 12px; height: 2px; background: var(--border-primary); }
+.org-connector--short { width: 8px; left: -12px; }
