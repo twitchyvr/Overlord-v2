@@ -182,12 +182,18 @@ async function processEmailForAgent(bus: Bus, params: {
         clearTimeout(timeout);
         bus.off('chat:response', handler);
 
-        // Extract text from response
-        const content = responseData.content as Array<{ type: string; text?: string }> || [];
-        const text = content
-          .filter(b => b.type === 'text' && b.text)
-          .map(b => b.text)
-          .join('\n');
+        // Extract text from response — content may be a string (from chat orchestrator)
+        // or an array of blocks (from streaming)
+        const rawContent = responseData.content;
+        let text = '';
+        if (typeof rawContent === 'string') {
+          text = rawContent;
+        } else if (Array.isArray(rawContent)) {
+          text = rawContent
+            .filter((b: { type: string; text?: string }) => b.type === 'text' && b.text)
+            .map((b: { type: string; text?: string }) => b.text)
+            .join('\n');
+        }
         log.info({ agentId, emailId, textLength: text.length }, 'Captured agent response for email');
         resolve(text);
       }
