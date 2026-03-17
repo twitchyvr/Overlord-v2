@@ -165,13 +165,14 @@ export function checkRoomAccess(
   }
 
   // Fallback: roomAccess array (backward compatibility)
-  if (roomAccess.includes('*') || roomAccess.includes(roomType)) {
+  // Empty roomAccess = unrestricted (agent can go anywhere) — #690
+  if (roomAccess.length === 0 || roomAccess.includes('*') || roomAccess.includes(roomType)) {
     return ok({ granted: true, source: 'room_access' });
   }
 
   return err(
     'ACCESS_DENIED',
-    `Agent ${agentId} does not have access to "${roomType}" rooms`,
+    `Agent ${agentId} does not have access to "${roomType}" rooms. Allowed: ${roomAccess.join(', ')}`,
     { context: { agentId, roomType, roomAccess } },
   );
 }
