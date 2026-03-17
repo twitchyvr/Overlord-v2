@@ -238,11 +238,13 @@ async function handleChatMessage(
       log.warn({ socketId, roomId: room.id }, 'No agent found — using system agent');
     }
 
-    // 6. Determine AI provider from room config
-    if (room.config && room.config.provider && room.config.provider !== 'configurable') {
+    // 6. Determine AI provider: agent override > room config > default (#679)
+    const agentProvider = agent?.provider as string | undefined;
+    if (agentProvider && agentProvider !== 'configurable') {
+      provider = agentProvider;
+    } else if (room.config && room.config.provider && room.config.provider !== 'configurable') {
       provider = room.config.provider;
     } else {
-      // 'configurable' means use whatever provider has an API key configured
       provider = resolveDefaultProvider();
     }
 

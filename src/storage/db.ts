@@ -95,6 +95,7 @@ const SCHEMA_SQL = `
     communication_style TEXT,
     expertise_areas TEXT DEFAULT '[]',
     subject_reference TEXT,
+    provider TEXT DEFAULT 'configurable',
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
@@ -422,6 +423,8 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['agents', 'communication_style', 'TEXT'],
   ['agents', 'expertise_areas', "TEXT DEFAULT '[]'"],
   ['agents', 'subject_reference', 'TEXT'],
+  // Per-agent AI provider (#679)
+  ['agents', 'provider', "TEXT DEFAULT 'configurable'"],
   // Atomic task checkout (#682)
   ['todos', 'locked_by', 'TEXT REFERENCES agents(id)'],
   ['todos', 'checked_out_at', 'TEXT'],

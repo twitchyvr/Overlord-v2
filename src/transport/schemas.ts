@@ -272,6 +272,7 @@ export const AgentUpdateSchema = z.object({
   capabilities: z.array(z.string().max(200)).max(50).optional(),
   roomAccess: z.array(z.string().max(200)).max(50).optional(),
   config: z.record(z.unknown()).optional(),
+  provider: z.string().max(50).optional(), // Per-agent AI provider (#679)
 });
 
 export const AgentGenerateProfileSchema = z.object({
