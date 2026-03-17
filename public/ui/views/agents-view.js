@@ -29,6 +29,7 @@ import { Toast } from '../components/toast.js';
 import { Modal } from '../components/modal.js';
 import { Drawer } from '../components/drawer.js';
 import { EntityLink, resolveAgent, resolveRoom } from '../engine/entity-nav.js';
+import { OrgChart } from '../components/org-chart.js';
 
 
 // ── Constants ────────────────────────────────────────────────────
@@ -101,8 +102,10 @@ export class AgentsView extends Component {
     this._agents = [];
     this._agentPositions = {};
     this._rooms = [];
+    this._floors = [];
     this._filter = 'all';
     this._sort = 'name';     // 'name' | 'status' | 'last-active'
+    this._showOrgChart = false;
     this._tabs = null;
   }
 
@@ -131,6 +134,12 @@ export class AgentsView extends Component {
       this._render();
     });
 
+    // Subscribe to floor list (for org chart #678)
+    this.subscribe(store, 'building.floors', (floors) => {
+      this._floors = floors || [];
+      if (this._showOrgChart) this._render();
+    });
+
     // Listen for real-time agent events
     this._listeners.push(
       OverlordUI.subscribe('agent:registered', () => this._fetchAgents()),
@@ -142,6 +151,7 @@ export class AgentsView extends Component {
     this._agents = store.get('agents.list') || [];
     this._agentPositions = store.get('building.agentPositions') || {};
     this._rooms = store.get('rooms.list') || [];
+    this._floors = store.get('building.floors') || [];
 
     this._render();
     this._fetchAgents();
@@ -286,6 +296,21 @@ export class AgentsView extends Component {
     header.querySelector('.agents-view-actions').appendChild(resetBtn);
 
     this.el.appendChild(header);
+
+    // ── Org Chart mode (#678) ──
+    if (this._showOrgChart) {
+      const store = OverlordUI.getStore();
+      const buildingData = store?.get('building.data') || {};
+      const buildingName = buildingData.name || 'Project';
+      const orgChartEl = OrgChart.render({
+        buildingName,
+        floors: this._floors,
+        agents: this._agents.filter(a => a.id !== '__user__'),
+        agentPositions: this._agentPositions,
+      });
+      this.el.appendChild(orgChartEl);
+      return;
+    }
 
     // ── Filter tabs ──
     const tabContainer = h('div', { class: 'agents-view-tabs' });
