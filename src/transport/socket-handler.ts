@@ -33,7 +33,7 @@ import type { z } from 'zod';
 
 import {
   validate,
-  BuildingCreateSchema, BuildingGetSchema, BuildingListSchema, BuildingApplyBlueprintSchema, BuildingUpdateSchema, BuildingHealthScoreSchema,
+  BuildingCreateSchema, BuildingGetSchema, BuildingDeleteSchema, BuildingListSchema, BuildingApplyBlueprintSchema, BuildingUpdateSchema, BuildingHealthScoreSchema,
   FolderAddPathSchema, FolderRemovePathSchema, FolderListPathsSchema,
   GitDetectSchema, GitInitSchema, GitCloneSchema,
   FloorListSchema, FloorGetSchema, FloorCreateSchema, FloorUpdateSchema, FloorDeleteSchema, FloorSortSchema,
@@ -305,6 +305,64 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
 
     handle(socket, 'building:get', BuildingGetSchema, (parsed, ack) => {
       if (ack) ack(getBuilding(parsed.buildingId));
+    });
+
+    handle(socket, 'building:delete', BuildingDeleteSchema, (parsed, ack) => {
+      const db = getDb();
+      const buildingId = parsed.buildingId;
+
+      // Verify building exists
+      const building = db.prepare('SELECT name FROM buildings WHERE id = ?').get(buildingId) as { name: string } | undefined;
+      if (!building) {
+        if (ack) ack({ ok: false, error: { code: 'BUILDING_NOT_FOUND', message: 'Building does not exist', retryable: false } });
+        return;
+      }
+
+      // Cascading delete — order matters for FK constraints
+      const txn = db.transaction(() => {
+        // Delete doc library entries and libraries
+        db.prepare('DELETE FROM doc_entries WHERE library_id IN (SELECT id FROM doc_libraries WHERE building_id = ?)').run(buildingId);
+        db.prepare('DELETE FROM doc_libraries WHERE building_id = ?').run(buildingId);
+        // Delete email recipients then emails
+        db.prepare('DELETE FROM agent_email_recipients WHERE email_id IN (SELECT id FROM agent_emails WHERE building_id = ?)').run(buildingId);
+        db.prepare('DELETE FROM agent_emails WHERE building_id = ?').run(buildingId);
+        // Delete agent stats and activity
+        db.prepare('DELETE FROM agent_stats WHERE agent_id IN (SELECT id FROM agents WHERE building_id = ?)').run(buildingId);
+        db.prepare('DELETE FROM agent_activity_log WHERE building_id = ?').run(buildingId);
+        db.prepare('DELETE FROM agent_activity_log WHERE agent_id IN (SELECT id FROM agents WHERE building_id = ?)').run(buildingId);
+        // Delete pipeline, visual tests
+        db.prepare('DELETE FROM pipeline_evidence WHERE building_id = ?').run(buildingId);
+        db.prepare('DELETE FROM visual_tests WHERE building_id = ?').run(buildingId);
+        // Delete todos then tasks
+        db.prepare('DELETE FROM todos WHERE task_id IN (SELECT id FROM tasks WHERE building_id = ?)').run(buildingId);
+        db.prepare('DELETE FROM tasks WHERE building_id = ?').run(buildingId);
+        // Delete milestones, RAID, phase gates, plans
+        db.prepare('DELETE FROM milestones WHERE building_id = ?').run(buildingId);
+        db.prepare('DELETE FROM raid_entries WHERE building_id = ?').run(buildingId);
+        db.prepare('DELETE FROM phase_gates WHERE building_id = ?').run(buildingId);
+        db.prepare('DELETE FROM plans WHERE building_id = ?').run(buildingId);
+        // Delete room children (exit docs, messages, notes, citations, tables)
+        const roomIds = db.prepare('SELECT id FROM rooms WHERE floor_id IN (SELECT id FROM floors WHERE building_id = ?)').all(buildingId) as Array<{ id: string }>;
+        for (const r of roomIds) {
+          db.prepare('DELETE FROM exit_documents WHERE room_id = ?').run(r.id);
+          db.prepare('DELETE FROM messages WHERE room_id = ?').run(r.id);
+          db.prepare('DELETE FROM notes WHERE room_id = ?').run(r.id);
+          db.prepare('DELETE FROM citations WHERE source_room_id = ? OR target_room_id = ?').run(r.id, r.id);
+          db.prepare('DELETE FROM tables_v2 WHERE room_id = ?').run(r.id);
+        }
+        // Delete agents, rooms, floors, repos, building
+        db.prepare('DELETE FROM agents WHERE building_id = ?').run(buildingId);
+        db.prepare('DELETE FROM rooms WHERE floor_id IN (SELECT id FROM floors WHERE building_id = ?)').run(buildingId);
+        db.prepare('DELETE FROM floors WHERE building_id = ?').run(buildingId);
+        db.prepare('DELETE FROM project_repos WHERE building_id = ?').run(buildingId);
+        db.prepare('DELETE FROM repo_file_origins WHERE building_id = ?').run(buildingId);
+        db.prepare('DELETE FROM buildings WHERE id = ?').run(buildingId);
+      });
+
+      txn();
+      io.emit('building:deleted', { buildingId, name: building.name });
+      log.info({ buildingId, name: building.name }, 'Building deleted with all data');
+      if (ack) ack({ ok: true, data: { buildingId, name: building.name } });
     });
 
     handle(socket, 'building:list', BuildingListSchema, (parsed, ack) => {

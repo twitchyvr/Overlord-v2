@@ -76,6 +76,11 @@ export const BuildingGetSchema = z.object({
   buildingId: id(),
 });
 
+export const BuildingDeleteSchema = z.object({
+  buildingId: id(),
+  confirm: z.boolean().optional(), // Safety check
+});
+
 export const BuildingListSchema = z.object({
   projectId: optionalId(),
 }).optional().default({});
