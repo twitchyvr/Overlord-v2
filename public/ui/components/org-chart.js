@@ -88,7 +88,7 @@ export class OrgChart {
               const agentBranch = h('div', { class: 'org-branch org-branch--agent' });
               agentBranch.appendChild(h('div', { class: 'org-connector org-connector--short' }));
 
-              const statusClass = agent._status === 'active' ? 'active' : agent._status === 'idle' ? 'idle' : 'offline';
+              const statusClass = (agent._status === 'active' || agent._status === 'working') ? 'active' : agent._status === 'idle' ? 'idle' : 'offline';
               const initial = (agent.display_name || agent.name || '?')[0].toUpperCase();
 
               const agentNode = h('div', { class: 'org-node org-node--agent' },
@@ -147,23 +147,24 @@ export class OrgChart {
       const unassignedAgents = h('div', { class: 'org-children org-children--agents' });
       for (const agent of unassigned) {
         const initial = (agent.display_name || agent.name || '?')[0].toUpperCase();
-        const agentEl = h('div', { class: 'org-branch org-branch--agent' },
-          h('div', { class: 'org-connector org-connector--short' }),
-          h('div', { class: 'org-node org-node--agent org-node--idle' },
-            h('div', { class: 'org-node-content' },
-              h('div', { class: 'org-agent-avatar org-status--idle' }, initial),
-              h('div', { class: 'org-agent-info' },
-                h('span', { class: 'org-agent-name' }, agent.display_name || agent.name || 'Agent'),
-                h('span', { class: 'org-agent-role' }, agent.role || ''),
-              ),
-              h('span', { class: 'org-status-dot org-status--idle' }),
-            )
-          ),
+        const agentNode = h('div', { class: 'org-node org-node--agent org-node--idle' },
+          h('div', { class: 'org-node-content' },
+            h('div', { class: 'org-agent-avatar org-status--idle' }, initial),
+            h('div', { class: 'org-agent-info' },
+              h('span', { class: 'org-agent-name' }, agent.display_name || agent.name || 'Agent'),
+              h('span', { class: 'org-agent-role' }, agent.role || ''),
+            ),
+            h('span', { class: 'org-status-dot org-status--idle' }),
+          )
         );
-        agentEl.style.cursor = 'pointer';
-        agentEl.addEventListener('click', () => {
+        agentNode.style.cursor = 'pointer';
+        agentNode.addEventListener('click', () => {
           OverlordUI.dispatch('entity:navigate', { entityType: 'agent', entityId: agent.id });
         });
+        const agentEl = h('div', { class: 'org-branch org-branch--agent' },
+          h('div', { class: 'org-connector org-connector--short' }),
+          agentNode,
+        );
         unassignedAgents.appendChild(agentEl);
       }
       unassignedBranch.appendChild(unassignedAgents);
