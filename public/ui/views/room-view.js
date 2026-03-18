@@ -664,57 +664,117 @@ export class RoomView extends Component {
 
   /** Add a single tool to the room's allowed list. */
   _openAddToolInput(room) {
-    let toolName = '';
     const container = h('div', { class: 'rv-add-tool-modal' });
+    const existingTools = new Set(room.tools || []);
+    let allTools = [];
+    let searchTerm = '';
 
     container.appendChild(h('p', { class: 'text-muted' },
-      'Enter the tool name to add to this room. Only tools in the allowed list will be available to agents.'
+      'Search and select tools to add to this room. Tools control what agents can do.'
     ));
 
-    const inputGroup = h('div', { class: 'rv-edit-field' });
-    inputGroup.appendChild(h('label', { class: 'form-label' }, 'Tool Name'));
-    const input = h('input', { class: 'form-input', type: 'text', placeholder: 'e.g., read_file' });
-    input.addEventListener('input', () => { toolName = input.value; });
-    inputGroup.appendChild(input);
-    container.appendChild(inputGroup);
-
-    const actions = h('div', { class: 'rv-edit-actions' });
-    const cancelBtn = h('button', { class: 'btn btn-ghost btn-md' }, 'Cancel');
-    cancelBtn.addEventListener('click', () => Modal.close('rv-add-tool'));
-    const addBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Add Tool');
-    addBtn.addEventListener('click', async () => {
-      const name = toolName.trim();
-      if (!name) { Toast.warning('Enter a tool name'); return; }
-      if ((room.tools || []).includes(name)) { Toast.warning('Tool already in list'); return; }
-      if (!window.overlordSocket) { Toast.error('Not connected'); return; }
-      addBtn.disabled = true;
-      addBtn.textContent = 'Adding...';
-      try {
-        const newTools = [...(room.tools || []), name];
-        const result = await window.overlordSocket.updateRoom(room.id, { allowedTools: newTools });
-        if (result && result.ok) {
-          Toast.success(`Tool "${name}" added`);
-          Modal.close('rv-add-tool');
-          this._loadRoom(room.id);
-        } else {
-          throw new Error(result?.error?.message || 'Failed');
-        }
-      } catch (err) {
-        Toast.error(`Add failed: ${err.message}`);
-        addBtn.disabled = false;
-        addBtn.textContent = 'Add Tool';
-      }
+    // Search input
+    const searchInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      placeholder: 'Search tools by name or category...',
+      style: 'margin-bottom: 8px',
     });
-    actions.appendChild(cancelBtn);
-    actions.appendChild(addBtn);
+    container.appendChild(searchInput);
+
+    // Tool list container
+    const toolList = h('div', {
+      class: 'rv-tool-picker-list',
+      style: 'max-height: 320px; overflow-y: auto; border: 1px solid var(--border-primary); border-radius: 6px; padding: 4px;',
+    });
+    container.appendChild(toolList);
+
+    const renderTools = () => {
+      toolList.textContent = '';
+      const filtered = allTools.filter(t =>
+        !existingTools.has(t.name) &&
+        (t.name.toLowerCase().includes(searchTerm) || t.category.toLowerCase().includes(searchTerm) || t.description.toLowerCase().includes(searchTerm))
+      );
+      if (filtered.length === 0) {
+        toolList.appendChild(h('div', { style: 'padding: 12px; color: var(--text-muted); text-align: center;' },
+          searchTerm ? 'No matching tools found' : 'All tools already added'));
+        return;
+      }
+      let lastCategory = '';
+      for (const tool of filtered) {
+        if (tool.category !== lastCategory) {
+          lastCategory = tool.category;
+          toolList.appendChild(h('div', {
+            style: 'padding: 4px 8px; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;',
+          }, tool.category));
+        }
+        const row = h('div', {
+          class: 'rv-tool-picker-item',
+          style: 'display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; cursor: pointer;',
+        },
+          h('span', { style: 'font-weight: 500; font-size: var(--text-sm); color: var(--text-primary);' }, tool.name),
+          h('span', { style: 'font-size: 0.7rem; color: var(--text-muted); flex: 1;' }, tool.description.slice(0, 60) + (tool.description.length > 60 ? '...' : '')),
+        );
+        row.addEventListener('mouseenter', () => { row.style.background = 'var(--bg-tertiary)'; });
+        row.addEventListener('mouseleave', () => { row.style.background = ''; });
+        row.addEventListener('click', async () => {
+          row.style.opacity = '0.5';
+          row.style.pointerEvents = 'none';
+          try {
+            const newTools = [...existingTools, tool.name];
+            const result = await window.overlordSocket.updateRoom(room.id, { allowedTools: [...newTools] });
+            if (result && result.ok) {
+              existingTools.add(tool.name);
+              Toast.success(`"${tool.name}" added`);
+              renderTools();
+            } else {
+              throw new Error(result?.error?.message || 'Failed');
+            }
+          } catch (err) {
+            Toast.error(`Failed: ${err.message}`);
+            row.style.opacity = '1';
+            row.style.pointerEvents = '';
+          }
+        });
+        toolList.appendChild(row);
+      }
+    };
+
+    searchInput.addEventListener('input', () => {
+      searchTerm = searchInput.value.toLowerCase().trim();
+      renderTools();
+    });
+
+    // Fetch all registered tools
+    if (window.overlordSocket?.socket) {
+      window.overlordSocket.socket.emit('tools:list-all', (res) => {
+        if (res?.ok) {
+          allTools = res.data || [];
+          renderTools();
+        } else {
+          toolList.appendChild(h('div', { style: 'padding: 12px; color: var(--text-muted);' }, 'Failed to load tools'));
+        }
+      });
+    }
+
+    const actions = h('div', { class: 'rv-edit-actions', style: 'margin-top: 8px;' });
+    const doneBtn = h('button', { class: 'btn btn-primary btn-md' }, 'Done');
+    doneBtn.addEventListener('click', () => {
+      Modal.close('rv-add-tool');
+      this._loadRoom(room.id);
+    });
+    actions.appendChild(doneBtn);
     container.appendChild(actions);
 
     Modal.open('rv-add-tool', {
-      title: 'Add Tool',
+      title: 'Add Tools',
       content: container,
-      size: 'sm',
+      size: 'md',
       position: window.innerWidth < 768 ? 'fullscreen' : 'center',
     });
+
+    // Focus search input
+    setTimeout(() => searchInput.focus(), 100);
   }
 
   /** Confirm before removing a tool from the room. */
