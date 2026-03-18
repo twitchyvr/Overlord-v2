@@ -622,6 +622,17 @@ export class AgentsView extends Component {
 
     card.appendChild(cardHeader);
 
+    // ── Task badge — show pending task count (#799) ──
+    const store = OverlordUI.getStore();
+    const allTasks = store?.get('tasks.list') || [];
+    const agentTasks = allTasks.filter(t => t.assignee_id === agent.id && t.status !== 'done');
+    if (agentTasks.length > 0) {
+      const taskBadge = h('div', { class: 'agents-view-card-tasks', title: `${agentTasks.length} pending task${agentTasks.length === 1 ? '' : 's'}` },
+        h('span', { style: 'font-size: 0.7rem; color: var(--text-muted);' }, `\u{1F4CB} ${agentTasks.length} task${agentTasks.length === 1 ? '' : 's'}`),
+      );
+      card.appendChild(taskBadge);
+    }
+
     // ── Room assignment row ──
     const roomRow = h('div', { class: 'agents-view-card-room' });
     if (roomId && roomName) {
@@ -633,7 +644,10 @@ export class AgentsView extends Component {
     } else {
       roomRow.classList.add('agents-view-card-room-unassigned');
       roomRow.appendChild(h('span', { class: 'agents-view-unassigned-icon' }, '\u26A0'));
-      roomRow.appendChild(h('span', { class: 'agents-view-unassigned-text' }, 'Unassigned'));
+      const unassignedText = agentTasks.length > 0
+        ? `Unassigned \u2014 ${agentTasks.length} task${agentTasks.length === 1 ? '' : 's'} waiting`
+        : 'Unassigned';
+      roomRow.appendChild(h('span', { class: 'agents-view-unassigned-text' }, unassignedText));
 
       // Quick-assign button
       const assignBtn = h('button', {
