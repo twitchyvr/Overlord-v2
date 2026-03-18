@@ -212,6 +212,12 @@ export class ChatView extends Component {
     // Always call _renderMessages so the empty state is shown when no messages exist.
     const existingMessages = store.get('chat.messages') || [];
     this._renderMessages(existingMessages);
+
+    // Load chat history from DB for the active room (#764)
+    const activeRoomId = store.get('rooms.active');
+    if (activeRoomId && window.overlordSocket?.fetchChatHistory) {
+      window.overlordSocket.fetchChatHistory(activeRoomId);
+    }
   }
 
   _render() {
@@ -356,6 +362,11 @@ export class ChatView extends Component {
     }
 
     this._previousRoomId = newRoomId;
+
+    // Load history for the new room from DB (#764)
+    if (newRoomId && window.overlordSocket?.fetchChatHistory) {
+      window.overlordSocket.fetchChatHistory(newRoomId);
+    }
   }
 
   /**
