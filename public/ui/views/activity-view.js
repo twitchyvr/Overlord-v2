@@ -626,8 +626,49 @@ export class ActivityView extends Component {
       return `War room activated: ${item.reason || item.warRoomId || 'Escalation'}`;
     }
 
-    // Default: use whatever text fields are available
-    return item.message || item.description || item.summary || event || 'Activity';
+    // Handle underscore-format event types from agent_activity_log (#721)
+    if (event === 'task_assign') {
+      const agentName = resolveAgentName(item.agentId);
+      return `Task assigned to ${agentName}`;
+    }
+    if (event === 'task_complete') {
+      return `Task completed`;
+    }
+    if (event === 'session_start') {
+      const agentName = resolveAgentName(item.agentId);
+      return `${agentName} session started`;
+    }
+    if (event === 'session_end') {
+      const agentName = resolveAgentName(item.agentId);
+      return `${agentName} session ended`;
+    }
+    if (event === 'room_join') {
+      const agentName = resolveAgentName(item.agentId);
+      return `${agentName} joined room`;
+    }
+    if (event === 'room_leave') {
+      const agentName = resolveAgentName(item.agentId);
+      return `${agentName} left room`;
+    }
+    if (event === 'status_change') {
+      const agentName = resolveAgentName(item.agentId);
+      return `${agentName} status changed to ${item.status || item.newStatus || 'unknown'}`;
+    }
+    if (event === 'message_sent') {
+      const agentName = resolveAgentName(item.agentId);
+      return `${agentName} sent a message`;
+    }
+    if (event === 'todo:checked-out') {
+      const agentName = resolveAgentName(item.agentId);
+      return `${agentName} checked out a todo`;
+    }
+    if (event === 'todo:released') {
+      return `Todo lock released`;
+    }
+
+    // Default: use whatever text fields are available, format raw event name as readable
+    const readableEvent = event ? event.replace(/[_:]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '';
+    return item.message || item.description || item.summary || readableEvent || 'Activity';
   }
 
   /* ── Filtering ─────────────────────────────────────────── */

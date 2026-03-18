@@ -946,7 +946,21 @@ export function initSocketBridge(socket, store, engine) {
         eventType: opts.eventType,
       }).then((res) => {
         if (res && res.ok) {
-          store.set('activity.items', res.data);
+          // Normalize DB field names to match the activity view's expected format (#721)
+          const normalized = (res.data || []).map(item => {
+            const eventData = typeof item.event_data === 'string' ? JSON.parse(item.event_data || '{}') : (item.event_data || {});
+            return {
+              ...eventData,
+              event: item.event_type || item.event || eventData.event || '',
+              type: item.event_type || item.type || '',
+              agentId: item.agent_id || item.agentId || eventData.agentId || '',
+              roomId: item.room_id || item.roomId || eventData.roomId || '',
+              ts: item.created_at || item.ts || '',
+              buildingId: item.building_id || item.buildingId || '',
+              id: item.id,
+            };
+          });
+          store.set('activity.items', normalized);
         }
         return res;
       });
