@@ -293,7 +293,7 @@ export class SettingsView extends Component {
   _buildFoldersTab() {
     const section = h('div', { class: 'settings-section' });
     const store = OverlordUI.getStore();
-    const buildingId = store?.get('activeBuildingId');
+    const buildingId = store?.get('building.active');
 
     if (!buildingId) {
       section.appendChild(h('div', { class: 'settings-empty-state' },
