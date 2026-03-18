@@ -19,7 +19,7 @@ import { OverlordUI } from '../engine/engine.js';
 import { h, formatTime } from '../engine/helpers.js';
 import { Toast } from '../components/toast.js';
 import { Modal } from '../components/modal.js';
-import { EntityLink, resolveAgent } from '../engine/entity-nav.js';
+import { EntityLink, resolveAgent, resolveAgentName } from '../engine/entity-nav.js';
 
 
 // ── Constants ────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ const FOLDERS = [
 /** Resolve display name — handles __user__ special ID (#667) */
 function resolveFromName(email) {
   if (email.from_id === '__user__') return 'You';
-  return email.from_name || resolveAgent(email.from_id)?.name || email.from_id;
+  return email.from_name || resolveAgentName(email.from_id);
 }
 
 
@@ -489,7 +489,7 @@ export class EmailView extends Component {
       .filter((r) => r.type === 'to')
       .map((r) => {
         const agent = resolveAgent(r.agent_id);
-        return agent?.name || r.agent_id;
+        return resolveAgentName(r.agent_id);
       });
     return toRecipients.join(', ') || 'unknown';
   }
@@ -646,7 +646,7 @@ export class EmailView extends Component {
     const tags = [];
     for (const r of recipients) {
       const agent = resolveAgent(r.agent_id);
-      const name = r.agent_id === '__user__' ? 'You' : (agent?.name || r.agent_id);
+      const name = resolveAgentName(r.agent_id);
       const typeLabel = r.type === 'cc' ? 'CC' : '';
       tags.push(
         h('span', { class: `email-recipient-tag ${r.type === 'cc' ? 'email-recipient-tag--cc' : ''}` },
@@ -1136,7 +1136,7 @@ export class EmailView extends Component {
     const tags = [];
     for (const r of recipients) {
       const agent = resolveAgent(r.agent_id);
-      const name = r.agent_id === '__user__' ? 'You' : (agent?.name || r.agent_id);
+      const name = resolveAgentName(r.agent_id);
       const typeLabel = r.type === 'cc' ? 'CC' : '';
       tags.push(
         h('span', { class: `email-recipient-tag ${r.type === 'cc' ? 'email-recipient-tag--cc' : ''}` },

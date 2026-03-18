@@ -247,7 +247,8 @@ export class PhaseView extends Component {
     const nextPhase = currentIdx + 1 < PHASE_ORDER.length ? PHASE_ORDER[currentIdx + 1] : null;
     // Require exit documents for current phase before allowing advancement (#529)
     const hasExitDocs = this._hasExitDocsForPhase();
-    const canAdvance = nextPhase && (allGatesGo || noGates) && hasExitDocs;
+    // #677: MUST have at least one gate with GO verdict — zero gates blocks advancement
+    const canAdvance = nextPhase && allGatesGo && hasExitDocs;
 
     const card = h('div', { class: `phase-view-current-card phase-view-current-${this._currentPhase}` });
 
@@ -301,7 +302,9 @@ export class PhaseView extends Component {
       } else {
         const blockedReason = !hasExitDocs
           ? 'Complete the current phase first \u2014 submit an exit document to advance.'
-          : 'All gates must be GO before advancing.';
+          : noGates
+            ? 'Create a gate review before advancing \u2014 at least one gate must have a GO verdict.'
+            : 'All gates must be GO before advancing.';
         actionRow.appendChild(
           h('div', { class: 'phase-view-advance-blocked', title: blockedReason },
             h('span', { class: 'phase-view-advance-blocked-icon' }, '\u{1F512}'),

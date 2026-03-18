@@ -73,11 +73,31 @@ export function resolveAgent(agentId) {
   const agents = store?.get('agents.list') || [];
   const agent = agents.find(a => a.id === agentId);
   if (agent) {
-    const resolved = { id: agent.id, name: agent.name || agent.id, role: agent.role, status: agent.status };
+    const resolved = { id: agent.id, name: agent.display_name || agent.name || _friendlyId(agentId), role: agent.role, status: agent.status };
     _agentCache.set(agentId, resolved);
     return resolved;
   }
-  return { id: agentId, name: agentId, role: null, status: null };
+  return { id: agentId, name: _friendlyId(agentId), role: null, status: null };
+}
+
+/**
+ * Resolve an agent ID to a human-friendly display name (#673).
+ * NEVER returns raw IDs — falls back to "Agent" or "You".
+ */
+export function resolveAgentName(agentId) {
+  if (!agentId) return 'Unknown';
+  if (agentId === '__user__') return 'You';
+  const agent = resolveAgent(agentId);
+  return agent?.name || 'Agent';
+}
+
+/** Convert a raw agent ID to something less ugly than the full UUID */
+function _friendlyId(id) {
+  if (!id) return 'Agent';
+  if (id === '__user__') return 'You';
+  // Extract any readable part: "agent_1234_abc" → "Agent"
+  // Don't show raw IDs to non-technical users
+  return 'Agent';
 }
 
 /**
