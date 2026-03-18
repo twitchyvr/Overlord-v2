@@ -29,6 +29,7 @@ import { executeBrowserTools } from './providers/browser-tools.js';
 import { executeWorkspaceSandbox } from './providers/workspace-sandbox.js';
 import { analyzeScreenshot } from './providers/screenshot-analyzer.js';
 import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
+import { getDb } from '../storage/db.js';
 
 const log = logger.child({ module: 'tool-registry' });
 
@@ -620,7 +621,7 @@ function registerBuiltinTools(): void {
       const agentId = (p.targetAgentId as string) || ctx?.agentId || 'unknown';
       const key = p.key as string;
       // ToolContext doesn't declare buildingId; extract from ctx if the room injected it
-      const buildingId = (ctx as unknown as Record<string, unknown>)?.buildingId as string | undefined;
+      const buildingId = ctx?.buildingId;
 
       switch (action) {
         case 'write': {
@@ -1211,6 +1212,118 @@ function registerBuiltinTools(): void {
       }
       const { output: wsOutput, ...wsRest } = result.data;
       return { output: wsOutput, ...wsRest };
+    },
+  });
+
+  // ─── Overlord Project Management Tools (#788) ───
+
+  registerTool({
+    name: 'create_task',
+    description: 'Create a task in the current project. Use this when you identify work that needs to be done.',
+    category: 'project',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Short descriptive title for the task' },
+        description: { type: 'string', description: 'Detailed description of what needs to be done' },
+        priority: { type: 'string', enum: ['low', 'normal', 'high', 'critical'], description: 'Task priority (default: normal)' },
+        phase: { type: 'string', description: 'Project phase this task belongs to (e.g., strategy, discovery, architecture, execution)' },
+      },
+      required: ['title'],
+    },
+    execute: async (p, ctx) => {
+      const buildingId = ctx?.buildingId;
+      if (!buildingId) return { output: 'Error: no active building', error: true };
+
+      const db = getDb();
+      const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const title = p.title as string;
+      const description = (p.description as string) || '';
+      const priority = (p.priority as string) || 'normal';
+      const phase = (p.phase as string) || null;
+
+      db.prepare(`
+        INSERT INTO tasks (id, building_id, title, description, priority, phase, status, assignee_id)
+        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+      `).run(id, buildingId, title, description, priority, phase, ctx?.agentId || null);
+
+      return {
+        output: `Task created: "${title}" (${priority} priority)${phase ? ` for ${phase} phase` : ''}`,
+        taskId: id,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'create_raid_entry',
+    description: 'Log a Risk, Assumption, Issue, or Decision in the project RAID log. Use this proactively when you identify risks, make assumptions, discover issues, or make decisions.',
+    category: 'project',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['risk', 'assumption', 'issue', 'decision'], description: 'RAID entry type' },
+        summary: { type: 'string', description: 'Brief summary of the entry' },
+        rationale: { type: 'string', description: 'Why this matters — context and reasoning' },
+        affectedAreas: { type: 'array', items: { type: 'string' }, description: 'Areas of the project affected (e.g., architecture, neural-network, rendering)' },
+      },
+      required: ['type', 'summary'],
+    },
+    execute: async (p, ctx) => {
+      const buildingId = ctx?.buildingId;
+      if (!buildingId) return { output: 'Error: no active building', error: true };
+
+      const db = getDb();
+      const id = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const type = p.type as string;
+      const summary = p.summary as string;
+      const rationale = (p.rationale as string) || '';
+      const affectedAreas = Array.isArray(p.affectedAreas) ? p.affectedAreas : [];
+
+      db.prepare(`
+        INSERT INTO raid_entries (id, building_id, type, phase, summary, rationale, decided_by, affected_areas, status)
+        VALUES (?, ?, ?, (SELECT active_phase FROM buildings WHERE id = ?), ?, ?, ?, ?, 'active')
+      `).run(id, buildingId, type, buildingId, summary, rationale, ctx?.agentId || null, JSON.stringify(affectedAreas));
+
+      const typeLabel = { risk: 'Risk', assumption: 'Assumption', issue: 'Issue', decision: 'Decision' }[type] || type;
+      return {
+        output: `${typeLabel} logged: "${summary}"`,
+        entryId: id,
+      };
+    },
+  });
+
+  registerTool({
+    name: 'create_milestone',
+    description: 'Create a project milestone with a target date. Use this to define key delivery points.',
+    category: 'project',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Milestone name (e.g., "v0.1 — Core Simulation Running")' },
+        description: { type: 'string', description: 'What this milestone represents' },
+        targetDate: { type: 'string', description: 'Target date in YYYY-MM-DD format' },
+      },
+      required: ['title'],
+    },
+    execute: async (p, ctx) => {
+      const buildingId = ctx?.buildingId;
+      if (!buildingId) return { output: 'Error: no active building', error: true };
+
+      const db = getDb();
+      const id = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const title = p.title as string;
+      const description = (p.description as string) || '';
+      const targetDate = (p.targetDate as string) || null;
+
+      db.prepare(`
+        INSERT INTO milestones (id, building_id, title, description, due_date, status)
+        VALUES (?, ?, ?, ?, ?, 'active')
+      `).run(id, buildingId, title, description, targetDate);
+
+      return {
+        output: `Milestone created: "${title}"${targetDate ? ` (target: ${targetDate})` : ''}`,
+        milestoneId: id,
+      };
     },
   });
 }

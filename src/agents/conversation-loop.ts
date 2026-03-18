@@ -551,6 +551,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
               workingDirectory: params.workingDirectory,
               allowedPaths: params.allowedPaths,
               repoContext: params.repoContext,
+              buildingId: (params.options?.buildingId as string) || '',
             },
           }),
           TOOL_TIMEOUT_MS,

@@ -29,7 +29,7 @@ describe('StrategistOffice', () => {
       expect(contract.fileScope).toBe('read-only');
     });
 
-    it('has research tool set — read access to codebase, no file writing or execution', () => {
+    it('has research + project management tool set (#788)', () => {
       expect(contract.tools).toContain('read_file');
       expect(contract.tools).toContain('list_dir');
       expect(contract.tools).toContain('search_files');
@@ -37,7 +37,10 @@ describe('StrategistOffice', () => {
       expect(contract.tools).toContain('record_note');
       expect(contract.tools).toContain('recall_notes');
       expect(contract.tools).toContain('session_note');
-      expect(contract.tools).toHaveLength(7);
+      expect(contract.tools).toContain('create_task');
+      expect(contract.tools).toContain('create_raid_entry');
+      expect(contract.tools).toContain('create_milestone');
+      expect(contract.tools).toHaveLength(10);
       expect(contract.tools).not.toContain('write_file');
       expect(contract.tools).not.toContain('bash');
     });
@@ -162,9 +165,9 @@ describe('StrategistOffice', () => {
       expect(room.type).toBe('strategist');
     });
 
-    it('getAllowedTools returns 7 research tools', () => {
+    it('getAllowedTools returns 10 tools (research + project management)', () => {
       const room = new StrategistOffice('room_1');
-      expect(room.getAllowedTools()).toHaveLength(7);
+      expect(room.getAllowedTools()).toHaveLength(10);
     });
 
     it('hasTool returns true for read/research tools, false for write/exec tools', () => {
@@ -204,7 +207,7 @@ describe('StrategistOffice', () => {
       const ctx = room.buildContextInjection();
       expect(ctx.roomType).toBe('strategist');
       expect(ctx.fileScope).toBe('read-only');
-      expect((ctx.tools as string[])).toHaveLength(7);
+      expect((ctx.tools as string[])).toHaveLength(10);
     });
 
     it('validates complete exit document (building blueprint)', () => {

@@ -292,6 +292,8 @@ export interface ToolContext {
   roomType: string;
   agentId: string;
   fileScope: string;
+  /** Building ID — for project-scoped tools (#788) */
+  buildingId?: string;
   /** Building's project working directory — tools use this as cwd */
   workingDirectory?: string;
   /** Additional paths the building has been granted access to */
