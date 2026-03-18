@@ -273,6 +273,14 @@ export function markAsRead(emailId: string, agentId: string): Result {
   const db = getDb();
 
   try {
+    // __user__ (project owner) bypasses recipient check (#728)
+    // The user can read any email without being in agent_email_recipients
+    if (agentId === '__user__') {
+      db.prepare("UPDATE agent_emails SET status = 'read', read_at = datetime('now') WHERE id = ? AND read_at IS NULL")
+        .run(emailId);
+      return ok({ emailId, agentId, readAt: new Date().toISOString() });
+    }
+
     // Verify the agent is actually a recipient of this email
     const recipient = db.prepare(
       'SELECT id FROM agent_email_recipients WHERE email_id = ? AND agent_id = ?',
@@ -298,12 +306,7 @@ export function markAsRead(emailId: string, agentId: string): Result {
       db.prepare("UPDATE agent_emails SET status = 'read', read_at = datetime('now') WHERE id = ?").run(emailId);
     }
 
-    // Read back the actual stored timestamp for consistency
-    const updated = db.prepare(
-      'SELECT read_at FROM agent_email_recipients WHERE email_id = ? AND agent_id = ?',
-    ).get(emailId, agentId) as { read_at: string | null } | undefined;
-
-    return ok({ emailId, agentId, readAt: updated?.read_at || null });
+    return ok({ emailId, agentId, readAt: new Date().toISOString() });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return err('EMAIL_MARK_READ_FAILED', message);
