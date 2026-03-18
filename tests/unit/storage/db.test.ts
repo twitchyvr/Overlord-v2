@@ -85,7 +85,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 25 tables', () => {
+  describe('schema — all 27 tables', () => {
     const expectedTables = [
       'buildings',
       'floors',
@@ -112,9 +112,11 @@ describe('Storage Layer', () => {
       'pipeline_evidence',
       'project_repos',
       'repo_file_origins',
+      'doc_libraries',
+      'doc_entries',
     ];
 
-    it('creates all 25 tables', async () => {
+    it('creates all 27 tables', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -124,7 +126,7 @@ describe('Storage Layer', () => {
 
       const tableNames = tables.map((t) => t.name).sort();
       expect(tableNames).toEqual(expectedTables.sort());
-      expect(tableNames).toHaveLength(25);
+      expect(tableNames).toHaveLength(27);
     });
 
     it.each(expectedTables)('creates table: %s', async (tableName) => {
@@ -268,9 +270,12 @@ describe('Storage Layer', () => {
       'idx_file_origins_building',
       'idx_file_origins_repo',
       'idx_file_origins_path',
+      'idx_doc_libraries_building',
+      'idx_doc_entries_library',
+      'idx_doc_entries_path',
     ];
 
-    it('creates all 50 custom indexes', async () => {
+    it('creates all 53 custom indexes', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -280,7 +285,7 @@ describe('Storage Layer', () => {
 
       const indexNames = indexes.map((i) => i.name).sort();
       expect(indexNames).toEqual(expectedIndexes.sort());
-      expect(indexNames).toHaveLength(50);
+      expect(indexNames).toHaveLength(53);
     });
 
     it.each(expectedIndexes)('creates index: %s', async (indexName) => {
@@ -323,7 +328,7 @@ describe('Storage Layer', () => {
         .prepare("SELECT count(*) as cnt FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         .get() as { cnt: number };
 
-      expect(tables.cnt).toBe(25);
+      expect(tables.cnt).toBe(27);
     });
   });
 

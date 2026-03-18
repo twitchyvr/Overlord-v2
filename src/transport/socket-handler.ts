@@ -85,6 +85,8 @@ import {
   MessagingModeSchema, GnapBuildingSchema,
   LogLevelSetSchema,
   RepoAddSchema, RepoRemoveSchema, RepoListSchema, RepoUpdateSchema, RepoAnalyzeSchema, RepoSyncStatusSchema, RepoSyncFetchSchema,
+  DocLibraryCreateSchema, DocLibraryListSchema, DocLibraryDeleteSchema, DocLibraryIndexSchema,
+  DocSearchSchema, DocGetSchema, DocListSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { checkBudget, setAgentBudget, getBuildingBudgets } from '../agents/budget-tracker.js';
@@ -111,6 +113,7 @@ import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
 import { isImageGenerationAvailable } from '../ai/minimax-image.js';
 import { writeAgentPhoto } from '../ai/agent-photo-store.js';
 import { listAllTools } from '../tools/tool-registry.js';
+import { createLibrary, listLibraries, deleteLibrary, indexLibrary, searchDocuments, getDocumentContent, listDocuments } from '../storage/doc-library.js';
 
 const log = logger.child({ module: 'transport' });
 
@@ -1415,6 +1418,41 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       if (typeof ack === 'function') {
         ack({ ok: true, data: listAllTools() });
       }
+    });
+
+    // ─── Documentation Libraries (#811) ───
+
+    handle(socket, 'doc:library:create', DocLibraryCreateSchema, (parsed, ack) => {
+      const result = createLibrary(parsed);
+      if (result.ok) {
+        // Auto-index on creation
+        indexLibrary((result.data as { id: string }).id);
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'doc:library:list', DocLibraryListSchema, (parsed, ack) => {
+      if (ack) ack(listLibraries(parsed.buildingId));
+    });
+
+    handle(socket, 'doc:library:delete', DocLibraryDeleteSchema, (parsed, ack) => {
+      if (ack) ack(deleteLibrary(parsed.libraryId));
+    });
+
+    handle(socket, 'doc:library:index', DocLibraryIndexSchema, (parsed, ack) => {
+      if (ack) ack(indexLibrary(parsed.libraryId));
+    });
+
+    handle(socket, 'doc:search', DocSearchSchema, (parsed, ack) => {
+      if (ack) ack(searchDocuments(parsed));
+    });
+
+    handle(socket, 'doc:get', DocGetSchema, (parsed, ack) => {
+      if (ack) ack(getDocumentContent(parsed.entryId));
+    });
+
+    handle(socket, 'doc:list', DocListSchema, (parsed, ack) => {
+      if (ack) ack(listDocuments(parsed.libraryId));
     });
 
     // ─── Agent Reset (#559) ───
