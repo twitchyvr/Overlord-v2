@@ -131,6 +131,42 @@ function isLongField(field) {
 }
 
 /**
+ * Transform flat arrays into expected nested structures (#713).
+ * Non-technical users can't type JSON objects — this converts their
+ * simple inputs into the structures the server expects.
+ */
+function _transformStructuredField(field, value, allFields) {
+  if (!Array.isArray(value)) return value;
+
+  // roomConfig: convert ["collaboration", "execution"] → [{floor: "collaboration", rooms: []}, ...]
+  if (field === 'roomConfig') {
+    // If already has nested objects, leave it alone
+    if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) return value;
+    // Build from floor names — use floorsNeeded if available, or the flat strings
+    const floors = value.length > 0 ? value : (allFields.floorsNeeded || []);
+    return floors.filter(f => typeof f === 'string' && f.trim()).map(f => ({
+      floor: f.trim(),
+      rooms: [], // Empty rooms array — server accepts this
+    }));
+  }
+
+  // agentRoster: convert ["Alice, developer", "Bob, tester"] → [{name, role, rooms: []}]
+  if (field === 'agentRoster') {
+    if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) return value;
+    return value.filter(v => typeof v === 'string' && v.trim()).map(v => {
+      const parts = v.split(',').map(p => p.trim());
+      return {
+        name: parts[0] || 'Agent',
+        role: parts[1] || 'developer',
+        rooms: parts.slice(2).filter(Boolean),
+      };
+    });
+  }
+
+  return value;
+}
+
+/**
  * Determine whether a field expects structured data (JSON/list).
  */
 function isStructuredField(field) {
@@ -302,9 +338,13 @@ export class ExitDocForm extends Component {
       // Input element
       let inputEl;
       if (isLong || isStruct) {
-        const structPlaceholder = isStruct && hint !== `Provide the ${label.toLowerCase()} for this document.`
-          ? hint
-          : `Enter ${label.toLowerCase()} (JSON array or one item per line)`;
+        // Field-specific placeholders for complex nested fields (#713)
+        const fieldPlaceholders = {
+          roomConfig: 'One floor per line, e.g.:\ncollaboration\nexecution\ngovernance',
+          agentRoster: 'One agent per line: name, role\ne.g.:\nAlice, developer\nBob, tester\nCarol, reviewer',
+        };
+        const structPlaceholder = fieldPlaceholders[field]
+          || (isStruct && hint !== `Provide the ${label.toLowerCase()} for this document.` ? hint : `Enter ${label.toLowerCase()} (one item per line)`);
         inputEl = h('textarea', {
           class: `form-input exit-doc-textarea${isStruct ? ' exit-doc-structured' : ''}`,
           id: `exit-field-${field}`,
@@ -409,11 +449,11 @@ export class ExitDocForm extends Component {
           if (raw.includes('\n')) {
             exitDoc[field] = raw.split('\n').map(l => l.trim()).filter(Boolean);
           } else {
-            // Wrap single plain-text values in an array so server
-            // validation doesn't reject them for non-array type
             exitDoc[field] = [raw];
           }
         }
+        // Auto-transform flat arrays into expected nested structures (#713)
+        exitDoc[field] = _transformStructuredField(field, exitDoc[field], exitDoc);
       } else {
         exitDoc[field] = raw;
       }
