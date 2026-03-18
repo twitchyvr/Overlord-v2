@@ -1600,6 +1600,27 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithFeedback('settings:get-config', {});
     },
 
+    // ── Chat History (#764) ──
+
+    fetchChatHistory(roomId, opts = {}) {
+      return _emitWithTimeout('chat:history', {
+        roomId,
+        limit: opts.limit || 50,
+        before: opts.before,
+      }).then((res) => {
+        if (res && res.ok) {
+          // Merge into chat.messages store
+          const existing = store.get('chat.messages') || [];
+          const existingIds = new Set(existing.map(m => m.id));
+          const newMsgs = (res.data || []).filter(m => !existingIds.has(m.id));
+          if (newMsgs.length > 0) {
+            store.set('chat.messages', [...newMsgs, ...existing]);
+          }
+        }
+        return res;
+      });
+    },
+
     // ── Agent Stats methods ──
 
     fetchAgentStats(agentId) {

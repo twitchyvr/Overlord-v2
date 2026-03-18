@@ -42,7 +42,7 @@ import {
   AgentRegisterSchema, AgentGetSchema, AgentListSchema, AgentUpdateSchema, AgentUpdateProfileSchema,
   AgentGenerateProfileSchema,
   AgentGeneratePhotoSchema,
-  ChatMessageSchema,
+  ChatMessageSchema, ChatHistorySchema,
   ConversationListSchema, ConversationLoadSchema, ConversationCreateSchema, ConversationDeleteSchema,
   EmptyPayloadSchema, PhaseStatusSchema, PhaseGateSchema, PhaseGateCreateSchema,
   PhaseGatesSchema, PhaseCanAdvanceSchema, PhasePendingGatesSchema,
@@ -1965,6 +1965,38 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         scope: cmd.scope,
       }));
       if (ack) ack({ ok: true, data: commands });
+    });
+
+    // ─── Chat History (#764) ───
+
+    handle(socket, 'chat:history', ChatHistorySchema, (parsed, ack) => {
+      const db = getDb();
+      let sql = 'SELECT * FROM messages WHERE room_id = ?';
+      const params: unknown[] = [parsed.roomId];
+
+      if (parsed.before) {
+        sql += ' AND created_at < ?';
+        params.push(parsed.before);
+      }
+
+      sql += ' ORDER BY created_at DESC LIMIT ?';
+      params.push(parsed.limit);
+
+      const rows = db.prepare(sql).all(...params) as Array<Record<string, unknown>>;
+
+      // Return in chronological order (oldest first)
+      const messages = rows.reverse().map(row => ({
+        id: row.id,
+        roomId: row.room_id,
+        agentId: row.agent_id,
+        role: row.role,
+        content: row.content,
+        toolCalls: row.tool_calls ? JSON.parse(row.tool_calls as string) : [],
+        threadId: row.thread_id,
+        createdAt: row.created_at,
+      }));
+
+      if (ack) ack({ ok: true, data: messages });
     });
 
     // ─── Chat Events (with command/mention/reference parsing) ───

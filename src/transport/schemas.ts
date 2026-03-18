@@ -305,6 +305,13 @@ const AttachmentSchema = z.object({
   url: z.string().max(2000).optional(),
 });
 
+// Chat history retrieval (#764)
+export const ChatHistorySchema = z.object({
+  roomId: id(),
+  limit: z.number().int().min(1).max(200).optional().default(50),
+  before: z.string().max(100).optional(), // cursor: load messages before this timestamp
+});
+
 export const ChatMessageSchema = z.object({
   text: z.string().max(MAX_TEXT).optional().default(''),
   tokens: z.array(z.object({
