@@ -27,7 +27,7 @@ import { Button } from '../components/button.js';
 import { Modal } from '../components/modal.js';
 import { Drawer } from '../components/drawer.js';
 import { Toast } from '../components/toast.js';
-import { EntityLink } from '../engine/entity-nav.js';
+import { EntityLink, resolveAgentName } from '../engine/entity-nav.js';
 
 
 const STATUS_ORDER = ['pending', 'in-progress', 'done', 'blocked'];
@@ -758,7 +758,7 @@ export class TaskView extends Component {
       const agentSelect = h('select', { class: 'todo-agent-select' });
       agentSelect.appendChild(h('option', { value: '' }, 'Unassigned'));
       for (const agent of this._agents) {
-        const opt = h('option', { value: agent.id }, agent.name || agent.id);
+        const opt = h('option', { value: agent.id }, agent.display_name || agent.name || 'Agent');
         if (agent.id === todo.agent_id) opt.selected = true;
         agentSelect.appendChild(opt);
       }
@@ -872,7 +872,7 @@ export class TaskView extends Component {
     const agentSelect = h('select', { class: 'form-input todo-add-agent-select' });
     agentSelect.appendChild(h('option', { value: '' }, 'No agent'));
     for (const agent of this._agents) {
-      agentSelect.appendChild(h('option', { value: agent.id }, agent.name || agent.id));
+      agentSelect.appendChild(h('option', { value: agent.id }, agent.display_name || agent.name || 'Agent'));
     }
     inputRow.appendChild(agentSelect);
 
@@ -984,7 +984,7 @@ export class TaskView extends Component {
       });
       assigneeSelect.appendChild(h('option', { value: '' }, 'Unassigned'));
       for (const agent of this._agents) {
-        assigneeSelect.appendChild(h('option', { value: agent.id }, agent.name || agent.id));
+        assigneeSelect.appendChild(h('option', { value: agent.id }, agent.display_name || agent.name || 'Agent'));
       }
       form.appendChild(h('div', { class: 'form-group' },
         h('label', { class: 'form-label' }, 'Assignee'),
@@ -1200,7 +1200,7 @@ export class TaskView extends Component {
         const agentList = h('div', { class: 'task-detail-team-agents' });
         agentList.appendChild(h('span', { class: 'task-detail-team-agents-label' }, 'Team Members:'));
         for (const agent of info.agents) {
-          const name = agent.name || this._getAgentName(agent.agentId) || agent.agentId;
+          const name = agent.name || this._getAgentName(agent.agentId) || 'Agent';
           agentList.appendChild(EntityLink.agent(agent.agentId, name));
         }
         tableCard.appendChild(agentList);
@@ -1280,7 +1280,7 @@ export class TaskView extends Component {
     const tableList = h('div', { class: 'task-assign-table-list' });
 
     for (const t of allTables) {
-      const agentNames = t.agents.map(a => a.name || this._getAgentName(a.agentId) || a.agentId);
+      const agentNames = t.agents.map(a => a.name || this._getAgentName(a.agentId) || 'Agent');
 
       const tableItem = h('div', { class: 'task-assign-table-item' });
 
@@ -1558,7 +1558,7 @@ export class TaskView extends Component {
       const agentName = this._getAgentName(task.assignee_id);
       footer.appendChild(h('span', { class: 'kanban-card-assignee' },
         h('span', { class: 'kanban-card-avatar' }, (agentName || '?')[0].toUpperCase()),
-        EntityLink.agent(task.assignee_id, agentName || task.assignee_id)
+        EntityLink.agent(task.assignee_id, agentName || resolveAgentName(task.assignee_id))
       ));
     }
 
@@ -1635,7 +1635,7 @@ export class TaskView extends Component {
     const select = h('select', { class: 'form-input' });
     select.appendChild(h('option', { value: '' }, 'Select an agent...'));
     for (const agent of this._agents) {
-      select.appendChild(h('option', { value: agent.id }, agent.name || agent.id));
+      select.appendChild(h('option', { value: agent.id }, agent.display_name || agent.name || 'Agent'));
     }
     const content = h('div', null,
       h('p', null, `Assign ${this._selectedTaskIds.size} tasks to:`),
@@ -1864,7 +1864,8 @@ export class TaskView extends Component {
 
   _getAgentName(agentId) {
     if (!agentId) return null;
+    // Use resolveAgentName to never show raw IDs (#673)
     const agent = this._agents.find(a => a.id === agentId);
-    return agent ? (agent.name || agentId) : agentId;
+    return agent ? (agent.display_name || agent.name || resolveAgentName(agentId)) : resolveAgentName(agentId);
   }
 }

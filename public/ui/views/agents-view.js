@@ -491,7 +491,7 @@ export class AgentsView extends Component {
 
   /** Resolve the display name: prefer display_name, then name, then id. */
   _resolveDisplayName(agent) {
-    return agent.display_name || agent.name || agent.id;
+    return agent.display_name || agent.name || 'Agent';
   }
 
   /** Get the avatar initial(s) from display_name or name. */
@@ -680,7 +680,7 @@ export class AgentsView extends Component {
         const lastName = agent.last_name || '';
         const email = firstName && lastName
           ? `${firstName.toLowerCase()}.${lastName.toLowerCase()}@overlord.ai`
-          : `${(agent.name || agent.id).toLowerCase().replace(/\s+/g, '.')}@overlord.ai`;
+          : `${(agent.display_name || agent.name || 'agent').toLowerCase().replace(/\s+/g, '.')}@overlord.ai`;
         OverlordUI.dispatch('navigate:entity', { type: 'email', id: email, agentId: agent.id });
         Toast.info(`Email: ${email}`);
       }},
@@ -934,7 +934,7 @@ export class AgentsView extends Component {
     }
     profileRows.push(['Status', statusCfg.label]);
     profileRows.push(['Role', formatRole(agent.role)]);
-    profileRows.push(['Personality', derivePersonality(agent.name || agent.id)]);
+    profileRows.push(['Personality', derivePersonality(agent.display_name || agent.name || 'Agent')]);
     profileRows.push(['Profile Generated', agent.profile_generated ? 'Yes' : 'No']);
 
     for (const [label, value] of profileRows) {
@@ -1684,7 +1684,7 @@ export class AgentsView extends Component {
     // Guidance text
     container.appendChild(h('div', { class: 'assign-agent-guidance' },
       h('p', null, 'Select a room for '),
-      h('strong', null, agent.name || agent.id),
+      h('strong', null, agent.display_name || agent.name || 'Agent'),
       h('span', null, ` (${formatRole(agent.role)}).`),
     ));
 

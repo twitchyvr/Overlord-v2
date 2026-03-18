@@ -805,7 +805,7 @@ export class EmailView extends Component {
         const opt = h('option', {
           value: agent.id,
           selected: this._selectedAgentForContext === agent.id,
-        }, agent.display_name || agent.name || agent.id);
+        }, agent.display_name || agent.name || 'Agent');
         select.appendChild(opt);
       }
     }
@@ -826,7 +826,7 @@ export class EmailView extends Component {
 
     // From (read-only display)
     const fromAgent = resolveAgent(fromAgentId);
-    const fromName = fromAgentId === '__user__' ? 'You (Project Owner)' : (fromAgent?.name || fromAgentId);
+    const fromName = fromAgentId === '__user__' ? 'You (Project Owner)' : (fromAgent?.name || 'Agent');
     content.appendChild(
       h('div', { class: 'email-compose-field' },
         h('label', {}, 'From:'),
@@ -883,7 +883,7 @@ export class EmailView extends Component {
       }
       toDropdown.style.display = 'block';
       for (const agent of matches.slice(0, 8)) {
-        const name = agent.display_name || agent.name || agent.id;
+        const name = agent.display_name || agent.name || 'Agent';
         const initial = (name[0] || '?').toUpperCase();
         const opt = h('div', { class: 'email-compose-chip-option' },
           h('span', { class: 'email-compose-chip-avatar' }, initial),

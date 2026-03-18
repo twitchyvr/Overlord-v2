@@ -489,7 +489,7 @@ export class BuildingView extends Component {
         const initial = (agent.name || '?')[0].toUpperCase();
         const avatar = h('span', {
           class: `room-item-avatar room-item-avatar-${agent.status || 'idle'}`,
-          title: agent.name || agent.agentId,
+          title: agent.name || 'Agent',
         }, initial);
         avatarRow.appendChild(avatar);
       }
