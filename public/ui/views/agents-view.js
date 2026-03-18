@@ -311,7 +311,7 @@ export class AgentsView extends Component {
     }, '\u21BA Reset');
     resetBtn.addEventListener('click', () => {
       const store = OverlordUI.getStore();
-      const buildingId = store?.get('activeBuildingId');
+      const buildingId = store?.get('building.active');
       if (!buildingId) { Toast.warning('No active building'); return; }
       if (!confirm('Reset all agents to idle? This clears assignments and activity history.')) return;
       if (window.overlordSocket?.socket) {
