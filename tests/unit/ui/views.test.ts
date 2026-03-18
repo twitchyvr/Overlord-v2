@@ -88,7 +88,7 @@ describe('BuildingView', () => {
     expect(el.querySelector('.building-header')).not.toBeNull();
     expect(el.querySelector('.building-name')!.textContent).toBe('Test Building');
     expect(el.querySelectorAll('.floor-section').length).toBe(2);
-    expect(el.querySelector('.building-stats')).not.toBeNull();
+    expect(el.querySelector('.building-stats-inline')).not.toBeNull();
   });
 
   it('shows building stats footer', async () => {
@@ -103,11 +103,10 @@ describe('BuildingView', () => {
       { id: 'f1', ordinal: 1, rooms: [{ id: 'r1' }, { id: 'r2' }] }
     ]);
 
-    const statValues = el.querySelectorAll('.building-stat-value');
-    expect(statValues.length).toBe(3);
-    expect(statValues[0].textContent).toBe('1');  // 1 floor
-    expect(statValues[1].textContent).toBe('2');  // 2 rooms
-    expect(statValues[2].textContent).toBe('0');  // 0 active agents
+    const statsInline = el.querySelector('.building-stats-inline');
+    expect(statsInline).not.toBeNull();
+    expect(statsInline!.textContent).toContain('1F'); // 1 floor
+    expect(statsInline!.textContent).toContain('2R'); // 2 rooms
   });
 
   it('shows agent indicator when agents are on a floor', async () => {
@@ -172,8 +171,8 @@ describe('BuildingView', () => {
     ]);
 
     // Initially 0 active
-    let statValues = el.querySelectorAll('.building-stat-value');
-    expect(statValues[2].textContent).toBe('0');
+    let statsInline = el.querySelector('.building-stats-inline');
+    expect(statsInline!.textContent).toContain('0 active');
 
     // Add agents — one active, one idle
     store.set('building.agentPositions', {
@@ -183,8 +182,8 @@ describe('BuildingView', () => {
     });
 
     // active + working = 2
-    statValues = el.querySelectorAll('.building-stat-value');
-    expect(statValues[2].textContent).toBe('2');
+    statsInline = el.querySelector('.building-stats-inline');
+    expect(statsInline!.textContent).toContain('2 active');
   });
 
   it('shows room items with agent dots in expanded floors', async () => {
@@ -213,9 +212,9 @@ describe('BuildingView', () => {
     expect(roomItem).not.toBeNull();
     expect(roomItem.classList.contains('room-item-occupied')).toBe(true);
 
-    // Should have agent avatars
-    const agentAvatars = roomItem.querySelector('.room-item-avatars');
-    expect(agentAvatars).not.toBeNull();
+    // Should have agent count indicator (compact view — no avatars)
+    const agentCount = roomItem.querySelector('.room-item-count');
+    expect(agentCount).not.toBeNull();
   });
 
   it('sorts floors by ordinal (lowest first — top-down reading order)', async () => {
@@ -300,11 +299,10 @@ describe('BuildingView', () => {
     const roomItems = el.querySelectorAll('.room-item');
     expect(roomItems.length).toBe(2);
 
-    // Both rooms should have idle status badge (no agents)
-    const badges = el.querySelectorAll('.room-item-status');
-    expect(badges.length).toBe(2);
-    expect(badges[0].textContent).toBe('Idle');
-    expect(badges[0].classList.contains('room-item-status-idle')).toBe(true);
+    // Both rooms should have idle status dot (no agents)
+    const dots = el.querySelectorAll('.room-item-dot');
+    expect(dots.length).toBe(2);
+    expect(dots[0].classList.contains('room-item-dot-idle')).toBe(true);
   });
 
   it('room item shows active status when agents are present', async () => {
@@ -325,9 +323,8 @@ describe('BuildingView', () => {
     // Expand floor
     (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    const badge = el.querySelector('.room-item-status')!;
-    expect(badge.textContent).toBe('Active');
-    expect(badge.classList.contains('room-item-status-active')).toBe(true);
+    const dot = el.querySelector('.room-item-dot')!;
+    expect(dot.classList.contains('room-item-dot-active')).toBe(true);
   });
 
   it('room item shows error status when an agent has error status', async () => {
@@ -348,9 +345,8 @@ describe('BuildingView', () => {
     // Expand floor
     (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    const badge = el.querySelector('.room-item-status')!;
-    expect(badge.textContent).toBe('Error');
-    expect(badge.classList.contains('room-item-status-error')).toBe(true);
+    const dot = el.querySelector('.room-item-dot')!;
+    expect(dot.classList.contains('room-item-dot-error')).toBe(true);
   });
 
   it('room item displays agent count and type tag', async () => {
@@ -375,20 +371,18 @@ describe('BuildingView', () => {
 
     (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    // Agent counts
-    const agentCounts = el.querySelectorAll('.room-item-agent-count');
-    expect(agentCounts.length).toBe(2);
-    expect(agentCounts[0].textContent).toBe('2 agents');
-    expect(agentCounts[1].textContent).toBe('1 agent');
+    // Agent count pills (#726 compact view)
+    const counts = el.querySelectorAll('.room-item-count');
+    expect(counts.length).toBe(2); // both rooms have agents
+    expect(counts[0].textContent).toBe('2');
+    expect(counts[1].textContent).toBe('1');
 
-    // Type tags
-    const typeTags = el.querySelectorAll('.room-item-type');
-    expect(typeTags.length).toBe(2);
-    expect(typeTags[0].textContent).toBe('Code Lab');
-    expect(typeTags[1].textContent).toBe('War Room');
+    // Room names (type info merged into name — no separate type tag)
+    const names = el.querySelectorAll('.room-item-name');
+    expect(names.length).toBe(2);
   });
 
-  it('room item shows agent avatars for occupied rooms', async () => {
+  it('room item shows count for occupied rooms (#726 compact)', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -405,9 +399,9 @@ describe('BuildingView', () => {
 
     (el.querySelector('.floor-section-header') as HTMLElement).click();
 
-    const avatars = el.querySelectorAll('.room-item-avatar');
-    expect(avatars.length).toBe(1);
-    expect(avatars[0].textContent).toBe('A');
+    const count = el.querySelector('.room-item-count');
+    expect(count).not.toBeNull();
+    expect(count!.textContent).toBe('1');
   });
 
   it('room item formats room type slug as title when no name given', async () => {
@@ -470,20 +464,19 @@ describe('BuildingView', () => {
     (el.querySelector('.floor-section-header') as HTMLElement).click();
 
     // Initially idle
-    let badge = el.querySelector('.room-item-status')!;
-    expect(badge.textContent).toBe('Idle');
+    let dot = el.querySelector('.room-item-dot')!;
+    expect(dot.classList.contains('room-item-dot-idle')).toBe(true);
 
     // Add an active agent
     store.set('building.agentPositions', {
       a1: { agentId: 'a1', name: 'Coder', floorId: 'f1', roomId: 'r1', status: 'working' }
     });
 
-    badge = el.querySelector('.room-item-status')!;
-    expect(badge.textContent).toBe('Active');
-    expect(badge.classList.contains('room-item-status-active')).toBe(true);
+    dot = el.querySelector('.room-item-dot')!;
+    expect(dot.classList.contains('room-item-dot-active')).toBe(true);
   });
 
-  it('renders foundation element', async () => {
+  it('does not render foundation element (#726 — removed)', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -494,8 +487,7 @@ describe('BuildingView', () => {
     store.set('building.floors', [{ id: 'f1', ordinal: 1, rooms: [] }]);
 
     const foundation = el.querySelector('.building-foundation');
-    expect(foundation).not.toBeNull();
-    expect(foundation!.textContent).toContain('Foundation');
+    expect(foundation).toBeNull();
   });
 
   it('supports multiple floors expanded simultaneously', async () => {

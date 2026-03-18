@@ -200,31 +200,15 @@ export class BuildingView extends Component {
       tree.appendChild(this._renderFloorSection(floor));
     }
 
-    // Foundation anchor
-    const foundation = h('div', {
-      class: 'building-foundation',
-      title: 'The base infrastructure that supports all floors and rooms above'
-    },
-      h('span', null, '\u{1F3D7}\uFE0F Foundation')
-    );
-    tree.appendChild(foundation);
-
     this.el.appendChild(tree);
 
-    // ── Building stats footer ──
-    const stats = h('div', { class: 'building-stats' },
-      h('div', { class: 'building-stat' },
-        h('span', { class: 'building-stat-value' }, String(this._floors.length)),
-        h('span', { class: 'building-stat-label' }, 'Floors')
-      ),
-      h('div', { class: 'building-stat' },
-        h('span', { class: 'building-stat-value' }, String(this._countTotalRooms())),
-        h('span', { class: 'building-stat-label' }, 'Rooms')
-      ),
-      h('div', { class: 'building-stat' },
-        h('span', { class: 'building-stat-value' }, String(this._countActiveAgents())),
-        h('span', { class: 'building-stat-label' }, 'Active')
-      )
+    // ── Compact inline stats (#726) ──
+    const stats = h('div', { class: 'building-stats-inline' },
+      h('span', null, `${this._floors.length}F`),
+      h('span', { class: 'building-stats-sep' }, '\u00B7'),
+      h('span', null, `${this._countTotalRooms()}R`),
+      h('span', { class: 'building-stats-sep' }, '\u00B7'),
+      h('span', null, `${this._countActiveAgents()} active`),
     );
     this.el.appendChild(stats);
 
@@ -452,52 +436,27 @@ export class BuildingView extends Component {
       ...(isActiveRoom ? { 'aria-current': 'true' } : {}),
     });
 
-    // ── Row 1: Status badge + Room name ──
+    // ── Single-line compact layout (#726): dot + name + agent count ──
     const row1 = h('div', { class: 'room-item-row1' });
 
-    // Status badge (Active / Idle / Error)
-    const statusBadge = h('span', {
-      class: `room-item-status room-item-status-${roomStatus}`
-    }, roomStatus.charAt(0).toUpperCase() + roomStatus.slice(1));
+    // Status dot (tiny colored circle, not a full badge)
+    const statusDot = h('span', {
+      class: `room-item-dot room-item-dot-${roomStatus}`,
+      title: roomStatus,
+    });
 
     // Room name
     const nameEl = h('span', { class: 'room-item-name', title: roomName }, roomName);
 
-    row1.appendChild(statusBadge);
+    // Agent count (compact — just the number if > 0)
+    const countEl = agentsInRoom.length > 0
+      ? h('span', { class: 'room-item-count' }, String(agentsInRoom.length))
+      : null;
+
+    row1.appendChild(statusDot);
     row1.appendChild(nameEl);
+    if (countEl) row1.appendChild(countEl);
     item.appendChild(row1);
-
-    // ── Row 2: Type tag + Agent count ──
-    const row2 = h('div', { class: 'room-item-row2' });
-
-    // Room type tag
-    const typeTag = h('span', { class: 'room-item-type' }, typeInfo.label || this._formatRoomType(room.type));
-    row2.appendChild(typeTag);
-
-    // Agent count
-    const agentCount = h('span', { class: 'room-item-agent-count' },
-      `${agentsInRoom.length} agent${agentsInRoom.length !== 1 ? 's' : ''}`
-    );
-    row2.appendChild(agentCount);
-
-    item.appendChild(row2);
-
-    // ── Row 3: Agent avatars (if agents present) ──
-    if (agentsInRoom.length > 0) {
-      const avatarRow = h('div', { class: 'room-item-avatars' });
-      for (const agent of agentsInRoom.slice(0, 5)) {
-        const initial = (agent.name || '?')[0].toUpperCase();
-        const avatar = h('span', {
-          class: `room-item-avatar room-item-avatar-${agent.status || 'idle'}`,
-          title: agent.name || 'Agent',
-        }, initial);
-        avatarRow.appendChild(avatar);
-      }
-      if (agentsInRoom.length > 5) {
-        avatarRow.appendChild(h('span', { class: 'room-item-avatar-overflow' }, `+${agentsInRoom.length - 5}`));
-      }
-      item.appendChild(avatarRow);
-    }
 
     // ── Last activity (if available) ──
     if (room.lastActivity) {
