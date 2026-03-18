@@ -65,6 +65,15 @@ export function getTool(name: string): ToolDefinition | null {
  * Get tools available for a specific room (filtered by room's allowed list)
  * This IS the access control — structural, not instructional
  */
+/** List all registered tools with name, description, and category (#689) */
+export function listAllTools(): Array<{ name: string; description: string; category: string }> {
+  return Array.from(tools.values()).map(t => ({
+    name: t.name,
+    description: t.description || '',
+    category: t.category || 'general',
+  })).sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+}
+
 export function getToolsForRoom(allowedToolNames: string[]): ToolDefinition[] {
   return allowedToolNames
     .map((name) => tools.get(name))

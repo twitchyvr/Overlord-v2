@@ -110,6 +110,7 @@ import { checkSyncStatus, fetchLatestCommit } from '../ai/repo-sync-service.js';
 import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
 import { isImageGenerationAvailable } from '../ai/minimax-image.js';
 import { writeAgentPhoto } from '../ai/agent-photo-store.js';
+import { listAllTools } from '../tools/tool-registry.js';
 
 const log = logger.child({ module: 'transport' });
 
@@ -1390,6 +1391,13 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
     // Pipeline dashboard (#684)
     handle(socket, 'pipeline:dashboard', PipelineBuildingSchema, (parsed, ack) => {
       if (ack) ack(getPipelineDashboard(parsed.buildingId));
+    });
+
+    // ─── Tool Registry (#689) ───
+    socket.on('tools:list-all', (ack) => {
+      if (typeof ack === 'function') {
+        ack({ ok: true, data: listAllTools() });
+      }
     });
 
     // ─── Agent Reset (#559) ───
