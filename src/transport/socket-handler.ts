@@ -160,6 +160,17 @@ interface InitTransportParams {
 
 const socketAssociations = new Map<string, SocketAssociations>();
 
+/** Get the building ID the socket is currently connected to (#795) */
+function getSocketBuildingId(socket: { rooms?: Set<string> | Iterable<string> }): string | null {
+  if (!socket.rooms) return null;
+  try {
+    for (const room of socket.rooms) {
+      if (typeof room === 'string' && room.startsWith('building:')) return room.slice('building:'.length);
+    }
+  } catch { /* rooms not iterable in test mocks */ }
+  return null;
+}
+
 function getAssociations(socketId: string): SocketAssociations {
   let assoc = socketAssociations.get(socketId);
   if (!assoc) {
@@ -961,6 +972,12 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         if (ack) ack({ ok: false, error: { code: 'AGENT_NOT_FOUND', message: `Agent ${parsed.agentId} does not exist`, retryable: false } });
         return;
       }
+      // Building isolation (#795)
+      const socketBuilding = getSocketBuildingId(socket);
+      if (socketBuilding && agent.building_id && agent.building_id !== socketBuilding) {
+        if (ack) ack({ ok: false, error: { code: 'ACCESS_DENIED', message: 'Agent belongs to a different project', retryable: false } });
+        return;
+      }
       if (ack) ack({ ok: true, data: agent });
     });
 
@@ -1501,17 +1518,28 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
     });
 
     handle(socket, 'email:get', EmailGetSchema, (parsed, ack) => {
-      const email = getEmail(parsed.emailId);
+      const email = getEmail(parsed.emailId) as Record<string, unknown> | null;
       if (!email) {
         if (ack) ack({ ok: false, error: { code: 'EMAIL_NOT_FOUND', message: `Email ${parsed.emailId} not found`, retryable: false } });
+        return;
+      }
+      // Building isolation (#795)
+      const socketBuilding = getSocketBuildingId(socket);
+      if (socketBuilding && email.building_id && email.building_id !== socketBuilding) {
+        if (ack) ack({ ok: false, error: { code: 'ACCESS_DENIED', message: 'Email belongs to a different project', retryable: false } });
         return;
       }
       if (ack) ack({ ok: true, data: email });
     });
 
     handle(socket, 'email:thread', EmailThreadSchema, (parsed, ack) => {
-      const thread = getThread(parsed.threadId);
-      if (ack) ack({ ok: true, data: thread });
+      const thread = getThread(parsed.threadId) as unknown as Array<Record<string, unknown>>;
+      // Building isolation (#795) — filter thread to current building
+      const socketBuilding = getSocketBuildingId(socket);
+      const filtered = socketBuilding
+        ? thread.filter(e => !e.building_id || e.building_id === socketBuilding)
+        : thread;
+      if (ack) ack({ ok: true, data: filtered });
     });
 
     handle(socket, 'email:mark-read', EmailMarkReadSchema, (parsed, ack) => {
@@ -2313,6 +2341,12 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         if (ack) ack({ ok: false, error: { code: 'PLAN_NOT_FOUND', message: `Plan ${parsed.planId} does not exist`, retryable: false } });
         return;
       }
+      // Building isolation (#795)
+      const socketBuilding = getSocketBuildingId(socket);
+      if (socketBuilding && plan.building_id && plan.building_id !== socketBuilding) {
+        if (ack) ack({ ok: false, error: { code: 'ACCESS_DENIED', message: 'Plan belongs to a different project', retryable: false } });
+        return;
+      }
       if (ack) ack({ ok: true, data: { ...plan, steps: JSON.parse((plan.steps as string) || '[]') } });
     });
 
@@ -2415,6 +2449,15 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
     });
 
     handle(socket, 'raid:update', RaidUpdateSchema, (parsed, ack) => {
+      // Building isolation (#795)
+      const socketBuilding = getSocketBuildingId(socket);
+      if (socketBuilding) {
+        const entry = getDb().prepare('SELECT building_id FROM raid_entries WHERE id = ?').get(parsed.id) as { building_id: string } | undefined;
+        if (entry && entry.building_id !== socketBuilding) {
+          if (ack) ack({ ok: false, error: { code: 'ACCESS_DENIED', message: 'RAID entry belongs to a different project', retryable: false } });
+          return;
+        }
+      }
       const result = updateRaidStatus({ id: parsed.id, status: parsed.status });
       if (result.ok) {
         bus.emit('raid:entry:updated', { id: parsed.id, status: parsed.status, ...(result.data as Record<string, unknown>) });
@@ -2423,6 +2466,15 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
     });
 
     handle(socket, 'raid:edit', RaidEditSchema, (parsed, ack) => {
+      // Building isolation (#795)
+      const socketBuilding = getSocketBuildingId(socket);
+      if (socketBuilding) {
+        const entry = getDb().prepare('SELECT building_id FROM raid_entries WHERE id = ?').get(parsed.id) as { building_id: string } | undefined;
+        if (entry && entry.building_id !== socketBuilding) {
+          if (ack) ack({ ok: false, error: { code: 'ACCESS_DENIED', message: 'RAID entry belongs to a different project', retryable: false } });
+          return;
+        }
+      }
       const result = updateRaidEntry({
         id: parsed.id,
         summary: parsed.summary,
@@ -2569,13 +2621,19 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
 
     handle(socket, 'task:get', TaskGetSchema, (parsed, ack) => {
       const db = getDb();
-      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(parsed.id);
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(parsed.id) as Record<string, unknown> | undefined;
       if (!task) {
         if (ack) ack({ ok: false, error: { code: 'TASK_NOT_FOUND', message: `Task ${parsed.id} does not exist`, retryable: false } });
         return;
       }
+      // Building isolation (#795)
+      const socketBuilding = getSocketBuildingId(socket);
+      if (socketBuilding && task.building_id && task.building_id !== socketBuilding) {
+        if (ack) ack({ ok: false, error: { code: 'ACCESS_DENIED', message: 'Task belongs to a different project', retryable: false } });
+        return;
+      }
       const todos = db.prepare('SELECT * FROM todos WHERE task_id = ? ORDER BY created_at').all(parsed.id);
-      if (ack) ack({ ok: true, data: { ...(task as Record<string, unknown>), todos } });
+      if (ack) ack({ ok: true, data: { ...task, todos } });
     });
 
     // ─── Task Assignment Events ───
@@ -2733,8 +2791,12 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         if (ack) ack({ ok: false, error: { code: 'MILESTONE_NOT_FOUND', message: `Milestone ${parsed.id} does not exist`, retryable: false } });
         return;
       }
-
-      // Include task summary
+      // Building isolation (#795)
+      const socketBuilding = getSocketBuildingId(socket);
+      if (socketBuilding && milestone.building_id && milestone.building_id !== socketBuilding) {
+        if (ack) ack({ ok: false, error: { code: 'ACCESS_DENIED', message: 'Milestone belongs to a different project', retryable: false } });
+        return;
+      }
       const tasks = db.prepare('SELECT id, title, status, priority FROM tasks WHERE milestone_id = ? ORDER BY created_at').all(parsed.id);
       if (ack) ack({ ok: true, data: { ...milestone, tasks } });
     });
