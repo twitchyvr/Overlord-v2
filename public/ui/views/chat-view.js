@@ -14,7 +14,7 @@ import { h, setTrustedContent, escapeHtml, formatTime, debounce, linkEntities } 
 import { TokenInput } from '../components/token-input.js';
 import { Table } from '../components/table.js';
 import { Toast } from '../components/toast.js';
-import { EntityLink, resolveAgent } from '../engine/entity-nav.js';
+import { EntityLink, resolveAgent, resolveAgentName } from '../engine/entity-nav.js';
 
 
 /**
@@ -439,11 +439,13 @@ export class ChatView extends Component {
       'data-message-id': msg.id || ''
     });
 
+    // Resolve agent name from store if not provided (#790)
+    const resolvedName = msg.agentName || (msg.agentId ? resolveAgentName(msg.agentId) : null);
+
     // Avatar/role indicator
     const avatar = h('div', { class: 'chat-message-avatar' },
       role === 'user' ? 'U' :
-      role === 'assistant' ? 'A' :
-      role === 'agent' ? (msg.agentName || 'AG')[0].toUpperCase() :
+      (role === 'assistant' || role === 'agent') ? (resolvedName || 'A')[0].toUpperCase() :
       'S'
     );
     el.appendChild(avatar);
@@ -453,9 +455,9 @@ export class ChatView extends Component {
 
     // Sender name + timestamp (agent names are clickable entity links)
     const senderEl = (role === 'agent' || role === 'assistant') && msg.agentId
-      ? EntityLink.agent(msg.agentId, msg.agentName || 'Agent')
+      ? EntityLink.agent(msg.agentId, resolvedName || 'Agent')
       : h('span', { class: 'chat-message-sender' },
-          msg.agentName || (role === 'user' ? 'You' : role === 'assistant' ? 'Overlord' : 'System')
+          resolvedName || (role === 'user' ? 'You' : role === 'assistant' ? 'Overlord' : 'System')
         );
     if (senderEl.classList && !senderEl.classList.contains('chat-message-sender')) {
       senderEl.classList.add('chat-message-sender');
