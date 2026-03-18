@@ -284,7 +284,7 @@ export class RaidLogView extends Component {
         title: entry.summary,
         description: entry.rationale,
         status: entry.status || 'active',
-        owner: entry.decided_by,
+        owner: entry.decided_by ? resolveAgentName(entry.decided_by) : null,
         severity: entry.status === 'closed' ? null : severityMap[entry.type] || null
       });
 

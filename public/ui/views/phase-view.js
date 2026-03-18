@@ -19,7 +19,7 @@ import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
 import { h, formatTime, tip } from '../engine/helpers.js';
 import { Toast } from '../components/toast.js';
-import { EntityLink, resolveAgent } from '../engine/entity-nav.js';
+import { EntityLink, resolveAgent, resolveAgentName } from '../engine/entity-nav.js';
 
 /* ── Constants ── */
 
@@ -458,7 +458,7 @@ export class PhaseView extends Component {
           }, verdictCfg.icon),
           h('div', { class: 'phase-view-signoff-details' },
             h('div', { class: 'phase-view-signoff-who' },
-              agent ? EntityLink.agent(signoff.agent_id, agent.name) : h('span', null, signoff.agent_id || 'Unknown'),
+              signoff.agent_id ? EntityLink.agent(signoff.agent_id, resolveAgentName(signoff.agent_id)) : h('span', null, 'Unknown'),
               h('span', { class: 'phase-view-signoff-verdict-label' }, verdictCfg.label)
             ),
             signoff.reason

@@ -603,7 +603,7 @@ export class RoomView extends Component {
           (agent.name || '?')[0].toUpperCase()
         ),
         h('div', { class: 'room-roster-info' },
-          EntityLink.agent(agent.agentId || agent.id, agent.name || agent.agentId || agent.id || 'Agent'),
+          EntityLink.agent(agent.agentId || agent.id, agent.display_name || agent.name || 'Agent'),
           h('span', { class: 'room-roster-role' }, agent.role || ''),
           h('span', { class: 'room-roster-table text-muted' }, tableName)
         ),
@@ -1023,7 +1023,7 @@ export class RoomView extends Component {
       if (agent) {
         // Occupied chair: solid green border
         const statusClass = STATUS_CLASSES[agent.status] || 'idle';
-        const displayName = agent.display_name || agent.name || agent.id;
+        const displayName = agent.display_name || agent.name || 'Agent';
         const chair = h('div', { class: `rv-chair rv-chair-occupied rv-chair-${statusClass}`, title: `${displayName} (${agent.status || 'idle'})` },
           h('div', { class: 'rv-chair-circle' },
             h('div', { class: 'rv-chair-avatar' }, (displayName)[0].toUpperCase()),
@@ -1055,7 +1055,7 @@ export class RoomView extends Component {
           h('div', { class: `rv-table-agent-dot rv-table-agent-dot-${statusClass}` }),
           h('div', { class: 'rv-table-agent-avatar' }, (agent.name || '?')[0].toUpperCase()),
           h('div', { class: 'rv-table-agent-info' },
-            h('span', { class: 'rv-table-agent-name' }, agent.name || agent.id),
+            h('span', { class: 'rv-table-agent-name' }, agent.display_name || agent.name || 'Agent'),
             h('span', { class: 'rv-table-agent-role text-muted' }, agent.role || '')
           ),
           h('span', { class: `rv-table-agent-status rv-table-agent-status-${statusClass}` }, agent.status || 'idle')
@@ -1124,7 +1124,7 @@ export class RoomView extends Component {
       const card = h('div', { class: 'assign-agent-card', 'data-agent-id': agent.id },
         h('div', { class: 'assign-agent-avatar' }, (agent.name || '?')[0].toUpperCase()),
         h('div', { class: 'assign-agent-info' },
-          h('div', { class: 'assign-agent-name' }, agent.name || agent.id),
+          h('div', { class: 'assign-agent-name' }, agent.display_name || agent.name || 'Agent'),
           h('div', { class: 'assign-agent-role text-muted' }, agent.role || 'agent')
         )
       );
@@ -1493,7 +1493,7 @@ export class RoomView extends Component {
         h('div', { class: 'assign-agent-avatar' }, (agent.name || '?')[0].toUpperCase()),
         h('div', { class: 'assign-agent-info' },
           h('div', { class: 'assign-agent-name-row' },
-            h('span', { class: 'assign-agent-name' }, agent.name || agent.id),
+            h('span', { class: 'assign-agent-name' }, agent.display_name || agent.name || 'Agent'),
             agentHasAccess
               ? h('span', { class: 'assign-agent-badge access-ok' }, 'Has Access')
               : h('span', { class: 'assign-agent-badge access-denied' }, 'No Access')

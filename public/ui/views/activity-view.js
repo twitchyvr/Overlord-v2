@@ -798,7 +798,7 @@ export class ActivityView extends Component {
         h('h4', { class: 'activity-view-drawer-heading' }, 'Agent'),
         h('div', { class: 'activity-view-drawer-row' },
           h('span', { class: 'activity-view-drawer-label' }, 'Name:'),
-          EntityLink.agent(agentId, agent?.name)
+          EntityLink.agent(agentId, resolveAgentName(agentId))
         )
       );
       if (agent?.role) {

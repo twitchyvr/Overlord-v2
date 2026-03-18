@@ -142,7 +142,7 @@ async function _openAgentDetail(agentId) {
   const container = h('div', { class: 'entity-detail agent-detail-view' });
 
   // ── Header ──
-  const displayName = agent.display_name || agent.name || agent.id;
+  const displayName = agent.display_name || agent.name || 'Agent';
   const avatarEl = h('div', { class: 'agent-detail-avatar' });
   if (agent.photo_url) {
     const img = h('img', {
@@ -736,7 +736,7 @@ export const EntityLink = {
   agent(agentId, displayName) {
     if (!agentId) return h('span', { class: 'text-muted' }, 'Unassigned');
     const resolved = resolveAgent(agentId);
-    return _createEntityLink('agent', agentId, displayName || resolved?.name || agentId);
+    return _createEntityLink('agent', agentId, displayName || resolved?.name || 'Agent');
   },
 
   /**
