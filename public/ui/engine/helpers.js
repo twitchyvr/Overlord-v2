@@ -114,7 +114,12 @@ export function uid(prefix = '') {
  */
 export function formatTime(date) {
   if (!date) return '';
-  const d = date instanceof Date ? date : new Date(date);
+  // Normalize SQLite datetime format (no timezone) to UTC (#707)
+  let input = date;
+  if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(input) && !input.includes('T') && !input.includes('Z')) {
+    input = input.replace(' ', 'T') + 'Z';
+  }
+  const d = input instanceof Date ? input : new Date(input);
   if (isNaN(d.getTime())) return '';
 
   const now = new Date();
