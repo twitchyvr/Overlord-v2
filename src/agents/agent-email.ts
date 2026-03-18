@@ -156,7 +156,7 @@ function getThreadId(parentId: string): string | null {
  */
 export function getInbox(
   agentId: string,
-  opts: { status?: string; priority?: string; limit?: number; offset?: number } = {},
+  opts: { status?: string; priority?: string; limit?: number; offset?: number; buildingId?: string } = {},
 ): EmailWithRecipients[] {
   const db = getDb();
   const limit = opts.limit ?? 50;
@@ -170,6 +170,12 @@ export function getInbox(
     WHERE r.agent_id = ?
   `;
   const params: unknown[] = [agentId];
+
+  // Filter by building to prevent cross-project data bleed (#772)
+  if (opts.buildingId) {
+    sql += ' AND e.building_id = ?';
+    params.push(opts.buildingId);
+  }
 
   if (opts.status) {
     sql += ' AND e.status = ?';
@@ -196,20 +202,30 @@ export function getInbox(
  */
 export function getSentEmails(
   agentId: string,
-  opts: { limit?: number; offset?: number } = {},
+  opts: { limit?: number; offset?: number; buildingId?: string } = {},
 ): EmailWithRecipients[] {
   const db = getDb();
   const limit = opts.limit ?? 50;
   const offset = opts.offset ?? 0;
 
-  const emails = db.prepare(`
+  let sql = `
     SELECT e.*, a.name AS from_name
     FROM agent_emails e
     LEFT JOIN agents a ON a.id = e.from_id
     WHERE e.from_id = ?
-    ORDER BY e.created_at DESC
-    LIMIT ? OFFSET ?
-  `).all(agentId, limit, offset) as Array<EmailRow & { from_name: string }>;
+  `;
+  const params: unknown[] = [agentId];
+
+  // Filter by building (#772)
+  if (opts.buildingId) {
+    sql += ' AND e.building_id = ?';
+    params.push(opts.buildingId);
+  }
+
+  sql += ' ORDER BY e.created_at DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const emails = db.prepare(sql).all(...params) as Array<EmailRow & { from_name: string }>;
 
   return emails.map((e) => ({
     ...e,
@@ -316,14 +332,22 @@ export function markAsRead(emailId: string, agentId: string): Result {
 /**
  * Get unread count for an agent.
  */
-export function getUnreadCount(agentId: string): number {
+export function getUnreadCount(agentId: string, buildingId?: string): number {
   const db = getDb();
-  const result = db.prepare(`
+  let sql = `
     SELECT COUNT(DISTINCT r.email_id) as cnt
     FROM agent_email_recipients r
+    JOIN agent_emails e ON e.id = r.email_id
     WHERE r.agent_id = ? AND r.read_at IS NULL
-  `).get(agentId) as { cnt: number };
+  `;
+  const params: unknown[] = [agentId];
 
+  if (buildingId) {
+    sql += ' AND e.building_id = ?';
+    params.push(buildingId);
+  }
+
+  const result = db.prepare(sql).get(...params) as { cnt: number };
   return result.cnt;
 }
 
@@ -331,20 +355,32 @@ export function getUnreadCount(agentId: string): number {
  * Get pending (unread + urgent first) emails for idle processing.
  * Returns urgent emails first, then normal unread.
  */
-export function getPendingEmails(agentId: string, limit = 10): EmailWithRecipients[] {
+export function getPendingEmails(agentId: string, limit = 10, buildingId?: string): EmailWithRecipients[] {
   const db = getDb();
 
-  const emails = db.prepare(`
+  let sql = `
     SELECT DISTINCT e.*, a.name AS from_name
     FROM agent_emails e
     JOIN agent_email_recipients r ON r.email_id = e.id
     LEFT JOIN agents a ON a.id = e.from_id
     WHERE r.agent_id = ? AND r.read_at IS NULL
+  `;
+  const params: unknown[] = [agentId];
+
+  if (buildingId) {
+    sql += ' AND e.building_id = ?';
+    params.push(buildingId);
+  }
+
+  sql += `
     ORDER BY
       CASE e.priority WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
       e.created_at ASC
     LIMIT ?
-  `).all(agentId, limit) as Array<EmailRow & { from_name: string }>;
+  `;
+  params.push(limit);
+
+  const emails = db.prepare(sql).all(...params) as Array<EmailRow & { from_name: string }>;
 
   return emails.map((e) => ({
     ...e,

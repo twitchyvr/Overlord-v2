@@ -801,6 +801,7 @@ export const EmailForwardSchema = z.object({
 
 export const EmailInboxSchema = z.object({
   agentId: id(),
+  buildingId: optionalId(), // Filter by building (#772)
   status: z.string().max(MAX_NAME).optional(),
   priority: z.string().max(MAX_NAME).optional(),
   limit: z.number().int().min(1).max(100).optional().default(50),
@@ -822,10 +823,12 @@ export const EmailMarkReadSchema = z.object({
 
 export const EmailUnreadCountSchema = z.object({
   agentId: id(),
+  buildingId: optionalId(), // Filter by building (#772)
 });
 
 export const EmailSentSchema = z.object({
   agentId: id(),
+  buildingId: optionalId(), // Filter by building (#772)
   limit: z.number().int().min(1).max(100).optional().default(50),
   offset: z.number().int().min(0).optional().default(0),
 });

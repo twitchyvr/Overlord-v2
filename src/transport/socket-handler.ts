@@ -1486,6 +1486,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         priority: parsed.priority,
         limit: parsed.limit,
         offset: parsed.offset,
+        buildingId: parsed.buildingId,
       });
       if (ack) ack({ ok: true, data: emails });
     });
@@ -1494,6 +1495,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       const emails = getSentEmails(parsed.agentId, {
         limit: parsed.limit,
         offset: parsed.offset,
+        buildingId: parsed.buildingId,
       });
       if (ack) ack({ ok: true, data: emails });
     });
@@ -1521,7 +1523,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
     });
 
     handle(socket, 'email:unread-count', EmailUnreadCountSchema, (parsed, ack) => {
-      const count = getUnreadCount(parsed.agentId);
+      const count = getUnreadCount(parsed.agentId, parsed.buildingId);
       if (ack) ack({ ok: true, data: { agentId: parsed.agentId, count } });
     });
 
