@@ -96,7 +96,8 @@
   flex-direction: column;
   gap: 4px;
   padding: var(--sp-2) 6px;
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0; /* Critical for flex overflow scrolling */
   overflow-y: auto;
   overflow-x: hidden;
   /* Smooth scrollbar */

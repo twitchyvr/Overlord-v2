@@ -490,7 +490,7 @@ describe('BuildingView', () => {
     expect(foundation).toBeNull();
   });
 
-  it('supports multiple floors expanded simultaneously', async () => {
+  it('accordion: only one floor expanded at a time (#726)', async () => {
     const { BuildingView } = await import('../../../public/ui/views/building-view.js');
     const el = document.createElement('div');
     const view = new BuildingView(el);
@@ -503,15 +503,16 @@ describe('BuildingView', () => {
       { id: 'f2', name: 'Floor B', ordinal: 2, rooms: [{ id: 'r2', type: 'review' }] }
     ]);
 
-    // Expand both floors
+    // Expand first floor
     const headers = el.querySelectorAll('.floor-section-header');
     (headers[0] as HTMLElement).click();
-    (headers[1] as HTMLElement).click();
+    expect(el.querySelectorAll('.floor-section.expanded').length).toBe(1);
 
-    // Both should be expanded
+    // Expand second floor — first should close (accordion)
+    (headers[1] as HTMLElement).click();
     const expanded = el.querySelectorAll('.floor-section.expanded');
-    expect(expanded.length).toBe(2);
-    expect(el.querySelectorAll('.room-item').length).toBe(2);
+    expect(expanded.length).toBe(1);
+    expect(expanded[0].getAttribute('data-floor-id')).toBe('f2');
   });
 
   it('cleans up on destroy', async () => {

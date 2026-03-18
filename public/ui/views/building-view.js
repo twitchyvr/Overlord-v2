@@ -325,9 +325,23 @@ export class BuildingView extends Component {
           section.classList.remove('expanded');
         }
       } else {
+        // Accordion: collapse all other floors first (#726)
+        for (const otherId of [...this._expandedFloors]) {
+          if (otherId !== floor.id) {
+            this._expandedFloors.delete(otherId);
+            const otherSection = this.el.querySelector(`[data-floor-id="${otherId}"]`);
+            if (otherSection) {
+              const otherBody = otherSection.querySelector('.floor-section-body');
+              if (otherBody) otherBody.remove();
+              otherSection.classList.remove('expanded');
+              const otherHeader = otherSection.querySelector('.floor-section-header');
+              if (otherHeader) otherHeader.setAttribute('aria-expanded', 'false');
+            }
+          }
+        }
+
         this._expandedFloors.add(floor.id);
         header.setAttribute('aria-expanded', 'true');
-        // Build and append the body content
         section.classList.add('expanded');
         const body = this._buildFloorBody(floor);
         section.appendChild(body);
