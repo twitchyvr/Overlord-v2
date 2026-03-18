@@ -131,6 +131,38 @@ export class AgentActivityTracker extends Component {
         }
       })
     );
+
+    // ── Initialize idle state for agents in rooms (#776) ──
+    // Without this, agents have no animation class on initial load
+    try {
+      const store = OverlordUI.getStore();
+      if (store) {
+        this.subscribe(store, 'building.agentPositions', () => this._initIdleStates());
+        this.subscribe(store, 'agents.list', () => this._initIdleStates());
+      }
+    } catch { /* store not ready yet */ }
+  }
+
+  /** Apply idle animation to all agents currently in rooms (#776) */
+  _initIdleStates() {
+    const store = OverlordUI.getStore();
+    const agents = store?.get('agents.list') || [];
+    const positions = store?.get('building.agentPositions') || {};
+
+    for (const agent of agents) {
+      if (agent.id === '__user__') continue;
+      // Only set idle if not already tracking a more specific state
+      if (this._agentStates.has(agent.id)) continue;
+
+      const pos = positions[agent.id];
+      const inRoom = agent.current_room_id || pos?.roomId;
+      const status = pos?.status || agent.status || 'idle';
+
+      if (inRoom) {
+        const state = (status === 'active' || status === 'working') ? 'working' : 'idle';
+        this._setState(agent.id, state);
+      }
+    }
   }
 
   unmount() {
