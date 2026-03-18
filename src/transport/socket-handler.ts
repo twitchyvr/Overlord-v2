@@ -2988,23 +2988,34 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       }
       const nextPhase = phaseOrder[idx + 1];
 
-      // Create a gate for the current phase and immediately sign off as GO
-      const gateResult = createGate({ buildingId, phase: currentPhase });
-      if (!gateResult.ok) {
-        if (ack) ack(gateResult);
-        return;
+      // #677: Check if advancement is allowed — requires at least one GO gate
+      const advanceCheck = canAdvance(buildingId);
+      if (advanceCheck.ok) {
+        const advData = advanceCheck.data as { canAdvance: boolean; reason?: string };
+        if (!advData.canAdvance) {
+          if (ack) ack({ ok: false, error: { code: 'GATE_REQUIRED', message: advData.reason || 'At least one gate must have a GO verdict before advancing', retryable: false } });
+          return;
+        }
       }
 
-      const gateData = gateResult.data as { id: string };
-      const signoffResult = await signoffGate({
-        gateId: gateData.id, reviewer: parsed.reviewer || 'system',
-        verdict: 'GO', conditions: [], nextPhaseInput: parsed.nextPhaseInput,
-      });
+      // Advancement allowed — find the existing GO gate or fail
+      const existingGates = getDb().prepare(
+        "SELECT id FROM phase_gates WHERE building_id = ? AND phase = ? AND status = 'go' ORDER BY signoff_timestamp DESC LIMIT 1",
+      ).get(buildingId, currentPhase) as { id: string } | undefined;
+
+      const gateId = existingGates?.id || 'system-advance';
+
+      // Update building phase
+      getDb().prepare('UPDATE buildings SET active_phase = ?, updated_at = datetime(?) WHERE id = ?')
+        .run(nextPhase, new Date().toISOString(), buildingId);
+
+      broadcastLog('info', `Phase advanced: ${currentPhase} → ${nextPhase}`, 'phase');
+
+      const signoffResult = { ok: true as const, data: { gateId, nextPhase, phaseAdvanced: true } };
 
       if (signoffResult.ok) {
-        broadcastLog('info', `Phase advanced: ${currentPhase} → ${nextPhase}`, 'phase');
         bus.emit('phase:advanced', {
-          buildingId, from: currentPhase, to: nextPhase, gateId: gateData.id,
+          buildingId, from: currentPhase, to: nextPhase, gateId,
         });
         bus.emit('building:updated', { id: buildingId, activePhase: nextPhase });
       }

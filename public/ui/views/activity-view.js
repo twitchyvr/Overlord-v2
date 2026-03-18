@@ -22,7 +22,7 @@ import { OverlordUI } from '../engine/engine.js';
 import { h, formatTime } from '../engine/helpers.js';
 import { Tabs } from '../components/tabs.js';
 import { Drawer } from '../components/drawer.js';
-import { EntityLink, resolveAgent, resolveRoom } from '../engine/entity-nav.js';
+import { EntityLink, resolveAgent, resolveAgentName, resolveRoom } from '../engine/entity-nav.js';
 
 
 /* ── Constants ─────────────────────────────────────────────── */
@@ -855,7 +855,7 @@ export class ActivityView extends Component {
 
     // Determine a title for the drawer
     const drawerTitle = agentId
-      ? `Activity: ${resolveAgent(agentId)?.name || agentId}`
+      ? `Activity: ${resolveAgentName(agentId)}`
       : roomId
         ? `Activity: ${resolveRoom(roomId)?.name || roomId}`
         : 'Activity Detail';

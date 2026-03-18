@@ -319,6 +319,43 @@ export function exitRoom({ roomId, agentId, reason }: ExitRoomParams): Result {
   }
 }
 
+/** Extract a meaningful summary from exit document fields (#675) */
+function _extractExitDocSummary(doc: Record<string, unknown>, docType: string, roomType: string): string {
+  // Try common exit doc field names for a summary
+  const summaryFields = ['summary', 'title', 'description', 'findings', 'conclusion', 'recommendation', 'decision'];
+  for (const field of summaryFields) {
+    if (doc[field] && typeof doc[field] === 'string' && (doc[field] as string).length > 5) {
+      const text = (doc[field] as string).trim();
+      return text.length > 200 ? text.slice(0, 197) + '...' : text;
+    }
+  }
+  // Fallback: try to describe what type of work was done
+  const typeLabels: Record<string, string> = {
+    'implementation-report': 'Implementation completed',
+    'requirements-doc': 'Requirements documented',
+    'architecture-report': 'Architecture defined',
+    'test-report': 'Testing completed',
+    'review-report': 'Code review completed',
+    'deployment-report': 'Deployment executed',
+    'strategy-report': 'Strategy defined',
+  };
+  return typeLabels[docType] || `${roomType} phase completed`;
+}
+
+/** Extract rationale from exit document content (#675) */
+function _extractExitDocRationale(doc: Record<string, unknown>, docType: string): string {
+  const rationaleFields = ['rationale', 'notes', 'details', 'body', 'content', 'analysis'];
+  for (const field of rationaleFields) {
+    if (doc[field] && typeof doc[field] === 'string' && (doc[field] as string).length > 10) {
+      const text = (doc[field] as string).trim();
+      return text.length > 500 ? text.slice(0, 497) + '...' : text;
+    }
+  }
+  // Count fields as a basic description
+  const fieldCount = Object.keys(doc).length;
+  return `Submitted ${docType} exit document with ${fieldCount} field${fieldCount === 1 ? '' : 's'}`;
+}
+
 interface SubmitExitDocParams {
   roomId: string;
   agentId: string;
@@ -360,9 +397,21 @@ export async function submitExitDocument({ roomId, agentId, document, buildingId
     const id = `exitdoc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const raidEntryIds: string[] = [];
 
-    // Auto-create RAID decision entry linking exit doc to project log
+    // Auto-create RAID decision entry linking exit doc to project log (#675)
+    // Extract meaningful content from the exit document instead of generic templates
     if (buildingId && phase) {
       const raidId = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const docType = room.exitRequired?.type || 'generic';
+      const roomType = room.type;
+
+      // Build a meaningful summary from exit doc fields
+      const docSummary = _extractExitDocSummary(document, docType, roomType);
+      const docRationale = _extractExitDocRationale(document, docType);
+
+      // Resolve agent name for rationale — use SELECT * to handle schema variations
+      const agentRow = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as Record<string, unknown> | undefined;
+      const agentName = (agentRow?.display_name as string) || (agentRow?.name as string) || 'Agent';
+
       db.prepare(`
         INSERT INTO raid_entries (id, building_id, type, phase, room_id, summary, rationale, decided_by, affected_areas)
         VALUES (?, ?, 'decision', ?, ?, ?, ?, ?, ?)
@@ -371,10 +420,10 @@ export async function submitExitDocument({ roomId, agentId, document, buildingId
         buildingId,
         phase,
         roomId,
-        `Exit document submitted: ${room.exitRequired?.type || 'generic'}`,
-        `Agent ${agentId} completed ${room.type} room work`,
+        docSummary,
+        `${agentName}: ${docRationale}`,
         agentId,
-        JSON.stringify([room.type]),
+        JSON.stringify([roomType]),
       );
       raidEntryIds.push(raidId);
       log.info({ raidId, exitDocId: id, roomId }, 'RAID entry auto-created for exit document');
