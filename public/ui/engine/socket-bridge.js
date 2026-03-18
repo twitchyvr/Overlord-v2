@@ -1299,7 +1299,12 @@ export function initSocketBridge(socket, store, engine) {
     async createTask(params) {
       const res = await _emitWithFeedback('task:create', params);
       if (res && res.ok) {
-        store.update('tasks.list', (tasks) => [res.data, ...(tasks || [])]);
+        store.update('tasks.list', (tasks) => {
+          const list = tasks || [];
+          // Dedup — real-time task:created event may have already added this (#787)
+          if (res.data?.id && list.some((t) => t.id === res.data.id)) return list;
+          return [res.data, ...list];
+        });
       }
       return res;
     },
