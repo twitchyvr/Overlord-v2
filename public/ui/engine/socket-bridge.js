@@ -1704,8 +1704,8 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithFeedback('email:mark-read', { emailId, agentId });
     },
 
-    fetchUnreadCount(agentId) {
-      return _emitWithTimeout('email:unread-count', { agentId }).then((res) => {
+    fetchUnreadCount(agentId, opts = {}) {
+      return _emitWithTimeout('email:unread-count', { agentId, ...opts }).then((res) => {
         if (res && res.ok) {
           store.set('email.unreadCount', res.data?.count ?? 0);
         }

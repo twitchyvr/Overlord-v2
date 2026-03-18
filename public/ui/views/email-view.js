@@ -135,10 +135,12 @@ export class EmailView extends Component {
     if (agents.length === 0) { this._loading = false; return; }
 
     const agentId = this._selectedAgentForContext || '__user__';
+    const store = OverlordUI.getStore();
+    const buildingId = store?.get('building.active') || '';
     this._loading = true;
     const gen = ++this._fetchGen;
 
-    api.fetchInbox(agentId)
+    api.fetchInbox(agentId, { buildingId })
       .then((res) => {
         if (!this._mounted || gen !== this._fetchGen) return;
         if (!res || !res.ok) {
@@ -152,8 +154,8 @@ export class EmailView extends Component {
         this._renderList();
       });
 
-    api.fetchSentEmails(agentId).catch(() => {});
-    api.fetchUnreadCount(agentId).catch(() => {});
+    api.fetchSentEmails(agentId, { buildingId }).catch(() => {});
+    api.fetchUnreadCount(agentId, { buildingId }).catch(() => {});
   }
 
   // ── Full render ────────────────────────────────────────────
