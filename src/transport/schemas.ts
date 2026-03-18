@@ -1107,3 +1107,22 @@ export const RepoSyncFetchSchema = z.object({
   repoId: id(),
 });
 
+// Documentation Library schemas (#811)
+export const DocLibraryCreateSchema = z.object({
+  buildingId: optionalId(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  docRootPath: z.string().min(1).max(500),
+});
+export const DocLibraryListSchema = z.object({ buildingId: optionalId() });
+export const DocLibraryDeleteSchema = z.object({ libraryId: id() });
+export const DocLibraryIndexSchema = z.object({ libraryId: id() });
+export const DocSearchSchema = z.object({
+  query: z.string().min(1).max(500),
+  buildingId: optionalId(),
+  libraryId: optionalId(),
+  limit: z.number().int().min(1).max(100).optional(),
+});
+export const DocGetSchema = z.object({ entryId: id() });
+export const DocListSchema = z.object({ libraryId: id() });
+

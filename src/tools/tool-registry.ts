@@ -30,6 +30,7 @@ import { executeWorkspaceSandbox } from './providers/workspace-sandbox.js';
 import { analyzeScreenshot } from './providers/screenshot-analyzer.js';
 import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
 import { getDb } from '../storage/db.js';
+import { searchDocuments, getDocumentContent, listDocuments, listLibraries } from '../storage/doc-library.js';
 
 const log = logger.child({ module: 'tool-registry' });
 
@@ -1324,6 +1325,77 @@ function registerBuiltinTools(): void {
         output: `Milestone created: "${title}"${targetDate ? ` (target: ${targetDate})` : ''}`,
         milestoneId: id,
       };
+    },
+  });
+
+  // ─── Documentation Library Tools (#811) ───
+
+  registerTool({
+    name: 'search_library',
+    description: 'Search project documentation libraries for information. Use this to find relevant docs, specs, guides, or code references.',
+    category: 'documentation',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query — keywords, concepts, or questions' },
+        limit: { type: 'number', description: 'Max results (default: 10)' },
+      },
+      required: ['query'],
+    },
+    execute: async (p, ctx) => {
+      const buildingId = ctx?.buildingId;
+      const result = searchDocuments({
+        query: p.query as string,
+        buildingId: buildingId || undefined,
+        limit: (p.limit as number) || 10,
+      });
+      if (!result.ok) return { output: result.error?.message || 'Search failed', error: true };
+      const docs = result.data as Array<{ title: string; summary: string; file_path: string; library_name: string }>;
+      if (docs.length === 0) return { output: 'No matching documents found.' };
+      const lines = docs.map((d, i) =>
+        `${i + 1}. **${d.title}** (${d.library_name})\n   ${d.summary}\n   Path: ${d.file_path}`
+      );
+      return { output: `Found ${docs.length} documents:\n\n${lines.join('\n\n')}` };
+    },
+  });
+
+  registerTool({
+    name: 'get_document',
+    description: 'Read the full content of a document from the project documentation library.',
+    category: 'documentation',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        documentId: { type: 'string', description: 'Document entry ID from search results' },
+      },
+      required: ['documentId'],
+    },
+    execute: async (p) => {
+      const result = getDocumentContent(p.documentId as string);
+      if (!result.ok) return { output: result.error?.message || 'Document not found', error: true };
+      const doc = result.data as { title: string; content: string; file_path: string };
+      return { output: `# ${doc.title}\n\n${doc.content}` };
+    },
+  });
+
+  registerTool({
+    name: 'list_library',
+    description: 'List all documents in a documentation library with their summaries.',
+    category: 'documentation',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        libraryId: { type: 'string', description: 'Library ID to list' },
+      },
+      required: ['libraryId'],
+    },
+    execute: async (p) => {
+      const result = listDocuments(p.libraryId as string);
+      if (!result.ok) return { output: result.error?.message || 'Library not found', error: true };
+      const docs = result.data as Array<{ title: string; file_path: string; word_count: number; format: string }>;
+      if (docs.length === 0) return { output: 'Library is empty.' };
+      const lines = docs.map(d => `- ${d.title} (${d.format}, ${d.word_count} words) — ${d.file_path}`);
+      return { output: `${docs.length} documents:\n\n${lines.join('\n')}` };
     },
   });
 }

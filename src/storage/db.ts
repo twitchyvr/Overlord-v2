@@ -408,6 +408,37 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_file_origins_building ON repo_file_origins(building_id);
   CREATE INDEX IF NOT EXISTS idx_file_origins_repo ON repo_file_origins(source_repo_id);
   CREATE INDEX IF NOT EXISTS idx_file_origins_path ON repo_file_origins(file_path);
+
+  -- Documentation Libraries (#811)
+  CREATE TABLE IF NOT EXISTS doc_libraries (
+    id TEXT PRIMARY KEY,
+    building_id TEXT REFERENCES buildings(id),
+    name TEXT NOT NULL,
+    description TEXT,
+    doc_root_path TEXT NOT NULL,
+    auto_index INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS doc_entries (
+    id TEXT PRIMARY KEY,
+    library_id TEXT NOT NULL REFERENCES doc_libraries(id),
+    file_path TEXT NOT NULL,
+    title TEXT,
+    summary TEXT,
+    format TEXT DEFAULT 'text',
+    content_hash TEXT,
+    word_count INTEGER DEFAULT 0,
+    tags TEXT DEFAULT '[]',
+    indexed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_doc_libraries_building ON doc_libraries(building_id);
+  CREATE INDEX IF NOT EXISTS idx_doc_entries_library ON doc_entries(library_id);
+  CREATE INDEX IF NOT EXISTS idx_doc_entries_path ON doc_entries(file_path);
 `;
 
 /**

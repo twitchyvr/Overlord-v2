@@ -269,6 +269,9 @@ export class StrategistOffice extends BaseRoom {
       'create_task',
       'create_raid_entry',
       'create_milestone',
+      'search_library',
+      'get_document',
+      'list_library',
     ],
     fileScope: 'read-only',
     exitRequired: {
