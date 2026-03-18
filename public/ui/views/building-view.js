@@ -1422,7 +1422,13 @@ export class BuildingView extends Component {
 
   _countActiveAgents() {
     if (!this._agentPositions) return 0;
-    return Object.values(this._agentPositions).filter(a => a.status === 'active' || a.status === 'working').length;
+    // Only count agents that belong to the current building (#686)
+    const store = OverlordUI.getStore();
+    const agentsList = store?.get('agents.list') || [];
+    const buildingAgents = agentsList.length > 0 ? new Set(agentsList.map(a => a.id)) : null;
+    return Object.entries(this._agentPositions)
+      .filter(([id, a]) => (a.status === 'active' || a.status === 'working') && (!buildingAgents || buildingAgents.has(id)))
+      .length;
   }
 
   _updateAgentIndicators() {
