@@ -1774,53 +1774,83 @@ export class AgentsView extends Component {
       Toast.error('Not connected');
       return;
     }
-    if (this._rooms.length === 0) {
+
+    // Only use rooms from the current building's floors (#774)
+    const store = OverlordUI.getStore();
+    const floors = store?.get('building.floors') || [];
+    const buildingRooms = [];
+    for (const floor of floors) {
+      for (const room of (floor.rooms || [])) {
+        buildingRooms.push(room);
+      }
+    }
+
+    if (buildingRooms.length === 0) {
       Toast.warning('No rooms available. Create rooms first.');
       return;
     }
 
+    // Build a map of room type → room id (only current building)
     const roomMap = {};
-    for (const room of this._rooms) {
-      roomMap[room.type] = room.id;
+    for (const room of buildingRooms) {
+      if (!roomMap[room.type]) roomMap[room.type] = room.id;
     }
-    const fallbackRoomId = this._rooms[0]?.id;
+
+    // Role → preferred room type mapping
+    const roleToRoom = {
+      strategist: 'strategist', lead: 'strategist',
+      analyst: 'discovery', 'business-analyst': 'discovery',
+      architect: 'architecture',
+      developer: 'code-lab', engineer: 'code-lab',
+      tester: 'testing-lab', qa: 'testing-lab',
+      reviewer: 'review',
+      operator: 'deploy', devops: 'deploy',
+    };
 
     let assigned = 0;
-    let failed = 0;
+    let skipped = 0;
 
     for (const agent of unassigned) {
-      const roomAccess = this._parseArray(agent.room_access);
+      // Skip agents already in a room
+      if (agent.current_room_id) { skipped++; continue; }
+
+      // Find best room: role match → room_access match → first available
       let targetRoomId = null;
 
-      // Find the first matching room from the agent's room_access
-      for (const accessType of roomAccess) {
-        if (accessType === '*') {
-          targetRoomId = fallbackRoomId;
-          break;
-        }
-        if (roomMap[accessType]) {
-          targetRoomId = roomMap[accessType];
-          break;
+      // 1. Try role-based match
+      const rolePref = roleToRoom[(agent.role || '').toLowerCase()];
+      if (rolePref && roomMap[rolePref]) {
+        targetRoomId = roomMap[rolePref];
+      }
+
+      // 2. Try room_access match
+      if (!targetRoomId) {
+        const roomAccess = this._parseArray(agent.room_access);
+        for (const accessType of roomAccess) {
+          if (accessType === '*') { targetRoomId = buildingRooms[0]?.id; break; }
+          if (roomMap[accessType]) { targetRoomId = roomMap[accessType]; break; }
         }
       }
 
-      // Fall back to first available room if no match found
-      if (!targetRoomId) targetRoomId = fallbackRoomId;
+      // 3. Fallback to first room
+      if (!targetRoomId) targetRoomId = buildingRooms[0]?.id;
+      if (!targetRoomId) { skipped++; continue; }
 
       try {
         const result = await window.overlordSocket.moveAgent(agent.id, targetRoomId);
         if (result && result.ok) {
           assigned++;
         } else {
-          failed++;
+          skipped++;
         }
       } catch {
-        failed++;
+        skipped++;
       }
     }
 
     if (assigned > 0) Toast.success(`${assigned} agent${assigned === 1 ? '' : 's'} assigned to rooms`);
-    if (failed > 0) Toast.warning(`${failed} agent${failed === 1 ? '' : 's'} could not be assigned`);
+    if (skipped > 0 && assigned === 0) Toast.warning('No agents could be assigned — check room access settings');
+    else if (skipped > 0) Toast.info(`${skipped} agent${skipped === 1 ? '' : 's'} skipped (already assigned or no matching room)`);
 
     this._fetchAgents();
   }
