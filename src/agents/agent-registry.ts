@@ -120,6 +120,30 @@ export function registerAgent({
     if (!gender) gender = g;
   }
 
+  // Auto-populate room_access from role if not provided (#796)
+  let effectiveRoomAccess = roomAccess;
+  if (effectiveRoomAccess.length === 0 && role) {
+    const roleToRooms: Record<string, string[]> = {
+      strategist: ['strategist'],
+      lead: ['strategist', 'review'],
+      analyst: ['discovery'],
+      'business-analyst': ['discovery'],
+      architect: ['architecture'],
+      developer: ['code-lab'],
+      engineer: ['code-lab'],
+      tester: ['testing-lab'],
+      qa: ['testing-lab'],
+      reviewer: ['review'],
+      'code-reviewer': ['review'],
+      operator: ['deploy'],
+      devops: ['deploy'],
+      sre: ['deploy'],
+      security: ['security-review'],
+    };
+    const mapped = roleToRooms[role.toLowerCase()];
+    if (mapped) effectiveRoomAccess = mapped;
+  }
+
   // Compute display_name: explicit value > "First Last" > fallback to name
   const computedDisplayName = displayName
     || (firstName && lastName ? `${firstName} ${lastName}` : null)
@@ -141,7 +165,7 @@ export function registerAgent({
     role,
     buildingId || null,
     JSON.stringify(capabilities),
-    JSON.stringify(roomAccess),
+    JSON.stringify(effectiveRoomAccess),
     badgeStr,
     JSON.stringify(config),
     firstName || null,
