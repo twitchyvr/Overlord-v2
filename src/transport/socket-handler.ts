@@ -2998,12 +2998,15 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
 
       // #677: Check if advancement is allowed — requires at least one GO gate
       const advanceCheck = canAdvance(buildingId);
-      if (advanceCheck.ok) {
-        const advData = advanceCheck.data as { canAdvance: boolean; reason?: string };
-        if (!advData.canAdvance) {
-          if (ack) ack({ ok: false, error: { code: 'GATE_REQUIRED', message: advData.reason || 'At least one gate must have a GO verdict before advancing', retryable: false } });
-          return;
-        }
+      if (!advanceCheck.ok) {
+        // canAdvance() itself failed — do not allow advancement
+        if (ack) ack(advanceCheck);
+        return;
+      }
+      const advData = advanceCheck.data as { canAdvance: boolean; reason?: string };
+      if (!advData.canAdvance) {
+        if (ack) ack({ ok: false, error: { code: 'GATE_REQUIRED', message: advData.reason || 'At least one gate must have a GO verdict before advancing', retryable: false } });
+        return;
       }
 
       // Advancement allowed — find the existing GO gate or fail
