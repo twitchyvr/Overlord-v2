@@ -468,25 +468,53 @@ export class AgentsView extends Component {
 
   /** Render a highlighted section showing agents currently in rooms. */
   _renderWorkingSection(roomNameMap) {
-    const working = this._getAgentsInRooms();
-    if (working.length === 0) return null;
+    const inRooms = this._getAgentsInRooms();
+    if (inRooms.length === 0) return null;
+
+    // Separate truly active (working/active status) from just assigned (#775)
+    const active = inRooms.filter(a => {
+      const s = this._resolveStatus(a);
+      return s === 'active' || s === 'working';
+    });
+    const assigned = inRooms.filter(a => {
+      const s = this._resolveStatus(a);
+      return s !== 'active' && s !== 'working';
+    });
 
     const section = h('div', { class: 'agents-working-section' });
-    section.appendChild(h('div', { class: 'agents-working-title' },
-      `Currently Working (${working.length})`));
 
-    for (const agent of working) {
-      const roomId = this._resolveRoomId(agent);
-      const roomName = roomId ? (roomNameMap[roomId] || 'Room') : '';
-      const statusCfg = STATUS_CONFIG[this._resolveStatus(agent)] || STATUS_CONFIG.idle;
-      const row = h('div', { style: 'display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) 0;font-size:var(--text-sm)' },
-        h('div', { class: `agents-view-status-dot ${statusCfg.dot}`, style: 'position:static;width:8px;height:8px' }),
-        h('span', { style: 'font-weight:var(--font-medium)' }, this._resolveDisplayName(agent)),
-        h('span', { style: 'color:var(--text-muted)' }, `in ${roomName}`)
-      );
-      section.appendChild(row);
+    // Active agents (actually doing work)
+    if (active.length > 0) {
+      section.appendChild(h('div', { class: 'agents-working-title' },
+        `Active (${active.length})`));
+      for (const agent of active) {
+        section.appendChild(this._workingRow(agent, roomNameMap));
+      }
     }
+
+    // Assigned but idle agents
+    if (assigned.length > 0) {
+      section.appendChild(h('div', {
+        class: 'agents-working-title',
+        style: active.length > 0 ? 'margin-top:var(--sp-2)' : '',
+      }, `In Room (${assigned.length})`));
+      for (const agent of assigned) {
+        section.appendChild(this._workingRow(agent, roomNameMap));
+      }
+    }
+
     return section;
+  }
+
+  _workingRow(agent, roomNameMap) {
+    const roomId = this._resolveRoomId(agent);
+    const roomName = roomId ? (roomNameMap[roomId] || 'Room') : '';
+    const statusCfg = STATUS_CONFIG[this._resolveStatus(agent)] || STATUS_CONFIG.idle;
+    return h('div', { style: 'display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) 0;font-size:var(--text-sm)' },
+      h('div', { class: `agents-view-status-dot ${statusCfg.dot}`, style: 'position:static;width:8px;height:8px' }),
+      h('span', { style: 'font-weight:var(--font-medium)' }, this._resolveDisplayName(agent)),
+      h('span', { style: 'color:var(--text-muted)' }, `in ${roomName}`)
+    );
   }
 
   // ── Agent Card ───────────────────────────────────────────────
