@@ -14,6 +14,7 @@
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { getDb } from '../storage/db.js';
+import { getAgent } from './agent-registry.js';
 import { AgentSession } from './agent-session.js';
 import { estimateTokens, allocateBudget, pruneMessages, getContextMetrics } from './context-manager.js';
 import { buildScratchpadInjection } from '../tools/providers/session-notes.js';
@@ -307,7 +308,26 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   if (params.options?.buildingId) {
     (roomContext as Record<string, unknown>).buildingId = params.options.buildingId;
   }
-  const baseSystemPrompt = buildSystemPrompt(roomContext, room, params.repoContext);
+
+  // Inject agent identity (#813)
+  let agentIdentity = '';
+  try {
+    const agentData = getAgent(agentId);
+    if (agentData) {
+      const parts: string[] = [];
+      const displayName = agentData.display_name || agentData.name || agentId;
+      const roleName = agentData.role || 'agent';
+      parts.push(`You are **${displayName}**, a ${roleName}.`);
+      if (agentData.nickname) parts.push(`Your nickname is "${agentData.nickname}".`);
+      if (agentData.specialization) parts.push(`You specialize in ${agentData.specialization}.`);
+      if (agentData.bio) parts.push(agentData.bio);
+      const commStyle = (agentData as unknown as Record<string, unknown>).communication_style as string | null;
+      if (commStyle) parts.push(`Communication style: ${commStyle}`);
+      agentIdentity = parts.join(' ') + '\n\n';
+    }
+  } catch { /* agent lookup failed — use generic identity */ }
+
+  const baseSystemPrompt = agentIdentity + buildSystemPrompt(roomContext, room, params.repoContext);
   let scratchpad = '';
   try { scratchpad = buildScratchpadInjection(agentId); } catch { /* DB not ready yet — scratchpad is optional */ }
   const systemPrompt = scratchpad
