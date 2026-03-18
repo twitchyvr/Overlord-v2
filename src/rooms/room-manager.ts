@@ -319,41 +319,57 @@ export function exitRoom({ roomId, agentId, reason }: ExitRoomParams): Result {
   }
 }
 
-/** Extract a meaningful summary from exit document fields (#675) */
-function _extractExitDocSummary(doc: Record<string, unknown>, docType: string, roomType: string): string {
-  // Try common exit doc field names for a summary
-  const summaryFields = ['summary', 'title', 'description', 'findings', 'conclusion', 'recommendation', 'decision'];
-  for (const field of summaryFields) {
-    if (doc[field] && typeof doc[field] === 'string' && (doc[field] as string).length > 5) {
-      const text = (doc[field] as string).trim();
-      return text.length > 200 ? text.slice(0, 197) + '...' : text;
+/**
+ * Extract a meaningful summary from exit document fields (#675).
+ * Iterates over ALL fields rather than hardcoding names, since each
+ * room type has different field names (filesModified, verdict, projectGoals, etc.)
+ */
+function _extractExitDocSummary(doc: Record<string, unknown>, _docType: string, roomType: string): string {
+  // Try each field — use the first meaningful string value
+  for (const [key, value] of Object.entries(doc)) {
+    if (typeof value === 'string' && value.trim().length > 5) {
+      const text = value.trim();
+      const label = _humanizeFieldName(key);
+      const truncated = text.length > 160 ? text.slice(0, 157) + '...' : text;
+      return `${label}: ${truncated}`;
+    }
+    // For arrays of strings, join them
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
+      const label = _humanizeFieldName(key);
+      const joined = value.slice(0, 3).join(', ');
+      return `${label}: ${joined}${value.length > 3 ? ` (+${value.length - 3} more)` : ''}`;
     }
   }
-  // Fallback: try to describe what type of work was done
-  const typeLabels: Record<string, string> = {
-    'implementation-report': 'Implementation completed',
-    'requirements-doc': 'Requirements documented',
-    'architecture-report': 'Architecture defined',
-    'test-report': 'Testing completed',
-    'review-report': 'Code review completed',
-    'deployment-report': 'Deployment executed',
-    'strategy-report': 'Strategy defined',
-  };
-  return typeLabels[docType] || `${roomType} phase completed`;
+  return `${_humanizeFieldName(roomType)} completed`;
 }
 
-/** Extract rationale from exit document content (#675) */
-function _extractExitDocRationale(doc: Record<string, unknown>, docType: string): string {
-  const rationaleFields = ['rationale', 'notes', 'details', 'body', 'content', 'analysis'];
-  for (const field of rationaleFields) {
-    if (doc[field] && typeof doc[field] === 'string' && (doc[field] as string).length > 10) {
-      const text = (doc[field] as string).trim();
-      return text.length > 500 ? text.slice(0, 497) + '...' : text;
+/**
+ * Extract rationale from exit document — concatenate key field names and values (#675).
+ */
+function _extractExitDocRationale(doc: Record<string, unknown>, _docType: string): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(doc)) {
+    if (key === 'artifacts') continue; // skip artifact arrays
+    const label = _humanizeFieldName(key);
+    if (typeof value === 'string' && value.trim().length > 0) {
+      parts.push(`${label}: ${value.trim().slice(0, 80)}`);
+    } else if (typeof value === 'number') {
+      parts.push(`${label}: ${value}`);
+    } else if (Array.isArray(value)) {
+      parts.push(`${label}: ${value.length} items`);
     }
+    if (parts.length >= 4) break; // enough context
   }
-  // Count fields as a basic description
-  const fieldCount = Object.keys(doc).length;
-  return `Submitted ${docType} exit document with ${fieldCount} field${fieldCount === 1 ? '' : 's'}`;
+  return parts.join(' | ') || `Exit document submitted`;
+}
+
+/** Convert camelCase/snake_case field names to readable labels */
+function _humanizeFieldName(name: string): string {
+  return name
+    .replace(/([a-z])([A-Z])/g, '$1 $2')  // camelCase → camel Case
+    .replace(/[_-]/g, ' ')                  // snake_case → snake case
+    .replace(/\b\w/g, c => c.toUpperCase()) // capitalize words
+    .trim();
 }
 
 interface SubmitExitDocParams {
