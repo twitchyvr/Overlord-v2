@@ -94,8 +94,8 @@
 .building-tree {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-2);
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-2);
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -132,12 +132,13 @@
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3) var(--sp-3);
   cursor: pointer;
   border-radius: var(--radius-md);
   transition: background var(--duration-fast) var(--ease-default);
   user-select: none;
   position: relative;
+  font-weight: 600;
 }
 .floor-section-header:hover {
   background: color-mix(in srgb, var(--floor-section-color, var(--text-muted)) 6%, transparent);
@@ -192,8 +193,8 @@
 
 /* Floor name */
 .floor-section-name {
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
+  font-size: 0.9rem;
+  font-weight: 600;
   color: var(--text-primary);
   flex: 1;
   min-width: 0;
@@ -300,15 +301,15 @@
 .floor-room-list {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-2) var(--sp-2) calc(var(--sp-2) + 20px);
+  gap: 10px;
+  padding: var(--sp-2) var(--sp-2) var(--sp-3) calc(var(--sp-2) + 16px);
 }
 
 .room-item {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
-  padding: var(--sp-2) var(--sp-3);
+  gap: 6px;
+  padding: 10px var(--sp-3);
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   cursor: pointer;
