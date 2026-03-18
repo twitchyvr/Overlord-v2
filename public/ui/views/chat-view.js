@@ -160,6 +160,7 @@ export class ChatView extends Component {
     // Subscribe to chat messages
     this.subscribe(store, 'chat.messages', (messages) => {
       this._renderMessages(messages || []);
+      this._updateSuggestionsBar(); // Hide pills once messages arrive (#789)
     });
 
     // Listen for streaming events
@@ -1244,8 +1245,10 @@ export class ChatView extends Component {
     if (!this._suggestionsBarEl) return;
     const store = OverlordUI.getStore();
     const isProcessing = store?.get('ui.processing') || store?.get('ui.streaming');
-    // Hide suggestions while agent is actively responding (#553)
-    if (isProcessing) {
+    const hasMessages = (store?.get('chat.messages') || []).length > 0;
+
+    // Hide suggestions when processing OR when conversation already has messages (#789)
+    if (isProcessing || hasMessages) {
       this._suggestionsBarEl.style.display = 'none';
       return;
     }
