@@ -170,7 +170,9 @@ export class AgentsView extends Component {
   /** Fetch agents from the server. */
   _fetchAgents() {
     if (window.overlordSocket) {
-      window.overlordSocket.fetchAgents({});
+      const store = OverlordUI.getStore();
+      const buildingId = store?.get('building.active') || '';
+      window.overlordSocket.fetchAgents({ buildingId });
     }
   }
 
