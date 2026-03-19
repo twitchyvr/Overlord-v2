@@ -19,6 +19,7 @@ import { AgentSession } from './agent-session.js';
 import { estimateTokens, allocateBudget, pruneMessages, getContextMetrics } from './context-manager.js';
 import { buildScratchpadInjection } from '../tools/providers/session-notes.js';
 import { acquireSlot, releaseSlot } from '../ai/rate-limiter.js';
+import { checkBudget, recordUsage } from './budget-tracker.js';
 import { buildPerception, extractToolResults } from './perception-builder.js';
 import { selectToolsForTask } from './tool-selector.js';
 import type { Bus } from '../core/bus.js';
@@ -168,6 +169,7 @@ export function detectAndSubmitExitDoc(
 
 /** All limits are user-configurable via environment variables / config */
 const MAX_TOOL_ITERATIONS = config.get('MAX_TOOL_ITERATIONS');
+const CONVERSATION_TOKEN_LIMIT = config.get('CONVERSATION_TOKEN_LIMIT');
 const TOOL_TIMEOUT_MS = config.get('TOOL_TIMEOUT_MS');
 const AI_MAX_RETRIES = config.get('AI_MAX_RETRIES');
 const AI_RETRY_DELAY_MS = config.get('AI_RETRY_DELAY_MS');
@@ -343,6 +345,39 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   while (iteration < MAX_TOOL_ITERATIONS) {
     iteration++;
 
+    // ── Budget enforcement (#851) ──
+    // Check per-agent budget BEFORE sending to AI
+    if (iteration > 1) {
+      try {
+        const budgetStatus = checkBudget(agentId);
+        if (budgetStatus.isOverBudget) {
+          log.warn(
+            { agentId, used: budgetStatus.used, limit: budgetStatus.limit, iteration },
+            'Agent budget exhausted — stopping conversation',
+          );
+          bus.emit('budget:exhausted', {
+            agentId, buildingId,
+            used: budgetStatus.used,
+            limit: budgetStatus.limit,
+            period: budgetStatus.period,
+          });
+          break;
+        }
+      } catch { /* DB not ready in tests — budget check is best-effort */ }
+    }
+
+    // Check per-conversation token limit (safety net)
+    if (CONVERSATION_TOKEN_LIMIT > 0) {
+      const conversationTotal = totalTokens.input + totalTokens.output;
+      if (conversationTotal >= CONVERSATION_TOKEN_LIMIT) {
+        log.warn(
+          { agentId, conversationTotal, limit: CONVERSATION_TOKEN_LIMIT, iteration },
+          'Per-conversation token limit reached — stopping',
+        );
+        break;
+      }
+    }
+
     // Prune messages if history exceeds budget
     const pruneResult = pruneMessages(messages, contextBudget);
     if (pruneResult.prunedCount > 0) {
@@ -433,6 +468,13 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     const response = aiResult.data as AIResponse;
     totalTokens.input += response.usage.input_tokens;
     totalTokens.output += response.usage.output_tokens;
+
+    // Record per-iteration usage for budget tracking (#851)
+    try {
+      recordUsage(agentId, response.usage.input_tokens, response.usage.output_tokens);
+    } catch (e) {
+      log.warn({ agentId, err: e }, 'Failed to record usage (non-blocking)');
+    }
 
     // Capture any thinking blocks from the response (MiniMax M2.5 always-on thinking)
     const thinkingBlocks = response.content.filter((b) => b.type === 'thinking');
