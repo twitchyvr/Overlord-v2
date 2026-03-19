@@ -167,6 +167,20 @@ export function detectAndSubmitExitDoc(
   return false;
 }
 
+/** Classify a tool name into an activity type for UI badges (#802) */
+function _classifyToolActivity(toolName: string): string {
+  if (/write_file|patch_file|create_file/.test(toolName)) return 'coding';
+  if (/read_file|list_dir|list_files|search_code/.test(toolName)) return 'reading';
+  if (/bash|shell|exec|run_command/.test(toolName)) return 'running';
+  if (/web_search|fetch_webpage|search_library/.test(toolName)) return 'searching';
+  if (/send_email|compose_email/.test(toolName)) return 'emailing';
+  if (/read_email|check_inbox|get_email/.test(toolName)) return 'reading-mail';
+  if (/git_|create_pr|merge_/.test(toolName)) return 'git';
+  if (/test|e2e|playwright/.test(toolName)) return 'testing';
+  if (/create_task|create_raid|create_milestone/.test(toolName)) return 'planning';
+  return 'working';
+}
+
 /** All limits are user-configurable via environment variables / config */
 const MAX_TOOL_ITERATIONS = config.get('MAX_TOOL_ITERATIONS');
 const CONVERSATION_TOKEN_LIMIT = config.get('CONVERSATION_TOKEN_LIMIT');
@@ -434,6 +448,9 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     let aiResult: Result;
     let retries = 0;
 
+    // Emit thinking activity (#802)
+    bus.emit('agent:activity', { agentId, buildingId, activity: 'thinking', roomId: room.id });
+
     while (true) {
       // Rate limiting: acquire a slot before sending (#381)
       await acquireSlot(provider);
@@ -590,6 +607,10 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         roomId: room.id,
         input: toolInput,
       });
+
+      // Emit activity badge update (#802)
+      const toolActivity = _classifyToolActivity(toolName);
+      bus.emit('agent:activity', { agentId, buildingId, activity: toolActivity, toolName, roomId: room.id });
 
       // Stream tool progress to the client so the UI shows what's happening
       bus.emit('chat:stream', {

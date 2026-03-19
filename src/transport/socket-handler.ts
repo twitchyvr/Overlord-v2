@@ -3577,6 +3577,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
   forward('exit-doc:submitted');
   forward('scope-change:detected');
   forward('agent:mentioned');
+  forward('agent:activity');
   forward('agent:created');
   forward('agent:updated');
   forward('agent:status-changed');

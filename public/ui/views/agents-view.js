@@ -59,6 +59,24 @@ function formatRole(role) {
   return ROLE_LABELS[role] || role.charAt(0).toUpperCase() + role.slice(1).replace(/-/g, ' ');
 }
 
+/** Map activity type to emoji badge (#802) */
+const ACTIVITY_BADGES = {
+  thinking: { emoji: '\uD83E\uDDE0', label: 'Thinking' },
+  coding: { emoji: '\uD83D\uDCBB', label: 'Writing code' },
+  reading: { emoji: '\uD83D\uDCD6', label: 'Reading code' },
+  running: { emoji: '\u26A1', label: 'Running command' },
+  searching: { emoji: '\uD83D\uDD0D', label: 'Searching' },
+  emailing: { emoji: '\u2709\uFE0F', label: 'Writing email' },
+  'reading-mail': { emoji: '\uD83D\uDCEC', label: 'Reading email' },
+  git: { emoji: '\uD83D\uDD00', label: 'Git operations' },
+  testing: { emoji: '\uD83E\uDDEA', label: 'Running tests' },
+  planning: { emoji: '\uD83D\uDCCB', label: 'Planning' },
+  working: { emoji: '\u2699\uFE0F', label: 'Working' },
+};
+function _activityBadge(activity) {
+  return ACTIVITY_BADGES[activity] || null;
+}
+
 const CAPABILITIES = [
   'chat', 'analysis', 'code-generation', 'code-review',
   'testing', 'deployment', 'documentation', 'planning'
@@ -131,6 +149,12 @@ export class AgentsView extends Component {
       this._render();
     });
 
+    // Subscribe to agent activity badges (#802)
+    this.subscribe(store, 'agents.activities', (activities) => {
+      this._activities = activities || {};
+      this._render();
+    });
+
     // Subscribe to room list (for room name resolution and quick-assign)
     this.subscribe(store, 'rooms.list', (rooms) => {
       this._rooms = rooms || [];
@@ -153,6 +177,7 @@ export class AgentsView extends Component {
     // Initialize from current store state
     this._agents = store.get('agents.list') || [];
     this._agentPositions = store.get('building.agentPositions') || {};
+    this._activities = store.get('agents.activities') || {};
     this._rooms = store.get('rooms.list') || [];
     this._floors = store.get('building.floors') || [];
 
@@ -619,6 +644,20 @@ export class AgentsView extends Component {
       class: `agents-view-status-label agents-view-status-label-${status}`
     }, statusCfg.label);
     cardHeader.appendChild(statusLabel);
+
+    // Activity badge (#802) — shows what the agent is currently doing
+    const activityData = this._activities[agent.id];
+    if (activityData && (Date.now() - activityData.timestamp) < 60_000) {
+      const badge = _activityBadge(activityData.activity);
+      if (badge) {
+        const activityEl = h('span', {
+          class: 'agents-view-activity-badge',
+          title: `${badge.label}${activityData.toolName ? ` (${activityData.toolName})` : ''}`,
+          style: 'font-size:1rem; margin-left:var(--sp-1); animation:pulse 1.5s ease-in-out infinite',
+        }, badge.emoji);
+        cardHeader.appendChild(activityEl);
+      }
+    }
 
     card.appendChild(cardHeader);
 
