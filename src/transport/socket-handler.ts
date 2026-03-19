@@ -3677,6 +3677,9 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         try {
           const raidId = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
           const phaseName = phase.charAt(0).toUpperCase() + phase.slice(1);
+          // Resolve agent name instead of showing raw ID (#673)
+          const agentRow = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as Record<string, unknown> | undefined;
+          const agentName = (agentRow?.display_name as string) || (agentRow?.name as string) || 'Agent';
           getDb().prepare(`
             INSERT INTO raid_entries (id, building_id, type, phase, room_id, summary, rationale, decided_by, affected_areas)
             VALUES (?, ?, 'decision', ?, ?, ?, ?, ?, ?)
@@ -3686,7 +3689,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
             phase,
             roomId,
             `Phase ${phaseName} completed \u2014 exit document submitted`,
-            `Agent ${agentId} auto-submitted exit document for ${exitDocType || 'room'} work. Phase deliverables captured.`,
+            `${agentName} completed ${exitDocType || phase} phase. Deliverables captured in exit document.`,
             agentId,
             JSON.stringify([exitDocType || phase]),
           );
