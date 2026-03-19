@@ -622,15 +622,48 @@ export class AgentsView extends Component {
 
     card.appendChild(cardHeader);
 
-    // ── Task badge — show pending task count (#799) ──
+    // ── Task info — current task + queue count (#799, #803) ──
     const store = OverlordUI.getStore();
     const allTasks = store?.get('tasks.list') || [];
     const agentTasks = allTasks.filter(t => t.assignee_id === agent.id && t.status !== 'done');
     if (agentTasks.length > 0) {
-      const taskBadge = h('div', { class: 'agents-view-card-tasks', title: `${agentTasks.length} pending task${agentTasks.length === 1 ? '' : 's'}` },
-        h('span', { style: 'font-size: 0.7rem; color: var(--text-muted);' }, `\u{1F4CB} ${agentTasks.length} task${agentTasks.length === 1 ? '' : 's'}`),
+      // Sort by priority (critical > high > normal > low) then by creation
+      const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
+      const sorted = [...agentTasks].sort((a, b) =>
+        (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9)
       );
-      card.appendChild(taskBadge);
+      const currentTask = sorted[0];
+
+      const taskSection = h('div', { class: 'agents-view-card-tasks' });
+
+      // Current task title
+      if (currentTask?.title) {
+        const taskTitle = currentTask.title.length > 45
+          ? currentTask.title.slice(0, 42) + '...'
+          : currentTask.title;
+        taskSection.appendChild(
+          h('div', {
+            class: 'agents-view-card-current-task',
+            title: currentTask.title,
+            style: 'font-size:var(--text-xs); color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:2px'
+          }, `\u25B6 ${taskTitle}`)
+        );
+      }
+
+      // Queue count
+      if (agentTasks.length > 1) {
+        taskSection.appendChild(
+          h('span', { style: 'font-size:0.7rem; color:var(--text-muted)' },
+            `+${agentTasks.length - 1} more task${agentTasks.length - 1 === 1 ? '' : 's'} queued`
+          )
+        );
+      } else {
+        taskSection.appendChild(
+          h('span', { style: 'font-size:0.7rem; color:var(--text-muted)' }, '1 task assigned')
+        );
+      }
+
+      card.appendChild(taskSection);
     }
 
     // ── Room assignment row ──
@@ -678,14 +711,16 @@ export class AgentsView extends Component {
       card.appendChild(capRow);
     }
 
-    // ── Card footer with role/specialization ──
+    // ── Card footer with role + last activity (#803) ──
     const footerLabel = agent.specialization || agent.role || agent.type || '';
     const footer = h('div', { class: 'agents-view-card-footer' },
       footerLabel ? h('span', { class: 'agents-view-card-id' }, footerLabel) : null
     );
-    if (agent.created_at) {
+    // Show last activity time (prefer updated_at over created_at)
+    const activityTime = agent.updated_at || agent.created_at;
+    if (activityTime) {
       footer.appendChild(
-        h('span', { class: 'agents-view-card-time' }, formatTime(agent.created_at))
+        h('span', { class: 'agents-view-card-time' }, formatTime(activityTime))
       );
     }
     card.appendChild(footer);
