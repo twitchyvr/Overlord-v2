@@ -87,6 +87,7 @@ import {
   RepoAddSchema, RepoRemoveSchema, RepoListSchema, RepoUpdateSchema, RepoAnalyzeSchema, RepoSyncStatusSchema, RepoSyncFetchSchema,
   DocLibraryCreateSchema, DocLibraryListSchema, DocLibraryDeleteSchema, DocLibraryIndexSchema,
   DocSearchSchema, DocGetSchema, DocListSchema,
+  ProviderSetKeySchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { checkBudget, setAgentBudget, getBuildingBudgets } from '../agents/budget-tracker.js';
@@ -3508,6 +3509,42 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
 
     handle(socket, 'system:health', EmptyPayloadSchema, (_data, ack) => {
       if (ack) ack({ ok: true, data: { uptime: process.uptime(), version: '0.1.0' } });
+    });
+
+    // ─── Provider Key Management (#762) ───
+
+    socket.on('provider:set-key', (data: unknown, ack?: (res: unknown) => void) => {
+      try {
+        const parsed = ProviderSetKeySchema.parse(data);
+
+        const ENV_KEY_MAP: Record<string, string> = {
+          minimax: 'MINIMAX_API_KEY',
+          anthropic: 'ANTHROPIC_API_KEY',
+          ollama: 'OLLAMA_BASE_URL',
+          openai: 'OPENAI_API_KEY',
+          gemini: 'GOOGLE_GEMINI_API_KEY',
+        };
+
+        const envKey = ENV_KEY_MAP[parsed.provider];
+        if (!envKey) {
+          if (ack) ack({ ok: false, error: { code: 'UNKNOWN_PROVIDER', message: `Unknown provider: ${parsed.provider}`, retryable: false } });
+          return;
+        }
+
+        if (parsed.apiKey) {
+          process.env[envKey] = parsed.apiKey;
+          log.info({ provider: parsed.provider }, 'API key set via UI');
+          broadcastLog('info', `API key configured for ${parsed.provider}`, 'ai');
+        } else {
+          delete process.env[envKey];
+          log.info({ provider: parsed.provider }, 'API key removed via UI');
+          broadcastLog('info', `API key removed for ${parsed.provider}`, 'ai');
+        }
+
+        if (ack) ack({ ok: true, data: { provider: parsed.provider, configured: !!parsed.apiKey } });
+      } catch (e) {
+        if (ack) ack({ ok: false, error: { code: 'INVALID_PAYLOAD', message: e instanceof Error ? e.message : 'Invalid data', retryable: false } });
+      }
     });
 
     // ─── Disconnect Cleanup ───

@@ -1132,3 +1132,9 @@ export const DocSearchSchema = z.object({
 export const DocGetSchema = z.object({ entryId: id() });
 export const DocListSchema = z.object({ libraryId: id() });
 
+// Provider key management (#762)
+export const ProviderSetKeySchema = z.object({
+  provider: z.string().min(1).max(50),
+  apiKey: z.string().max(500),
+});
+
