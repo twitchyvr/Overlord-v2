@@ -3248,6 +3248,9 @@
   margin: 0 auto;
   padding: var(--sp-8) var(--sp-6);
   animation: wizard-fade-in 0.4s ease;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 @keyframes wizard-fade-in {
@@ -3673,6 +3676,17 @@
   align-items: center;
   gap: var(--sp-3);
   margin-top: var(--sp-6);
+  padding-bottom: var(--sp-4);
+}
+
+/* Sticky actions on the welcome step so CTA is never clipped */
+.wizard-welcome .wizard-actions {
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(transparent, var(--bg-primary) 30%);
+  padding-top: var(--sp-8);
+  margin-top: var(--sp-4);
+  z-index: 2;
 }
 
 .wizard-actions-row {
@@ -3754,6 +3768,101 @@
   animation: loading-spin 0.8s linear infinite;
 }
 
+/* ── One-Shot Section ── */
+
+.wizard-oneshot {
+  margin-top: var(--sp-6);
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.wizard-oneshot-divider {
+  text-align: center;
+  position: relative;
+  margin-bottom: var(--sp-4);
+}
+
+.wizard-oneshot-divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-primary);
+}
+
+.wizard-oneshot-divider span {
+  position: relative;
+  background: var(--bg-primary);
+  padding: 0 var(--sp-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.wizard-oneshot-input {
+  margin-bottom: var(--sp-3);
+}
+
+.wizard-btn-accent {
+  background: var(--accent-amber);
+  color: var(--bg-primary);
+}
+
+.wizard-btn-accent:hover {
+  background: color-mix(in srgb, var(--accent-amber) 85%, #fff);
+  transform: translateY(-1px);
+}
+
+/* ── Effort Level Choices ── */
+
+.effort-level-choices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-4);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.effort-level-card {
+  background: var(--surface-1);
+  border: 2px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.effort-level-card:hover {
+  border-color: var(--accent-blue);
+  background: var(--surface-2);
+  transform: translateY(-2px);
+}
+
+.effort-level-card.selected {
+  border-color: var(--accent-blue);
+  background: color-mix(in srgb, var(--accent-blue) 8%, var(--surface-1));
+}
+
+.effort-level-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--sp-2);
+}
+
+.effort-level-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-1);
+}
+
+.effort-level-desc {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
 /* ── Responsive ── */
 
 @media (max-width: 600px) {
@@ -3765,6 +3874,9 @@
   }
   .wizard-team-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .effort-level-choices {
+    grid-template-columns: 1fr;
   }
   .onboarding-wizard {
     padding: var(--sp-4) var(--sp-3);
