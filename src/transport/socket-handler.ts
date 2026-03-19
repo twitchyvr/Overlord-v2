@@ -84,7 +84,7 @@ import {
   ModelProviderSchema, ModelRecommendSchema, ModelGetSchema, ModelCompareSchema,
   MessagingModeSchema, GnapBuildingSchema,
   LogLevelSetSchema,
-  RepoAddSchema, RepoRemoveSchema, RepoListSchema, RepoUpdateSchema, RepoAnalyzeSchema, RepoSyncStatusSchema, RepoSyncFetchSchema,
+  RepoAddSchema, RepoRemoveSchema, RepoListSchema, RepoUpdateSchema, RepoAnalyzeSchema, RepoSyncStatusSchema, RepoSyncFetchSchema, CodebaseAnalyzeSchema,
   DocLibraryCreateSchema, DocLibraryListSchema, DocLibraryDeleteSchema, DocLibraryIndexSchema,
   DocSearchSchema, DocGetSchema, DocListSchema,
   ProviderSetKeySchema,
@@ -109,6 +109,8 @@ import type { PipelineStage } from '../rooms/pipeline-evidence.js';
 import { generateFullProfile } from '../ai/agent-profile-service.js';
 import type { FullProfileResult } from '../ai/agent-profile-service.js';
 import { analyzeRepos } from '../ai/repo-analysis-service.js';
+import { analyzeCodebase, enhanceAnalysisWithAI } from '../ai/codebase-analysis-service.js';
+import { isBlockedPath } from '../tools/path-permissions.js';
 import { checkSyncStatus, fetchLatestCommit } from '../ai/repo-sync-service.js';
 import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
 import { isImageGenerationAvailable } from '../ai/minimax-image.js';
@@ -3429,6 +3431,45 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         }
       } catch (e) {
         if (ack) ack({ ok: false, error: { code: 'ANALYZE_FAILED', message: e instanceof Error ? e.message : String(e), retryable: false } });
+      }
+    });
+
+    // ─── Codebase Analysis (#872) ───
+
+    handle(socket, 'codebase:analyze', CodebaseAnalyzeSchema, async (parsed, ack) => {
+      try {
+        // Security: resolve and guard the path before scanning
+        const resolvedPath = path.resolve(parsed.directoryPath);
+        if (isBlockedPath(resolvedPath)) {
+          if (ack) ack({ ok: false, error: { code: 'PATH_BLOCKED', message: 'Access to that path is not permitted.', retryable: false } });
+          return;
+        }
+
+        const result = analyzeCodebase(resolvedPath);
+        if (!result.ok) {
+          if (ack) ack({ ok: false, error: { code: result.error.code, message: result.error.message, retryable: result.error.retryable ?? false } });
+          return;
+        }
+
+        let data = result.data;
+
+        // Optionally enhance with AI
+        if (parsed.enhanceWithAI) {
+          // Try to read README for AI context
+          let readmeContent: string | undefined;
+          try {
+            const readmePath = path.join(resolvedPath, 'README.md');
+            if (fs.existsSync(readmePath)) {
+              readmeContent = fs.readFileSync(readmePath, 'utf-8').slice(0, 2000);
+            }
+          } catch { /* no README */ }
+
+          data = await enhanceAnalysisWithAI(ai, data, readmeContent);
+        }
+
+        if (ack) ack({ ok: true, data });
+      } catch (e) {
+        if (ack) ack({ ok: false, error: { code: 'CODEBASE_ANALYZE_FAILED', message: e instanceof Error ? e.message : String(e), retryable: false } });
       }
     });
 

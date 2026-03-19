@@ -613,6 +613,8 @@ declare global {
       deleteTable: (id: string) => Promise<any>;
       fetchTables: (roomId: string) => Promise<any>;
       moveAgent: (agentId: string, roomId: string, tableType?: string) => Promise<any>;
+      analyzeCodebase: (directoryPath: string, enhanceWithAI?: boolean) => Promise<any>;
+      applyBlueprint: (params: any) => Promise<any>;
     };
   }
 }

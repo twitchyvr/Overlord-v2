@@ -1104,6 +1104,11 @@ export const RepoAnalyzeSchema = z.object({
   projectGoals: z.string().max(2000).default(''),
 });
 
+export const CodebaseAnalyzeSchema = z.object({
+  directoryPath: z.string().min(1).max(2000),
+  enhanceWithAI: z.boolean().default(false),
+});
+
 export const RepoSyncStatusSchema = z.object({
   buildingId: id(),
 });

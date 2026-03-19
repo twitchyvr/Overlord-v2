@@ -33,7 +33,6 @@ export async function executeShell(params: {
   return new Promise((resolve) => {
     const proc = spawn('bash', ['-c', command], {
       cwd,
-      timeout,
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });

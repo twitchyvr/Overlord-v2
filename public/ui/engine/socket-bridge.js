@@ -1051,6 +1051,11 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithFeedback('repo:analyze', params, 30000);
     },
 
+    /** Analyze a local codebase directory (#872) */
+    analyzeCodebase(directoryPath, enhanceWithAI = false) {
+      return _emitWithFeedback('codebase:analyze', { directoryPath, enhanceWithAI }, 30000);
+    },
+
     repoSyncStatus(buildingId) {
       return _emitWithFeedback('repo:sync-status', { buildingId }, 30000);
     },
