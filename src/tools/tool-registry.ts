@@ -1398,4 +1398,122 @@ function registerBuiltinTools(): void {
       return { output: `${docs.length} documents:\n\n${lines.join('\n')}` };
     },
   });
+
+  // ── Document Format Tools (#812) ──
+
+  registerTool({
+    name: 'read_pdf',
+    description: 'Extract text and metadata from a PDF file. Returns page count, text content, and document info.',
+    category: 'document',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filePath: { type: 'string', description: 'Path to the PDF file' },
+        pages: { type: 'string', description: 'Optional page range, e.g. "1-5" or "3"' },
+      },
+      required: ['filePath'],
+    },
+    execute: async (p, ctx) => {
+      const { readPdfImpl } = await import('./providers/document-formats.js');
+      const result = await readPdfImpl({
+        filePath: p.filePath as string,
+        pages: p.pages as string | undefined,
+        cwd: ctx?.workingDirectory,
+        allowedPaths: ctx?.allowedPaths,
+      });
+      return { output: `PDF: ${result.pageCount} pages\n\n${result.text}` };
+    },
+  });
+
+  registerTool({
+    name: 'read_docx',
+    description: 'Extract text and structure from a Word document (.docx). Returns plain text, HTML, and word count.',
+    category: 'document',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filePath: { type: 'string', description: 'Path to the DOCX file' },
+      },
+      required: ['filePath'],
+    },
+    execute: async (p, ctx) => {
+      const { readDocxImpl } = await import('./providers/document-formats.js');
+      const result = await readDocxImpl({
+        filePath: p.filePath as string,
+        cwd: ctx?.workingDirectory,
+        allowedPaths: ctx?.allowedPaths,
+      });
+      return { output: `DOCX: ${result.wordCount} words\n\n${result.text}` };
+    },
+  });
+
+  registerTool({
+    name: 'read_xlsx',
+    description: 'Extract tabular data from an Excel spreadsheet (.xlsx). Returns sheet names, headers, and row data as JSON.',
+    category: 'document',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filePath: { type: 'string', description: 'Path to the XLSX file' },
+        sheet: { type: 'string', description: 'Sheet name (defaults to first sheet)' },
+      },
+      required: ['filePath'],
+    },
+    execute: async (p, ctx) => {
+      const { readXlsxImpl } = await import('./providers/document-formats.js');
+      const result = await readXlsxImpl({
+        filePath: p.filePath as string,
+        sheet: p.sheet as string | undefined,
+        cwd: ctx?.workingDirectory,
+        allowedPaths: ctx?.allowedPaths,
+      });
+      const preview = result.data.slice(0, 20);
+      return { output: `XLSX: ${result.rowCount} rows, ${result.headers.length} columns\nSheets: ${result.sheets.join(', ')}\nHeaders: ${result.headers.join(', ')}\n\n${JSON.stringify(preview, null, 2)}` };
+    },
+  });
+
+  registerTool({
+    name: 'parse_markdown',
+    description: 'Parse a Markdown file into structured data: table of contents, code blocks, links, and word count.',
+    category: 'document',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filePath: { type: 'string', description: 'Path to the Markdown file' },
+      },
+      required: ['filePath'],
+    },
+    execute: async (p, ctx) => {
+      const { parseMarkdownImpl } = await import('./providers/document-formats.js');
+      const result = await parseMarkdownImpl({
+        filePath: p.filePath as string,
+        cwd: ctx?.workingDirectory,
+        allowedPaths: ctx?.allowedPaths,
+      });
+      const tocStr = result.toc.map(h => `${'  '.repeat(h.level - 1)}- ${h.title} (line ${h.line})`).join('\n');
+      return { output: `Markdown: ${result.wordCount} words, ${result.toc.length} headings, ${result.codeBlocks.length} code blocks, ${result.links.length} links\n\nTable of Contents:\n${tocStr}\n\n${result.text.slice(0, 5000)}` };
+    },
+  });
+
+  registerTool({
+    name: 'detect_file_type',
+    description: 'Detect the type, MIME type, and category of a file. Reports whether the file is readable as text.',
+    category: 'document',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filePath: { type: 'string', description: 'Path to the file' },
+      },
+      required: ['filePath'],
+    },
+    execute: async (p, ctx) => {
+      const { detectFileTypeImpl } = await import('./providers/document-formats.js');
+      const result = await detectFileTypeImpl({
+        filePath: p.filePath as string,
+        cwd: ctx?.workingDirectory,
+        allowedPaths: ctx?.allowedPaths,
+      });
+      return { output: `Type: ${result.extension} (${result.mimeType})\nCategory: ${result.category}\nReadable: ${result.readable}` };
+    },
+  });
 }
