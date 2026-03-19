@@ -235,4 +235,54 @@ describe('MiniMax Adapter (Anthropic-Compatible)', () => {
       ).rejects.toThrow('Connection timed out');
     });
   });
+
+  describe('Model name construction (#853)', () => {
+    it('appends -highspeed when USE_HIGHSPEED=true and model lacks suffix', async () => {
+      mockCreate.mockResolvedValueOnce(standardResponse);
+      const adapter = createMinimaxAdapter(makeConfig({
+        MINIMAX_MODEL: 'MiniMax-M2.5',
+        MINIMAX_USE_HIGHSPEED: true,
+      }));
+      await adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {});
+      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+        model: 'MiniMax-M2.5-highspeed',
+      }));
+    });
+
+    it('does NOT double-append -highspeed when model already has suffix', async () => {
+      mockCreate.mockResolvedValueOnce(standardResponse);
+      const adapter = createMinimaxAdapter(makeConfig({
+        MINIMAX_MODEL: 'MiniMax-M2.5-highspeed',
+        MINIMAX_USE_HIGHSPEED: true,
+      }));
+      await adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {});
+      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+        model: 'MiniMax-M2.5-highspeed',
+      }));
+    });
+
+    it('uses base model without suffix when USE_HIGHSPEED=false', async () => {
+      mockCreate.mockResolvedValueOnce(standardResponse);
+      const adapter = createMinimaxAdapter(makeConfig({
+        MINIMAX_MODEL: 'MiniMax-M2.5',
+        MINIMAX_USE_HIGHSPEED: false,
+      }));
+      await adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {});
+      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+        model: 'MiniMax-M2.5',
+      }));
+    });
+
+    it('respects options.model override over config', async () => {
+      mockCreate.mockResolvedValueOnce(standardResponse);
+      const adapter = createMinimaxAdapter(makeConfig({
+        MINIMAX_MODEL: 'MiniMax-M2.5',
+        MINIMAX_USE_HIGHSPEED: true,
+      }));
+      await adapter.sendMessage([{ role: 'user', content: 'hi' }], [], { model: 'CustomModel' });
+      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+        model: 'CustomModel-highspeed',
+      }));
+    });
+  });
 });
