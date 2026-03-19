@@ -228,7 +228,12 @@ export function initBudgetTracker(bus: Bus): void {
     const tokens = data.tokens as { input: number; output: number } | undefined;
     if (!agentId || !tokens || agentId === '__user__') return;
 
-    recordUsage(agentId, tokens.input, tokens.output);
+    // Skip if per-iteration tracking already recorded usage (#851)
+    if (data.usageAlreadyTracked) {
+      log.debug({ agentId }, 'Skipping bus-level recordUsage — per-iteration tracking active');
+    } else {
+      recordUsage(agentId, tokens.input, tokens.output);
+    }
 
     // Check budget thresholds and emit alerts
     const budget = getAgentBudget(agentId);

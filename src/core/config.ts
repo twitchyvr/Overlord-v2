@@ -62,7 +62,8 @@ const ConfigSchema = z.object({
   PLUGIN_DIR: z.string().default('./plugins'),
 
   // Agent Conversation Loop
-  MAX_TOOL_ITERATIONS: z.coerce.number().int().positive().default(200),
+  MAX_TOOL_ITERATIONS: z.coerce.number().int().positive().default(50),
+  CONVERSATION_TOKEN_LIMIT: z.coerce.number().int().nonnegative().default(100_000),
   TOOL_TIMEOUT_MS: z.coerce.number().positive().default(120_000),
   AI_MAX_RETRIES: z.coerce.number().int().nonnegative().default(5),
   AI_RETRY_DELAY_MS: z.coerce.number().positive().default(1_000),

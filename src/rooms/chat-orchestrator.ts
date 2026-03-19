@@ -400,6 +400,7 @@ async function handleChatMessage(
         thinking: data.thinking,
         toolCalls: data.toolCalls.map((tc) => ({ name: tc.name, input: tc.input })),
         tokens: data.totalTokens,
+        usageAlreadyTracked: true, // #851 — per-iteration tracking in conversation loop
         iterations: data.iterations,
         sessionId: data.sessionId,
         maxIterationsReached: data.maxIterationsReached,

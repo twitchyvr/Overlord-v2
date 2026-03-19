@@ -189,7 +189,7 @@ describe('Config Service', () => {
       const { config: freshConfig } = await import('../../../src/core/config.js');
       const all = freshConfig.getAll();
       expect(all.PORT).toBe(4000);
-      expect(all.MAX_TOOL_ITERATIONS).toBe(200);
+      expect(all.MAX_TOOL_ITERATIONS).toBe(50);
     });
   });
 
