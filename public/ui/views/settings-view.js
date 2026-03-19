@@ -784,7 +784,7 @@ export class SettingsView extends Component {
       if (window.overlordSocket?.socket) {
         addBtn.textContent = 'Indexing...';
         addBtn.disabled = true;
-        window.overlordSocket.socket.emit('doc:library:create', { buildingId, name, path }, (res) => {
+        window.overlordSocket.socket.emit('doc:library:create', { buildingId, name, docRootPath: path }, (res) => {
           if (res?.ok) {
             const libraryId = res.data?.id || res.data?.libraryId;
             // Auto-index after creation
