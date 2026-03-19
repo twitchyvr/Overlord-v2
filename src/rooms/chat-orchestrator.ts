@@ -16,6 +16,7 @@
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { runConversationLoop } from '../agents/conversation-loop.js';
+import { queryHook } from '../plugins/plugin-loader.js';
 import { getDb } from '../storage/db.js';
 import type { Bus, BusEventData } from '../core/bus.js';
 import type {
@@ -315,6 +316,7 @@ async function handleChatMessage(
       bus,
       workingDirectory,
       allowedPaths,
+      queryHook,  // Inject plugin hook function (#873 — avoids Agents→Plugins layer violation)
       options: {
         buildingId,
         socketId,
