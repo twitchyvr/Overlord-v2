@@ -195,25 +195,32 @@ export async function createAgentViaUI(
 export async function createAgentDirect(
   page: Page,
   name: string,
-  role: string = 'developer'
+  role: string = 'developer',
+  buildingId?: string
 ): Promise<string> {
   const result = await page.evaluate(
-    async ({ agentName, agentRole }: { agentName: string; agentRole: string }) => {
+    async ({ agentName, agentRole, bId }: { agentName: string; agentRole: string; bId?: string }) => {
       if (!window.overlordSocket) throw new Error('Socket not connected');
-      const store = (window as any)._overlordStore;
-      const buildingId = store?.get?.('building.active') || undefined;
+      // Use provided buildingId, or try to get it from the socket bridge's internal store
+      let activeBuildingId = bId;
+      if (!activeBuildingId) {
+        // Fallback: read from socket bridge's exposed store getter
+        try {
+          activeBuildingId = (window.overlordSocket as any)._getActiveBuildingId?.() || undefined;
+        } catch { /* ignore */ }
+      }
       const res = await window.overlordSocket.registerAgent({
         name: agentName,
         role: agentRole,
         capabilities: ['chat'],
         roomAccess: ['*'],
-        buildingId,
+        buildingId: activeBuildingId,
         autoGenerateProfile: false,
       });
       if (!res?.ok) throw new Error(res?.error?.message || 'Failed to create agent');
       return res.data.id;
     },
-    { agentName: name, agentRole: role }
+    { agentName: name, agentRole: role, bId: buildingId }
   );
 
   await page.waitForTimeout(UI_SETTLE_MS);

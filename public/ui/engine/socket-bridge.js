@@ -827,6 +827,11 @@ export function initSocketBridge(socket, store, engine) {
   window.overlordSocket = {
     socket,
 
+    /** Get the currently active building ID from the store. */
+    _getActiveBuildingId() {
+      return store.get('building.active') || null;
+    },
+
     emit(event, data) {
       return _emitWithFeedback(event, data);
     },
