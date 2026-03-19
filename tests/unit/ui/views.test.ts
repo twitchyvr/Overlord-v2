@@ -1258,7 +1258,7 @@ describe('One-Shot Prompting — UI', () => {
     view.mount();
 
     expect(el.querySelector('.one-shot-input')).not.toBeNull();
-    expect(el.querySelector('.one-shot-section')).not.toBeNull();
+    expect(el.querySelector('.onboarding-paths')).not.toBeNull();
     expect(el.querySelector('.one-shot-divider')).not.toBeNull();
   });
 
@@ -1272,15 +1272,15 @@ describe('One-Shot Prompting — UI', () => {
     expect(divider!.textContent).toContain('or choose a template');
   });
 
-  it('has a "Just Build It" button in the one-shot section', async () => {
+  it('has a "Just Build It" button in the onboarding paths', async () => {
     const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
     const el = document.createElement('div');
     const view = new StrategistView(el);
     view.mount();
 
-    const btn = el.querySelector('.one-shot-actions .btn');
-    expect(btn).not.toBeNull();
-    expect(btn!.textContent).toContain('Just Build It');
+    const buttons = el.querySelectorAll('.onboarding-path-input .btn');
+    const justBuildBtn = Array.from(buttons).find(b => b.textContent?.includes('Just Build It'));
+    expect(justBuildBtn).not.toBeNull();
   });
 
   it('typing in the one-shot input updates _oneShotPrompt state', async () => {
@@ -1296,16 +1296,48 @@ describe('One-Shot Prompting — UI', () => {
     expect((view as any)._oneShotPrompt).toBe('Build me a bakery website');
   });
 
-  it('template grid still appears below the one-shot input', async () => {
+  it('template grid still appears below onboarding paths', async () => {
     const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
     const el = document.createElement('div');
     const view = new StrategistView(el);
     view.mount();
 
-    // Both should be present
-    expect(el.querySelector('.one-shot-section')).not.toBeNull();
+    // Onboarding paths and template grid should both be present
+    expect(el.querySelector('.onboarding-paths')).not.toBeNull();
     expect(el.querySelector('.template-grid')).not.toBeNull();
     expect(el.querySelectorAll('.template-card').length).toBe(8);
+  });
+
+  it('renders "Use Existing Codebase" option (#872)', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    // Should have three onboarding path cards
+    const pathCards = el.querySelectorAll('.onboarding-path-card');
+    expect(pathCards.length).toBe(3);
+
+    // First card should be "Use Existing Codebase"
+    const firstTitle = pathCards[0].querySelector('.onboarding-path-title');
+    expect(firstTitle!.textContent).toContain('Use Existing Codebase');
+
+    // Should have a path input
+    const pathInput = pathCards[0].querySelector('input[type="text"]');
+    expect(pathInput).not.toBeNull();
+    expect(pathInput!.getAttribute('placeholder')).toContain('/path/to/your/project');
+  });
+
+  it('renders "Import from GitHub" option (#872)', async () => {
+    const { StrategistView } = await import('../../../public/ui/views/strategist-view.js');
+    const el = document.createElement('div');
+    const view = new StrategistView(el);
+    view.mount();
+
+    const pathCards = el.querySelectorAll('.onboarding-path-card');
+    const githubCard = pathCards[2];
+    const title = githubCard.querySelector('.onboarding-path-title');
+    expect(title!.textContent).toContain('Import from GitHub');
   });
 });
 

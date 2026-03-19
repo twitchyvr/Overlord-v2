@@ -299,6 +299,8 @@ export class OnboardingWizard extends Component {
     this._selectedType = null;
     this._selectedScale = null;
     this._creating = false;
+    this._codebasePath = '';
+    this._codebaseAnalyzing = false;
   }
 
   mount() {
@@ -419,6 +421,48 @@ export class OnboardingWizard extends Component {
         this._featureItem('\u{1F50D}', 'Full Visibility', 'See what\u2019s happening across your entire project at a glance')
       )
     );
+
+    // ─── "Use Existing Codebase" section (#872) ───
+    const existingSection = h('div', { class: 'wizard-existing-codebase' },
+      h('div', { class: 'wizard-oneshot-divider' },
+        h('span', null, 'already have a project?')
+      ),
+    );
+    const existingCard = h('div', { class: 'onboarding-path-card onboarding-path-primary' });
+    existingCard.appendChild(h('div', { class: 'onboarding-path-body' },
+      h('h3', { class: 'onboarding-path-title' }, '\u{1F4C2} Use Existing Codebase'),
+      h('p', { class: 'onboarding-path-desc' }, 'Point to a folder on your machine and I\'ll figure out what kind of project it is and set everything up for you.'),
+    ));
+    const existingInput = h('div', { class: 'onboarding-path-input' });
+    const codebasePathInput = h('input', {
+      class: 'wizard-input',
+      type: 'text',
+      placeholder: '/path/to/your/project',
+      value: this._codebasePath,
+    });
+    codebasePathInput.addEventListener('input', (e) => { this._codebasePath = e.target.value; });
+    codebasePathInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this._handleCodebaseAnalyze();
+      }
+    });
+    existingInput.appendChild(codebasePathInput);
+    const analyzeBtn = h('button', {
+      class: 'wizard-btn wizard-btn-primary',
+      disabled: this._codebaseAnalyzing,
+    }, this._codebaseAnalyzing ? 'Analyzing...' : 'Analyze');
+    analyzeBtn.addEventListener('click', () => this._handleCodebaseAnalyze());
+    existingInput.appendChild(analyzeBtn);
+    existingCard.appendChild(existingInput);
+    if (this._codebaseAnalyzing) {
+      existingCard.appendChild(h('div', { class: 'onboarding-analyzing' },
+        h('div', { class: 'spinner' }),
+        h('span', null, 'Scanning your project...'),
+      ));
+    }
+    existingSection.appendChild(existingCard);
+    content.appendChild(existingSection);
 
     // ─── "Just Build It" one-shot section ───
     const oneShotSection = h('div', { class: 'wizard-oneshot' },
@@ -806,6 +850,53 @@ export class OnboardingWizard extends Component {
   }
 
   // ─── One-Shot "Just Build It" Handler ───
+
+  /** Handle "Use Existing Codebase" — analyze and create (#872) */
+  async _handleCodebaseAnalyze() {
+    const dirPath = this._codebasePath.trim();
+    if (!dirPath) {
+      Toast.error('Please enter a path to your project folder.');
+      return;
+    }
+    if (!window.overlordSocket) {
+      Toast.error('Not connected to server.');
+      return;
+    }
+
+    this._codebaseAnalyzing = true;
+    this.render();
+
+    try {
+      const result = await window.overlordSocket.analyzeCodebase(dirPath, true);
+
+      if (!result?.ok || !result.data) {
+        Toast.error(result?.error?.message || 'Analysis failed. Check that the path is correct.');
+        this._codebaseAnalyzing = false;
+        this.render();
+        return;
+      }
+
+      const analysis = result.data;
+
+      // Navigate to the strategist view with analysis pre-loaded
+      // Use OverlordUI dispatch to switch views, then the strategist
+      // will pick up the analysis from a global handoff
+      window._pendingCodebaseAnalysis = {
+        analysis,
+        localPath: dirPath,
+      };
+
+      OverlordUI.dispatch('navigate:strategist');
+
+      // The strategist view will check for window._pendingCodebaseAnalysis
+      // and auto-navigate to the analyze-results step
+
+    } catch (err) {
+      Toast.error(`Analysis failed: ${err.message}`);
+    } finally {
+      this._codebaseAnalyzing = false;
+    }
+  }
 
   async _handleOneShot(description) {
     // Extract a project name from the user's description

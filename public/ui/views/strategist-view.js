@@ -296,7 +296,7 @@ export class StrategistView extends Component {
   constructor(el, opts = {}) {
     super(el, opts);
     this._selectedTemplate = null;
-    this._step = 'select'; // 'select' | 'effort' | 'configure' | 'creating'
+    this._step = 'select'; // 'select' | 'effort' | 'configure' | 'creating' | 'analyze-results'
     this._effortLevel = 'medium'; // 'easy' | 'medium' | 'advanced'
     this._oneShotPrompt = '';
     this._projectName = '';
@@ -308,6 +308,9 @@ export class StrategistView extends Component {
     this._pendingRepos = []; // Array of { url, name, relationship }
     this._analysisResult = null; // AI analysis result
     this._analyzing = false;
+    this._codebaseAnalysis = null; // Codebase analysis result (#872)
+    this._codebaseAnalyzing = false;
+    this._codebasePath = '';
   }
 
   mount() {
@@ -317,8 +320,26 @@ export class StrategistView extends Component {
     // Listen for navigate events
     this._listeners.push(
       OverlordUI.subscribe('navigate:strategist', () => {
-        this._step = 'select';
-        this._selectedTemplate = null;
+        // Check for pending codebase analysis handoff from onboarding wizard (#872)
+        if (window._pendingCodebaseAnalysis) {
+          const { analysis, localPath } = window._pendingCodebaseAnalysis;
+          delete window._pendingCodebaseAnalysis;
+
+          this._codebaseAnalysis = analysis;
+          this._projectName = analysis.projectName || '';
+          this._projectGoals = analysis.aiDescription || analysis.summary || '';
+          this._successCriteria = analysis.aiGoals || '';
+          this._localPath = localPath;
+          this._projectSource = 'local';
+
+          const matchingTemplate = TEMPLATES.find(t => t.id === analysis.recommendedTemplate);
+          this._selectedTemplate = matchingTemplate || TEMPLATES[0];
+
+          this._step = 'analyze-results';
+        } else {
+          this._step = 'select';
+          this._selectedTemplate = null;
+        }
         this.render();
       })
     );
@@ -341,6 +362,9 @@ export class StrategistView extends Component {
       case 'creating':
         this._renderCreating();
         break;
+      case 'analyze-results':
+        this._renderAnalyzeResults();
+        break;
     }
   }
 
@@ -348,48 +372,116 @@ export class StrategistView extends Component {
     // Header
     const header = h('div', { class: 'strategist-header' },
       h('h2', null, 'New Project'),
-      h('p', { class: 'strategist-subtitle' }, 'Describe what you want to build, or choose a template below.')
+      h('p', { class: 'strategist-subtitle' }, 'How would you like to get started?')
     );
     this.el.appendChild(header);
 
-    // ── One-shot prompt input ──
-    const promptSection = h('div', { class: 'one-shot-section' });
+    // ── Three onboarding paths ──
+    const pathsGrid = h('div', { class: 'onboarding-paths' });
+
+    // Path 1: Use Existing Codebase (#872)
+    const existingCard = h('div', { class: 'onboarding-path-card onboarding-path-primary' });
+    existingCard.appendChild(h('div', { class: 'onboarding-path-icon' }, '\u{1F4C2}'));
+    existingCard.appendChild(h('div', { class: 'onboarding-path-body' },
+      h('h3', { class: 'onboarding-path-title' }, 'Use Existing Codebase'),
+      h('p', { class: 'onboarding-path-desc' }, 'Point to a folder on your machine and I\'ll analyze it to detect the project type, tech stack, and set everything up automatically.'),
+    ));
+    const existingInput = h('div', { class: 'onboarding-path-input' });
+    const pathInput = h('input', {
+      class: 'form-input mono',
+      type: 'text',
+      placeholder: '/path/to/your/project',
+      value: this._codebasePath,
+      'aria-label': 'Path to existing codebase',
+    });
+    pathInput.addEventListener('input', (e) => { this._codebasePath = e.target.value; });
+    pathInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this._handleCodebaseAnalyze();
+      }
+    });
+    existingInput.appendChild(pathInput);
+    const analyzeBtn = Button.create(this._codebaseAnalyzing ? 'Analyzing...' : 'Analyze', {
+      variant: 'primary',
+      size: 'md',
+      disabled: this._codebaseAnalyzing,
+      onClick: () => this._handleCodebaseAnalyze(),
+    });
+    existingInput.appendChild(analyzeBtn);
+    existingCard.appendChild(existingInput);
+    if (this._codebaseAnalyzing) {
+      existingCard.appendChild(h('div', { class: 'onboarding-analyzing' },
+        h('div', { class: 'spinner' }),
+        h('span', null, 'Scanning your project...'),
+      ));
+    }
+    pathsGrid.appendChild(existingCard);
+
+    // Path 2: Start From Scratch
+    const scratchCard = h('div', { class: 'onboarding-path-card' });
+    scratchCard.appendChild(h('div', { class: 'onboarding-path-icon' }, '\u2728'));
+    scratchCard.appendChild(h('div', { class: 'onboarding-path-body' },
+      h('h3', { class: 'onboarding-path-title' }, 'Start From Scratch'),
+      h('p', { class: 'onboarding-path-desc' }, 'Describe what you want to build in plain language, or pick a template below.'),
+    ));
+    const scratchInput = h('div', { class: 'onboarding-path-input' });
     const promptInput = h('textarea', {
       class: 'one-shot-input',
       placeholder: 'Just tell me what you want to build...\ne.g. "Build me a website for my bakery with online ordering"',
-      rows: '3',
+      rows: '2',
       'aria-label': 'Describe your project in plain language',
     }, this._oneShotPrompt);
-
-    promptInput.addEventListener('input', (e) => {
-      this._oneShotPrompt = e.target.value;
-    });
-
-    // Submit via Enter (but allow Shift+Enter for newlines)
+    promptInput.addEventListener('input', (e) => { this._oneShotPrompt = e.target.value; });
     promptInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        if (this._oneShotPrompt.trim().length > 0) {
-          this._handleOneShotSubmit();
-        }
+        if (this._oneShotPrompt.trim().length > 0) this._handleOneShotSubmit();
       }
     });
-
-    const promptActions = h('div', { class: 'one-shot-actions' });
+    scratchInput.appendChild(promptInput);
     const goBtn = Button.create('Just Build It', {
       variant: 'primary',
       size: 'md',
-      icon: '\u{1F680}',
-      onClick: () => {
-        if (this._oneShotPrompt.trim().length > 0) {
-          this._handleOneShotSubmit();
-        }
+      onClick: () => { if (this._oneShotPrompt.trim().length > 0) this._handleOneShotSubmit(); },
+    });
+    scratchInput.appendChild(goBtn);
+    scratchCard.appendChild(scratchInput);
+    pathsGrid.appendChild(scratchCard);
+
+    // Path 3: Import from GitHub
+    const cloneCard = h('div', { class: 'onboarding-path-card' });
+    cloneCard.appendChild(h('div', { class: 'onboarding-path-icon' }, '\u{1F517}'));
+    cloneCard.appendChild(h('div', { class: 'onboarding-path-body' },
+      h('h3', { class: 'onboarding-path-title' }, 'Import from GitHub'),
+      h('p', { class: 'onboarding-path-desc' }, 'Clone a repository by URL and set up automatically.'),
+    ));
+    const cloneInput = h('div', { class: 'onboarding-path-input' });
+    const urlInput = h('input', {
+      class: 'form-input mono',
+      type: 'text',
+      placeholder: 'https://github.com/owner/repo',
+      value: this._cloneUrl,
+      'aria-label': 'GitHub repository URL',
+    });
+    urlInput.addEventListener('input', (e) => { this._cloneUrl = e.target.value; });
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this._handleGitHubImport();
       }
     });
-    promptActions.appendChild(goBtn);
-    promptSection.appendChild(promptInput);
-    promptSection.appendChild(promptActions);
-    this.el.appendChild(promptSection);
+    cloneInput.appendChild(urlInput);
+    const importBtn = Button.create('Import', {
+      variant: 'primary',
+      size: 'md',
+      onClick: () => this._handleGitHubImport(),
+    });
+    cloneInput.appendChild(importBtn);
+    cloneCard.appendChild(cloneInput);
+    pathsGrid.appendChild(cloneCard);
+
+    this.el.appendChild(pathsGrid);
 
     // ── Divider ──
     const divider = h('div', { class: 'one-shot-divider' },
@@ -1069,6 +1161,371 @@ export class StrategistView extends Component {
       });
       row.appendChild(removeBtn);
       listEl.appendChild(row);
+    }
+  }
+
+  /** Handle "Use Existing Codebase" — analyze a local directory (#872) */
+  async _handleCodebaseAnalyze() {
+    const dirPath = this._codebasePath.trim();
+    if (!dirPath) {
+      Toast.error('Please enter a path to your project folder.');
+      return;
+    }
+    if (!window.overlordSocket) {
+      Toast.error('Not connected to server.');
+      return;
+    }
+
+    this._codebaseAnalyzing = true;
+    this.render();
+
+    try {
+      const result = await window.overlordSocket.analyzeCodebase(dirPath, true);
+
+      if (result?.ok && result.data) {
+        this._codebaseAnalysis = result.data;
+        this._projectName = result.data.projectName || '';
+        this._projectGoals = result.data.aiDescription || result.data.summary || '';
+        this._successCriteria = result.data.aiGoals || '';
+        this._localPath = dirPath;
+        this._projectSource = 'local';
+
+        // Find matching template
+        const matchingTemplate = TEMPLATES.find(t => t.id === result.data.recommendedTemplate);
+        this._selectedTemplate = matchingTemplate || TEMPLATES[0];
+
+        this._step = 'analyze-results';
+      } else {
+        const msg = result?.error?.message || 'Analysis failed';
+        Toast.error(msg);
+      }
+    } catch (err) {
+      Toast.error(`Analysis failed: ${err.message}`);
+    } finally {
+      this._codebaseAnalyzing = false;
+      this.render();
+    }
+  }
+
+  /** Handle "Import from GitHub" — clone + analyze (#872) */
+  async _handleGitHubImport() {
+    const url = this._cloneUrl.trim();
+    if (!url) {
+      Toast.error('Please enter a GitHub repository URL.');
+      return;
+    }
+
+    // Basic URL validation
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Invalid protocol');
+    } catch {
+      Toast.error('Please enter a valid URL (https://github.com/owner/repo).');
+      return;
+    }
+
+    // Extract repo name from URL for project name
+    const pathParts = new URL(url).pathname.replace(/\.git$/, '').split('/').filter(Boolean);
+    const repoName = pathParts[pathParts.length - 1] || 'imported-project';
+
+    // Set up as a clone project and go straight to configure
+    this._cloneUrl = url;
+    this._projectSource = 'clone';
+    this._projectName = repoName;
+    this._selectedTemplate = TEMPLATES[0]; // Default to web-app, user can change
+    this._step = 'effort';
+    this.render();
+  }
+
+  /** Render codebase analysis results with confirmation (#872) */
+  _renderAnalyzeResults() {
+    const analysis = this._codebaseAnalysis;
+    if (!analysis) { this._step = 'select'; this.render(); return; }
+
+    // Header with back button
+    const header = h('div', { class: 'strategist-header' },
+      h('button', {
+        class: 'btn btn-ghost btn-sm',
+        onClick: () => { this._step = 'select'; this._codebaseAnalysis = null; this.render(); }
+      }, '\u2190 Back'),
+      h('h2', null, 'Project Analysis Complete'),
+      h('p', { class: 'strategist-subtitle' }, 'Here\'s what I found. Review and customize before setting up your project.'),
+    );
+    this.el.appendChild(header);
+
+    // Analysis summary card
+    const summaryCard = h('div', { class: 'analysis-summary-card glass-card' });
+
+    // Project info grid
+    const infoGrid = h('div', { class: 'analysis-info-grid' });
+
+    const addInfoItem = (label, value, icon) => {
+      if (!value) return;
+      infoGrid.appendChild(h('div', { class: 'analysis-info-item' },
+        h('span', { class: 'analysis-info-icon' }, icon),
+        h('div', { class: 'analysis-info-content' },
+          h('span', { class: 'analysis-info-label' }, label),
+          h('span', { class: 'analysis-info-value' }, value),
+        ),
+      ));
+    };
+
+    addInfoItem('Project', analysis.projectName, '\u{1F4C1}');
+    addInfoItem('Type', analysis.projectType.replace(/-/g, ' '), '\u{1F3AF}');
+    addInfoItem('Language', analysis.primaryLanguage, '\u{1F4DD}');
+    if (analysis.framework) addInfoItem('Framework', analysis.framework, '\u{1F527}');
+    if (analysis.buildSystem) addInfoItem('Build System', analysis.buildSystem, '\u{1F528}');
+    if (analysis.testFramework) addInfoItem('Tests', analysis.testFramework, '\u2705');
+    addInfoItem('Maturity', analysis.maturity.charAt(0).toUpperCase() + analysis.maturity.slice(1), '\u{1F4CA}');
+    addInfoItem('CI/CD', analysis.hasCICD ? 'Configured' : 'Not detected', analysis.hasCICD ? '\u{1F680}' : '\u26A0\uFE0F');
+    addInfoItem('Docker', analysis.hasDocker ? 'Enabled' : 'Not detected', analysis.hasDocker ? '\u{1F433}' : '\u2796');
+    if (analysis.gitRepoUrl) addInfoItem('Git', analysis.gitRepoUrl, '\u{1F517}');
+
+    summaryCard.appendChild(infoGrid);
+
+    // Tech stack badges
+    if (analysis.techStack.length > 0) {
+      const techSection = h('div', { class: 'analysis-tech-section' },
+        h('h4', null, 'Tech Stack'),
+      );
+      const techBadges = h('div', { class: 'analysis-tech-badges' });
+      for (const tech of analysis.techStack) {
+        techBadges.appendChild(h('span', { class: 'analysis-tech-badge' }, tech));
+      }
+      techSection.appendChild(techBadges);
+      summaryCard.appendChild(techSection);
+    }
+
+    // Detected files
+    if (analysis.detectedFiles.length > 0) {
+      const filesSection = h('div', { class: 'analysis-detected-section' },
+        h('h4', null, `${analysis.detectedFiles.length} indicator files found`),
+      );
+      const filesList = h('div', { class: 'analysis-detected-files' });
+      for (const f of analysis.detectedFiles.slice(0, 12)) {
+        filesList.appendChild(h('span', { class: 'analysis-detected-file mono' }, f.path));
+      }
+      if (analysis.detectedFiles.length > 12) {
+        filesList.appendChild(h('span', { class: 'analysis-detected-more' }, `+${analysis.detectedFiles.length - 12} more`));
+      }
+      filesSection.appendChild(filesList);
+      summaryCard.appendChild(filesSection);
+    }
+
+    // AI description
+    if (analysis.aiDescription) {
+      summaryCard.appendChild(h('div', { class: 'analysis-ai-section' },
+        h('h4', null, 'AI Summary'),
+        h('p', null, analysis.aiDescription),
+        analysis.aiSuggestions ? h('p', { class: 'analysis-ai-suggestion' }, analysis.aiSuggestions) : null,
+      ));
+    }
+
+    this.el.appendChild(summaryCard);
+
+    // ── Recommended Setup ──
+    const setupSection = h('div', { class: 'analysis-setup-section' });
+    setupSection.appendChild(h('h3', null, 'Recommended Setup'));
+
+    // Rooms
+    if (analysis.recommendedRooms?.length > 0) {
+      const roomsCard = h('div', { class: 'analysis-setup-card' },
+        h('h4', null, `${analysis.recommendedRooms.length} Rooms`),
+      );
+      const roomsList = h('div', { class: 'analysis-setup-list' });
+      for (const room of analysis.recommendedRooms) {
+        roomsList.appendChild(h('div', { class: 'analysis-setup-item' },
+          h('span', { class: 'analysis-setup-name' }, room.name),
+          h('span', { class: 'analysis-setup-meta' }, `${room.floor} floor`),
+        ));
+      }
+      roomsCard.appendChild(roomsList);
+      setupSection.appendChild(roomsCard);
+    }
+
+    // Agents
+    if (analysis.recommendedAgents?.length > 0) {
+      const agentsCard = h('div', { class: 'analysis-setup-card' },
+        h('h4', null, `${analysis.recommendedAgents.length} Agents`),
+      );
+      const agentsList = h('div', { class: 'analysis-setup-list' });
+      for (const agent of analysis.recommendedAgents) {
+        agentsList.appendChild(h('div', { class: 'analysis-setup-item' },
+          h('span', { class: 'analysis-setup-name' }, agent.name),
+          h('span', { class: 'analysis-setup-meta' }, agent.role),
+        ));
+      }
+      agentsCard.appendChild(agentsList);
+      setupSection.appendChild(agentsCard);
+    }
+
+    // Documentation
+    if (analysis.documentationPaths?.length > 0) {
+      const docsCard = h('div', { class: 'analysis-setup-card' },
+        h('h4', null, 'Documentation Detected'),
+      );
+      const docsList = h('div', { class: 'analysis-setup-list' });
+      for (const docPath of analysis.documentationPaths) {
+        docsList.appendChild(h('div', { class: 'analysis-setup-item' },
+          h('span', { class: 'analysis-setup-name mono' }, docPath),
+        ));
+      }
+      docsCard.appendChild(docsList);
+      setupSection.appendChild(docsCard);
+    }
+
+    this.el.appendChild(setupSection);
+
+    // ── Editable fields ──
+    const form = h('div', { class: 'strategist-form' });
+
+    // Project name (editable)
+    const nameGroup = h('div', { class: 'form-group' },
+      h('label', { class: 'form-label', for: 'project-name' }, 'Project Name'),
+      h('input', {
+        class: 'form-input',
+        id: 'project-name',
+        type: 'text',
+        value: this._projectName,
+      }),
+    );
+    nameGroup.querySelector('input').addEventListener('input', (e) => { this._projectName = e.target.value; });
+    form.appendChild(nameGroup);
+
+    // Goals (editable, pre-filled from AI)
+    const goalsGroup = h('div', { class: 'form-group' },
+      h('label', { class: 'form-label', for: 'project-goals' }, 'Project Description'),
+      h('textarea', {
+        class: 'form-input form-textarea',
+        id: 'project-goals',
+        rows: '3',
+      }, this._projectGoals),
+    );
+    goalsGroup.querySelector('textarea').addEventListener('input', (e) => { this._projectGoals = e.target.value; });
+    form.appendChild(goalsGroup);
+
+    this.el.appendChild(form);
+
+    // ── Setup choice (#872) ──
+    const choiceSection = h('div', { class: 'analysis-choice-section' },
+      h('h3', null, 'How would you like to proceed?'),
+    );
+
+    const choiceGrid = h('div', { class: 'analysis-choice-grid' });
+
+    // Option 1: Auto-configure everything
+    const autoCard = h('div', { class: 'analysis-choice-card analysis-choice-primary' });
+    autoCard.appendChild(h('div', { class: 'analysis-choice-icon' }, '\u{1F680}'));
+    autoCard.appendChild(h('h4', null, 'Set Up Automatically'));
+    autoCard.appendChild(h('p', null, 'I\'ll create all the rooms, assign agents, and configure tools based on what I detected. You can start working right away.'));
+    const autoBtn = Button.create('Accept & Set Up', {
+      variant: 'primary',
+      size: 'lg',
+      onClick: () => this._createProjectFromAnalysis(),
+    });
+    autoCard.appendChild(autoBtn);
+    choiceGrid.appendChild(autoCard);
+
+    // Option 2: Customize manually
+    const manualCard = h('div', { class: 'analysis-choice-card' });
+    manualCard.appendChild(h('div', { class: 'analysis-choice-icon' }, '\u{1F527}'));
+    manualCard.appendChild(h('h4', null, 'Let Me Customize'));
+    manualCard.appendChild(h('p', null, 'Review and adjust the rooms, agents, tools, and settings before creating the project. Best if you have specific requirements.'));
+    const manualBtn = Button.create('Customize Setup', {
+      variant: 'secondary',
+      size: 'lg',
+      onClick: () => {
+        this._step = 'effort';
+        this.render();
+      },
+    });
+    manualCard.appendChild(manualBtn);
+    choiceGrid.appendChild(manualCard);
+
+    choiceSection.appendChild(choiceGrid);
+    this.el.appendChild(choiceSection);
+  }
+
+  /** Create project directly from analysis results (#872) */
+  async _createProjectFromAnalysis() {
+    const analysis = this._codebaseAnalysis;
+    if (!analysis) return;
+
+    const projectName = this._projectName.trim() || analysis.projectName;
+    const template = this._selectedTemplate || TEMPLATES[0];
+
+    this._step = 'creating';
+    this.render();
+
+    window._suppressOperationErrors = true;
+    window._suppressedErrors = [];
+
+    try {
+      if (!window.overlordSocket) throw new Error('Socket not connected');
+
+      // Step 1: Create building with working directory
+      const buildParams = {
+        name: projectName,
+        workingDirectory: this._localPath.trim() || undefined,
+        repoUrl: analysis.gitRepoUrl || undefined,
+        effortLevel: 'medium',
+        config: {
+          projectDescription: this._projectGoals || analysis.summary,
+          template: analysis.recommendedTemplate,
+          effortLevel: 'medium',
+          codebaseAnalysis: {
+            projectType: analysis.projectType,
+            primaryLanguage: analysis.primaryLanguage,
+            framework: analysis.framework,
+            techStack: analysis.techStack,
+            maturity: analysis.maturity,
+          },
+        },
+      };
+
+      const buildResult = await window.overlordSocket.createBuilding(buildParams);
+      if (!buildResult || !buildResult.ok) {
+        throw new Error(buildResult?.error?.message || 'Failed to create building');
+      }
+
+      const buildingId = buildResult.data.id;
+
+      // Step 2: Apply blueprint from analysis-recommended template
+      const blueprintResult = await window.overlordSocket.applyBlueprint({
+        buildingId,
+        blueprint: {
+          mode: 'quickStart',
+          effortLevel: 'medium',
+          floorsNeeded: template.floorsNeeded,
+          roomConfig: template.roomConfig,
+          agentRoster: template.agentRoster,
+          projectGoals: this._projectGoals || analysis.summary,
+          successCriteria: this._successCriteria || '',
+        },
+        agentId: 'user',
+      });
+
+      if (!blueprintResult || !blueprintResult.ok) {
+        throw new Error(blueprintResult?.error?.message || 'Failed to apply blueprint');
+      }
+
+      Toast.success(`Project "${projectName}" created from existing codebase!`);
+      await window.overlordSocket.selectBuilding(buildingId);
+      OverlordUI.dispatch('navigate:dashboard');
+      OverlordUI.dispatch('building:selected', { buildingId });
+
+    } catch (err) {
+      console.error('[StrategistView] Project creation from analysis failed:', err);
+      Toast.error(`Failed to create project: ${err.message}`);
+      this._step = 'analyze-results';
+      this.render();
+    } finally {
+      window._suppressOperationErrors = false;
+      const suppressed = window._suppressedErrors || [];
+      window._suppressedErrors = [];
+      if (suppressed.length > 0) {
+        Toast.warning(`Project created with ${suppressed.length} warning${suppressed.length > 1 ? 's' : ''} (non-critical)`);
+      }
     }
   }
 
