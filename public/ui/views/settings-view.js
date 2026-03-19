@@ -17,11 +17,12 @@ import { Toast } from '../components/toast.js';
 
 
 const TABS = [
-  { id: 'general',  label: 'General',  icon: '\u2699\uFE0F' },
-  { id: 'folders',  label: 'Folders',  icon: '\u{1F4C2}' },
-  { id: 'quality',  label: 'Quality',  icon: '\u2705' },
-  { id: 'ai',       label: 'AI',       icon: '\u{1F916}' },
-  { id: 'display',  label: 'Display',  icon: '\u{1F5A5}\uFE0F' },
+  { id: 'general',   label: 'General',   icon: '\u2699\uFE0F' },
+  { id: 'folders',   label: 'Folders',   icon: '\u{1F4C2}' },
+  { id: 'libraries', label: 'Libraries', icon: '\u{1F4DA}' },
+  { id: 'quality',   label: 'Quality',   icon: '\u2705' },
+  { id: 'ai',        label: 'AI',        icon: '\u{1F916}' },
+  { id: 'display',   label: 'Display',   icon: '\u{1F5A5}\uFE0F' },
 ];
 
 /** Known AI providers with display metadata. */
@@ -135,6 +136,9 @@ export class SettingsView extends Component {
         break;
       case 'folders':
         tabContent.appendChild(this._buildFoldersTab());
+        break;
+      case 'libraries':
+        tabContent.appendChild(this._buildLibrariesTab());
         break;
       case 'quality':
         tabContent.appendChild(this._buildQualityTab());
@@ -736,6 +740,148 @@ export class SettingsView extends Component {
         Toast.success('Quality settings saved');
       }
     });
+  }
+
+  // ── Documentation Libraries Tab (#811) ──────────────────
+
+  _buildLibrariesTab() {
+    const section = h('div', { class: 'settings-section' });
+    const store = OverlordUI.getStore();
+    const buildingId = store?.get('building.active');
+
+    section.appendChild(h('h3', { class: 'settings-section-title' }, 'Documentation Libraries'));
+    section.appendChild(h('p', { class: 'settings-section-desc', style: 'color:var(--text-muted); margin-bottom:var(--sp-4)' },
+      'Libraries give your agents access to project documentation, API references, and code files. Agents can search and read library contents during conversations.'
+    ));
+
+    if (!buildingId) {
+      section.appendChild(h('div', { class: 'settings-info', style: 'padding:var(--sp-4); background:var(--bg-secondary); border-radius:var(--radius-md); color:var(--text-muted)' },
+        'Select a project first to manage its documentation libraries.'
+      ));
+      return section;
+    }
+
+    // Create library form
+    const createRow = h('div', { style: 'display:flex; gap:var(--sp-2); margin-bottom:var(--sp-4)' });
+    const pathInput = h('input', {
+      type: 'text',
+      class: 'form-input',
+      placeholder: '/path/to/docs or /path/to/project',
+      style: 'flex:1'
+    });
+    const nameInput = h('input', {
+      type: 'text',
+      class: 'form-input',
+      placeholder: 'Library name (optional)',
+      style: 'width:180px'
+    });
+    const addBtn = h('button', { class: 'btn btn-primary btn-md' }, '+ Add Library');
+    addBtn.addEventListener('click', () => {
+      const path = pathInput.value.trim();
+      if (!path) { Toast.warning('Enter a folder path'); return; }
+      const name = nameInput.value.trim() || path.split('/').pop() || 'Library';
+
+      if (window.overlordSocket?.socket) {
+        addBtn.textContent = 'Indexing...';
+        addBtn.disabled = true;
+        window.overlordSocket.socket.emit('doc:library:create', { buildingId, name, path }, (res) => {
+          if (res?.ok) {
+            const libraryId = res.data?.id || res.data?.libraryId;
+            // Auto-index after creation
+            window.overlordSocket.socket.emit('doc:library:index', { libraryId }, (indexRes) => {
+              addBtn.textContent = '+ Add Library';
+              addBtn.disabled = false;
+              if (indexRes?.ok) {
+                Toast.success(`Library "${name}" created and indexed (${indexRes.data?.indexed || 0} files)`);
+              } else {
+                Toast.success(`Library "${name}" created (indexing may be in progress)`);
+              }
+              pathInput.value = '';
+              nameInput.value = '';
+              this._updateModalContent();
+            });
+          } else {
+            addBtn.textContent = '+ Add Library';
+            addBtn.disabled = false;
+            Toast.error(res?.error?.message || 'Failed to create library');
+          }
+        });
+      }
+    });
+    createRow.appendChild(pathInput);
+    createRow.appendChild(nameInput);
+    createRow.appendChild(addBtn);
+    section.appendChild(createRow);
+
+    // List existing libraries
+    const listContainer = h('div', { class: 'settings-libraries-list' });
+    section.appendChild(listContainer);
+
+    // Fetch libraries
+    if (window.overlordSocket?.socket) {
+      window.overlordSocket.socket.emit('doc:library:list', { buildingId }, (res) => {
+        if (res?.ok && res.data?.length > 0) {
+          for (const lib of res.data) {
+            const card = h('div', {
+              style: 'display:flex; align-items:center; justify-content:space-between; padding:var(--sp-3); border:1px solid var(--border-secondary); border-radius:var(--radius-md); margin-bottom:var(--sp-2)'
+            },
+              h('div', {},
+                h('div', { style: 'font-weight:var(--font-medium)' }, lib.name || 'Unnamed'),
+                h('div', { style: 'font-size:var(--text-xs); color:var(--text-muted)' }, lib.path || ''),
+                h('div', { style: 'font-size:var(--text-xs); color:var(--text-muted)' },
+                  `${lib.file_count || 0} files indexed`
+                ),
+              ),
+              h('div', { style: 'display:flex; gap:var(--sp-2)' },
+                (() => {
+                  const reindexBtn = h('button', { class: 'btn btn-ghost btn-xs' }, 'Re-index');
+                  reindexBtn.addEventListener('click', () => {
+                    reindexBtn.textContent = 'Indexing...';
+                    reindexBtn.disabled = true;
+                    window.overlordSocket.socket.emit('doc:library:index', { libraryId: lib.id }, (indexRes) => {
+                      reindexBtn.textContent = 'Re-index';
+                      reindexBtn.disabled = false;
+                      if (indexRes?.ok) {
+                        Toast.success(`Re-indexed: ${indexRes.data?.indexed || 0} files`);
+                        this._updateModalContent();
+                      } else {
+                        Toast.error('Re-indexing failed');
+                      }
+                    });
+                  });
+                  return reindexBtn;
+                })(),
+                (() => {
+                  const delBtn = h('button', {
+                    class: 'btn btn-ghost btn-xs',
+                    style: 'color:var(--c-danger)'
+                  }, 'Remove');
+                  delBtn.addEventListener('click', () => {
+                    if (!confirm(`Remove library "${lib.name}"? This deletes the index but not the source files.`)) return;
+                    window.overlordSocket.socket.emit('doc:library:delete', { libraryId: lib.id }, (delRes) => {
+                      if (delRes?.ok) {
+                        Toast.info(`Library "${lib.name}" removed`);
+                        this._updateModalContent();
+                      } else {
+                        Toast.error('Failed to remove library');
+                      }
+                    });
+                  });
+                  return delBtn;
+                })(),
+              ),
+            );
+            listContainer.appendChild(card);
+          }
+        } else {
+          listContainer.appendChild(h('div', {
+            style: 'padding:var(--sp-4); text-align:center; color:var(--text-muted); background:var(--bg-secondary); border-radius:var(--radius-md)'
+          }, 'No libraries configured yet. Add a folder path above to index documentation for your agents.'));
+        }
+      });
+    }
+
+    return section;
   }
 
   // ── AI Providers Tab ────────────────────────────────────
