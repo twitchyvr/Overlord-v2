@@ -109,6 +109,7 @@ export function initSocketBridge(socket, store, engine) {
     });
     store.update('activity.items', (items) => [{ event: 'room:agent:entered', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('room:agent:entered', data);
+    engine.dispatch('agent:moved', data); // #850 — notify agents-view of room changes
     engine.dispatch('activity:new', { event: 'room:agent:entered', ...data });
   });
 
@@ -121,6 +122,7 @@ export function initSocketBridge(socket, store, engine) {
     });
     store.update('activity.items', (items) => [{ event: 'room:agent:exited', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('room:agent:exited', data);
+    engine.dispatch('agent:moved', data); // #850 — notify agents-view of room changes
     engine.dispatch('activity:new', { event: 'room:agent:exited', ...data });
   });
 
@@ -386,6 +388,40 @@ export function initSocketBridge(socket, store, engine) {
     store.update('activity.items', (items) => [{ event: 'agent:mentioned', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('agent:mentioned', data);
     engine.dispatch('activity:new', { event: 'agent:mentioned', ...data });
+  });
+
+  // #850 — Agent created broadcast (new agents appear in other clients)
+  socket.on('agent:created', (data) => {
+    if (!isActiveBuilding(data)) return;
+    if (data.agent) {
+      store.update('agents.list', (agents) => {
+        const list = agents || [];
+        // Avoid duplicate if agent was already added via ACK
+        if (list.some((a) => a.id === data.agentId)) return list;
+        return [...list, data.agent];
+      });
+    }
+    store.update('activity.items', (items) => [{ event: 'agent:created', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('agent:registered', data);
+    engine.dispatch('activity:new', { event: 'agent:created', ...data });
+  });
+
+  // #850 — Agent updated broadcast (field changes propagate to other clients)
+  socket.on('agent:updated', (data) => {
+    if (!isActiveBuilding(data)) return;
+    if (data.agent) {
+      store.update('agents.list', (agents) => {
+        const list = agents || [];
+        const idx = list.findIndex((a) => a.id === data.agentId);
+        if (idx >= 0) {
+          const next = [...list];
+          next[idx] = { ...next[idx], ...data.agent };
+          return next;
+        }
+        return list;
+      });
+    }
+    engine.dispatch('agent:updated', data);
   });
 
   socket.on('agent:status-changed', (data) => {
@@ -656,12 +692,14 @@ export function initSocketBridge(socket, store, engine) {
   // ── Agent profile events ──
 
   socket.on('agent:profile-updated', (data) => {
+    if (!isActiveBuilding(data)) return; // #850 — building isolation
     store.update('agents.list', (agents) => {
       const list = agents || [];
       const idx = list.findIndex((a) => a.id === data.agentId || a.id === data.id);
       if (idx >= 0) {
         const next = [...list];
-        next[idx] = { ...next[idx], ...data };
+        // Spread the profile object (actual agent fields), not the event wrapper
+        next[idx] = { ...next[idx], ...(data.profile || {}) };
         return next;
       }
       return list;
@@ -672,16 +710,10 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('agent:profile-generated', (data) => {
-    store.update('agents.list', (agents) => {
-      const list = agents || [];
-      const idx = list.findIndex((a) => a.id === data.agentId || a.id === data.id);
-      if (idx >= 0) {
-        const next = [...list];
-        next[idx] = { ...next[idx], ...data };
-        return next;
-      }
-      return list;
-    });
+    if (!isActiveBuilding(data)) return; // #850 — building isolation
+    // profile-generated carries generation metadata, not agent fields —
+    // the actual profile update is handled by agent:profile-updated above.
+    // Only update activity feed, do not spread metadata onto agent object.
     store.update('activity.items', (items) => [{ event: 'agent:profile-generated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('agent:profile-generated', data);
     engine.dispatch('activity:new', { event: 'agent:profile-generated', ...data });
