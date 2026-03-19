@@ -21,7 +21,25 @@ const TYPE_ICONS = {
   room: '\u{1F3E0}',
   milestone: '\u{1F3AF}',
   message: '\u{1F4AC}',
+  command: '\u26A1',
+  navigate: '\u2192',
+  project: '\u{1F3D7}\uFE0F',
 };
+
+/** Built-in navigation and action commands (#703) */
+const BUILT_IN_COMMANDS = [
+  { id: 'nav-dashboard',  label: 'Go to Dashboard',  icon: '\u{1F4CA}', type: 'navigate', action: () => OverlordUI.dispatch('navigate:dashboard') },
+  { id: 'nav-chat',       label: 'Go to Chat',       icon: '\u{1F4AC}', type: 'navigate', action: () => OverlordUI.dispatch('navigate:chat') },
+  { id: 'nav-agents',     label: 'Go to Agents',     icon: '\u{1F916}', type: 'navigate', action: () => OverlordUI.dispatch('navigate:agents') },
+  { id: 'nav-tasks',      label: 'Go to Tasks',      icon: '\u2611',    type: 'navigate', action: () => OverlordUI.dispatch('navigate:tasks') },
+  { id: 'nav-activity',   label: 'Go to Activity',   icon: '\u{1F4CB}', type: 'navigate', action: () => OverlordUI.dispatch('navigate:activity') },
+  { id: 'nav-raid',       label: 'Go to RAID Log',   icon: '\u26A0',    type: 'navigate', action: () => OverlordUI.dispatch('navigate:raid-log') },
+  { id: 'nav-milestones', label: 'Go to Milestones', icon: '\u{1F3AF}', type: 'navigate', action: () => OverlordUI.dispatch('navigate:milestones') },
+  { id: 'nav-scripts',    label: 'Go to Scripts',    icon: '\u26A1',    type: 'navigate', action: () => OverlordUI.dispatch('navigate:scripts') },
+  { id: 'nav-settings',   label: 'Go to Settings',   icon: '\u2699\uFE0F', type: 'navigate', action: () => OverlordUI.dispatch('navigate:settings') },
+  { id: 'act-new-project', label: 'New Project',      icon: '\u2795',    type: 'command',  action: () => OverlordUI.dispatch('navigate:onboarding') },
+  { id: 'act-new-task',    label: 'Create Task',      icon: '\u2795',    type: 'command',  action: () => { OverlordUI.dispatch('navigate:tasks'); setTimeout(() => OverlordUI.dispatch('task:create'), 300); } },
+];
 
 /** View routes for each type */
 const TYPE_ROUTES = {
@@ -204,6 +222,16 @@ export class GlobalSearch extends Component {
       return;
     }
 
+    // Check if query matches commands first (#703)
+    const q = query.toLowerCase();
+    const matchingCmds = BUILT_IN_COMMANDS.filter(cmd =>
+      cmd.label.toLowerCase().includes(q) || cmd.id.includes(q)
+    );
+    if (matchingCmds.length > 0 && (q.startsWith('go') || q.startsWith('nav') || q.startsWith('new') || q.startsWith('create'))) {
+      this._renderCommands(query);
+      return;
+    }
+
     const store = OverlordUI.getStore();
     const buildingId = store?.get('building.active');
     if (!buildingId || !window.overlordSocket) {
@@ -238,9 +266,8 @@ export class GlobalSearch extends Component {
     this._resultsEl.textContent = '';
 
     if (!this._results || !this._query.trim()) {
-      this._resultsEl.appendChild(
-        h('div', { class: 'global-search-empty' }, 'Type to search across your project...')
-      );
+      // Show navigation commands and actions when query is empty (#703)
+      this._renderCommands('');
       return;
     }
 
@@ -358,6 +385,137 @@ export class GlobalSearch extends Component {
     this._resultsEl.appendChild(h('div', { class: 'global-search-empty global-search-error' }, msg));
   }
 
+  /** Render navigation commands, action commands, and project switcher (#703) */
+  _renderCommands(query) {
+    if (!this._resultsEl) return;
+
+    // Filter commands by query
+    const q = (query || '').toLowerCase();
+    const matchingCommands = q
+      ? BUILT_IN_COMMANDS.filter(cmd =>
+          cmd.label.toLowerCase().includes(q) ||
+          cmd.id.toLowerCase().includes(q)
+        )
+      : BUILT_IN_COMMANDS;
+
+    // Build flat items for keyboard navigation
+    this._flatItems = matchingCommands.map(cmd => ({
+      type: cmd.type,
+      item: cmd,
+    }));
+
+    // Add building switcher items
+    const store = OverlordUI.getStore();
+    const buildings = store?.get('building.list') || [];
+    const activeId = store?.get('building.active');
+
+    const matchingBuildings = q
+      ? buildings.filter(b => (b.name || '').toLowerCase().includes(q))
+      : buildings;
+
+    for (const b of matchingBuildings) {
+      this._flatItems.push({
+        type: 'project',
+        item: {
+          id: `switch-${b.id}`,
+          label: b.name || 'Untitled',
+          icon: '\u{1F3D7}\uFE0F',
+          type: 'project',
+          isActive: b.id === activeId,
+          action: () => {
+            if (window.overlordSocket) {
+              window.overlordSocket.selectBuilding(b.id);
+            }
+            OverlordUI.dispatch('building:selected', { buildingId: b.id });
+          },
+        },
+      });
+    }
+
+    this._selectedIdx = -1;
+
+    // Render navigation section
+    const navItems = this._flatItems.filter(f => f.item.type === 'navigate');
+    const actItems = this._flatItems.filter(f => f.item.type === 'command');
+    const projItems = this._flatItems.filter(f => f.item.type === 'project');
+
+    if (navItems.length > 0) {
+      const navSection = h('div', { class: 'global-search-section' },
+        h('div', { class: 'global-search-section-title' }, 'Navigation')
+      );
+      let idx = 0;
+      for (const { item } of navItems) {
+        const row = h('div', {
+          class: 'global-search-item',
+          'data-idx': String(idx),
+        },
+          h('span', { class: 'global-search-item-icon' }, item.icon),
+          h('div', { class: 'global-search-item-content' },
+            h('div', { class: 'global-search-item-title' }, item.label)
+          )
+        );
+        row.addEventListener('click', () => { item.action(); this.close(); });
+        row.addEventListener('mouseenter', () => { this._selectedIdx = idx; this._updateSelectionStyles(); });
+        navSection.appendChild(row);
+        idx++;
+      }
+      this._resultsEl.appendChild(navSection);
+    }
+
+    if (actItems.length > 0) {
+      const actSection = h('div', { class: 'global-search-section' },
+        h('div', { class: 'global-search-section-title' }, 'Actions')
+      );
+      let idx = navItems.length;
+      for (const { item } of actItems) {
+        const row = h('div', {
+          class: 'global-search-item',
+          'data-idx': String(idx),
+        },
+          h('span', { class: 'global-search-item-icon' }, item.icon),
+          h('div', { class: 'global-search-item-content' },
+            h('div', { class: 'global-search-item-title' }, item.label)
+          )
+        );
+        row.addEventListener('click', () => { item.action(); this.close(); });
+        row.addEventListener('mouseenter', () => { this._selectedIdx = idx; this._updateSelectionStyles(); });
+        actSection.appendChild(row);
+        idx++;
+      }
+      this._resultsEl.appendChild(actSection);
+    }
+
+    if (projItems.length > 0) {
+      const projSection = h('div', { class: 'global-search-section' },
+        h('div', { class: 'global-search-section-title' }, 'Switch Project')
+      );
+      let idx = navItems.length + actItems.length;
+      for (const { item } of projItems) {
+        const row = h('div', {
+          class: `global-search-item${item.isActive ? ' active-project' : ''}`,
+          'data-idx': String(idx),
+        },
+          h('span', { class: 'global-search-item-icon' }, item.icon),
+          h('div', { class: 'global-search-item-content' },
+            h('div', { class: 'global-search-item-title' }, item.label),
+            item.isActive ? h('div', { class: 'global-search-item-meta' }, h('span', { class: 'search-badge active' }, 'Current')) : null
+          )
+        );
+        row.addEventListener('click', () => { item.action(); this.close(); });
+        row.addEventListener('mouseenter', () => { this._selectedIdx = idx; this._updateSelectionStyles(); });
+        projSection.appendChild(row);
+        idx++;
+      }
+      this._resultsEl.appendChild(projSection);
+    }
+
+    if (this._flatItems.length === 0 && q) {
+      this._resultsEl.appendChild(
+        h('div', { class: 'global-search-empty' }, `No commands or results for "${escapeHtml(q)}"`)
+      );
+    }
+  }
+
   _moveSelection(dir) {
     if (this._flatItems.length === 0) return;
     this._selectedIdx += dir;
@@ -379,6 +537,12 @@ export class GlobalSearch extends Component {
   _activateSelection() {
     if (this._selectedIdx < 0 || this._selectedIdx >= this._flatItems.length) return;
     const { type, item } = this._flatItems[this._selectedIdx];
+    // Handle command/navigation items (#703)
+    if (item.action && typeof item.action === 'function') {
+      item.action();
+      this.close();
+      return;
+    }
     this._navigateToItem(type, item);
   }
 
