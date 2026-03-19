@@ -70,6 +70,7 @@ const ACTIVITY_BADGES = {
   'reading-mail': { emoji: '\uD83D\uDCEC', label: 'Reading email' },
   git: { emoji: '\uD83D\uDD00', label: 'Git operations' },
   testing: { emoji: '\uD83E\uDDEA', label: 'Running tests' },
+  reviewing: { emoji: '\uD83D\uDD0D', label: 'Reviewing code' },
   planning: { emoji: '\uD83D\uDCCB', label: 'Planning' },
   working: { emoji: '\u2699\uFE0F', label: 'Working' },
 };
@@ -174,6 +175,17 @@ export class AgentsView extends Component {
       OverlordUI.subscribe('agent:updated', () => this._fetchAgents())
     );
 
+    // Stale badge cleanup timer (#802 code review) — clear expired activity badges
+    this._badgeTimer = setInterval(() => {
+      if (!this._activities || Object.keys(this._activities).length === 0) return;
+      const now = Date.now();
+      let hasStale = false;
+      for (const [, data] of Object.entries(this._activities)) {
+        if (now - data.timestamp > 60_000) { hasStale = true; break; }
+      }
+      if (hasStale) this._render();
+    }, 15_000);
+
     // Initialize from current store state
     this._agents = store.get('agents.list') || [];
     this._agentPositions = store.get('building.agentPositions') || {};
@@ -186,6 +198,7 @@ export class AgentsView extends Component {
   }
 
   destroy() {
+    if (this._badgeTimer) clearInterval(this._badgeTimer);
     this._tabs = null;
     super.destroy();
   }
@@ -664,7 +677,8 @@ export class AgentsView extends Component {
     // ── Task info — current task + queue count (#799, #803) ──
     const store = OverlordUI.getStore();
     const allTasks = store?.get('tasks.list') || [];
-    const agentTasks = allTasks.filter(t => t.assignee_id === agent.id && t.status !== 'done');
+    const TERMINAL = new Set(['done', 'completed', 'finished', 'closed', 'cancelled']);
+    const agentTasks = allTasks.filter(t => t.assignee_id === agent.id && !TERMINAL.has(t.status));
     if (agentTasks.length > 0) {
       // Sort by priority (critical > high > normal > low) then by creation
       const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };

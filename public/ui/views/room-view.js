@@ -37,7 +37,7 @@ const ROOM_TYPE_DEFAULTS = {
   discovery: ['read_file','list_dir','web_search','fetch_webpage','record_note','recall_notes','session_note'],
   architecture: ['read_file','list_dir','web_search','fetch_webpage','record_note','recall_notes','session_note'],
   'code-lab': ['read_file','write_file','copy_file','patch_file','list_dir','bash','web_search','fetch_webpage','screenshot','analyze_screenshot','session_note','game_engine','dev_server','workspace_sandbox'],
-  'testing-lab': ['read_file','list_dir','bash','qa_run_tests','qa_check_lint','qa_check_types','qa_check_coverage','qa_audit_deps','screenshot','analyze_screenshot','session_note'],
+  'testing-lab': ['read_file','list_dir','bash','qa_run_tests','qa_check_lint','qa_check_types','qa_check_coverage','qa_audit_deps','e2e_test','screenshot','analyze_screenshot','session_note'],
   review: ['read_file','list_dir','web_search','recall_notes','qa_run_tests','qa_check_lint','session_note'],
   deploy: ['read_file','list_dir','bash','github','qa_run_tests','session_note'],
   'war-room': ['read_file','write_file','patch_file','list_dir','bash','web_search','fetch_webpage','qa_run_tests','qa_check_lint','github','session_note'],

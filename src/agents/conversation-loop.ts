@@ -169,14 +169,15 @@ export function detectAndSubmitExitDoc(
 
 /** Classify a tool name into an activity type for UI badges (#802) */
 function _classifyToolActivity(toolName: string): string {
-  if (/write_file|patch_file|create_file/.test(toolName)) return 'coding';
+  if (/write_file|patch_file|create_file|copy_file/.test(toolName)) return 'coding';
   if (/read_file|list_dir|list_files|search_code/.test(toolName)) return 'reading';
   if (/bash|shell|exec|run_command/.test(toolName)) return 'running';
   if (/web_search|fetch_webpage|search_library/.test(toolName)) return 'searching';
   if (/send_email|compose_email/.test(toolName)) return 'emailing';
   if (/read_email|check_inbox|get_email/.test(toolName)) return 'reading-mail';
   if (/git_|create_pr|merge_/.test(toolName)) return 'git';
-  if (/test|e2e|playwright/.test(toolName)) return 'testing';
+  if (/^qa_|^e2e_test$|^run_tests$|^playwright/.test(toolName)) return 'testing';
+  if (/code_review/.test(toolName)) return 'reviewing';
   if (/create_task|create_raid|create_milestone/.test(toolName)) return 'planning';
   return 'working';
 }
