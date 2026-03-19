@@ -1,6 +1,6 @@
 {
   "name": "overlord-v2",
-  "version": "0.1.0",
+  "version": "0.9.0",
   "description": "Overlord v2 — Building/Room/Table agentic framework. Scriptable, scalable, provider-agnostic.",
   "main": "dist/server.js",
   "type": "module",
