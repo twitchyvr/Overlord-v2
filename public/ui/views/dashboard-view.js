@@ -293,12 +293,16 @@ export class DashboardView extends Component {
         };
       }
 
+      // Use live agent count when available — metadata may be stale (#889)
+      const metadataAgentCount = building.agentCount ?? building.agent_count ?? 0;
+      const liveAgentCount = (isActive && this._agents.length > 0) ? this._agents.length : metadataAgentCount;
+
       const card = Card.create('building', {
         name: building.name,
         activePhase: building.activePhase || building.active_phase,
         description: building.description || building.project_description || '',
         floorCount: building.floorCount ?? building.floor_count,
-        agentCount: building.agentCount ?? building.agent_count ?? 0,
+        agentCount: Math.max(liveAgentCount, metadataAgentCount),
         repoUrl: building.repoUrl || building.repo_url || '',
         healthScore: building.healthScore || null,
       }, {
