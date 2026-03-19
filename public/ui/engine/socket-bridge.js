@@ -390,6 +390,15 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'agent:mentioned', ...data });
   });
 
+  // #802 — Agent activity badges (thinking, coding, reading, etc.)
+  socket.on('agent:activity', (data) => {
+    if (!isActiveBuilding(data)) return;
+    store.update('agents.activities', (activities) => {
+      return { ...(activities || {}), [data.agentId]: { activity: data.activity, toolName: data.toolName, timestamp: Date.now() } };
+    });
+    engine.dispatch('agent:activity', data);
+  });
+
   // #850 — Agent created broadcast (new agents appear in other clients)
   socket.on('agent:created', (data) => {
     if (!isActiveBuilding(data)) return;
