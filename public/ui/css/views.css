@@ -140,6 +140,172 @@
 }
 
 
+/* ── Getting Started (empty dashboard) #767 ── */
+
+.dashboard-getting-started {
+  max-width: 600px;
+  margin: var(--sp-8) auto;
+  text-align: center;
+}
+
+.getting-started-hero {
+  margin-bottom: var(--sp-8);
+}
+
+.getting-started-icon {
+  font-size: 3.5rem;
+  margin-bottom: var(--sp-4);
+}
+
+.getting-started-title {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 var(--sp-2);
+}
+
+.getting-started-subtitle {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: 0;
+  max-width: 440px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.getting-started-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  text-align: left;
+}
+
+.getting-started-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  background: var(--surface-1);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+}
+
+.getting-started-step-number {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--accent-blue);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+.getting-started-step-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.getting-started-step-content {
+  flex: 1;
+}
+
+.getting-started-step-content strong {
+  display: block;
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.getting-started-step-content p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ── Fresh Project Checklist #767 ── */
+
+.dashboard-fresh-checklist {
+  background: var(--surface-1);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  margin-bottom: var(--sp-6);
+}
+
+.fresh-checklist-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 var(--sp-1);
+}
+
+.fresh-checklist-subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
+}
+
+.fresh-checklist-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.fresh-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+}
+
+.fresh-checklist-check {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.fresh-checklist-item.done .fresh-checklist-check {
+  color: var(--accent-green);
+  font-weight: 700;
+}
+
+.fresh-checklist-content {
+  flex: 1;
+}
+
+.fresh-checklist-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fresh-checklist-item.done .fresh-checklist-label {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.fresh-checklist-hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.fresh-checklist-action {
+  flex-shrink: 0;
+}
+
+
 /* ═══════════════════════════════════════════════
    STRATEGIST VIEW (Phase Zero Wizard)
    ═══════════════════════════════════════════════ */

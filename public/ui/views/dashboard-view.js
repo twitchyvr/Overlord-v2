@@ -91,9 +91,22 @@ export class DashboardView extends Component {
     );
     this.el.appendChild(header);
 
+    // Empty state: no projects yet — show getting-started guide
+    if (this._buildings.length === 0) {
+      this.el.appendChild(this._buildGettingStarted());
+      return;
+    }
+
     // Project Switcher (multi-building selector)
-    if (this._buildings.length > 0) {
-      this.el.appendChild(this._buildProjectSwitcher());
+    this.el.appendChild(this._buildProjectSwitcher());
+
+    // Fresh project state: one building but no agents/activity yet
+    const isFreshProject = this._buildings.length === 1 &&
+      this._getAgentCount() === 0 &&
+      this._raidEntries.length === 0;
+
+    if (isFreshProject) {
+      this.el.appendChild(this._buildFreshProjectChecklist());
     }
 
     // Cross-project KPIs (aggregate stats)
@@ -101,8 +114,10 @@ export class DashboardView extends Component {
       this.el.appendChild(this._buildCrossProjectKPIs());
     }
 
-    // Per-building KPI Cards
-    this.el.appendChild(this._buildKPISection());
+    // Per-building KPI Cards (skip when fresh — zeros are meaningless)
+    if (!isFreshProject) {
+      this.el.appendChild(this._buildKPISection());
+    }
 
     // Phase Progress (if active building)
     if (this._activeBuilding) {
@@ -365,5 +380,138 @@ export class DashboardView extends Component {
       kpiValues[2].textContent = String(this._getAgentCount());
       kpiValues[3].textContent = String(this._raidEntries.length);
     }
+  }
+
+  // ─── Getting Started (no projects) (#767) ───
+
+  _buildGettingStarted() {
+    const section = h('div', { class: 'dashboard-getting-started' });
+
+    section.appendChild(h('div', { class: 'getting-started-hero' },
+      h('div', { class: 'getting-started-icon' }, '\u{1F680}'),
+      h('h2', { class: 'getting-started-title' }, 'Welcome to Overlord'),
+      h('p', { class: 'getting-started-subtitle' },
+        'Your AI-powered project management team is ready. Create your first project to get started.'
+      )
+    ));
+
+    const steps = [
+      {
+        icon: '\u{1F3D7}\uFE0F',
+        title: 'Create a project',
+        description: 'Describe what you want to build and we\u2019ll set up your AI team automatically.',
+        action: 'New Project',
+        onClick: () => OverlordUI.dispatch('navigate:onboarding')
+      },
+      {
+        icon: '\u{1F916}',
+        title: 'Meet your AI team',
+        description: 'Each team member specializes in a role \u2014 strategy, coding, review, deployment.',
+      },
+      {
+        icon: '\u{1F4AC}',
+        title: 'Start a conversation',
+        description: 'Tell your team what to build. They\u2019ll plan, code, and deliver.',
+      }
+    ];
+
+    const stepsContainer = h('div', { class: 'getting-started-steps' });
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      const stepEl = h('div', { class: 'getting-started-step' },
+        h('div', { class: 'getting-started-step-number' }, String(i + 1)),
+        h('div', { class: 'getting-started-step-icon' }, step.icon),
+        h('div', { class: 'getting-started-step-content' },
+          h('strong', null, step.title),
+          h('p', null, step.description)
+        )
+      );
+
+      if (step.action) {
+        const btn = Button.create(step.action, {
+          variant: 'primary',
+          icon: '+',
+          onClick: step.onClick
+        });
+        stepEl.appendChild(btn);
+      }
+
+      stepsContainer.appendChild(stepEl);
+    }
+
+    section.appendChild(stepsContainer);
+    return section;
+  }
+
+  // ─── Fresh Project Checklist (#767) ───
+
+  _buildFreshProjectChecklist() {
+    const building = this._buildings[0];
+    const section = h('div', { class: 'dashboard-fresh-checklist' });
+
+    section.appendChild(h('h3', { class: 'fresh-checklist-title' },
+      '\u{1F4CB} Getting Started with ' + (building?.name || 'Your Project')
+    ));
+    section.appendChild(h('p', { class: 'fresh-checklist-subtitle' },
+      'Complete these steps to set up your project. Your AI team will take it from there.'
+    ));
+
+    const hasAgents = this._getAgentCount() > 0;
+    const hasRaid = this._raidEntries.length > 0;
+    const activePhase = building?.activePhase || building?.active_phase || 'strategy';
+    const pastStrategy = activePhase !== 'strategy';
+
+    const items = [
+      {
+        label: 'Project created',
+        done: true,
+        hint: building?.name || 'Untitled'
+      },
+      {
+        label: 'AI team assembled',
+        done: hasAgents,
+        hint: hasAgents
+          ? `${this._getAgentCount()} agents ready`
+          : 'Open Chat to trigger team setup',
+        action: !hasAgents ? () => OverlordUI.dispatch('navigate:chat') : null
+      },
+      {
+        label: 'First conversation started',
+        done: pastStrategy,
+        hint: pastStrategy
+          ? `Currently in ${activePhase} phase`
+          : 'Talk to your team to kick off Discovery',
+        action: !pastStrategy ? () => OverlordUI.dispatch('navigate:chat') : null
+      },
+      {
+        label: 'Risks and decisions logged',
+        done: hasRaid,
+        hint: hasRaid
+          ? `${this._raidEntries.length} entries tracked`
+          : 'RAID entries auto-generate as your team works'
+      }
+    ];
+
+    const list = h('div', { class: 'fresh-checklist-items' });
+    for (const item of items) {
+      const itemEl = h('div', { class: `fresh-checklist-item${item.done ? ' done' : ''}` },
+        h('div', { class: 'fresh-checklist-check' }, item.done ? '\u2713' : '\u25CB'),
+        h('div', { class: 'fresh-checklist-content' },
+          h('div', { class: 'fresh-checklist-label' }, item.label),
+          h('div', { class: 'fresh-checklist-hint' }, item.hint)
+        )
+      );
+
+      if (item.action) {
+        const actionBtn = h('button', { class: 'fresh-checklist-action wizard-btn wizard-btn-ghost' }, 'Go \u2192');
+        actionBtn.addEventListener('click', item.action);
+        itemEl.appendChild(actionBtn);
+      }
+
+      list.appendChild(itemEl);
+    }
+
+    section.appendChild(list);
+    return section;
   }
 }

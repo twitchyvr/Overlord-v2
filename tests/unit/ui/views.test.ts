@@ -813,22 +813,35 @@ describe('DashboardView', () => {
     expect(mod.DashboardView).toBeDefined();
   });
 
-  it('renders KPI cards and header on mount', async () => {
+  it('renders KPI cards and header on mount with buildings', async () => {
     const { DashboardView } = await import('../../../public/ui/views/dashboard-view.js');
     const el = document.createElement('div');
     const view = new DashboardView(el);
     view.mount();
+
+    // Set up building data so KPIs render (empty state shows getting-started instead)
+    const store = OverlordUI.getStore();
+    store.set('building.list', [
+      { id: 'b1', name: 'Test', active_phase: 'strategy', agentCount: 2 }
+    ]);
+    store.set('agents.list', [{ id: 'a1', name: 'Agent 1' }]);
 
     expect(el.querySelector('.dashboard-header')).not.toBeNull();
     expect(el.querySelector('.dashboard-title')!.textContent).toBe('Dashboard');
     expect(el.querySelectorAll('.kpi-card').length).toBe(4);
   });
 
-  it('shows building list section', async () => {
+  it('shows building list section with buildings', async () => {
     const { DashboardView } = await import('../../../public/ui/views/dashboard-view.js');
     const el = document.createElement('div');
     const view = new DashboardView(el);
     view.mount();
+
+    const store = OverlordUI.getStore();
+    store.set('building.list', [
+      { id: 'b1', name: 'Test', active_phase: 'strategy', agentCount: 1 }
+    ]);
+    store.set('agents.list', [{ id: 'a1', name: 'Agent 1' }]);
 
     expect(el.querySelector('.dashboard-buildings-section')).not.toBeNull();
   });
@@ -867,7 +880,7 @@ describe('DashboardView', () => {
     expect(el.querySelector('.dashboard-phase-section')).not.toBeNull();
   });
 
-  it('shows empty state when no buildings exist', async () => {
+  it('shows getting-started guide when no buildings exist', async () => {
     const { DashboardView } = await import('../../../public/ui/views/dashboard-view.js');
     const el = document.createElement('div');
     const view = new DashboardView(el);
@@ -876,9 +889,10 @@ describe('DashboardView', () => {
     const store = OverlordUI.getStore();
     store.set('building.list', []);
 
-    const buildingsSection = el.querySelector('.dashboard-buildings-section');
-    expect(buildingsSection!.querySelector('.empty-state')).not.toBeNull();
-    expect(buildingsSection!.textContent).toContain('No buildings yet');
+    // Empty state now shows getting-started hero instead of empty building list
+    const gettingStarted = el.querySelector('.dashboard-getting-started');
+    expect(gettingStarted).not.toBeNull();
+    expect(gettingStarted!.textContent).toContain('Welcome to Overlord');
   });
 
   it('updates KPI values without full re-render', async () => {
@@ -888,11 +902,14 @@ describe('DashboardView', () => {
     view.mount();
 
     const store = OverlordUI.getStore();
-    // Initial render with 0 agents
-    store.set('building.list', []);
+    // Need at least one building with agents to render KPIs (empty state shows getting-started)
+    store.set('building.list', [
+      { id: 'b1', name: 'Test', active_phase: 'strategy', agentCount: 1 }
+    ]);
+    store.set('agents.list', [{ id: 'a1', name: 'Agent 1' }]);
 
     const kpiValues = el.querySelectorAll('.kpi-card-value');
-    expect(kpiValues[2].textContent).toBe('0'); // agents KPI
+    expect(kpiValues[2].textContent).toBe('1'); // agents KPI
 
     // Update agents
     store.set('agents.list', [
@@ -911,7 +928,11 @@ describe('DashboardView', () => {
     view.mount();
 
     const store = OverlordUI.getStore();
-    store.set('building.list', []);
+    // Need at least one building with agents to render KPIs
+    store.set('building.list', [
+      { id: 'b1', name: 'Test', active_phase: 'strategy', agentCount: 1 }
+    ]);
+    store.set('agents.list', [{ id: 'a1', name: 'Agent 1' }]);
 
     const kpiValues = el.querySelectorAll('.kpi-card-value');
     expect(kpiValues[3].textContent).toBe('0');
