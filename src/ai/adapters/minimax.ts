@@ -77,7 +77,9 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
       const anthropic = getClient();
       const useHighspeed = cfg.get('MINIMAX_USE_HIGHSPEED');
       const baseModel = (options.model as string) || cfg.get('MINIMAX_MODEL');
-      const model = useHighspeed ? `${baseModel}-highspeed` : baseModel;
+      const model = useHighspeed && !baseModel.endsWith('-highspeed')
+        ? `${baseModel}-highspeed`
+        : baseModel;
 
       // Convert tool definitions to Anthropic format
       const anthropicTools: Anthropic.Tool[] = tools.map((t) => ({
