@@ -2,7 +2,7 @@
  * Overlord v2 — Service Worker
  * Cache-first for static assets, network-first for API/socket.
  */
-const CACHE_NAME = 'overlord-v2-cache-v1';
+const CACHE_NAME = 'overlord-v2-cache-v2';
 const STATIC_ASSETS = [
   '/', '/index.html', '/manifest.json', '/favicon.svg',
   '/ui/css/tokens.css', '/ui/css/base.css', '/ui/css/components.css',
@@ -42,15 +42,17 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.pathname.startsWith('/ui/') || url.pathname === '/favicon.svg' || url.pathname === '/manifest.json') {
+    // Stale-while-revalidate: serve cached version immediately, update cache in background
     event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached;
-        return fetch(event.request).then((r) => {
-          const c = r.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, c));
-          return r;
-        });
-      })
+      caches.open(CACHE_NAME).then((cache) =>
+        cache.match(event.request).then((cached) => {
+          const networkFetch = fetch(event.request).then((r) => {
+            cache.put(event.request, r.clone());
+            return r;
+          });
+          return cached || networkFetch;
+        })
+      )
     );
     return;
   }
