@@ -263,7 +263,15 @@ describe('Building Onboarding', () => {
     initBuildingOnboarding({ bus, rooms, agents });
     bus._trigger('building:created', { buildingId: 'bld_6', name: 'Dedup Agent' });
 
-    expect(agents.registerAgent).not.toHaveBeenCalled();
+    // Strategist should NOT be re-registered (dedup), but team agents should be created (#766)
+    const registerCalls = (agents.registerAgent as ReturnType<typeof vi.fn>).mock.calls;
+    const strategistCalls = registerCalls.filter(
+      (call) => call[0]?.role === 'strategist',
+    );
+    expect(strategistCalls).toHaveLength(0); // Strategist NOT re-registered
+
+    // Team agents (analyst, architect, 2x developer, tester, reviewer) ARE registered
+    expect(registerCalls.length).toBeGreaterThanOrEqual(6);
 
     const onboarded = bus._emissions.find((e) => e.event === 'building:onboarded');
     expect(onboarded).toBeDefined();
