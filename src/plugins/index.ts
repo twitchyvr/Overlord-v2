@@ -29,7 +29,6 @@ import {
   discoverPlugins,
   loadPlugin,
   broadcastHook,
-  queryHook,
 } from './plugin-loader.js';
 import type { InitPluginsParams } from './contracts.js';
 

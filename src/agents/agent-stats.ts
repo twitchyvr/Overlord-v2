@@ -296,7 +296,7 @@ export function onTaskAssign(agentId: string, taskId: string, taskTitle: string,
 /**
  * Hook: agent sent a message.
  */
-export function onMessageSent(agentId: string, roomId: string, buildingId?: string): void {
+export function onMessageSent(agentId: string, _roomId: string, _buildingId?: string): void {
   incrementStat(agentId, 'messages_sent');
 }
 
