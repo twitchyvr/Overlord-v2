@@ -470,8 +470,9 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['agents', 'communication_style', 'TEXT'],
   ['agents', 'expertise_areas', "TEXT DEFAULT '[]'"],
   ['agents', 'subject_reference', 'TEXT'],
-  // Per-agent AI provider (#679)
+  // Per-agent AI provider (#679) and model (#761)
   ['agents', 'provider', "TEXT DEFAULT 'configurable'"],
+  ['agents', 'model', 'TEXT'],
   // Atomic task checkout (#682)
   ['todos', 'locked_by', 'TEXT REFERENCES agents(id)'],
   ['todos', 'checked_out_at', 'TEXT'],

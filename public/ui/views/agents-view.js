@@ -1013,6 +1013,68 @@ export class AgentsView extends Component {
       });
     }
 
+    // ── AI Model Configuration (#761) ──
+    const modelSection = h('div', { class: 'agents-view-detail-section' });
+    modelSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'AI Model'));
+
+    const currentProvider = agent.provider || 'configurable';
+    const currentModel = agent.model || '';
+
+    const modelForm = h('div', { style: 'display:flex; flex-direction:column; gap:var(--sp-2)' });
+
+    // Provider selector
+    const providerRow = h('div', { style: 'display:flex; align-items:center; gap:var(--sp-2)' });
+    providerRow.appendChild(h('label', { style: 'font-size:var(--text-sm); color:var(--text-muted); width:70px' }, 'Provider'));
+    const providerSelect = h('select', { class: 'form-input', style: 'flex:1' });
+    for (const [val, label] of [['configurable', 'Default (building config)'], ['minimax', 'MiniMax M2.5'], ['anthropic', 'Anthropic (Claude)'], ['ollama', 'Ollama (local)']]) {
+      const opt = h('option', { value: val }, label);
+      if (val === currentProvider) opt.selected = true;
+      providerSelect.appendChild(opt);
+    }
+    providerRow.appendChild(providerSelect);
+    modelForm.appendChild(providerRow);
+
+    // Model input
+    const modelRow = h('div', { style: 'display:flex; align-items:center; gap:var(--sp-2)' });
+    modelRow.appendChild(h('label', { style: 'font-size:var(--text-sm); color:var(--text-muted); width:70px' }, 'Model'));
+    const modelInput = h('input', {
+      class: 'form-input',
+      type: 'text',
+      value: currentModel,
+      placeholder: 'Leave blank for provider default',
+      style: 'flex:1'
+    });
+    modelRow.appendChild(modelInput);
+    modelForm.appendChild(modelRow);
+
+    // Save button
+    const saveModelBtn = h('button', { class: 'btn btn-primary btn-sm', style: 'align-self:flex-end' }, 'Save Model Config');
+    saveModelBtn.addEventListener('click', async () => {
+      saveModelBtn.textContent = 'Saving...';
+      saveModelBtn.disabled = true;
+      try {
+        const res = await window.overlordSocket.emit('agent:update', {
+          agentId: agent.id,
+          provider: providerSelect.value,
+          model: modelInput.value.trim() || null,
+        });
+        if (res?.ok) {
+          Toast.success(`AI model updated for ${displayName}`);
+          this._fetchAgents();
+        } else {
+          Toast.error(res?.error?.message || 'Failed to update model');
+        }
+      } catch (e) {
+        Toast.error('Failed to save model config');
+      }
+      saveModelBtn.textContent = 'Save Model Config';
+      saveModelBtn.disabled = false;
+    });
+    modelForm.appendChild(saveModelBtn);
+
+    modelSection.appendChild(modelForm);
+    content.appendChild(modelSection);
+
     // ── Recent Activity Timeline ──
     const activitySection = h('div', { class: 'agents-view-detail-section' });
     activitySection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Recent Activity'));

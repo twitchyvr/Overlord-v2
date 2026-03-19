@@ -69,6 +69,7 @@ interface AgentUpdates {
   badge?: string | SecurityBadge | null;
   config?: Record<string, unknown>;
   provider?: string;
+  model?: string;
 }
 
 export function initAgents({ bus }: InitAgentsParams): AgentRegistryAPI {
@@ -257,6 +258,7 @@ export function updateAgent(agentId: string, updates: AgentUpdates): Result {
   }
   if (updates.config) { fields.push('config = ?'); params.push(JSON.stringify(updates.config)); }
   if (updates.provider) { fields.push('provider = ?'); params.push(updates.provider); }
+  if (updates.model !== undefined) { fields.push('model = ?'); params.push(updates.model || null); }
 
   if (fields.length === 0) return ok({ id: agentId, message: 'No updates provided' });
 
