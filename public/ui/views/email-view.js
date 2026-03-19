@@ -424,9 +424,9 @@ export class EmailView extends Component {
   }
 
   _getEmptyDesc() {
-    if (this._filter === 'inbox') return 'Agent emails will appear here when agents communicate.';
-    if (this._filter === 'sent') return 'Sent emails will appear here after composing.';
-    return 'No emails have been sent or received yet.';
+    if (this._filter === 'inbox') return 'Agents use mail to communicate across rooms and coordinate work. Messages will appear here as agents collaborate on your project.';
+    if (this._filter === 'sent') return 'Sent emails will appear here. You can compose messages to agents using the Compose button above.';
+    return 'Agent Mail is the inter-agent communication system. Agents send reports, ask questions, and coordinate work through email. Start a conversation in Chat to see agents begin collaborating.';
   }
 
   /**
