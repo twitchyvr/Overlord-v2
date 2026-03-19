@@ -383,7 +383,7 @@ export class TaskView extends Component {
           h('p', { class: 'empty-state-description' },
             this._searchQuery
               ? 'Try adjusting your search or filters.'
-              : 'Create a task to get started tracking work.')
+              : 'Tasks are created automatically as your agents work through project phases. You can also create tasks manually using the + button above, or ask an agent in Chat to plan the work.')
         ));
       }
       return;

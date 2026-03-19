@@ -190,7 +190,7 @@ export class MilestoneView extends Component {
       content.appendChild(h('div', { class: 'milestone-empty-state' },
         h('span', { class: 'milestone-empty-icon' }, '\u{1F3AF}'),
         h('p', null, this._activeFilter === 'all'
-          ? 'No milestones yet. Create one to start tracking progress.'
+          ? 'Milestones mark key deliverables in your project timeline. Agents create them as they plan work, or you can add them manually below.'
           : `No ${this._activeFilter} milestones.`),
         this._activeFilter === 'all' ? (() => {
           const btn = h('button', { class: 'btn btn-primary btn-md' }, '+ Create First Milestone');

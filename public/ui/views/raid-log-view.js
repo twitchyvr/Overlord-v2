@@ -267,7 +267,7 @@ export class RaidLogView extends Component {
           h('p', { class: 'empty-state-description' },
             this._searchQuery
               ? 'Try adjusting your search or filters.'
-              : 'Add an entry to start tracking risks, assumptions, issues, and decisions.')
+              : 'The RAID log tracks Risks, Assumptions, Issues, and Decisions throughout your project. Agents automatically create entries as they work through phases. You can also add entries manually using the + button above.')
         ));
       }
       return;

@@ -350,7 +350,7 @@ export class ActivityView extends Component {
             h('p', { class: 'activity-view-empty-desc' },
               this._filter !== 'all'
                 ? 'No events match the selected filter. Try switching to "All".'
-                : 'Activity events will appear here as agents work.')
+                : 'This is your project\'s live activity feed. Events appear in real-time as agents enter rooms, execute tools, submit documents, and advance phases. Start a conversation in Chat to see activity flow.')
           )
         );
       }
