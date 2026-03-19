@@ -254,6 +254,17 @@ export class ChatView extends Component {
     this._messagesEl.addEventListener('scroll', () => this._checkScrollLock());
     this.el.appendChild(this._messagesEl);
 
+    // Typing indicator (#793)
+    this._typingIndicator = h('div', { class: 'chat-typing-indicator', style: { display: 'none' } },
+      h('div', { class: 'typing-dots' },
+        h('span', { class: 'typing-dot' }),
+        h('span', { class: 'typing-dot' }),
+        h('span', { class: 'typing-dot' })
+      ),
+      h('span', { class: 'typing-label' }, 'AI is thinking...')
+    );
+    this._messagesEl.appendChild(this._typingIndicator);
+
     // Scroll-to-bottom button
     this._scrollBtn = h('button', {
       class: 'chat-scroll-btn',
@@ -736,6 +747,7 @@ export class ChatView extends Component {
   // ── Stream Handling ──────────────────────────────────────────
 
   _handleStreamStart(data) {
+    this._hideTypingIndicator();
     this._streamBuffer = '';
     const el = h('div', {
       class: 'chat-message chat-message-assistant streaming',
@@ -804,6 +816,7 @@ export class ChatView extends Component {
   }
 
   _handleResponse(data) {
+    this._hideTypingIndicator();
     // Socket bridge already adds to chat.messages store — this handler
     // is for rendering non-streaming responses that bypass the stream flow
     // (e.g., error responses or responses when streaming wasn't active).
@@ -1022,11 +1035,31 @@ export class ChatView extends Component {
     // Clear pending attachments
     this._pendingAttachments = [];
     this._updateAttachPreview();
+
+    // Show typing indicator (#793)
+    this._showTypingIndicator();
   }
 
   _clearChat() {
+    // Confirmation dialog (#793)
+    if (!confirm('Clear all messages in this conversation? This cannot be undone.')) return;
     const store = OverlordUI.getStore();
     if (store) store.set('chat.messages', []);
+  }
+
+  // ── Typing Indicator (#793) ──
+
+  _showTypingIndicator() {
+    if (this._typingIndicator) {
+      this._typingIndicator.style.display = '';
+      if (this._scrollLocked) this._scrollToBottom();
+    }
+  }
+
+  _hideTypingIndicator() {
+    if (this._typingIndicator) {
+      this._typingIndicator.style.display = 'none';
+    }
   }
 
   /** Update the room indicator badge in the chat header. */
