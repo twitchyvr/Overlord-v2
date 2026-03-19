@@ -38,7 +38,12 @@ const log = logger.child({ module: 'lua-sandbox' });
 
 import type { SecurityEvent } from './contracts.js';
 
-/** In-memory security event log — shared across all plugins */
+/**
+ * In-memory security event log — shared across all plugins.
+ * NOTE: Events are NOT persisted to disk. They are lost on server restart.
+ * For auditability, wire security:blocked / security:warning bus events to
+ * the storage layer in a future iteration (#890).
+ */
 const securityEvents: SecurityEvent[] = [];
 const MAX_SECURITY_EVENTS = 1000;
 
@@ -171,11 +176,18 @@ export async function createLuaSandbox(
         return ok({ pluginId: manifest.id, hook, skipped: true });
       }
 
+      // Queryable hooks return handler values; fire-and-forget hooks discard them
+      const QUERYABLE_HOOKS: PluginHook[] = [
+        'onPreToolUse', 'onPostToolUse',
+        'onPhaseGateEvaluate', 'onExitDocValidate', 'onAgentAssign',
+        'onNotificationRule', 'onProgressReport',
+      ];
+
       try {
         const handlerResult = await Promise.resolve(handler(data));
-        // For queryable hooks (onPreToolUse, onPostToolUse, etc.), return the
-        // handler's value so queryHook() can use it as an override
-        if (handlerResult !== undefined && handlerResult !== null) {
+        // Only pass through return values for queryable hooks (#873)
+        // Fire-and-forget hooks always return the standard ok shape
+        if (QUERYABLE_HOOKS.includes(hook) && handlerResult !== undefined && handlerResult !== null) {
           return ok(handlerResult);
         }
         return ok({ pluginId: manifest.id, hook });
@@ -371,7 +383,11 @@ function injectOverlordAPI(
         return getSecurityStats();
       },
 
-      /** Simple pattern matching helper for Lua scripts */
+      /** Simple pattern matching helper for Lua scripts.
+       * NOTE: Accepts regex strings from plugin code. Built-in plugins use
+       * Lua string.match() (Lua patterns, not regex). Custom plugins that use
+       * this function should avoid pathological patterns (e.g. (a+)+$) to
+       * prevent ReDoS. The try/catch prevents crashes but not CPU hangs. */
       matchPattern: (text: string, pattern: string) => {
         try {
           return new RegExp(pattern, 'i').test(String(text));
