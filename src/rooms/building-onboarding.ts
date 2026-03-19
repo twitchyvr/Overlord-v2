@@ -320,15 +320,31 @@ function provisionAgentTeam({
   const TEAM_ROLES = [
     { name: 'Analyst', role: 'analyst', capabilities: ['chat', 'analysis', 'research'], roomAccess: ['discovery'] },
     { name: 'Architect', role: 'architect', capabilities: ['chat', 'analysis', 'design'], roomAccess: ['architecture'] },
-    { name: 'Developer', role: 'developer', capabilities: ['chat', 'code', 'testing'], roomAccess: ['code-lab'] },
-    { name: 'Developer', role: 'developer', capabilities: ['chat', 'code', 'testing'], roomAccess: ['code-lab'] },
+    { name: 'Developer Alpha', role: 'developer', capabilities: ['chat', 'code', 'testing'], roomAccess: ['code-lab'] },
+    { name: 'Developer Beta', role: 'developer', capabilities: ['chat', 'code', 'testing'], roomAccess: ['code-lab'] },
     { name: 'Tester', role: 'tester', capabilities: ['chat', 'testing', 'analysis'], roomAccess: ['testing-lab'] },
     { name: 'Reviewer', role: 'reviewer', capabilities: ['chat', 'review', 'analysis'], roomAccess: ['review'] },
   ];
 
+  // Dedup: check which roles already exist in this building
+  const existingAgents = agents.listAgents({ buildingId });
+  const existingRoles = new Map<string, number>();
+  for (const a of existingAgents) {
+    const key = a.role || '';
+    existingRoles.set(key, (existingRoles.get(key) || 0) + 1);
+  }
+
   let created = 0;
 
   for (const teamRole of TEAM_ROLES) {
+    // Skip if this role already has enough agents
+    const existingCount = existingRoles.get(teamRole.role) || 0;
+    const neededForRole = TEAM_ROLES.filter(r => r.role === teamRole.role).length;
+    if (existingCount >= neededForRole) {
+      log.info({ buildingId, role: teamRole.role, existing: existingCount }, 'Role already has enough agents — skipping');
+      continue;
+    }
+
     try {
       const result = agents.registerAgent({
         name: teamRole.name,
@@ -340,12 +356,13 @@ function provisionAgentTeam({
 
       if (result.ok) {
         created++;
+        existingRoles.set(teamRole.role, (existingRoles.get(teamRole.role) || 0) + 1);
         log.info({ buildingId, role: teamRole.role, name: teamRole.name }, 'Team agent provisioned');
       } else {
         log.warn({ buildingId, role: teamRole.role, error: result.error }, 'Failed to provision team agent');
       }
     } catch (e) {
-      log.warn({ buildingId, role: teamRole.role, err: e }, 'Team agent provisioning threw');
+      log.error({ buildingId, role: teamRole.role, err: e }, 'Team agent provisioning threw');
     }
   }
 
