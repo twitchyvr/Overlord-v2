@@ -368,13 +368,22 @@ export class TaskView extends Component {
           h('p', { class: 'loading-text' }, 'Loading tasks...')
         ));
       } else {
-        container.appendChild(h('div', { class: 'empty-state' },
-          h('p', { class: 'empty-state-title' }, this._searchQuery ? 'No matching tasks' : 'No tasks yet'),
-          h('p', { class: 'empty-state-description' },
-            this._searchQuery
-              ? 'Try adjusting your search or filters.'
-              : 'Create a task to get started tracking work.')
-        ));
+        if (this._searchQuery) {
+          container.appendChild(h('div', { class: 'empty-state' },
+            h('p', { class: 'empty-state-title' }, 'No matching tasks'),
+            h('p', { class: 'empty-state-description' }, 'Try adjusting your search or filters.')
+          ));
+        } else {
+          // Helpful empty state for new projects (#676)
+          const emptyEl = h('div', { class: 'empty-state' },
+            h('p', { class: 'empty-state-title' }, 'No tasks yet'),
+            h('p', { class: 'empty-state-description' },
+              'Tasks are created automatically as your AI team works through your project. ' +
+              'Start a conversation in the Chat view to begin generating tasks.'
+            )
+          );
+          container.appendChild(emptyEl);
+        }
       }
       return;
     }

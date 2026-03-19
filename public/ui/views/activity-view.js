@@ -333,7 +333,7 @@ export class ActivityView extends Component {
             h('p', { class: 'activity-view-empty-desc' },
               this._filter !== 'all'
                 ? 'No events match the selected filter. Try switching to "All".'
-                : 'Activity events will appear here as agents work.')
+                : 'Activity events will appear here as your AI team works. Start a conversation in Chat to see your team in action.')
           )
         );
       }
