@@ -747,11 +747,34 @@ export class ScriptsView extends Component {
 
   _renderEmpty(msg) {
     this._gridEl.textContent = '';
-    this._gridEl.appendChild(
-      h('div', { class: 'scripts-empty' },
-        h('p', { class: 'scripts-empty-icon' }, '\u{1F4E6}'),
-        h('p', { class: 'scripts-empty-text' }, msg),
-      )
+
+    const empty = h('div', { class: 'scripts-empty' },
+      h('p', { class: 'scripts-empty-icon' }, '\u{1F4E6}'),
+      h('p', { class: 'scripts-empty-text' }, msg),
     );
+
+    // Add explanation and template suggestions when no scripts installed (#768)
+    if (msg === 'No scripts installed') {
+      empty.appendChild(h('div', { class: 'scripts-empty-guide' },
+        h('h3', null, 'What are scripts?'),
+        h('p', null,
+          'Scripts are small Lua programs that extend Overlord with custom behavior. ' +
+          'They can automate workflows, enforce rules, generate reports, and integrate with external services.'
+        ),
+        h('h4', null, 'Built-in scripts include:'),
+        h('ul', null,
+          h('li', null, 'Daily standup reports'),
+          h('li', null, 'Automatic phase advancement'),
+          h('li', null, 'Code complexity alerts'),
+          h('li', null, 'Deadline tracking'),
+          h('li', null, 'Shell command security guards'),
+        ),
+        h('p', { class: 'scripts-empty-hint' },
+          'Enable scripts in your project settings, or ask your AI team to set them up for you.'
+        )
+      ));
+    }
+
+    this._gridEl.appendChild(empty);
   }
 }
