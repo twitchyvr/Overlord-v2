@@ -31,6 +31,18 @@ const ROOM_ICONS = {
   'deploy':          '\u{1F680}',
 };
 
+/** Room type → default tools mapping (#801). */
+const ROOM_TYPE_DEFAULTS = {
+  strategist: ['read_file','list_dir','search_files','web_search','record_note','recall_notes','session_note','create_task','create_raid_entry','create_milestone','search_library','get_document','list_library'],
+  discovery: ['read_file','list_dir','web_search','fetch_webpage','record_note','recall_notes','session_note'],
+  architecture: ['read_file','list_dir','web_search','fetch_webpage','record_note','recall_notes','session_note'],
+  'code-lab': ['read_file','write_file','copy_file','patch_file','list_dir','bash','web_search','fetch_webpage','screenshot','analyze_screenshot','session_note','game_engine','dev_server','workspace_sandbox'],
+  'testing-lab': ['read_file','list_dir','bash','qa_run_tests','qa_check_lint','qa_check_types','qa_check_coverage','qa_audit_deps','screenshot','analyze_screenshot','session_note'],
+  review: ['read_file','list_dir','web_search','recall_notes','qa_run_tests','qa_check_lint','session_note'],
+  deploy: ['read_file','list_dir','bash','github','qa_run_tests','session_note'],
+  'war-room': ['read_file','write_file','patch_file','list_dir','bash','web_search','fetch_webpage','qa_run_tests','qa_check_lint','github','session_note'],
+};
+
 /** Agent status → CSS class suffix. */
 const STATUS_CLASSES = {
   idle:     'idle',
@@ -669,9 +681,39 @@ export class RoomView extends Component {
     let allTools = [];
     let searchTerm = '';
 
-    container.appendChild(h('p', { class: 'text-muted' },
+    const defaultTools = ROOM_TYPE_DEFAULTS[room.type] || [];
+
+    container.appendChild(h('p', { class: 'text-muted', style: 'margin-bottom: 8px' },
       'Search and select tools to add to this room. Tools control what agents can do.'
     ));
+
+    // Defaults button row (#801)
+    if (defaultTools.length > 0) {
+      const defaultsRow = h('div', { style: 'display:flex; gap:var(--sp-2); margin-bottom:var(--sp-2); align-items:center' });
+      const applyDefaultsBtn = h('button', { class: 'btn btn-primary btn-sm' },
+        `Apply ${room.type} Defaults (${defaultTools.length} tools)`
+      );
+      applyDefaultsBtn.addEventListener('click', async () => {
+        applyDefaultsBtn.textContent = 'Applying...';
+        applyDefaultsBtn.disabled = true;
+        try {
+          const merged = [...new Set([...existingTools, ...defaultTools])];
+          const result = await window.overlordSocket.updateRoom(room.id, { allowedTools: merged });
+          if (result?.ok) {
+            for (const t of defaultTools) existingTools.add(t);
+            Toast.success(`Applied ${defaultTools.length} default tools for ${room.type}`);
+            renderTools();
+          }
+        } catch { Toast.error('Failed to apply defaults'); }
+        applyDefaultsBtn.textContent = `Apply ${room.type} Defaults (${defaultTools.length} tools)`;
+        applyDefaultsBtn.disabled = false;
+      });
+      defaultsRow.appendChild(applyDefaultsBtn);
+      defaultsRow.appendChild(h('span', { style: 'font-size:var(--text-xs); color:var(--text-muted)' },
+        'Adds recommended tools without removing existing ones'
+      ));
+      container.appendChild(defaultsRow);
+    }
 
     // Search input
     const searchInput = h('input', {
@@ -713,6 +755,9 @@ export class RoomView extends Component {
           style: 'display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; cursor: pointer;',
         },
           h('span', { style: 'font-weight: 500; font-size: var(--text-sm); color: var(--text-primary);' }, tool.name),
+          defaultTools.includes(tool.name)
+            ? h('span', { style: 'font-size: 0.6rem; background: var(--c-primary, #3498db); color: white; padding: 1px 5px; border-radius: 3px; font-weight: 600;' }, 'REC')
+            : null,
           h('span', { style: 'font-size: 0.7rem; color: var(--text-muted); flex: 1;' }, tool.description.slice(0, 60) + (tool.description.length > 60 ? '...' : '')),
         );
         row.addEventListener('mouseenter', () => { row.style.background = 'var(--bg-tertiary)'; });
