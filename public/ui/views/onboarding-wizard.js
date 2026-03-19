@@ -336,6 +336,12 @@ export class OnboardingWizard extends Component {
       case 5: this._renderScaleStep(); break;
       case 6: this._renderReviewStep(); break;
     }
+
+    // Auto-focus the primary input on each step (#881)
+    requestAnimationFrame(() => {
+      const input = this.el.querySelector('.wizard-input, .wizard-textarea:not(.wizard-oneshot-input)');
+      if (input && !input.closest('.wizard-oneshot')) input.focus();
+    });
   }
 
   // ─── Progress Bar ───
