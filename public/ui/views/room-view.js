@@ -196,6 +196,21 @@ export class RoomView extends Component {
     return type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   }
 
+  /** Get a user-friendly description for each room type (#769). */
+  _getRoomDescription(type) {
+    const descriptions = {
+      'strategist': 'Where your project plan is created. The Strategist AI defines goals, requirements, and the team structure.',
+      'discovery': 'Research and requirements gathering. Your AI team investigates what needs to be built and identifies unknowns.',
+      'architecture': 'Technical design and task breakdown. The Architect AI creates the implementation plan.',
+      'code-lab': 'Where code is written. Developer AIs build features, fix bugs, and write tests here.',
+      'testing-lab': 'Quality assurance workspace. Code is reviewed and tested before moving forward.',
+      'review': 'Final review and sign-off. The team checks that everything meets requirements.',
+      'deploy': 'Deployment and release management. Your project is prepared for launch.',
+      'war-room': 'Emergency response workspace. Used when critical issues need immediate attention.',
+    };
+    return descriptions[type] || null;
+  }
+
   _buildContent() {
     const room = this._roomData;
     const container = h('div', { class: 'room-detail-view' });
@@ -255,6 +270,31 @@ export class RoomView extends Component {
         )
       )
     );
+
+    // User-friendly room explainer (#769)
+    const roomDesc = this._getRoomDescription(room.type);
+    if (roomDesc) {
+      header.appendChild(h('p', { class: 'room-view-explainer' }, roomDesc));
+    }
+
+    // CTA for empty rooms: prompt user to assign agents
+    if (agentsInRoom.length === 0) {
+      const cta = h('div', { class: 'room-empty-cta' },
+        h('p', null, 'This workspace is empty. Assign an AI team member to start working here.'),
+        Button.create('Assign Agent', {
+          variant: 'primary',
+          icon: '+',
+          onClick: () => {
+            // Scroll to table management section
+            const tableSection = this.el.querySelector?.('[data-testid="table-management"]') ||
+              document.querySelector('[data-testid="table-management"]');
+            if (tableSection) tableSection.scrollIntoView({ behavior: 'smooth' });
+          }
+        })
+      );
+      header.appendChild(cta);
+    }
+
     return header;
   }
 
@@ -861,10 +901,10 @@ export class RoomView extends Component {
       }
       frag.appendChild(grid);
     } else {
-      // Empty state with table type hints
+      // Empty state with workspace type hints (#769)
       const emptyState = h('div', { class: 'rv-tables-empty' });
       emptyState.appendChild(h('p', { class: 'rv-tables-empty-text' },
-        'No tables yet. Add a table to start seating agents.'
+        'No workstations set up yet. Add a workstation to give your AI team members a place to work.'
       ));
 
       // Table type explanations

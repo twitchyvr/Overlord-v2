@@ -309,6 +309,31 @@
   color: var(--text-muted);
 }
 
+.room-view-explainer {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.room-empty-cta {
+  margin-top: var(--sp-4);
+  padding: var(--sp-4);
+  background: var(--surface-1);
+  border: 1px dashed var(--border-primary);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.room-empty-cta p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  flex: 1;
+}
+
 /* Table layout */
 .room-tables {
   display: grid;
