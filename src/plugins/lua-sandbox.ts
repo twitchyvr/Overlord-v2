@@ -38,9 +38,49 @@ const log = logger.child({ module: 'lua-sandbox' });
 /** Default timeout for Lua script execution — configurable */
 const DEFAULT_TIMEOUT_MS = config.get('LUA_TIMEOUT_MS');
 
+// ─── Security Event Store (#873) ───
+
+import type { SecurityEvent } from './contracts.js';
+
+/** In-memory security event log — shared across all plugins */
+const securityEvents: SecurityEvent[] = [];
+const MAX_SECURITY_EVENTS = 1000;
+
+/** Log a security event (called from Lua plugins via overlord.security.logEvent) */
+export function logSecurityEvent(event: Omit<SecurityEvent, 'timestamp'>): void {
+  const entry: SecurityEvent = { ...event, timestamp: Date.now() };
+  securityEvents.push(entry);
+  if (securityEvents.length > MAX_SECURITY_EVENTS) {
+    securityEvents.splice(0, securityEvents.length - MAX_SECURITY_EVENTS);
+  }
+}
+
+/** Get security events, optionally filtered */
+export function getSecurityEvents(filter?: { type?: string; action?: string; limit?: number }): SecurityEvent[] {
+  let events = [...securityEvents];
+  if (filter?.type) events = events.filter(e => e.type === filter.type);
+  if (filter?.action) events = events.filter(e => e.action === filter.action);
+  events.reverse(); // Most recent first
+  if (filter?.limit) events = events.slice(0, filter.limit);
+  return events;
+}
+
+/** Get security event counts */
+export function getSecurityStats(): { total: number; blocked: number; warned: number; allowed: number } {
+  return {
+    total: securityEvents.length,
+    blocked: securityEvents.filter(e => e.action === 'block').length,
+    warned: securityEvents.filter(e => e.action === 'warn').length,
+    allowed: securityEvents.filter(e => e.action === 'allow').length,
+  };
+}
+
 /** Valid hook names for Lua plugins */
 const VALID_HOOKS: PluginHook[] = [
   'onLoad', 'onUnload', 'onRoomEnter', 'onRoomExit', 'onToolExecute', 'onPhaseAdvance',
+  'onPreToolUse', 'onPostToolUse', 'onSecurityEvent',
+  'onPhaseGateEvaluate', 'onExitDocValidate', 'onAgentAssign',
+  'onNotificationRule', 'onProgressReport', 'onBuildingCreate',
 ];
 
 /** Dangerous Lua globals that are removed from the sandbox */
@@ -125,7 +165,12 @@ export async function createLuaSandbox(
       }
 
       try {
-        await Promise.resolve(handler(data));
+        const handlerResult = await Promise.resolve(handler(data));
+        // For queryable hooks (onPreToolUse, onPostToolUse, etc.), return the
+        // handler's value so queryHook() can use it as an override
+        if (handlerResult !== undefined && handlerResult !== null) {
+          return ok(handlerResult);
+        }
         return ok({ pluginId: manifest.id, hook });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -282,6 +327,80 @@ function injectOverlordAPI(
         return context.storage.keys();
       },
     },
+
+    // Security API (#873) — requires security:read and/or security:write
+    security: {
+      logEvent: (event: Record<string, unknown>) => {
+        if (!manifest.permissions.includes('security:write')) {
+          context.log.warn('security:write permission denied');
+          return;
+        }
+        logSecurityEvent({
+          type: String(event.type || 'unknown'),
+          action: (event.action as SecurityEvent['action']) || 'warn',
+          toolName: event.toolName ? String(event.toolName) : undefined,
+          agentId: event.agentId ? String(event.agentId) : undefined,
+          roomId: event.roomId ? String(event.roomId) : undefined,
+          buildingId: event.buildingId ? String(event.buildingId) : undefined,
+          message: String(event.message || ''),
+          pluginId: manifest.id,
+          details: event as Record<string, unknown>,
+        });
+      },
+
+      getEvents: (filter?: Record<string, unknown>) => {
+        if (!manifest.permissions.includes('security:read')) {
+          context.log.warn('security:read permission denied');
+          return [];
+        }
+        return getSecurityEvents(filter as { type?: string; action?: string; limit?: number });
+      },
+
+      getStats: () => {
+        if (!manifest.permissions.includes('security:read')) {
+          context.log.warn('security:read permission denied');
+          return null;
+        }
+        return getSecurityStats();
+      },
+
+      /** Simple pattern matching helper for Lua scripts */
+      matchPattern: (text: string, pattern: string) => {
+        try {
+          return new RegExp(pattern, 'i').test(String(text));
+        } catch {
+          return false;
+        }
+      },
+
+      /** Match text against multiple patterns — returns first matching pattern or null */
+      matchAny: (text: string, patterns: string[]) => {
+        const textStr = String(text);
+        if (!Array.isArray(patterns)) return null;
+        for (const p of patterns) {
+          try {
+            if (new RegExp(String(p), 'i').test(textStr)) return String(p);
+          } catch {
+            continue;
+          }
+        }
+        return null;
+      },
+
+      /** Redact sensitive content by replacing matches with [REDACTED] */
+      redact: (text: string, patterns: string[]) => {
+        let result = String(text);
+        if (!Array.isArray(patterns)) return result;
+        for (const p of patterns) {
+          try {
+            result = result.replace(new RegExp(String(p), 'gi'), '[REDACTED]');
+          } catch {
+            continue;
+          }
+        }
+        return result;
+      },
+    },
   };
 
   engine.global.set('overlord', api);
@@ -307,16 +426,20 @@ function injectHookRegistration(
       return;
     }
 
-    // Wrap the Lua function as a JS PluginHookHandler
-    hooks[hookName as PluginHook] = (data: PluginHookData) => {
+    // Wrap the Lua function as a JS PluginHookHandler that captures return values.
+    // For queryable hooks (onPreToolUse, onPostToolUse, etc.), Lua functions
+    // return a table like { action = "block", message = "..." } which wasmoon
+    // converts to a JS object.
+    hooks[hookName as PluginHook] = ((data: PluginHookData) => {
       try {
-        handler(data);
+        const result = handler(data);
+        return result; // Return Lua table → JS object for queryable hooks
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         context.log.error(`Hook "${hookName}" threw: ${message}`);
         throw error;
       }
-    };
+    }) as PluginHookHandler;
 
     context.log.debug(`Hook registered: ${hookName}`);
   });

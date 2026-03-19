@@ -196,6 +196,9 @@ export {
 export { createSandbox } from './plugin-sandbox.js';
 export { validateLuaSyntax } from './lua-validator.js';
 export { exportBundle, importBundle } from './plugin-bundler.js';
+export {
+  logSecurityEvent, getSecurityEvents, getSecurityStats,
+} from './lua-sandbox.js';
 
 // Re-export all types
 export type {
@@ -217,4 +220,8 @@ export type {
   PluginToolAPI,
   PluginStorageAPI,
   InitPluginsParams,
+  SecurityHookResult,
+  SecurityEvent,
+  PreToolUseHookData,
+  PostToolUseHookData,
 } from './contracts.js';

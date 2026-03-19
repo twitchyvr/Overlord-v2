@@ -15,10 +15,16 @@ const BUILT_IN_DIR = path.resolve('plugins/built-in');
 const VALID_PERMISSIONS = new Set([
   'room:read', 'room:write', 'tool:execute', 'agent:read',
   'bus:emit', 'storage:read', 'storage:write', 'fs:read', 'fs:write', 'net:http',
+  'security:read', 'security:write',
 ]);
 
 // Valid lifecycle hooks
-const VALID_HOOKS = ['onLoad', 'onUnload', 'onRoomEnter', 'onRoomExit', 'onToolExecute', 'onPhaseAdvance'];
+const VALID_HOOKS = [
+  'onLoad', 'onUnload', 'onRoomEnter', 'onRoomExit', 'onToolExecute', 'onPhaseAdvance',
+  'onPreToolUse', 'onPostToolUse', 'onSecurityEvent',
+  'onPhaseGateEvaluate', 'onExitDocValidate', 'onAgentAssign',
+  'onNotificationRule', 'onProgressReport', 'onBuildingCreate',
+];
 
 // Regex for valid plugin IDs (kebab-case)
 const ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
