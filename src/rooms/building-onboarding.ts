@@ -105,17 +105,21 @@ export function initBuildingOnboarding({ bus, rooms, agents }: OnboardingDeps): 
     });
 
     if (result.success) {
+      // Auto-create a balanced agent team (#766)
+      const teamCreated = provisionAgentTeam({ buildingId, agents });
+
       bus.emit('building:onboarded', {
         buildingId,
         roomId: result.roomId,
         agentId: result.agentId,
         phase: 'strategy',
         roomType: 'strategist',
+        teamSize: teamCreated + 1, // +1 for the strategist
       });
 
       log.info(
-        { buildingId, roomId: result.roomId, agentId: result.agentId },
-        'Building onboarded — Strategist room ready',
+        { buildingId, roomId: result.roomId, agentId: result.agentId, teamCreated },
+        'Building onboarded — Strategist room ready, team provisioned',
       );
     } else {
       log.error({ buildingId, error: result.error }, 'Failed to onboard building');
@@ -299,6 +303,54 @@ function provisionPhaseRoom({
     agentId,
     roomType: mapping.roomType,
   };
+}
+
+/**
+ * Provision a balanced agent team for a new building (#766).
+ * Creates agents for each phase role (excluding strategist, already created).
+ * Agents are idle until their phase activates.
+ */
+function provisionAgentTeam({
+  buildingId,
+  agents,
+}: {
+  buildingId: string;
+  agents: AgentRegistryAPI;
+}): number {
+  const TEAM_ROLES = [
+    { name: 'Analyst', role: 'analyst', capabilities: ['chat', 'analysis', 'research'], roomAccess: ['discovery'] },
+    { name: 'Architect', role: 'architect', capabilities: ['chat', 'analysis', 'design'], roomAccess: ['architecture'] },
+    { name: 'Developer', role: 'developer', capabilities: ['chat', 'code', 'testing'], roomAccess: ['code-lab'] },
+    { name: 'Developer', role: 'developer', capabilities: ['chat', 'code', 'testing'], roomAccess: ['code-lab'] },
+    { name: 'Tester', role: 'tester', capabilities: ['chat', 'testing', 'analysis'], roomAccess: ['testing-lab'] },
+    { name: 'Reviewer', role: 'reviewer', capabilities: ['chat', 'review', 'analysis'], roomAccess: ['review'] },
+  ];
+
+  let created = 0;
+
+  for (const teamRole of TEAM_ROLES) {
+    try {
+      const result = agents.registerAgent({
+        name: teamRole.name,
+        role: teamRole.role,
+        capabilities: teamRole.capabilities,
+        roomAccess: teamRole.roomAccess,
+        buildingId,
+      });
+
+      if (result.ok) {
+        created++;
+        log.info({ buildingId, role: teamRole.role, name: teamRole.name }, 'Team agent provisioned');
+      } else {
+        log.warn({ buildingId, role: teamRole.role, error: result.error }, 'Failed to provision team agent');
+      }
+    } catch (e) {
+      log.warn({ buildingId, role: teamRole.role, err: e }, 'Team agent provisioning threw');
+    }
+  }
+
+  log.info({ buildingId, created, total: TEAM_ROLES.length }, 'Agent team provisioning complete');
+  return created;
 }
 
 /**
