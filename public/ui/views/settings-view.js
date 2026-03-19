@@ -889,16 +889,16 @@ export class SettingsView extends Component {
   _buildAITab() {
     const section = h('div', { class: 'settings-section' });
 
-    // Provider cards
-    section.appendChild(h('h4', { class: 'settings-section-title' }, 'Configured Providers'));
+    // Provider cards (#762 — interactive key management)
+    section.appendChild(h('h4', { class: 'settings-section-title' }, 'AI Providers'));
     section.appendChild(h('p', { class: 'settings-section-desc' },
-      'AI providers are configured via environment variables on the server. These are read-only.'));
+      'Configure API keys for AI providers. Keys set here are active for this server session. For permanent configuration, set environment variables in your .env file.'));
 
     const providerGrid = h('div', { class: 'settings-provider-grid' });
 
     for (const [key, provider] of Object.entries(PROVIDERS)) {
       const isConfigured = this._serverConfig?.providers?.[key]?.configured ?? false;
-      const model = this._serverConfig?.providers?.[key]?.model || '—';
+      const model = this._serverConfig?.providers?.[key]?.model || '\u2014';
 
       const card = h('div', {
         class: `settings-provider-card${isConfigured ? ' configured' : ' unconfigured'}`
@@ -915,12 +915,72 @@ export class SettingsView extends Component {
             h('span', { class: 'settings-provider-label' }, 'Model'),
             h('span', { class: 'settings-provider-value' }, model)
           ),
-          h('div', { class: 'settings-provider-row' },
-            h('span', { class: 'settings-provider-label' }, 'Env Key'),
-            h('span', { class: 'settings-provider-value mono' }, provider.envKey)
-          )
+          isConfigured
+            ? h('div', { class: 'settings-provider-row' },
+                h('span', { class: 'settings-provider-label' }, 'Key'),
+                h('span', { class: 'settings-provider-value mono' }, '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (configured)')
+              )
+            : null
         )
       );
+
+      // Add/Update key form
+      if (!isConfigured) {
+        const keyForm = h('div', { style: 'display:flex; gap:var(--sp-2); padding:var(--sp-2) var(--sp-3); border-top:1px solid var(--border-secondary)' });
+        const keyInput = h('input', {
+          class: 'form-input',
+          type: 'password',
+          placeholder: `Enter ${provider.envKey}...`,
+          style: 'flex:1; font-size:var(--text-sm)'
+        });
+        const saveBtn = h('button', { class: 'btn btn-primary btn-sm' }, 'Add Key');
+        saveBtn.addEventListener('click', () => {
+          const apiKey = keyInput.value.trim();
+          if (!apiKey) { Toast.warning('Enter an API key'); return; }
+          saveBtn.textContent = 'Saving...';
+          saveBtn.disabled = true;
+          if (window.overlordSocket?.socket) {
+            window.overlordSocket.socket.emit('provider:set-key', {
+              provider: key,
+              apiKey,
+            }, (res) => {
+              saveBtn.textContent = 'Add Key';
+              saveBtn.disabled = false;
+              if (res?.ok) {
+                Toast.success(`${provider.name} API key configured`);
+                keyInput.value = '';
+                // Refresh the AI tab to show updated status
+                this._fetchServerConfig();
+              } else {
+                Toast.error(res?.error?.message || 'Failed to set API key');
+              }
+            });
+          }
+        });
+        keyForm.appendChild(keyInput);
+        keyForm.appendChild(saveBtn);
+        card.appendChild(keyForm);
+      } else {
+        // Remove key button for configured providers
+        const removeRow = h('div', { style: 'padding:var(--sp-2) var(--sp-3); border-top:1px solid var(--border-secondary)' });
+        const removeBtn = h('button', { class: 'btn btn-ghost btn-xs', style: 'color:var(--c-danger)' }, 'Remove Key');
+        removeBtn.addEventListener('click', () => {
+          if (!confirm(`Remove ${provider.name} API key? The provider will become unavailable.`)) return;
+          if (window.overlordSocket?.socket) {
+            window.overlordSocket.socket.emit('provider:set-key', {
+              provider: key,
+              apiKey: '',
+            }, (res) => {
+              if (res?.ok) {
+                Toast.info(`${provider.name} key removed`);
+                this._fetchServerConfig();
+              }
+            });
+          }
+        });
+        removeRow.appendChild(removeBtn);
+        card.appendChild(removeRow);
+      }
 
       providerGrid.appendChild(card);
     }
