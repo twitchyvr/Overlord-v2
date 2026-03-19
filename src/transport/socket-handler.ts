@@ -482,6 +482,20 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       ).all() as Array<{ building_id: string; count: number }>;
       const agentMap = new Map(agentCounts.map(r => [r.building_id, r.count]));
 
+      // Total agents per building (including idle ones not in rooms) (#780)
+      const totalAgentCounts = db.prepare(
+        'SELECT building_id, COUNT(*) as count FROM agents WHERE building_id IS NOT NULL GROUP BY building_id'
+      ).all() as Array<{ building_id: string; count: number }>;
+      const totalAgentMap = new Map(totalAgentCounts.map(r => [r.building_id, r.count]));
+
+      // Task counts per building (#780)
+      const taskCounts = db.prepare(
+        `SELECT building_id, COUNT(*) as total,
+         SUM(CASE WHEN status = 'in-progress' OR status = 'pending' THEN 1 ELSE 0 END) as active
+         FROM tasks WHERE building_id IS NOT NULL GROUP BY building_id`
+      ).all() as Array<{ building_id: string; total: number; active: number }>;
+      const taskMap = new Map(taskCounts.map(r => [r.building_id, { total: r.total, active: r.active }]));
+
       // Compute health scores for each building
       const healthMap = new Map<string, { phaseProgress: number; taskCompletion: number; raidHealth: number; agentActivity: number; total: number }>();
       for (const b of buildings) {
@@ -503,6 +517,9 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
             repoUrl: b.repo_url || '',
             floorCount: floorMap.get(b.id) || 0,
             agentCount: agentMap.get(b.id) || 0,
+            totalAgentCount: totalAgentMap.get(b.id) || 0,
+            taskCount: taskMap.get(b.id)?.total || 0,
+            activeTaskCount: taskMap.get(b.id)?.active || 0,
             healthScore: healthMap.get(b.id) || null,
           })),
         },
