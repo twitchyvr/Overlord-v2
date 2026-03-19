@@ -259,8 +259,20 @@ export class Card {
     if (data.floorCount !== undefined) {
       stats.appendChild(h('span', { class: 'building-stat' }, `${data.floorCount} ${data.floorCount === 1 ? 'floor' : 'floors'}`));
     }
-    if (data.agentCount !== undefined && data.agentCount > 0) {
+    if (data.totalAgentCount > 0) {
+      const activeCount = data.agentCount || 0;
+      const totalCount = data.totalAgentCount;
+      stats.appendChild(h('span', { class: 'building-stat' },
+        activeCount > 0 ? `${activeCount} active / ${totalCount} agents` : `${totalCount} agents`
+      ));
+    } else if (data.agentCount !== undefined && data.agentCount > 0) {
       stats.appendChild(h('span', { class: 'building-stat' }, `${data.agentCount} ${data.agentCount === 1 ? 'agent' : 'agents'}`));
+    }
+    if (data.taskCount > 0) {
+      const taskLabel = data.activeTaskCount > 0
+        ? `${data.activeTaskCount} active / ${data.taskCount} tasks`
+        : `${data.taskCount} tasks`;
+      stats.appendChild(h('span', { class: 'building-stat' }, taskLabel));
     }
     if (data.repoUrl) {
       const repoName = data.repoUrl.split('/').slice(-2).join('/');

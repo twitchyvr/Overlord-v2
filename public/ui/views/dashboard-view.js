@@ -325,6 +325,9 @@ export class DashboardView extends Component {
         description: building.description || building.project_description || '',
         floorCount: building.floorCount ?? building.floor_count,
         agentCount: building.agentCount ?? building.agent_count ?? 0,
+        totalAgentCount: building.totalAgentCount ?? 0,
+        taskCount: building.taskCount ?? 0,
+        activeTaskCount: building.activeTaskCount ?? 0,
         repoUrl: building.repoUrl || building.repo_url || '',
         healthScore: building.healthScore || null,
       }, {
