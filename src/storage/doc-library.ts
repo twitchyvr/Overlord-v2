@@ -65,7 +65,16 @@ export function listLibraries(buildingId?: string): Result {
   }
 
   sql += ' ORDER BY name';
-  const rows = db.prepare(sql).all(...params);
+  const rows = db.prepare(sql).all(...params) as Array<Record<string, unknown>>;
+
+  // Enrich with file counts (#865)
+  const countSql = 'SELECT library_id, COUNT(*) as file_count FROM doc_entries GROUP BY library_id';
+  const counts = db.prepare(countSql).all() as Array<{ library_id: string; file_count: number }>;
+  const countMap = new Map(counts.map(r => [r.library_id, r.file_count]));
+  for (const row of rows) {
+    row.file_count = countMap.get(row.id as string) || 0;
+  }
+
   return ok(rows);
 }
 
