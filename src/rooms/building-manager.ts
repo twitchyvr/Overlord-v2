@@ -198,9 +198,9 @@ export function updateBuilding(buildingId: string, updates: { name?: string; wor
       updated_at = datetime('now')
     WHERE id = ?
   `).run(
-    updates.name || null,
-    updates.workingDirectory !== undefined ? (updates.workingDirectory || null) : null,
-    updates.repoUrl !== undefined ? (updates.repoUrl || null) : null,
+    updates.name !== undefined ? updates.name : null,
+    updates.workingDirectory !== undefined ? updates.workingDirectory : null,
+    updates.repoUrl !== undefined ? updates.repoUrl : null,
     updates.allowedPaths ? JSON.stringify(updates.allowedPaths) : null,
     updates.config ? JSON.stringify(updates.config) : null,
     buildingId,

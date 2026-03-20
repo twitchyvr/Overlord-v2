@@ -788,7 +788,7 @@ export class BuildingView extends Component {
       try {
         const result = await window.overlordSocket.updateBuilding(this._buildingData.id, {
           name: buildingName.trim() || this._buildingData.name,
-          workingDirectory: workingDirectory.trim() || undefined,
+          workingDirectory: workingDirectory.trim(),
           repoUrl: repoUrl.trim() || undefined,
         });
         if (result && result.ok) {

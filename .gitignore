@@ -148,3 +148,7 @@ data/
 tmp/
 temp/
 .DS_Store
+test-results/
+reports/
+docs/minimax-official-docs/
+.claude/
