@@ -880,6 +880,7 @@ export class ChatView extends Component {
   // ── Stream Handling ──────────────────────────────────────────
 
   _handleStreamStart(data) {
+    this._hideTypingIndicator();
     this._streamBuffer = '';
     const el = h('div', {
       class: 'chat-message chat-message-assistant streaming',
@@ -948,6 +949,7 @@ export class ChatView extends Component {
   }
 
   _handleResponse(data) {
+    this._hideTypingIndicator();
     // Socket bridge already adds to chat.messages store — this handler
     // is for rendering non-streaming responses that bypass the stream flow
     // (e.g., error responses or responses when streaming wasn't active).
@@ -1162,14 +1164,45 @@ export class ChatView extends Component {
         buildingId: store?.get('building.active'),
         roomId: store?.get('rooms.active'),
       });
+      // Show typing indicator only when message was actually sent (#793)
+      this._showTypingIndicator();
     }
     // Clear pending attachments
     this._pendingAttachments = [];
     this._updateAttachPreview();
   }
 
+  // ── Typing Indicator (#793) ──────────────────────────────────
+
+  _showTypingIndicator() {
+    if (this._typingIndicator) return;
+    this._typingIndicator = h('div', { class: 'chat-message chat-message-assistant chat-typing-indicator' },
+      h('div', { class: 'chat-message-avatar' }, 'A'),
+      h('div', { class: 'chat-message-content-wrap' },
+        h('div', { class: 'typing-dots' },
+          h('span', { class: 'typing-dot' }),
+          h('span', { class: 'typing-dot' }),
+          h('span', { class: 'typing-dot' })
+        )
+      )
+    );
+    this._messagesEl.appendChild(this._typingIndicator);
+    if (this._scrollLocked) this._scrollToBottom();
+  }
+
+  _hideTypingIndicator() {
+    if (!this._typingIndicator) return;
+    this._typingIndicator.remove();
+    this._typingIndicator = null;
+  }
+
+  // ── Clear Chat ─────────────────────────────────────────────
+
   _clearChat() {
     const store = OverlordUI.getStore();
+    const messages = store?.get('chat.messages') || [];
+    if (messages.length === 0) return;
+    if (!confirm('Clear all messages in this conversation? This cannot be undone.')) return;
     if (store) store.set('chat.messages', []);
   }
 
