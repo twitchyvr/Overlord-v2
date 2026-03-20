@@ -2325,3 +2325,146 @@ describe('SecurityView', () => {
     expect(view._subs.length).toBe(0);
   });
 });
+
+/* ────────────────────────────────────────────────────────── */
+/*  OnboardingWizard — keyboard navigation (#883)            */
+/* ────────────────────────────────────────────────────────── */
+
+describe('OnboardingWizard — keyboard navigation', () => {
+  it('renders effort cards with tabindex and role', async () => {
+    const { OnboardingWizard } = await import('../../../public/ui/views/onboarding-wizard.js');
+    const el = document.createElement('div');
+    const view = new OnboardingWizard(el);
+    view.mount();
+
+    // Navigate to effort step (step 3) by setting internal state
+    (view as any)._step = 3;
+    (view as any).render();
+
+    const cards = el.querySelectorAll('.effort-level-card');
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      expect(card.getAttribute('tabindex')).toBe('0');
+      expect(card.getAttribute('role')).toBe('option');
+    }
+
+    // Container should have listbox role
+    const container = el.querySelector('.effort-level-choices');
+    expect(container?.getAttribute('role')).toBe('listbox');
+  });
+
+  it('renders type cards with tabindex and role', async () => {
+    const { OnboardingWizard } = await import('../../../public/ui/views/onboarding-wizard.js');
+    const el = document.createElement('div');
+    const view = new OnboardingWizard(el);
+    view.mount();
+
+    (view as any)._step = 4;
+    (view as any).render();
+
+    const cards = el.querySelectorAll('.wizard-type-card');
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      expect(card.getAttribute('tabindex')).toBe('0');
+      expect(card.getAttribute('role')).toBe('option');
+    }
+
+    const grid = el.querySelector('.wizard-type-grid');
+    expect(grid?.getAttribute('role')).toBe('listbox');
+  });
+
+  it('renders scale cards with tabindex and role', async () => {
+    const { OnboardingWizard } = await import('../../../public/ui/views/onboarding-wizard.js');
+    const el = document.createElement('div');
+    const view = new OnboardingWizard(el);
+    view.mount();
+
+    (view as any)._step = 5;
+    (view as any)._selectedType = { id: 'web-app' };
+    (view as any)._selectedScale = null;
+    (view as any).render();
+
+    const cards = el.querySelectorAll('.wizard-scale-card');
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      expect(card.getAttribute('tabindex')).toBe('0');
+      expect(card.getAttribute('role')).toBe('option');
+    }
+  });
+
+  it('arrow keys cycle focus between effort cards', async () => {
+    const { OnboardingWizard } = await import('../../../public/ui/views/onboarding-wizard.js');
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const view = new OnboardingWizard(el);
+    view.mount();
+
+    (view as any)._step = 3;
+    (view as any).render();
+
+    const cards = el.querySelectorAll('.effort-level-card') as NodeListOf<HTMLElement>;
+    expect(cards.length).toBeGreaterThan(1);
+
+    // Focus first card
+    cards[0].focus();
+    expect(document.activeElement).toBe(cards[0]);
+
+    // Press ArrowRight → focus moves to second card
+    const rightEvent = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true });
+    cards[0].dispatchEvent(rightEvent);
+    expect(document.activeElement).toBe(cards[1]);
+
+    // Press ArrowLeft → focus moves back to first card
+    const leftEvent = new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true });
+    cards[1].dispatchEvent(leftEvent);
+    expect(document.activeElement).toBe(cards[0]);
+
+    document.body.removeChild(el);
+  });
+
+  it('Escape goes back one step', async () => {
+    const { OnboardingWizard } = await import('../../../public/ui/views/onboarding-wizard.js');
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const view = new OnboardingWizard(el);
+    view.mount();
+
+    (view as any)._step = 4;
+    (view as any).render();
+
+    const card = el.querySelector('.wizard-type-card') as HTMLElement;
+    expect(card).toBeTruthy();
+    card.focus();
+
+    const escEvent = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
+    card.dispatchEvent(escEvent);
+
+    // Should go back to step 3 (effort)
+    expect((view as any)._step).toBe(3);
+
+    document.body.removeChild(el);
+  });
+
+  it('Enter selects the focused card', async () => {
+    const { OnboardingWizard } = await import('../../../public/ui/views/onboarding-wizard.js');
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const view = new OnboardingWizard(el);
+    view.mount();
+
+    (view as any)._step = 3;
+    (view as any).render();
+
+    const card = el.querySelector('.effort-level-card') as HTMLElement;
+    expect(card).toBeTruthy();
+    card.focus();
+
+    const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+    card.dispatchEvent(enterEvent);
+
+    // Should advance to step 4 (type) after selecting effort
+    expect((view as any)._step).toBe(4);
+
+    document.body.removeChild(el);
+  });
+});

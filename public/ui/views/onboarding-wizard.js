@@ -617,7 +617,9 @@ export class OnboardingWizard extends Component {
 
     for (const level of EFFORT_LEVELS) {
       const card = h('div', {
-        class: `effort-level-card${this._selectedEffort?.id === level.id ? ' selected' : ''}`
+        class: `effort-level-card${this._selectedEffort?.id === level.id ? ' selected' : ''}`,
+        tabindex: '0',
+        role: 'option',
       });
 
       card.appendChild(h('div', { class: 'effort-level-icon' }, level.icon));
@@ -633,6 +635,9 @@ export class OnboardingWizard extends Component {
       cards.appendChild(card);
     }
 
+    cards.setAttribute('role', 'listbox');
+    cards.setAttribute('aria-label', 'Effort level options');
+    this._setupCardKeyboard(cards, 2);
     content.appendChild(cards);
 
     // Actions
@@ -643,6 +648,7 @@ export class OnboardingWizard extends Component {
     content.appendChild(actions);
 
     this.el.appendChild(content);
+    requestAnimationFrame(() => cards.querySelector('[tabindex="0"]')?.focus());
   }
 
   // ─── Step 4: Project Type ───
@@ -657,7 +663,9 @@ export class OnboardingWizard extends Component {
 
     for (const type of PROJECT_TYPES) {
       const card = h('div', {
-        class: `wizard-type-card${this._selectedType?.id === type.id ? ' selected' : ''}`
+        class: `wizard-type-card${this._selectedType?.id === type.id ? ' selected' : ''}`,
+        tabindex: '0',
+        role: 'option',
       });
 
       card.appendChild(h('div', { class: 'wizard-type-icon' }, type.icon));
@@ -674,6 +682,9 @@ export class OnboardingWizard extends Component {
       grid.appendChild(card);
     }
 
+    grid.setAttribute('role', 'listbox');
+    grid.setAttribute('aria-label', 'Project type options');
+    this._setupCardKeyboard(grid, 3);
     content.appendChild(grid);
 
     // Actions
@@ -684,6 +695,7 @@ export class OnboardingWizard extends Component {
     content.appendChild(actions);
 
     this.el.appendChild(content);
+    requestAnimationFrame(() => grid.querySelector('[tabindex="0"]')?.focus());
   }
 
   // ─── Step 5: Scale ───
@@ -698,7 +710,9 @@ export class OnboardingWizard extends Component {
 
     for (const scale of SCALE_OPTIONS) {
       const card = h('div', {
-        class: `wizard-scale-card${this._selectedScale?.id === scale.id ? ' selected' : ''}`
+        class: `wizard-scale-card${this._selectedScale?.id === scale.id ? ' selected' : ''}`,
+        tabindex: '0',
+        role: 'option',
       });
 
       card.appendChild(h('div', { class: 'wizard-scale-icon' }, scale.icon));
@@ -715,6 +729,9 @@ export class OnboardingWizard extends Component {
       grid.appendChild(card);
     }
 
+    grid.setAttribute('role', 'listbox');
+    grid.setAttribute('aria-label', 'Project scale options');
+    this._setupCardKeyboard(grid, 4);
     content.appendChild(grid);
 
     // Actions
@@ -725,6 +742,38 @@ export class OnboardingWizard extends Component {
     content.appendChild(actions);
 
     this.el.appendChild(content);
+    requestAnimationFrame(() => grid.querySelector('[tabindex="0"]')?.focus());
+  }
+
+  // ─── Card Keyboard Navigation ───
+
+  /**
+   * Add arrow-key, Enter, and Escape handling to a card grid container.
+   * @param {HTMLElement} container — the grid/flex parent holding focusable cards
+   * @param {number} prevStep — step number to go back to on Escape
+   */
+  _setupCardKeyboard(container, prevStep) {
+    container.addEventListener('keydown', (e) => {
+      const cards = Array.from(container.querySelectorAll('[tabindex="0"]'));
+      const idx = cards.indexOf(document.activeElement);
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = idx < cards.length - 1 ? idx + 1 : 0;
+        cards[next].focus();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = idx > 0 ? idx - 1 : cards.length - 1;
+        cards[prev].focus();
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (idx >= 0) cards[idx].click();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this._step = prevStep;
+        this.render();
+      }
+    });
   }
 
   // ─── Step 6: Review ───

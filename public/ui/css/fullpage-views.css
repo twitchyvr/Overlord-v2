@@ -3716,6 +3716,11 @@
   box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15), 0 4px 16px rgba(0,0,0,0.2);
 }
 
+.effort-level-card:focus-visible {
+  outline: 2px solid var(--accent-cyan, #22d3ee);
+  outline-offset: 2px;
+}
+
 .effort-level-icon {
   font-size: 2.5rem;
   margin-bottom: var(--sp-3, 0.75rem);
