@@ -1937,7 +1937,17 @@ export class AgentsView extends Component {
           throw new Error(result?.error?.message || 'Assignment failed');
         }
       } catch (err) {
-        Toast.error(`Assign failed: ${err.message}`);
+        // #926 — Replace raw UUIDs in error messages with agent names
+        const cleanMsg = (err.message || 'Assignment failed').replace(
+          /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+          (uuid) => {
+            const store = OverlordUI.getStore();
+            const agents = store?.get('agents.list') || [];
+            const match = agents.find((a) => a.id === uuid);
+            return match?.name || 'agent';
+          }
+        );
+        Toast.error(`Assign failed: ${cleanMsg}`);
         assignBtn.disabled = false;
         assignBtn.textContent = 'Assign';
       }

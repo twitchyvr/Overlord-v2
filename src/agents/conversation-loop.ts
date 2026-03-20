@@ -519,6 +519,22 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     totalTokens.input += response.usage.input_tokens;
     totalTokens.output += response.usage.output_tokens;
 
+    // #931 — Emit ai:request for token audit logging and UI visibility
+    bus.emit('ai:request', {
+      agentId,
+      buildingId,
+      roomId: room.id,
+      provider,
+      model: response.model || 'unknown',
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      totalInputTokens: totalTokens.input,
+      totalOutputTokens: totalTokens.output,
+      iteration,
+      stopReason: response.stop_reason,
+      timestamp: Date.now(),
+    });
+
     // Record per-iteration usage for budget tracking (#851)
     try {
       recordUsage(agentId, response.usage.input_tokens, response.usage.output_tokens);

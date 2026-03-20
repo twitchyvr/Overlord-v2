@@ -221,6 +221,28 @@ if (socket) {
     });
   }
 
+  // ── Token usage counter (#931) ──
+  const tokenCounterEl = document.getElementById('toolbar-token-counter');
+  const tokenDisplayEl = document.getElementById('token-count-display');
+  if (tokenCounterEl && tokenDisplayEl) {
+    store.subscribe('ai.usage', (usage) => {
+      if (!usage) return;
+      const total = (usage.total?.input || 0) + (usage.total?.output || 0);
+      const calls = usage.total?.calls || 0;
+      const formatted = total >= 1000000 ? `${(total / 1000000).toFixed(1)}M` :
+                        total >= 1000 ? `${(total / 1000).toFixed(1)}K` :
+                        String(total);
+      tokenDisplayEl.textContent = `${formatted} tokens (${calls} calls)`;
+      tokenCounterEl.title = `Session: ${total.toLocaleString()} tokens across ${calls} API calls\nInput: ${(usage.total?.input || 0).toLocaleString()} | Output: ${(usage.total?.output || 0).toLocaleString()}`;
+      tokenCounterEl.classList.remove('warning', 'danger');
+      if (total > 500000) tokenCounterEl.classList.add('danger');
+      else if (total > 100000) tokenCounterEl.classList.add('warning');
+    });
+    tokenCounterEl.addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('overlord:navigate', { detail: { view: 'activity' } }));
+    });
+  }
+
   // ── Determine initial view after connection ──
   let _initialNavDone = false;
   engine.subscribe('system:status', (data) => {

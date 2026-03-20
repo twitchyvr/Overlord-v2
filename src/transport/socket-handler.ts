@@ -268,15 +268,16 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
     // ─── Building Events ───
 
     handle(socket, 'building:create', BuildingCreateSchema, (parsed, ack) => {
-      // Default working directory if none specified (#540)
-      // Ensures Code Lab has a directory to write files from the start
+      // Default working directory if none specified (#540, #927)
+      // Use ~/Projects/<name> instead of /tmp so user can find their files
       let workingDirectory = parsed.workingDirectory;
       if (!workingDirectory) {
         const kebabName = parsed.name
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-|-$/g, '');
-        workingDirectory = `/tmp/overlord-projects/${kebabName}`;
+        const homeDir = process.env.HOME || process.env.USERPROFILE || '/tmp';
+        workingDirectory = `${homeDir}/Projects/${kebabName}`;
       }
       // Ensure the directory exists
       try {
@@ -3691,6 +3692,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
   forward('scope-change:detected');
   forward('agent:mentioned');
   forward('agent:activity');
+  forward('ai:request'); // #931 — Token audit logging
   forward('agent:created');
   forward('agent:updated');
   forward('agent:status-changed');

@@ -66,6 +66,9 @@ const ACTIVITY_ICONS = {
   'escalation:stale-gate':    '\u23F0',
   'escalation:war-room':      '\u{1F6A8}',
   'escalation:failed':        '\u274C',
+  'agent:activity':           '\u{1F916}',
+  'agent:created':            '\u{1F464}',
+  'ai:request':               '\u{1F4B0}',
   'error':                    '\u274C',
   'system':                   '\u2139'
 };
@@ -73,7 +76,7 @@ const ACTIVITY_ICONS = {
 /** Filter definitions — maps filter id to a predicate on event type. */
 const FILTER_PREDICATES = {
   all: () => true,
-  tools: (event) => event.startsWith('tool:') || event === 'tool:executed',
+  tools: (event) => event.startsWith('tool:') || event === 'tool:executed' || event === 'ai:request',
   phases: (event) =>
     event.startsWith('phase:') ||
     event.startsWith('phase-zero:') ||
@@ -664,6 +667,26 @@ export class ActivityView extends Component {
     }
     if (event === 'todo:released') {
       return `Todo lock released`;
+    }
+    // #923 — Agent activity events (thinking, coding, reading, etc.)
+    if (event === 'agent:activity') {
+      const name = item.agentName || resolveAgentName(item.agentId);
+      const activity = item.activity || 'working';
+      const tool = item.toolName ? ` (${item.toolName})` : '';
+      return `${name} is ${activity}${tool}`;
+    }
+    // #923 — Agent created
+    if (event === 'agent:created') {
+      const name = item.agent?.name || resolveAgentName(item.agentId);
+      return `${name} joined the team`;
+    }
+    // #931 — AI API call with token usage
+    if (event === 'ai:request') {
+      const name = item.agentName || resolveAgentName(item.agentId);
+      const inp = item.inputTokens || 0;
+      const out = item.outputTokens || 0;
+      const model = item.model || 'unknown';
+      return `${name} \u2192 ${model}: ${inp.toLocaleString()} in / ${out.toLocaleString()} out tokens`;
     }
 
     // Default: use whatever text fields are available, format raw event name as readable

@@ -106,7 +106,7 @@ export function initBuildingOnboarding({ bus, rooms, agents }: OnboardingDeps): 
 
     if (result.success) {
       // Auto-create a balanced agent team (#766)
-      const teamCreated = provisionAgentTeam({ buildingId, agents });
+      const teamCreated = provisionAgentTeam({ buildingId, agents, rooms });
 
       bus.emit('building:onboarded', {
         buildingId,
@@ -313,9 +313,11 @@ function provisionPhaseRoom({
 function provisionAgentTeam({
   buildingId,
   agents,
+  rooms,
 }: {
   buildingId: string;
   agents: AgentRegistryAPI;
+  rooms: RoomManagerAPI;
 }): number {
   const TEAM_ROLES = [
     { name: 'Analyst', role: 'analyst', capabilities: ['chat', 'analysis', 'research'], roomAccess: ['discovery'] },
@@ -335,6 +337,7 @@ function provisionAgentTeam({
   }
 
   let created = 0;
+  const agentsToEnter: Array<{ agentId: string; roomType: string; name: string }> = [];
 
   for (const teamRole of TEAM_ROLES) {
     // Skip if this role already has enough agents
@@ -357,12 +360,41 @@ function provisionAgentTeam({
       if (result.ok) {
         created++;
         existingRoles.set(teamRole.role, (existingRoles.get(teamRole.role) || 0) + 1);
+        const agentData = result.data as { id: string };
+        agentsToEnter.push({ agentId: agentData.id, roomType: teamRole.roomAccess[0], name: teamRole.name });
         log.info({ buildingId, role: teamRole.role, name: teamRole.name }, 'Team agent provisioned');
       } else {
         log.warn({ buildingId, role: teamRole.role, error: result.error }, 'Failed to provision team agent');
       }
     } catch (e) {
       log.error({ buildingId, role: teamRole.role, err: e }, 'Team agent provisioning threw');
+    }
+  }
+
+  // #925 — Auto-enter agents into their designated rooms
+  const db = getDb();
+  for (const entry of agentsToEnter) {
+    try {
+      // Find the room of this type in this building
+      const roomRow = db.prepare(`
+        SELECT r.id FROM rooms r
+        JOIN floors f ON r.floor_id = f.id
+        WHERE f.building_id = ? AND r.type = ?
+        LIMIT 1
+      `).get(buildingId, entry.roomType) as { id: string } | undefined;
+
+      if (roomRow) {
+        const enterResult = rooms.enterRoom({ roomId: roomRow.id, agentId: entry.agentId });
+        if (enterResult.ok) {
+          log.info({ buildingId, agentId: entry.agentId, roomType: entry.roomType, name: entry.name }, 'Agent auto-entered room');
+        } else {
+          log.warn({ buildingId, agentId: entry.agentId, roomType: entry.roomType, error: enterResult.error }, 'Agent failed to auto-enter room');
+        }
+      } else {
+        log.warn({ buildingId, roomType: entry.roomType, name: entry.name }, 'No room found for agent auto-entry — rooms may not be provisioned yet');
+      }
+    } catch (e) {
+      log.warn({ buildingId, agentId: entry.agentId, err: e }, 'Agent auto-entry threw (non-blocking)');
     }
   }
 

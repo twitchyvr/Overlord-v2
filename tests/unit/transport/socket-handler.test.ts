@@ -501,7 +501,7 @@ describe('Socket Handler (Transport Layer)', () => {
       expect(createBuilding).toHaveBeenCalledWith({
         name: 'My Project',
         projectId: undefined,
-        workingDirectory: '/tmp/overlord-projects/my-project',
+        workingDirectory: expect.stringContaining('/Projects/my-project'),
         repoUrl: undefined,
         config: {},
       });
