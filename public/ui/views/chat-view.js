@@ -556,6 +556,23 @@ export class ChatView extends Component {
       contentWrap.appendChild(this._buildPlanCard(msg.plan));
     }
 
+    // Inline action buttons for agent suggestions (#792)
+    if (msg.role === 'assistant' && msg.text) {
+      const inlineActions = this._detectInlineActions(msg.text);
+      if (inlineActions.length > 0) {
+        const actionsBar = h('div', { class: 'chat-inline-actions' });
+        for (const ia of inlineActions) {
+          const btn = h('button', { class: 'chat-inline-action-btn' },
+            h('span', { class: 'chat-inline-action-icon' }, ia.icon),
+            h('span', null, ia.label)
+          );
+          btn.addEventListener('click', () => ia.action());
+          actionsBar.appendChild(btn);
+        }
+        contentWrap.appendChild(actionsBar);
+      }
+    }
+
     // Message actions
     const actions = this._buildMessageActions(msg);
     contentWrap.appendChild(actions);
@@ -775,6 +792,61 @@ export class ChatView extends Component {
     }
 
     return chip;
+  }
+
+  /** Detect actionable suggestions in assistant message text (#792).
+   *  Returns an array of { icon, label, action } for inline buttons. */
+  _detectInlineActions(text) {
+    const actions = [];
+
+    // Pattern: mentions creating tasks/milestones/work items
+    if (/(?:suggest|recommend|create|should create|let me create|i.?ll create)\s+(?:\d+\s+)?(?:task|work item|action item)/i.test(text)) {
+      actions.push({
+        icon: '\u2795',
+        label: 'Create Tasks',
+        action: () => {
+          OverlordUI.dispatch('navigate:tasks');
+          Toast.info('Navigate to Tasks to create work items from this plan.');
+        }
+      });
+    }
+
+    if (/(?:suggest|recommend|create|should create)\s+(?:\d+\s+)?milestone/i.test(text)) {
+      actions.push({
+        icon: '\u{1F3AF}',
+        label: 'Create Milestones',
+        action: () => {
+          OverlordUI.dispatch('navigate:milestones');
+          Toast.info('Navigate to Milestones to create from this plan.');
+        }
+      });
+    }
+
+    // Pattern: mentions risks, issues, assumptions (bounded to prevent backtracking)
+    if (/(?:risk|issue|blocker|assumption|concern|dependency)[\s\S]{0,300}(?:identified|found|noted|flagged)/i.test(text) ||
+        /(?:identified|found|noted|flagged)[\s\S]{0,300}(?:risk|issue|blocker|assumption)/i.test(text)) {
+      actions.push({
+        icon: '\u26A0',
+        label: 'Log in RAID',
+        action: () => {
+          OverlordUI.dispatch('navigate:raid-log');
+          Toast.info('Navigate to RAID Log to record identified risks.');
+        }
+      });
+    }
+
+    // Pattern: mentions architecture, design, blueprint
+    if (/(?:architecture|design|blueprint|system design|component diagram)/i.test(text) &&
+        /(?:ready|complete|prepared|here.?s|i.?ve designed)/i.test(text)) {
+      actions.push({
+        icon: '\u{1F3D7}\uFE0F',
+        label: 'View Architecture',
+        action: () => OverlordUI.dispatch('navigate:building')
+      });
+    }
+
+    // Limit to 3 actions max to avoid clutter
+    return actions.slice(0, 3);
   }
 
   /** Build message action buttons. */
