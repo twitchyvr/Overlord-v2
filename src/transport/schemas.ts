@@ -1143,3 +1143,11 @@ export const ProviderSetKeySchema = z.object({
   apiKey: z.string().max(500),
 });
 
+// Security events (#890)
+export const SecurityStatsSchema = z.object({});
+export const SecurityEventsSchema = z.object({
+  type: z.string().optional(),
+  action: z.enum(['allow', 'warn', 'block']).optional(),
+  limit: z.number().int().min(1).max(500).optional(),
+});
+

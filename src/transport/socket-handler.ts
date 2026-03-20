@@ -88,6 +88,7 @@ import {
   DocLibraryCreateSchema, DocLibraryListSchema, DocLibraryDeleteSchema, DocLibraryIndexSchema,
   DocSearchSchema, DocGetSchema, DocListSchema,
   ProviderSetKeySchema,
+  SecurityStatsSchema, SecurityEventsSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { checkBudget, setAgentBudget, getBuildingBudgets } from '../agents/budget-tracker.js';
@@ -98,6 +99,7 @@ import { writeNote, readNote, listNotes, deleteNote, clearNotes } from '../tools
 import { getQualityConfig } from '../tools/quality-defaults.js';
 import { globalSearch } from '../storage/global-search.js';
 import { listPlugins, getPlugin, loadPlugin, unloadPlugin, reloadPlugin, getPluginLogs } from '../plugins/plugin-loader.js';
+import { getSecurityEvents, getSecurityStats, setSecurityBus } from '../plugins/index.js';
 import { validateLuaSyntax } from '../plugins/lua-validator.js';
 import { exportBundle, importBundle } from '../plugins/plugin-bundler.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
@@ -3552,6 +3554,22 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       if (ack) ack({ ok: true, data: { uptime: process.uptime(), version: '0.1.0' } });
     });
 
+    // ─── Security Events (#890) ───
+
+    handle(socket, 'security:stats', SecurityStatsSchema, (_parsed, ack) => {
+      const stats = getSecurityStats();
+      if (ack) ack({ ok: true, data: stats });
+    });
+
+    handle(socket, 'security:events', SecurityEventsSchema, (parsed, ack) => {
+      const events = getSecurityEvents({
+        type: parsed.type,
+        action: parsed.action,
+        limit: parsed.limit ?? 100,
+      });
+      if (ack) ack({ ok: true, data: events });
+    });
+
     // ─── Provider Key Management (#762) ───
 
     socket.on('provider:set-key', (data: unknown, ack?: (res: unknown) => void) => {
@@ -3722,6 +3740,12 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
   forward('plugin:status-changed');
   forward('plugin:config-changed');
   forward('plugin:source-changed');
+  forward('security:event-logged');
+  forward('security:blocked');
+  forward('security:warning');
+
+  // Wire security bus so logSecurityEvent() can broadcast to clients (#890)
+  setSecurityBus(bus);
 
   // ─── Exit Doc Auto-Submit (#524) ───
   // When the conversation loop detects an exit document in AI prose,
