@@ -2240,3 +2240,88 @@ describe('ActivityView', () => {
     expect(el.textContent).toContain('No Building Selected');
   });
 });
+
+// ─── SecurityView (#880) ────────────────────────────────────
+
+describe('SecurityView', () => {
+  it('exports the SecurityView class', async () => {
+    const mod = await import('../../../public/ui/views/security-view.js');
+    expect(mod.SecurityView).toBeDefined();
+    expect(typeof mod.SecurityView).toBe('function');
+  });
+
+  it('renders empty state when no events', async () => {
+    const { SecurityView } = await import('../../../public/ui/views/security-view.js');
+    const el = document.createElement('div');
+    const view = new SecurityView(el);
+    view.mount();
+
+    // Root element gets the class directly
+    expect(el.classList.contains('security-view')).toBe(true);
+    expect(el.querySelector('.security-empty')).not.toBeNull();
+    expect(el.textContent).toContain('No Security Events');
+  });
+
+  it('renders stats bar with 4 stat cards', async () => {
+    const { SecurityView } = await import('../../../public/ui/views/security-view.js');
+    const el = document.createElement('div');
+    const view = new SecurityView(el);
+    view.mount();
+
+    const statCards = el.querySelectorAll('.security-stat-card');
+    expect(statCards.length).toBe(4);
+    expect(el.textContent).toContain('Total');
+    expect(el.textContent).toContain('Blocked');
+    expect(el.textContent).toContain('Warned');
+    expect(el.textContent).toContain('Allowed');
+  });
+
+  it('renders filter pills for all, blocked, warnings, allowed', async () => {
+    const { SecurityView } = await import('../../../public/ui/views/security-view.js');
+    const el = document.createElement('div');
+    const view = new SecurityView(el);
+    view.mount();
+
+    const pills = el.querySelectorAll('.security-filter-pill');
+    expect(pills.length).toBe(4);
+    expect(pills[0].textContent).toBe('All');
+    expect(pills[1].textContent).toBe('Blocked');
+    expect(pills[2].textContent).toBe('Warnings');
+    expect(pills[3].textContent).toBe('Allowed');
+  });
+
+  it('renders events when store has data', async () => {
+    const store = OverlordUI.getStore();
+    store.set('security.events', [
+      { action: 'block', toolName: 'write_file', message: 'Blocked rm -rf', timestamp: Date.now(), pluginId: 'shell-guard' },
+      { action: 'warn', toolName: 'execute_command', message: 'SQL detected', timestamp: Date.now() - 1000, pluginId: 'code-scanner' },
+      { action: 'allow', toolName: 'read_file', timestamp: Date.now() - 2000 },
+    ], { silent: true });
+    store.set('security.stats', { total: 3, blocked: 1, warned: 1, allowed: 1 }, { silent: true });
+
+    const { SecurityView } = await import('../../../public/ui/views/security-view.js');
+    const el = document.createElement('div');
+    const view = new SecurityView(el);
+    view.mount();
+
+    const rows = el.querySelectorAll('.security-event-row');
+    expect(rows.length).toBe(3);
+
+    // First event should be blocked (red)
+    expect(rows[0].classList.contains('security-action--block')).toBe(true);
+    expect(el.textContent).toContain('Blocked rm -rf');
+    expect(el.textContent).toContain('shell-guard');
+  });
+
+  it('cleans up on destroy', async () => {
+    const { SecurityView } = await import('../../../public/ui/views/security-view.js');
+    const el = document.createElement('div');
+    const view = new SecurityView(el);
+    view.mount();
+
+    expect(view._mounted).toBe(true);
+    view.destroy();
+    expect(view._mounted).toBe(false);
+    expect(view._subs.length).toBe(0);
+  });
+});

@@ -52,6 +52,7 @@ export function initRouter({ centerPanel, buildingPanel }) {
   OverlordUI.subscribe('navigate:milestones', () => navigateTo('milestones'));
   OverlordUI.subscribe('navigate:phase', () => navigateTo('phase'));
   OverlordUI.subscribe('navigate:scripts', () => navigateTo('scripts'));
+  OverlordUI.subscribe('navigate:security', () => navigateTo('security'));
   OverlordUI.subscribe('navigate:script-editor', (data) => {
     _scriptEditorOpts = data || {};
     navigateTo('script-editor');
@@ -226,7 +227,8 @@ async function _loadViewModules() {
     { MilestoneView },
     { EmailView },
     { ScriptsView },
-    { ScriptEditorView }
+    { ScriptEditorView },
+    { SecurityView }
   ] = await Promise.all([
     import('../views/dashboard-view.js'),
     import('../views/strategist-view.js'),
@@ -241,7 +243,8 @@ async function _loadViewModules() {
     import('../views/milestone-view.js'),
     import('../views/email-view.js'),
     import('../views/scripts-view.js'),
-    import('../views/script-editor-view.js')
+    import('../views/script-editor-view.js'),
+    import('../views/security-view.js')
   ]);
 
   return {
@@ -258,7 +261,8 @@ async function _loadViewModules() {
     milestones: MilestoneView,
     email:      EmailView,
     scripts:    ScriptsView,
-    'script-editor': ScriptEditorView
+    'script-editor': ScriptEditorView,
+    security:   SecurityView
   };
 }
 
@@ -271,7 +275,7 @@ function _updateToolbar(viewName) {
 }
 
 function _updateMobileNav(viewName) {
-  const overflowViews = ['activity', 'email', 'raid-log', 'phase', 'milestones', 'strategist', 'scripts'];
+  const overflowViews = ['activity', 'email', 'raid-log', 'phase', 'milestones', 'strategist', 'scripts', 'security'];
   const isOverflowView = overflowViews.includes(viewName);
 
   document.querySelectorAll('#mobile-nav .mobile-nav-item').forEach(item => {
