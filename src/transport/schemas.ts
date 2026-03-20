@@ -625,6 +625,28 @@ export const AgentSpeakSchema = z.object({
   languageBoost: z.string().optional(),
 });
 
+// ─── MiniMax File Management ───
+
+export const FileUploadSchema = z.object({
+  /** Base64-encoded file data (max ~134MB for 100MB file) */
+  fileData: z.string().min(1).max(140_000_000),
+  filename: z.string().min(1).max(500),
+  purpose: z.enum(['voice_clone', 'prompt_audio', 't2a_async_input']),
+});
+
+export const FileRetrieveSchema = z.object({
+  fileId: z.string().min(1).max(100),
+});
+
+export const FileListSchema = z.object({
+  purpose: z.enum(['voice_clone', 'prompt_audio', 't2a_async_input']),
+});
+
+export const FileDeleteSchema = z.object({
+  fileId: z.string().min(1).max(100),
+  purpose: z.enum(['voice_clone', 'prompt_audio', 't2a_async_input']),
+});
+
 // ─── Citations ───
 
 export const CitationListSchema = z.object({
