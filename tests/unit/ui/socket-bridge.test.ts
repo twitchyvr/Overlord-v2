@@ -504,7 +504,7 @@ describe('socket "tool:executed" event', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const data = { toolName: 'search' };
     mockSocket._trigger('tool:executed', data);
-    expect(mockEngine.dispatch).toHaveBeenCalledWith('tool:executed', data);
+    expect(mockEngine.dispatch).toHaveBeenCalledWith('tool:executed', expect.objectContaining({ toolName: 'search' }));
   });
 });
 

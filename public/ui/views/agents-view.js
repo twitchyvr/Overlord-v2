@@ -425,26 +425,22 @@ export class AgentsView extends Component {
     sortRow.appendChild(sortSelect);
     this.el.appendChild(sortRow);
 
-    // ── Currently working section ──
-    const workingSection = this._renderWorkingSection(roomNameMap);
-    if (workingSection) this.el.appendChild(workingSection);
-
-    // ── Unassigned agents banner (#512) ──
+    // ── #930 — Auto-assign action bar at top (moved from bottom banner) ──
     const unassigned = this._agents.filter(a => !this._resolveRoomId(a));
     if (unassigned.length > 0) {
-      const banner = h('div', { class: 'agents-unassigned-banner' },
-        h('span', { class: 'agents-unassigned-banner-text' },
-          `${unassigned.length} agent${unassigned.length === 1 ? ' is' : 's are'} waiting for work. Click 'Assign' to put them in a room.`
+      const actionBar = h('div', { class: 'agents-action-bar' },
+        h('span', { class: 'agents-action-bar-text' },
+          `${unassigned.length} unassigned agent${unassigned.length === 1 ? '' : 's'}`
         ),
         h('button', {
           class: 'btn btn-primary btn-sm',
           onClick: () => this._autoAssignAll(unassigned)
-        }, 'Auto-Assign All')
+        }, `Auto-Assign ${unassigned.length}`)
       );
-      this.el.appendChild(banner);
+      this.el.appendChild(actionBar);
     }
 
-    // ── Agent grid ──
+    // ── Agent grid (grouped by status #930) ──
     const filtered = this._getFilteredAgents();
 
     if (filtered.length === 0) {
@@ -452,13 +448,17 @@ export class AgentsView extends Component {
       return;
     }
 
-    const grid = h('div', { class: 'agents-view-grid' });
+    // Group agents by status category
+    const groups = this._groupByStatus(filtered);
+    const container = h('div', { class: 'agents-view-grouped' });
 
-    for (const agent of filtered) {
-      grid.appendChild(this._renderAgentCard(agent, roomNameMap));
+    for (const group of groups) {
+      if (group.agents.length === 0) continue;
+      const section = this._renderCollapsibleGroup(group, roomNameMap);
+      container.appendChild(section);
     }
 
-    this.el.appendChild(grid);
+    this.el.appendChild(container);
   }
 
   /** Build the empty state placeholder. */
@@ -502,6 +502,73 @@ export class AgentsView extends Component {
       sorted.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
     }
     return sorted;
+  }
+
+  /** #930 — Group agents by status category for collapsible sections. */
+  _groupByStatus(agents) {
+    const active = [];
+    const inRoom = [];
+    const idle = [];
+    const error = [];
+
+    for (const a of agents) {
+      const s = this._resolveStatus(a);
+      const hasRoom = !!this._resolveRoomId(a);
+      if (s === 'active' || s === 'working') active.push(a);
+      else if (s === 'error') error.push(a);
+      else if (hasRoom) inRoom.push(a);
+      else idle.push(a);
+    }
+
+    return [
+      { key: 'active', label: 'Active', icon: '\u{1F7E2}', agents: active, defaultOpen: true },
+      { key: 'in-room', label: 'In Room', icon: '\u{1F3E0}', agents: inRoom, defaultOpen: true },
+      { key: 'idle', label: 'Idle / Unassigned', icon: '\u{26AA}', agents: idle, defaultOpen: true },
+      { key: 'error', label: 'Error', icon: '\u{1F534}', agents: error, defaultOpen: true },
+    ];
+  }
+
+  /** #930 — Render a collapsible group of agent cards. */
+  _renderCollapsibleGroup(group, roomNameMap) {
+    const section = h('div', { class: `agents-group agents-group-${group.key}` });
+
+    const header = h('div', {
+      class: 'agents-group-header',
+      role: 'button',
+      tabindex: '0',
+      'aria-expanded': group.defaultOpen ? 'true' : 'false',
+    });
+    const chevron = h('span', { class: 'agents-group-chevron' }, group.defaultOpen ? '\u25BC' : '\u25B6');
+    header.appendChild(chevron);
+    header.appendChild(h('span', { class: 'agents-group-icon' }, group.icon));
+    header.appendChild(h('span', { class: 'agents-group-label' }, group.label));
+    header.appendChild(h('span', { class: 'agents-group-count' }, String(group.agents.length)));
+
+    const body = h('div', { class: 'agents-group-body' });
+    if (!group.defaultOpen) body.style.display = 'none';
+
+    const grid = h('div', { class: 'agents-view-grid' });
+    for (const agent of group.agents) {
+      grid.appendChild(this._renderAgentCard(agent, roomNameMap));
+    }
+    body.appendChild(grid);
+
+    header.addEventListener('click', () => {
+      const isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : '';
+      chevron.textContent = isOpen ? '\u25B6' : '\u25BC';
+      header.setAttribute('aria-expanded', String(!isOpen));
+    });
+    header.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        header.click();
+      }
+    });
+
+    section.appendChild(header);
+    section.appendChild(body);
+    return section;
   }
 
   /** Render a highlighted section showing agents currently in rooms. */
@@ -764,11 +831,33 @@ export class AgentsView extends Component {
       card.appendChild(capRow);
     }
 
-    // ── Card footer with role + last activity (#803) ──
+    // ── #930 — Activity preview one-liner (reuses activityData from header badge) ──
+    if (activityData && (Date.now() - activityData.timestamp) < 120_000) {
+      const previewBadge = _activityBadge(activityData.activity);
+      const activityLabel = previewBadge?.label || activityData.activity || 'Working';
+      const toolSuffix = activityData.toolName ? ` (${activityData.toolName})` : '';
+      card.appendChild(h('div', { class: 'agents-view-card-activity-preview' },
+        previewBadge ? h('span', null, previewBadge.emoji + ' ') : null,
+        h('span', null, `${activityLabel}${toolSuffix}`)
+      ));
+    }
+
+    // ── Card footer with role + token usage + last activity ──
     const footerLabel = agent.specialization || agent.role || agent.type || '';
     const footer = h('div', { class: 'agents-view-card-footer' },
       footerLabel ? h('span', { class: 'agents-view-card-id' }, footerLabel) : null
     );
+
+    // #930 — Token usage badge on card
+    const store2 = OverlordUI.getStore();
+    const aiUsage2 = store2?.get('ai.usage');
+    const cardUsage = aiUsage2?.byAgent?.[agent.id];
+    if (cardUsage && cardUsage.calls > 0) {
+      const total = (cardUsage.input || 0) + (cardUsage.output || 0);
+      const fmt = total >= 1000 ? `${(total / 1000).toFixed(1)}K` : String(total);
+      footer.appendChild(h('span', { class: 'agents-view-card-tokens', title: `${total.toLocaleString()} tokens, ${cardUsage.calls} API calls` }, `\u{1F4B0} ${fmt}`));
+    }
+
     // Show last activity time (prefer updated_at over created_at)
     const activityTime = agent.updated_at || agent.created_at;
     if (activityTime) {
@@ -1012,6 +1101,41 @@ export class AgentsView extends Component {
         }
       });
     }
+
+    // ── #929 — Per-Agent Token Usage ──
+    const tokenSection = h('div', { class: 'agents-view-detail-section' });
+    tokenSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Token Usage'));
+    const aiUsage = store?.get('ai.usage');
+    const agentUsage = aiUsage?.byAgent?.[agent.id];
+    if (agentUsage) {
+      const totalTokens = (agentUsage.input || 0) + (agentUsage.output || 0);
+      const formatted = totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}K` : String(totalTokens);
+      const tokenGrid = h('div', { class: 'agents-view-stats-grid' });
+      tokenGrid.appendChild(h('div', { class: 'agents-view-stat-card' },
+        h('div', { class: 'agents-view-stat-icon' }, '\u{1F4B0}'),
+        h('div', { class: 'agents-view-stat-value' }, formatted),
+        h('div', { class: 'agents-view-stat-label' }, 'Total Tokens')
+      ));
+      tokenGrid.appendChild(h('div', { class: 'agents-view-stat-card' },
+        h('div', { class: 'agents-view-stat-icon' }, '\u{2B07}'),
+        h('div', { class: 'agents-view-stat-value' }, (agentUsage.input || 0).toLocaleString()),
+        h('div', { class: 'agents-view-stat-label' }, 'Input')
+      ));
+      tokenGrid.appendChild(h('div', { class: 'agents-view-stat-card' },
+        h('div', { class: 'agents-view-stat-icon' }, '\u{2B06}'),
+        h('div', { class: 'agents-view-stat-value' }, (agentUsage.output || 0).toLocaleString()),
+        h('div', { class: 'agents-view-stat-label' }, 'Output')
+      ));
+      tokenGrid.appendChild(h('div', { class: 'agents-view-stat-card' },
+        h('div', { class: 'agents-view-stat-icon' }, '\u{1F4DE}'),
+        h('div', { class: 'agents-view-stat-value' }, String(agentUsage.calls || 0)),
+        h('div', { class: 'agents-view-stat-label' }, 'API Calls')
+      ));
+      tokenSection.appendChild(tokenGrid);
+    } else {
+      tokenSection.appendChild(h('div', { class: 'agents-view-activity-empty' }, 'No token usage recorded this session'));
+    }
+    content.appendChild(tokenSection);
 
     // ── AI Model Configuration (#761) ──
     const modelSection = h('div', { class: 'agents-view-detail-section' });
