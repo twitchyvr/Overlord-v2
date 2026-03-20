@@ -210,8 +210,14 @@ describe('formatTime()', () => {
   });
 
   it('returns relative minutes for timestamps under an hour', () => {
+    // Guard: only test if 15m ago is still today (avoids midnight boundary flake)
     const d = new Date(Date.now() - 15 * 60000);
-    expect(formatTime(d)).toBe('15m ago');
+    if (d.getDate() === new Date().getDate()) {
+      expect(formatTime(d)).toBe('15m ago');
+    } else {
+      // Near midnight — the timestamp crossed to yesterday, skip assertion
+      expect(formatTime(d)).toMatch(/Yesterday/);
+    }
   });
 
   it('returns relative hours for timestamps under 24 hours', () => {
@@ -221,9 +227,13 @@ describe('formatTime()', () => {
       const d = new Date(Date.now() - 3 * 3600000);
       expect(formatTime(d)).toBe('3h ago');
     } else {
-      // Before noon — use 30 minutes ago which is always same day
-      const d = new Date(Date.now() - 30 * 60000);
-      expect(formatTime(d)).toBe('30m ago');
+      // Before noon — use 5 minutes ago which is always same day
+      const d = new Date(Date.now() - 5 * 60000);
+      if (d.getDate() === new Date().getDate()) {
+        expect(formatTime(d)).toBe('5m ago');
+      } else {
+        expect(formatTime(d)).toMatch(/Yesterday/);
+      }
     }
   });
 
