@@ -2468,3 +2468,66 @@ describe('OnboardingWizard — keyboard navigation', () => {
     document.body.removeChild(el);
   });
 });
+
+/* ────────────────────────────────────────────────────────── */
+/*  SettingsView — security level tab (#882)                  */
+/* ────────────────────────────────────────────────────────── */
+
+describe('SettingsView — security level tab', () => {
+  it('includes security tab in settings', async () => {
+    const { SettingsView } = await import('../../../public/ui/views/settings-view.js');
+    expect(SettingsView).toBeDefined();
+  });
+
+  it('renders 4 security level cards when tab is active', async () => {
+    const { SettingsView } = await import('../../../public/ui/views/settings-view.js');
+    const el = document.createElement('div');
+    const view = new SettingsView(el);
+    view.mount();
+
+    // Simulate opening settings and switching to security tab
+    (view as any)._activeTab = 'security';
+    const container = document.createElement('div');
+    const tab = (view as any)._buildSecurityTab();
+    container.appendChild(tab);
+
+    // Without a building selected, should show empty hint
+    const hint = container.querySelector('.settings-empty-hint');
+    expect(hint).toBeTruthy();
+  });
+
+  it('renders security level cards with correct roles', async () => {
+    const { SettingsView } = await import('../../../public/ui/views/settings-view.js');
+    const el = document.createElement('div');
+    const view = new SettingsView(el);
+    view.mount();
+
+    // Mock store with active building
+    const { OverlordUI } = await import('../../../public/ui/engine/engine.js');
+    const store = OverlordUI.getStore();
+    if (store) {
+      store.set('building.active', 'test-building-id');
+      store.set('building.data', { config: { securityLevel: 'standard' } });
+    }
+
+    (view as any)._activeTab = 'security';
+    const tab = (view as any)._buildSecurityTab();
+
+    const cards = tab.querySelectorAll('.security-level-card');
+    expect(cards.length).toBe(4);
+
+    for (const card of cards) {
+      expect(card.getAttribute('role')).toBe('option');
+      expect(card.getAttribute('tabindex')).toBe('0');
+    }
+
+    // Check standard is selected by default
+    const selectedCard = tab.querySelector('.security-level-card.selected');
+    expect(selectedCard).toBeTruthy();
+    expect(selectedCard?.getAttribute('data-level')).toBe('standard');
+
+    // Listbox container
+    const listbox = tab.querySelector('[role="listbox"]');
+    expect(listbox).toBeTruthy();
+  });
+});

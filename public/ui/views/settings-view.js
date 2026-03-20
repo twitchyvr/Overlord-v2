@@ -21,6 +21,7 @@ const TABS = [
   { id: 'folders',   label: 'Folders',   icon: '\u{1F4C2}' },
   { id: 'libraries', label: 'Libraries', icon: '\u{1F4DA}' },
   { id: 'quality',   label: 'Quality',   icon: '\u2705' },
+  { id: 'security',  label: 'Security',  icon: '\u{1F6E1}\uFE0F' },
   { id: 'ai',        label: 'AI',        icon: '\u{1F916}' },
   { id: 'display',   label: 'Display',   icon: '\u{1F5A5}\uFE0F' },
 ];
@@ -142,6 +143,9 @@ export class SettingsView extends Component {
         break;
       case 'quality':
         tabContent.appendChild(this._buildQualityTab());
+        break;
+      case 'security':
+        tabContent.appendChild(this._buildSecurityTab());
         break;
       case 'ai':
         tabContent.appendChild(this._buildAITab());
@@ -739,6 +743,130 @@ export class SettingsView extends Component {
       if (res?.ok) {
         Toast.success('Quality settings saved');
       }
+    });
+  }
+
+  // ── Security Level Tab (#882) ────────────────────────────
+
+  _buildSecurityTab() {
+    const section = h('div', { class: 'settings-section' });
+    const store = OverlordUI.getStore();
+    const buildingId = store?.get('building.active');
+
+    section.appendChild(h('h3', { class: 'settings-section-title' }, 'Security Level'));
+    section.appendChild(h('p', { class: 'settings-section-desc' },
+      'Configure how strictly security hooks enforce rules for this building. Higher levels provide more protection but may block legitimate operations.'));
+
+    if (!buildingId) {
+      section.appendChild(h('p', { class: 'settings-empty-hint' },
+        'Select a building to configure its security level.'));
+      return section;
+    }
+
+    const SECURITY_LEVELS = [
+      {
+        id: 'permissive',
+        label: 'Permissive',
+        icon: '\u{1F7E2}',
+        desc: 'Warn only — never blocks. Good for development and experimentation.',
+      },
+      {
+        id: 'standard',
+        label: 'Standard',
+        icon: '\u{1F535}',
+        desc: 'Block destructive operations, warn on risky ones. Recommended default.',
+      },
+      {
+        id: 'strict',
+        label: 'Strict',
+        icon: '\u{1F7E0}',
+        desc: 'Allowlist-only shell commands, block all code vulnerability patterns.',
+      },
+      {
+        id: 'paranoid',
+        label: 'Paranoid',
+        icon: '\u{1F534}',
+        desc: 'Block all shell commands, block any unsafe pattern. Maximum protection.',
+      },
+    ];
+
+    // Resolve current level from building config
+    const buildingData = store?.get('building.data') || {};
+    const config = buildingData.config || {};
+    const currentLevel = config.securityLevel || 'standard';
+
+    const cardsContainer = h('div', {
+      class: 'security-level-cards',
+      role: 'listbox',
+      'aria-label': 'Security level options',
+    });
+
+    for (const level of SECURITY_LEVELS) {
+      const isSelected = currentLevel === level.id;
+      const card = h('div', {
+        class: `security-level-card${isSelected ? ' selected' : ''}`,
+        role: 'option',
+        tabindex: '0',
+        'aria-selected': isSelected ? 'true' : 'false',
+        dataset: { level: level.id },
+      },
+        h('div', { class: 'security-level-card-header' },
+          h('span', { class: 'security-level-card-icon' }, level.icon),
+          h('span', { class: 'security-level-card-label' }, level.label),
+        ),
+        h('p', { class: 'security-level-card-desc' }, level.desc),
+      );
+
+      card.addEventListener('click', () => {
+        this._setSecurityLevel(buildingId, level.id, cardsContainer);
+      });
+
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          this._setSecurityLevel(buildingId, level.id, cardsContainer);
+        }
+      });
+
+      cardsContainer.appendChild(card);
+    }
+
+    section.appendChild(cardsContainer);
+
+    // Info note
+    section.appendChild(h('p', { class: 'settings-section-note' },
+      'Security hooks run before and after every tool execution. Changes take effect immediately for new tool calls.'));
+
+    return section;
+  }
+
+  _setSecurityLevel(buildingId, level, container) {
+    if (!window.overlordSocket) return;
+
+    // Update visual state immediately
+    container.querySelectorAll('.security-level-card').forEach(card => {
+      const isMatch = card.dataset.level === level;
+      card.classList.toggle('selected', isMatch);
+      card.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+    });
+
+    // Get current config and merge
+    const store = OverlordUI.getStore();
+    const buildingData = store?.get('building.data') || {};
+    const existingConfig = buildingData.config || {};
+    const newConfig = { ...existingConfig, securityLevel: level };
+
+    // Persist via building:update
+    window.overlordSocket.updateBuilding(buildingId, { config: newConfig }).then(res => {
+      if (res?.ok) {
+        Toast.success(`Security level set to ${level}`);
+        // Update store so other views react
+        store?.update('building.data', (data) => data ? { ...data, config: newConfig } : data);
+      } else {
+        Toast.error('Failed to save security level');
+      }
+    }).catch(() => {
+      Toast.error('Failed to save security level');
     });
   }
 

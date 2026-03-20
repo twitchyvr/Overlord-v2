@@ -2,6 +2,11 @@
 --
 -- Blocks dangerous shell commands before execution.
 -- Uses onPreToolUse to intercept shell/execute tools.
+-- Respects building security level (#882):
+--   permissive: warn only (never block)
+--   standard:   block destructive, warn risky (default)
+--   strict:     allowlist-only mode — block anything not explicitly safe
+--   paranoid:   block ALL shell commands
 
 local DANGEROUS_PATTERNS = {
   { pattern = "rm%s+%-rf%s+[/~]",                action = "block", message = "Recursive delete at root/home blocked" },
@@ -28,6 +33,28 @@ local DANGEROUS_PATTERNS = {
   { pattern = ":(){ :|:& };:",                    action = "block", message = "Fork bomb detected and blocked" },
 }
 
+-- Safe commands allowed in strict mode (allowlist)
+local STRICT_ALLOWLIST = {
+  "ls", "cat", "head", "tail", "grep", "find", "echo", "pwd", "date",
+  "wc", "sort", "uniq", "diff", "tree", "file", "which", "whoami",
+  "git status", "git log", "git diff", "git branch", "git show",
+  "npm test", "npm run", "npm list", "npx tsc",
+  "node ", "python ", "cargo ", "go ",
+}
+
+local function getFirstWord(cmd)
+  return string.match(cmd, "^%s*(%S+)")
+end
+
+local function isAllowlisted(cmd)
+  for _, safe in ipairs(STRICT_ALLOWLIST) do
+    if string.sub(cmd, 1, #safe) == safe then
+      return true
+    end
+  end
+  return false
+end
+
 registerHook("onPreToolUse", function(context)
   -- Only check shell/execute tools
   if context.toolName ~= "shell" and context.toolName ~= "execute" then
@@ -35,12 +62,58 @@ registerHook("onPreToolUse", function(context)
   end
 
   local cmd = tostring(context.toolParams.command or context.toolParams.cmd or "")
+  local level = context.securityLevel or "standard"
 
-  for _, rule in ipairs(DANGEROUS_PATTERNS) do
-    if string.match(cmd, rule.pattern) then
+  -- Paranoid: block ALL shell commands
+  if level == "paranoid" then
+    overlord.security.logEvent({
+      type = "shell_guard",
+      action = "block",
+      toolName = context.toolName,
+      agentId = context.agentId or "",
+      roomId = context.roomId or "",
+      message = "All shell commands blocked (paranoid security level)",
+      command = cmd,
+    })
+    return {
+      action = "block",
+      message = "All shell commands blocked (paranoid security level)",
+      suggestion = "Lower the security level to 'strict' or 'standard' to allow shell commands"
+    }
+  end
+
+  -- Strict: allowlist-only mode
+  if level == "strict" then
+    if not isAllowlisted(cmd) then
       overlord.security.logEvent({
         type = "shell_guard",
-        action = rule.action,
+        action = "block",
+        toolName = context.toolName,
+        agentId = context.agentId or "",
+        roomId = context.roomId or "",
+        message = "Command not in allowlist (strict security level)",
+        command = cmd,
+      })
+      return {
+        action = "block",
+        message = "Command not in allowlist (strict security level): " .. (getFirstWord(cmd) or "unknown"),
+        suggestion = "Only read-only and build commands are allowed in strict mode"
+      }
+    end
+  end
+
+  -- Standard & Permissive: check dangerous patterns
+  for _, rule in ipairs(DANGEROUS_PATTERNS) do
+    if string.match(cmd, rule.pattern) then
+      -- In permissive mode, downgrade all blocks to warns
+      local effectiveAction = rule.action
+      if level == "permissive" and effectiveAction == "block" then
+        effectiveAction = "warn"
+      end
+
+      overlord.security.logEvent({
+        type = "shell_guard",
+        action = effectiveAction,
         toolName = context.toolName,
         agentId = context.agentId or "",
         roomId = context.roomId or "",
@@ -48,7 +121,7 @@ registerHook("onPreToolUse", function(context)
         command = cmd,
         pattern = rule.pattern
       })
-      return { action = rule.action, message = rule.message }
+      return { action = effectiveAction, message = rule.message }
     end
   end
 
