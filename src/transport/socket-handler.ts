@@ -42,6 +42,7 @@ import {
   AgentRegisterSchema, AgentGetSchema, AgentListSchema, AgentUpdateSchema, AgentUpdateProfileSchema,
   AgentGenerateProfileSchema,
   AgentGeneratePhotoSchema,
+  AgentSpeakSchema,
   ChatMessageSchema, ChatHistorySchema,
   ConversationListSchema, ConversationLoadSchema, ConversationCreateSchema, ConversationDeleteSchema,
   EmptyPayloadSchema, PhaseStatusSchema, PhaseGateSchema, PhaseGateCreateSchema,
@@ -117,6 +118,8 @@ import { checkSyncStatus, fetchLatestCommit } from '../ai/repo-sync-service.js';
 import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
 import { isImageGenerationAvailable } from '../ai/minimax-image.js';
 import { writeAgentPhoto } from '../ai/agent-photo-store.js';
+import { synthesizeSpeech, isSpeechAvailable } from '../ai/minimax-speech.js';
+import type { SpeechOptions } from '../ai/minimax-speech.js';
 import { listAllTools } from '../tools/tool-registry.js';
 import { createLibrary, listLibraries, deleteLibrary, indexLibrary, searchDocuments, getDocumentContent, listDocuments } from '../storage/doc-library.js';
 
@@ -1241,6 +1244,62 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
           mimeType: result.data.mimeType,
         },
       });
+    });
+
+    // ─── Agent Speech Synthesis (MiniMax T2A) ───
+
+    let activeSpeechRequests = 0;
+    const MAX_CONCURRENT_SPEECH = 3;
+
+    handle(socket, 'agent:speak', AgentSpeakSchema, async (parsed, ack) => {
+      if (!isSpeechAvailable()) {
+        if (ack) ack({ ok: false, error: { code: 'SPEECH_NOT_AVAILABLE', message: 'MiniMax T2A is not available. MINIMAX_API_KEY is not configured.', retryable: false } });
+        return;
+      }
+
+      if (activeSpeechRequests >= MAX_CONCURRENT_SPEECH) {
+        if (ack) ack({ ok: false, error: { code: 'SPEECH_RATE_LIMITED', message: `Too many concurrent speech requests (max ${MAX_CONCURRENT_SPEECH})`, retryable: true } });
+        return;
+      }
+
+      activeSpeechRequests++;
+      try {
+        broadcastLog('info', `Synthesizing speech (${parsed.text.length} chars)...`, 'ai:minimax-speech');
+
+        const opts: SpeechOptions = {
+          voiceId: parsed.voiceId,
+          model: parsed.model,
+          speed: parsed.speed,
+          vol: parsed.vol,
+          pitch: parsed.pitch,
+          emotion: parsed.emotion,
+          format: parsed.format,
+          languageBoost: parsed.languageBoost,
+        };
+
+        const result = await synthesizeSpeech(parsed.text, opts);
+
+        if (!result.ok) {
+          broadcastLog('warn', `Speech synthesis failed: ${result.error.message}`, 'ai:minimax-speech');
+          if (ack) ack(result);
+          return;
+        }
+
+        // Return audio as base64 string for transport over Socket.IO
+        const audioBase64 = result.data.audio.toString('base64');
+
+        if (ack) ack({
+          ok: true,
+          data: {
+            audio: audioBase64,
+            mimeType: result.data.mimeType,
+            durationMs: result.data.durationMs,
+            charCount: result.data.charCount,
+          },
+        });
+      } finally {
+        activeSpeechRequests--;
+      }
     });
 
     // ─── Agent Stats ───

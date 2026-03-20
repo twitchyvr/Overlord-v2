@@ -611,6 +611,20 @@ export const AgentGeneratePhotoSchema = z.object({
   agentId: id(),
 });
 
+// ─── Agent Speech Synthesis (MiniMax T2A) ───
+
+export const AgentSpeakSchema = z.object({
+  text: z.string().min(1).max(10000),
+  voiceId: z.string().max(200).optional(),
+  model: z.enum(['speech-2.8-hd', 'speech-2.8-turbo']).optional(),
+  speed: z.number().min(0.5).max(2.0).optional(),
+  vol: z.number().min(0).max(10).optional(),
+  pitch: z.number().min(-12).max(12).optional(),
+  emotion: z.enum(['happy', 'sad', 'angry', 'fearful', 'disgusted', 'surprised', 'calm', 'fluent', 'whisper']).optional(),
+  format: z.enum(['mp3', 'pcm', 'flac', 'wav']).optional(),
+  languageBoost: z.string().optional(),
+});
+
 // ─── Citations ───
 
 export const CitationListSchema = z.object({
