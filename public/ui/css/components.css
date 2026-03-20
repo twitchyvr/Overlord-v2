@@ -3469,7 +3469,10 @@
   border-radius: var(--radius-lg);
   padding: var(--sp-4);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: border-color 150ms ease,
+              background 150ms ease,
+              transform 150ms ease,
+              box-shadow 150ms ease;
   text-align: center;
 }
 
@@ -3477,11 +3480,13 @@
   border-color: var(--accent-blue);
   background: var(--surface-2);
   transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .wizard-type-card.selected {
   border-color: var(--accent-blue);
   background: color-mix(in srgb, var(--accent-blue) 8%, var(--surface-1));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-blue) 15%, transparent), 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .wizard-type-icon {
@@ -3524,7 +3529,10 @@
   border-radius: var(--radius-lg);
   padding: var(--sp-5);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: border-color 150ms ease,
+              background 150ms ease,
+              transform 150ms ease,
+              box-shadow 150ms ease;
   text-align: center;
 }
 
@@ -3532,11 +3540,13 @@
   border-color: var(--accent-blue);
   background: var(--surface-2);
   transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .wizard-scale-card.selected {
   border-color: var(--accent-blue);
   background: color-mix(in srgb, var(--accent-blue) 8%, var(--surface-1));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-blue) 15%, transparent), 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .wizard-scale-icon {
