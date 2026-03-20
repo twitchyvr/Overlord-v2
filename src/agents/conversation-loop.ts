@@ -44,6 +44,22 @@ interface SecurityHookResult {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type QueryHookFn = (hook: any, data: Record<string, unknown>) => Promise<unknown | null>;
 
+const VALID_HOOK_ACTIONS = new Set(['allow', 'warn', 'block']);
+
+/** Validate raw Lua hook return value into a typed SecurityHookResult.
+ * Returns null if the value is missing or has an invalid action field,
+ * preventing untrusted Lua code from injecting unexpected values. */
+function _validateSecurityHookResult(raw: unknown): SecurityHookResult | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.action !== 'string' || !VALID_HOOK_ACTIONS.has(obj.action)) return null;
+  return {
+    action: obj.action as SecurityHookResult['action'],
+    message: typeof obj.message === 'string' ? obj.message : undefined,
+    suggestion: typeof obj.suggestion === 'string' ? obj.suggestion : undefined,
+  };
+}
+
 const log = logger.child({ module: 'conversation-loop' });
 
 // ─── Exit Document Auto-Detection (#524) ───
@@ -620,13 +636,14 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       // Uses injected queryHook to avoid Agents→Plugins layer violation
       if (params.queryHook) {
         try {
-          const preHookResult = await params.queryHook('onPreToolUse', {
+          const rawPreHook = await params.queryHook('onPreToolUse', {
             toolName,
             toolParams: toolInput,
             agentId,
             roomId: room.id,
             buildingId: params.workingDirectory,
-          }) as SecurityHookResult | null;
+          });
+          const preHookResult = _validateSecurityHookResult(rawPreHook);
 
           if (preHookResult && preHookResult.action === 'block') {
             log.warn({ tool: toolName, agentId, message: preHookResult.message }, 'Tool blocked by security hook');
@@ -722,7 +739,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       // Lua security hook: onPostToolUse — inspect result, log, warn (#873)
       if (params.queryHook) {
         try {
-          const postHookResult = await params.queryHook('onPostToolUse', {
+          const rawPostHook = await params.queryHook('onPostToolUse', {
             toolName,
             toolParams: toolInput,
             agentId,
@@ -730,7 +747,8 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
             buildingId: params.workingDirectory,
             result: toolResult.ok ? toolResult.data : toolResult.error,
             success: toolResult.ok,
-          }) as SecurityHookResult | null;
+          });
+          const postHookResult = _validateSecurityHookResult(rawPostHook);
 
           if (postHookResult && postHookResult.action === 'warn') {
             log.info({ tool: toolName, agentId, message: postHookResult.message }, 'Post-execution security warning');

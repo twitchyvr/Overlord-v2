@@ -240,6 +240,32 @@ function removeDangerousGlobals(engine: LuaEngine): void {
   }
 }
 
+// ─── Regex Safety (#890 — addresses ReDoS from untrusted plugin patterns) ───
+
+const MAX_PATTERN_LENGTH = 200;
+// Detect known ReDoS-prone constructs: nested quantifiers like (a+)+, (.+)+, (a*)*
+const REDOS_PATTERN = /(\+|\*|\{)\s*\)(\+|\*|\?|\{)/;
+
+/**
+ * Compile a regex from untrusted plugin input, returning null if:
+ * - Pattern exceeds MAX_PATTERN_LENGTH
+ * - Pattern contains known ReDoS-prone constructs
+ * - Pattern is syntactically invalid
+ */
+function _safeRegex(pattern: string, flags: string): RegExp | null {
+  if (typeof pattern !== 'string' || pattern.length === 0 || pattern.length > MAX_PATTERN_LENGTH) {
+    return null;
+  }
+  if (REDOS_PATTERN.test(pattern)) {
+    return null;
+  }
+  try {
+    return new RegExp(pattern, flags);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Inject the `overlord` global table into the Lua VM.
  * This provides the permission-filtered API surface.
@@ -384,16 +410,12 @@ function injectOverlordAPI(
       },
 
       /** Simple pattern matching helper for Lua scripts.
-       * NOTE: Accepts regex strings from plugin code. Built-in plugins use
-       * Lua string.match() (Lua patterns, not regex). Custom plugins that use
-       * this function should avoid pathological patterns (e.g. (a+)+$) to
-       * prevent ReDoS. The try/catch prevents crashes but not CPU hangs. */
+       * Accepts regex strings from plugin code. Patterns are length-capped
+       * and checked for known ReDoS-prone constructs before compilation. */
       matchPattern: (text: string, pattern: string) => {
-        try {
-          return new RegExp(pattern, 'i').test(String(text));
-        } catch {
-          return false;
-        }
+        const safe = _safeRegex(pattern, 'i');
+        if (!safe) return false;
+        return safe.test(String(text));
       },
 
       /** Match text against multiple patterns — returns first matching pattern or null */
@@ -401,11 +423,8 @@ function injectOverlordAPI(
         const textStr = String(text);
         if (!Array.isArray(patterns)) return null;
         for (const p of patterns) {
-          try {
-            if (new RegExp(String(p), 'i').test(textStr)) return String(p);
-          } catch {
-            continue;
-          }
+          const safe = _safeRegex(String(p), 'i');
+          if (safe && safe.test(textStr)) return String(p);
         }
         return null;
       },
@@ -415,11 +434,8 @@ function injectOverlordAPI(
         let result = String(text);
         if (!Array.isArray(patterns)) return result;
         for (const p of patterns) {
-          try {
-            result = result.replace(new RegExp(String(p), 'gi'), '[REDACTED]');
-          } catch {
-            continue;
-          }
+          const safe = _safeRegex(String(p), 'gi');
+          if (safe) result = result.replace(safe, '[REDACTED]');
         }
         return result;
       },
