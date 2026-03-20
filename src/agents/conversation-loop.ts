@@ -542,7 +542,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       log.warn({ agentId, err: e }, 'Failed to record usage (non-blocking)');
     }
 
-    // Capture any thinking blocks from the response (MiniMax M2.5 always-on thinking)
+    // Capture any thinking blocks from the response (MiniMax M2.7 interleaved thinking)
     const thinkingBlocks = response.content.filter((b) => b.type === 'thinking');
     for (const tb of thinkingBlocks) {
       if (tb.thinking) {

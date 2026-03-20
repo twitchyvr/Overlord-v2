@@ -62,18 +62,34 @@ const MODELS: ModelInfo[] = [
   // MiniMax
   {
     id: 'MiniMax-M2.7', name: 'MiniMax M2.7', provider: 'minimax',
-    contextWindow: 1000000, maxOutput: 16384,
-    pricing: { input: 1.1, output: 4.4 },
+    contextWindow: 204800, maxOutput: 16384,
+    pricing: { input: 0.3, output: 1.2 },
     capabilities: ['reasoning', 'coding', 'interleaved-thinking', 'long-context', 'agent-teams', 'self-evolution'],
     recommended: ['code-lab', 'discovery', 'architecture', 'testing-lab'],
     thinking: true, vision: false, toolUse: true, speed: 'fast',
   },
   {
+    id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 Highspeed', provider: 'minimax',
+    contextWindow: 204800, maxOutput: 16384,
+    pricing: { input: 0.6, output: 2.4 },
+    capabilities: ['reasoning', 'coding', 'interleaved-thinking', 'long-context', 'agent-teams', 'self-evolution'],
+    recommended: ['code-lab', 'testing-lab'],
+    thinking: true, vision: false, toolUse: true, speed: 'fast',
+  },
+  {
     id: 'MiniMax-M2.5', name: 'MiniMax M2.5 (Legacy)', provider: 'minimax',
-    contextWindow: 1000000, maxOutput: 16384,
-    pricing: { input: 1.1, output: 4.4 },
+    contextWindow: 204800, maxOutput: 16384,
+    pricing: { input: 0.3, output: 1.2 },
     capabilities: ['reasoning', 'coding', 'interleaved-thinking', 'long-context'],
     recommended: ['code-lab', 'discovery'],
+    thinking: true, vision: false, toolUse: true, speed: 'fast',
+  },
+  {
+    id: 'MiniMax-M2.5-highspeed', name: 'MiniMax M2.5 Highspeed (Legacy)', provider: 'minimax',
+    contextWindow: 204800, maxOutput: 16384,
+    pricing: { input: 0.6, output: 2.4 },
+    capabilities: ['reasoning', 'coding', 'interleaved-thinking', 'long-context'],
+    recommended: ['code-lab'],
     thinking: true, vision: false, toolUse: true, speed: 'fast',
   },
 
