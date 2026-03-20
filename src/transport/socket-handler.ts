@@ -3682,6 +3682,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
   forward('room:agent:exited');
   forward('chat:response');
   forward('chat:stream');
+  forward('tool:executing'); // #929 — tool start events for orchestration visibility
   forward('tool:executed');
   forward('phase:advanced');
   forward('raid:entry:added');

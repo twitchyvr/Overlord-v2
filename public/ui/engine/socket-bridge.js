@@ -208,11 +208,25 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('chat:attachments', data);
   });
 
+  // #929 — Tool executing (start) — shows what agent is calling + params
+  socket.on('tool:executing', (data) => {
+    if (!isActiveBuilding(data)) return;
+    const agents = store.get('agents.list') || [];
+    const agent = agents.find((a) => a.id === data.agentId);
+    const enriched = { ...data, agentName: agent?.name || data.agentId, timestamp: Date.now() };
+    store.update('activity.items', (items) => [{ event: 'tool:executing', ...enriched }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('tool:executing', enriched);
+    engine.dispatch('activity:new', { event: 'tool:executing', ...enriched });
+  });
+
   socket.on('tool:executed', (data) => {
     if (!isActiveBuilding(data)) return;
-    store.update('activity.items', (items) => [{ event: 'tool:executed', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
-    engine.dispatch('tool:executed', data);
-    engine.dispatch('activity:new', { event: 'tool:executed', ...data });
+    const agents = store.get('agents.list') || [];
+    const agent = agents.find((a) => a.id === data.agentId);
+    const enriched = { ...data, agentName: agent?.name || data.agentId, timestamp: Date.now() };
+    store.update('activity.items', (items) => [{ event: 'tool:executed', ...enriched }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('tool:executed', enriched);
+    engine.dispatch('activity:new', { event: 'tool:executed', ...enriched });
   });
 
   socket.on('phase:advanced', (data) => {

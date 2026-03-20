@@ -66,12 +66,26 @@ const ACTIVITY_ICONS = {
   'escalation:stale-gate':    '\u23F0',
   'escalation:war-room':      '\u{1F6A8}',
   'escalation:failed':        '\u274C',
+  'tool:executing':           '\u{2699}',
   'agent:activity':           '\u{1F916}',
   'agent:created':            '\u{1F464}',
   'ai:request':               '\u{1F4B0}',
   'error':                    '\u274C',
   'system':                   '\u2139'
 };
+
+/** Truncate tool input params to a short preview string. */
+function _truncateParams(input) {
+  if (!input || typeof input !== 'object') return '';
+  const keys = Object.keys(input);
+  if (keys.length === 0) return '';
+  // Show first key=value pair, truncated
+  const firstKey = keys[0];
+  let firstVal = String(input[firstKey] || '');
+  if (firstVal.length > 40) firstVal = firstVal.slice(0, 37) + '...';
+  const extra = keys.length > 1 ? ` (+${keys.length - 1} more)` : '';
+  return `${firstKey}=${firstVal}${extra}`;
+}
 
 /** Filter definitions — maps filter id to a predicate on event type. */
 const FILTER_PREDICATES = {
@@ -477,10 +491,20 @@ export class ActivityView extends Component {
   _formatSummary(item) {
     const event = item.event || item.type || '';
 
+    // #929 — Tool executing (start) with agent name + tool params preview
+    if (event === 'tool:executing') {
+      const agentName = item.agentName ||
+        (item.agentId ? resolveAgent(item.agentId)?.name : null) || 'Agent';
+      const toolName = item.toolName || 'tool';
+      const paramPreview = item.input ? _truncateParams(item.input) : '';
+      return `${agentName} calling ${toolName}${paramPreview ? `: ${paramPreview}` : ''}`;
+    }
+
     if (event === 'tool:executed') {
       const agentName = item.agentName ||
         (item.agentId ? resolveAgent(item.agentId)?.name : null) || 'Agent';
-      return `${item.toolName || 'Tool'} executed by ${agentName}`;
+      const status = item.success === false ? ' (failed)' : '';
+      return `${item.toolName || 'Tool'} completed${status} \u2014 ${agentName}`;
     }
 
     if (event === 'phase:advanced') {
