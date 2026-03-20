@@ -904,6 +904,33 @@
 .toolbar-btn-icon.theme-light .theme-icon-dark { opacity: 0; transform: rotate(90deg); }
 .toolbar-btn-icon.theme-light .theme-icon-light { opacity: 1; transform: rotate(0deg); }
 
+/* Token usage counter (#931) */
+.toolbar-token-counter {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+.toolbar-token-counter:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.toolbar-token-counter .token-icon {
+  font-size: 14px;
+}
+.toolbar-token-counter.warning {
+  color: var(--accent-yellow);
+}
+.toolbar-token-counter.danger {
+  color: var(--accent-red);
+  font-weight: 600;
+}
+
 /* Connection indicator */
 .toolbar-connection {
   display: flex;

@@ -391,12 +391,49 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   // #802 — Agent activity badges (thinking, coding, reading, etc.)
+  // #923 — ALSO pipe to activity.items so Activity Feed shows agent events
   socket.on('agent:activity', (data) => {
     if (!isActiveBuilding(data)) return;
     store.update('agents.activities', (activities) => {
       return { ...(activities || {}), [data.agentId]: { activity: data.activity, toolName: data.toolName, timestamp: Date.now() } };
     });
+    // Resolve agent name for display in Activity Feed
+    const agents = store.get('agents.list') || [];
+    const agent = agents.find((a) => a.id === data.agentId);
+    const enriched = { ...data, agentName: agent?.name || data.agentId, timestamp: Date.now() };
+    store.update('activity.items', (items) => [{ event: 'agent:activity', ...enriched }, ...(items || []).slice(0, 99)]);
     engine.dispatch('agent:activity', data);
+    engine.dispatch('activity:new', { event: 'agent:activity', ...enriched });
+  });
+
+  // #931 — AI request audit log: track every API call with token counts
+  socket.on('ai:request', (data) => {
+    if (!isActiveBuilding(data)) return;
+    // Resolve agent name
+    const agents = store.get('agents.list') || [];
+    const agent = agents.find((a) => a.id === data.agentId);
+    const agentName = agent?.name || data.agentId;
+    const enriched = { ...data, agentName, timestamp: data.timestamp || Date.now() };
+    // Track in token usage store (cumulative per agent)
+    store.update('ai.usage', (usage) => {
+      const u = usage || { total: { input: 0, output: 0, calls: 0 }, byAgent: {} };
+      u.total.input += data.inputTokens || 0;
+      u.total.output += data.outputTokens || 0;
+      u.total.calls += 1;
+      const agentUsage = u.byAgent[data.agentId] || { name: agentName, input: 0, output: 0, calls: 0 };
+      agentUsage.input += data.inputTokens || 0;
+      agentUsage.output += data.outputTokens || 0;
+      agentUsage.calls += 1;
+      agentUsage.name = agentName;
+      u.byAgent[data.agentId] = agentUsage;
+      return u;
+    });
+    // Track in API call log (chronological)
+    store.update('ai.callLog', (log) => [enriched, ...(log || []).slice(0, 199)]);
+    // Add to activity feed
+    store.update('activity.items', (items) => [{ event: 'ai:request', ...enriched }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('ai:request', enriched);
+    engine.dispatch('activity:new', { event: 'ai:request', ...enriched });
   });
 
   // #850 — Agent created broadcast (new agents appear in other clients)
