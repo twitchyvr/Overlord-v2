@@ -3489,6 +3489,11 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-blue) 15%, transparent), 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
+.wizard-type-card:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
 .wizard-type-icon {
   font-size: 2.5rem;
   margin-bottom: var(--sp-2);
@@ -3547,6 +3552,11 @@
   border-color: var(--accent-blue);
   background: color-mix(in srgb, var(--accent-blue) 8%, var(--surface-1));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-blue) 15%, transparent), 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.wizard-scale-card:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
 }
 
 .wizard-scale-icon {
