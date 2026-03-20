@@ -62,7 +62,9 @@ export type PluginPermission =
   | 'storage:write'   // Write to plugin-scoped storage
   | 'fs:read'         // Read files from the filesystem
   | 'fs:write'        // Write files to the filesystem
-  | 'net:http';       // Make outbound HTTP requests
+  | 'net:http'        // Make outbound HTTP requests
+  | 'security:read'   // Read security state (events, rules, budgets)
+  | 'security:write'; // Write security rules, log security events
 
 // ─── Plugin Lifecycle Hooks ───
 
@@ -71,14 +73,17 @@ export type PluginHook =
   | 'onUnload'             // Plugin being unloaded (cleanup)
   | 'onRoomEnter'          // An agent entered any room
   | 'onRoomExit'           // An agent exited any room
-  | 'onToolExecute'        // A tool was executed
+  | 'onToolExecute'        // A tool was executed (fire-and-forget, post-execution)
   | 'onPhaseAdvance'       // A phase gate advanced
   | 'onPhaseGateEvaluate'  // Phase gate go/no-go decision (queryable)
   | 'onExitDocValidate'    // Custom exit document validation (queryable)
   | 'onAgentAssign'        // Agent assignment strategy (queryable)
   | 'onNotificationRule'   // Alert/notification routing (queryable)
   | 'onProgressReport'     // Custom progress metrics (queryable)
-  | 'onBuildingCreate';    // Building initialization customization (queryable)
+  | 'onBuildingCreate'     // Building initialization customization (queryable)
+  | 'onPreToolUse'         // BEFORE tool execution — can block, warn, or allow (queryable)
+  | 'onPostToolUse'        // AFTER tool execution — can inspect result, redact, log (queryable)
+  | 'onSecurityEvent';     // When a security event occurs (for logging/alerting plugins)
 
 export interface PluginHookData {
   hook: PluginHook;
@@ -192,6 +197,54 @@ export interface PluginLogEntry {
 }
 
 export type PluginHookHandler = (data: PluginHookData) => void | Promise<void>;
+
+// ─── Security Hook Types ───
+
+/** Return value from onPreToolUse / onPostToolUse hooks */
+export interface SecurityHookResult {
+  /** 'allow' = proceed, 'warn' = proceed with warning, 'block' = deny execution */
+  action: 'allow' | 'warn' | 'block';
+  /** Human-readable message explaining the decision */
+  message?: string;
+  /** Suggestion for a safer alternative */
+  suggestion?: string;
+}
+
+/** Data passed to onPreToolUse hooks */
+export interface PreToolUseHookData extends PluginHookData {
+  hook: 'onPreToolUse';
+  toolName: string;
+  toolParams: Record<string, unknown>;
+  agentId: string;
+  roomId: string;
+  buildingId?: string;
+}
+
+/** Data passed to onPostToolUse hooks */
+export interface PostToolUseHookData extends PluginHookData {
+  hook: 'onPostToolUse';
+  toolName: string;
+  toolParams: Record<string, unknown>;
+  agentId: string;
+  roomId: string;
+  buildingId?: string;
+  result: unknown;
+  success: boolean;
+}
+
+/** Security event logged by plugins */
+export interface SecurityEvent {
+  timestamp: number;
+  type: string;
+  action: 'allow' | 'warn' | 'block';
+  toolName?: string;
+  agentId?: string;
+  roomId?: string;
+  buildingId?: string;
+  message: string;
+  pluginId?: string;
+  details?: Record<string, unknown>;
+}
 
 // ─── Plugin Sandbox (execution environment) ───
 

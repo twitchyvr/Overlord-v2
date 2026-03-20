@@ -1799,6 +1799,45 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('email:read', data);
   });
 
+  // ─── Security Events (#890) ───
+
+  // Add security fetch methods to the bridge
+  Object.assign(window.overlordSocket, {
+    fetchSecurityStats() {
+      return _emitWithTimeout('security:stats', {}).then((res) => {
+        if (res && res.ok) store.set('security.stats', res.data);
+        return res;
+      });
+    },
+    fetchSecurityEvents(filter = {}) {
+      return _emitWithTimeout('security:events', filter).then((res) => {
+        if (res && res.ok) store.set('security.events', res.data);
+        return res;
+      });
+    },
+  });
+
+  // Real-time security event listener
+  socket.on('security:event-logged', (data) => {
+    const action = data?.action ?? '';
+    store.update('security.stats', (stats) => {
+      const s = stats || { total: 0, blocked: 0, warned: 0, allowed: 0 };
+      return {
+        total: s.total + 1,
+        blocked: s.blocked + (action === 'block' ? 1 : 0),
+        warned: s.warned + (action === 'warn' ? 1 : 0),
+        allowed: s.allowed + (action === 'allow' ? 1 : 0),
+      };
+    });
+    store.update('security.events', (events) => [data, ...(events || []).slice(0, 99)]);
+    store.update('activity.items', (items) => [
+      { event: 'security:event-logged', ...data, timestamp: Date.now() },
+      ...(items || []).slice(0, 99),
+    ]);
+    engine.dispatch('security:event-logged', data);
+    engine.dispatch('activity:new', { event: 'security:event-logged', ...data });
+  });
+
   log.info('v2 bridge initialized');
   return window.overlordSocket;
 }

@@ -745,7 +745,7 @@ describe('DashboardView', () => {
 
     expect(el.querySelector('.dashboard-header')).not.toBeNull();
     expect(el.querySelector('.dashboard-title')!.textContent).toBe('Dashboard');
-    expect(el.querySelectorAll('.kpi-card').length).toBe(4);
+    expect(el.querySelectorAll('.kpi-card').length).toBe(5);
   });
 
   it('shows building list section', async () => {

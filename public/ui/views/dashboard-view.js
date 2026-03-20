@@ -25,6 +25,7 @@ export class DashboardView extends Component {
     this._activeBuilding = null;
     this._devLoopTransitions = [];
     this._activityItems = [];
+    this._securityStats = { total: 0, blocked: 0, warned: 0, allowed: 0 };
   }
 
   mount() {
@@ -67,6 +68,11 @@ export class DashboardView extends Component {
       this._updateToolActivity();
     });
 
+    this.subscribe(store, 'security.stats', (stats) => {
+      this._securityStats = stats || { total: 0, blocked: 0, warned: 0, allowed: 0 };
+      this._updateKPIs();
+    });
+
     // Hydrate from store — data may have arrived before this view mounted
     // (navigateTo is async, so store updates can land before subscriptions)
     this._buildings = store.get('building.list') || [];
@@ -75,6 +81,7 @@ export class DashboardView extends Component {
     this._activeBuilding = store.get('building.active');
     this._devLoopTransitions = store.get('devLoop.transitions') || [];
     this._activityItems = store.get('activity.items') || [];
+    this._securityStats = store.get('security.stats') || { total: 0, blocked: 0, warned: 0, allowed: 0 };
 
     // Fetch agents — scoped to active building when one is selected
     if (window.overlordSocket && this._agents.length === 0) {
@@ -84,6 +91,10 @@ export class DashboardView extends Component {
     // RAID entries are building-specific — fetch only when a building is active
     if (this._activeBuilding && window.overlordSocket && this._raidEntries.length === 0) {
       window.overlordSocket.fetchRaidEntries(this._activeBuilding);
+    }
+    // Fetch security stats
+    if (window.overlordSocket) {
+      window.overlordSocket.fetchSecurityStats();
     }
 
     this.render();
@@ -229,6 +240,17 @@ export class DashboardView extends Component {
         icon: '\u26A0',
         color: 'var(--accent-amber)',
         tooltip: 'Risks, Assumptions, Issues, and Decisions tracked for this project'
+      },
+      {
+        label: 'Security',
+        value: this._securityStats.blocked > 0
+          ? `${this._securityStats.blocked} blocked`
+          : this._securityStats.total > 0
+            ? `${this._securityStats.total} events`
+            : '0',
+        icon: '\u{1F6E1}',
+        color: this._securityStats.blocked > 0 ? 'var(--accent-red, #ef4444)' : 'var(--accent-green)',
+        tooltip: `Security hooks: ${this._securityStats.blocked} blocked, ${this._securityStats.warned} warned, ${this._securityStats.allowed} allowed`
       }
     ];
 
@@ -388,11 +410,17 @@ export class DashboardView extends Component {
   _updateKPIs() {
     // Lightweight KPI update without full re-render
     const kpiValues = this.el.querySelectorAll('.kpi-card-value');
-    if (kpiValues.length >= 4) {
+    if (kpiValues.length >= 5) {
       kpiValues[0].textContent = String(this._buildings.length);
       kpiValues[1].textContent = String(this._getAvgHealth());
       kpiValues[2].textContent = String(this._getAgentCount());
       kpiValues[3].textContent = String(this._raidEntries.length);
+      const s = this._securityStats;
+      kpiValues[4].textContent = s.blocked > 0
+        ? `${s.blocked} blocked`
+        : s.total > 0
+          ? `${s.total} events`
+          : '0';
     }
   }
 

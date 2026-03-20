@@ -1,0 +1,15 @@
+{
+  "id": "shell-guard",
+  "name": "Shell Guard",
+  "version": "1.0.0",
+  "description": "Pre-tool-use security hook that blocks dangerous shell commands (rm -rf /, curl|bash, force push to main, DROP TABLE, etc.).",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "security:read",
+    "security:write",
+    "storage:read",
+    "storage:write"
+  ]
+}

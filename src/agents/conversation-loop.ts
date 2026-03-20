@@ -32,6 +32,34 @@ import type {
   FileOriginEntry,
 } from '../core/contracts.js';
 
+/** Security hook result shape (duplicated from plugins/contracts to avoid layer violation) */
+interface SecurityHookResult {
+  action: 'allow' | 'warn' | 'block';
+  message?: string;
+  suggestion?: string;
+}
+
+/** Injected hook functions — provided by the caller to avoid direct plugin imports.
+ * The hook parameter accepts any string to avoid importing PluginHook type. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type QueryHookFn = (hook: any, data: Record<string, unknown>) => Promise<unknown | null>;
+
+const VALID_HOOK_ACTIONS = new Set(['allow', 'warn', 'block']);
+
+/** Validate raw Lua hook return value into a typed SecurityHookResult.
+ * Returns null if the value is missing or has an invalid action field,
+ * preventing untrusted Lua code from injecting unexpected values. */
+function _validateSecurityHookResult(raw: unknown): SecurityHookResult | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.action !== 'string' || !VALID_HOOK_ACTIONS.has(obj.action)) return null;
+  return {
+    action: obj.action as SecurityHookResult['action'],
+    message: typeof obj.message === 'string' ? obj.message : undefined,
+    suggestion: typeof obj.suggestion === 'string' ? obj.suggestion : undefined,
+  };
+}
+
 const log = logger.child({ module: 'conversation-loop' });
 
 // ─── Exit Document Auto-Detection (#524) ───
@@ -247,6 +275,8 @@ interface ConversationParams {
     fileOrigins: FileOriginEntry[];
     truncatedOrigins?: boolean;
   };
+  /** Injected plugin hook function — avoids direct Agents→Plugins import (#873) */
+  queryHook?: QueryHookFn;
 }
 
 /**
@@ -602,6 +632,44 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         };
       }
 
+      // Lua security hook: onPreToolUse — can block, warn, or allow (#873)
+      // Uses injected queryHook to avoid Agents→Plugins layer violation
+      if (params.queryHook) {
+        try {
+          const rawPreHook = await params.queryHook('onPreToolUse', {
+            toolName,
+            toolParams: toolInput,
+            agentId,
+            roomId: room.id,
+            buildingId: params.workingDirectory,
+          });
+          const preHookResult = _validateSecurityHookResult(rawPreHook);
+
+          if (preHookResult && preHookResult.action === 'block') {
+            log.warn({ tool: toolName, agentId, message: preHookResult.message }, 'Tool blocked by security hook');
+            bus.emit('security:blocked', { toolName, agentId, roomId: room.id, ...preHookResult });
+            const blockMsg = `Security: ${preHookResult.message || 'Blocked by security policy'}` +
+              (preHookResult.suggestion ? `\n\nSuggestion: ${preHookResult.suggestion}` : '');
+            return {
+              result: {
+                type: 'tool_result',
+                tool_use_id: toolUseId,
+                content: blockMsg,
+                is_error: true,
+              },
+              logEntry: { name: toolName, input: toolInput, result: { blocked: true, ...preHookResult } },
+            };
+          }
+
+          if (preHookResult && preHookResult.action === 'warn') {
+            log.info({ tool: toolName, agentId, message: preHookResult.message }, 'Security warning for tool');
+            bus.emit('security:warning', { toolName, agentId, roomId: room.id, ...preHookResult });
+          }
+        } catch (hookErr) {
+          log.warn({ tool: toolName, error: hookErr instanceof Error ? hookErr.message : String(hookErr) }, 'PreToolUse hook error (non-blocking)');
+        }
+      }
+
       bus.emit('tool:executing', {
         toolName,
         agentId,
@@ -667,6 +735,29 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
       // Room-level observation: onAfterToolCall can trigger escalation
       room.onAfterToolCall(toolName, agentId, toolResult);
+
+      // Lua security hook: onPostToolUse — inspect result, log, warn (#873)
+      if (params.queryHook) {
+        try {
+          const rawPostHook = await params.queryHook('onPostToolUse', {
+            toolName,
+            toolParams: toolInput,
+            agentId,
+            roomId: room.id,
+            buildingId: params.workingDirectory,
+            result: toolResult.ok ? toolResult.data : toolResult.error,
+            success: toolResult.ok,
+          });
+          const postHookResult = _validateSecurityHookResult(rawPostHook);
+
+          if (postHookResult && postHookResult.action === 'warn') {
+            log.info({ tool: toolName, agentId, message: postHookResult.message }, 'Post-execution security warning');
+            bus.emit('security:warning', { toolName, agentId, roomId: room.id, ...postHookResult });
+          }
+        } catch (hookErr) {
+          log.warn({ tool: toolName, error: hookErr instanceof Error ? hookErr.message : String(hookErr) }, 'PostToolUse hook error (non-blocking)');
+        }
+      }
 
       const resultContent = toolResult.ok
         ? JSON.stringify(toolResult.data)

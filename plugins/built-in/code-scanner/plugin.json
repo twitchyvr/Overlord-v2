@@ -1,0 +1,15 @@
+{
+  "id": "code-scanner",
+  "name": "Code Scanner",
+  "version": "1.0.0",
+  "description": "Pre-tool-use security hook that warns or blocks when code writes contain command injection, SQL injection, XSS, or hardcoded secrets.",
+  "author": "Overlord Team",
+  "engine": "lua",
+  "entrypoint": "main.lua",
+  "permissions": [
+    "security:read",
+    "security:write",
+    "storage:read",
+    "storage:write"
+  ]
+}
