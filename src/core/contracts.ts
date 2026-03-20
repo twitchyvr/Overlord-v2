@@ -163,6 +163,22 @@ export interface AgentRow {
   updated_at: string;
 }
 
+// ─── Security Level ───
+
+export type SecurityLevel = 'permissive' | 'standard' | 'strict' | 'paranoid';
+
+export const SECURITY_LEVELS: readonly SecurityLevel[] = ['permissive', 'standard', 'strict', 'paranoid'] as const;
+
+export const DEFAULT_SECURITY_LEVEL: SecurityLevel = 'standard';
+
+export interface BuildingConfig {
+  securityLevel?: SecurityLevel;
+  effortLevel?: string;
+  projectDescription?: string;
+  template?: string;
+  [key: string]: unknown;
+}
+
 export interface BuildingRow {
   id: string;
   project_id: string | null;

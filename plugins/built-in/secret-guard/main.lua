@@ -2,6 +2,12 @@
 --
 -- Scans tool output for leaked secrets (API keys, tokens, private keys)
 -- and emits warnings when detected.
+--
+-- Respects building security level (#882):
+--   permissive: warn only (default behavior)
+--   standard:   warn + flag for redaction
+--   strict:     block + flag for redaction
+--   paranoid:   block + alert
 
 local SECRET_PATTERNS = {
   { pattern = "sk_live_[a-zA-Z0-9]",       name = "Stripe Secret Key" },
@@ -17,20 +23,39 @@ local SECRET_PATTERNS = {
 
 registerHook("onPostToolUse", function(context)
   local output = tostring(context.result or "")
+  local level = context.securityLevel or "standard"
 
   for _, secret in ipairs(SECRET_PATTERNS) do
     if string.match(output, secret.pattern) then
+      -- Determine action based on security level
+      local action = "warn"
+      local suffix = "review before sharing"
+
+      if level == "permissive" then
+        action = "warn"
+        suffix = "review before sharing"
+      elseif level == "standard" then
+        action = "warn"
+        suffix = "review before sharing — consider redacting"
+      elseif level == "strict" then
+        action = "block"
+        suffix = "output blocked — contains sensitive data"
+      elseif level == "paranoid" then
+        action = "block"
+        suffix = "output blocked and flagged — contains sensitive data"
+      end
+
       overlord.security.logEvent({
         type = "secret_leak",
-        action = "warn",
+        action = action,
         toolName = context.toolName or "",
         agentId = context.agentId or "",
         roomId = context.roomId or "",
-        message = secret.name .. " detected in tool output — review before sharing"
+        message = secret.name .. " detected in tool output — " .. suffix
       })
       return {
-        action = "warn",
-        message = secret.name .. " detected in output — review before sharing"
+        action = action,
+        message = secret.name .. " detected in output — " .. suffix
       }
     end
   end

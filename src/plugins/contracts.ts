@@ -218,6 +218,7 @@ export interface PreToolUseHookData extends PluginHookData {
   agentId: string;
   roomId: string;
   buildingId?: string;
+  securityLevel?: string;
 }
 
 /** Data passed to onPostToolUse hooks */
@@ -228,6 +229,7 @@ export interface PostToolUseHookData extends PluginHookData {
   agentId: string;
   roomId: string;
   buildingId?: string;
+  securityLevel?: string;
   result: unknown;
   success: boolean;
 }

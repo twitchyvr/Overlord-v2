@@ -269,14 +269,15 @@ async function handleChatMessage(
       status: 'thinking',
     });
 
-    // 8. Resolve building working directory, allowed paths, and repo context for tool scoping
+    // 8. Resolve building working directory, allowed paths, security level, and repo context for tool scoping
     let workingDirectory: string | undefined;
     let allowedPaths: string[] = [];
+    let securityLevel: string | undefined;
     let repoContext: { repos: RepoContextEntry[]; fileOrigins: FileOriginEntry[]; truncatedOrigins?: boolean } | undefined;
     if (buildingId) {
       try {
         const db = getDb();
-        const building = db.prepare('SELECT working_directory, allowed_paths FROM buildings WHERE id = ?').get(buildingId) as Pick<BuildingRow, 'working_directory' | 'allowed_paths'> | undefined;
+        const building = db.prepare('SELECT working_directory, allowed_paths, config FROM buildings WHERE id = ?').get(buildingId) as Pick<BuildingRow, 'working_directory' | 'allowed_paths' | 'config'> | undefined;
         if (building?.working_directory) {
           workingDirectory = building.working_directory;
         }
@@ -285,6 +286,14 @@ async function handleChatMessage(
             const parsed = JSON.parse(building.allowed_paths);
             if (Array.isArray(parsed)) allowedPaths = parsed;
           } catch { /* malformed JSON — use empty array */ }
+        }
+
+        // Resolve security level from building config (#882)
+        if (building?.config) {
+          try {
+            const cfg = JSON.parse(building.config);
+            if (cfg.securityLevel) securityLevel = cfg.securityLevel;
+          } catch { /* malformed JSON — use default */ }
         }
 
         // Fetch linked repos for context injection (#644)
@@ -368,6 +377,7 @@ async function handleChatMessage(
       allowedPaths,
       repoContext,
       queryHook,  // Inject plugin hook function (#873 — avoids Agents→Plugins layer violation)
+      securityLevel,  // Building's security level (#882)
       options: {
         buildingId,
         socketId,

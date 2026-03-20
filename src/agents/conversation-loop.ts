@@ -277,6 +277,8 @@ interface ConversationParams {
   };
   /** Injected plugin hook function — avoids direct Agents→Plugins import (#873) */
   queryHook?: QueryHookFn;
+  /** Building's configured security level (#882) */
+  securityLevel?: string;
 }
 
 /**
@@ -642,6 +644,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
             agentId,
             roomId: room.id,
             buildingId: params.workingDirectory,
+            securityLevel: params.securityLevel,
           });
           const preHookResult = _validateSecurityHookResult(rawPreHook);
 
@@ -745,6 +748,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
             agentId,
             roomId: room.id,
             buildingId: params.workingDirectory,
+            securityLevel: params.securityLevel,
             result: toolResult.ok ? toolResult.data : toolResult.error,
             success: toolResult.ok,
           });
