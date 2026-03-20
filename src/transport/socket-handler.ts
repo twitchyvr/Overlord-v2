@@ -43,6 +43,7 @@ import {
   AgentGenerateProfileSchema,
   AgentGeneratePhotoSchema,
   AgentSpeakSchema,
+  FileUploadSchema, FileRetrieveSchema, FileListSchema, FileDeleteSchema,
   ChatMessageSchema, ChatHistorySchema,
   ConversationListSchema, ConversationLoadSchema, ConversationCreateSchema, ConversationDeleteSchema,
   EmptyPayloadSchema, PhaseStatusSchema, PhaseGateSchema, PhaseGateCreateSchema,
@@ -120,6 +121,8 @@ import { isImageGenerationAvailable } from '../ai/minimax-image.js';
 import { writeAgentPhoto } from '../ai/agent-photo-store.js';
 import { synthesizeSpeech, isSpeechAvailable } from '../ai/minimax-speech.js';
 import type { SpeechOptions } from '../ai/minimax-speech.js';
+import { uploadFile, retrieveFile, listFiles, deleteFile, isFileManagementAvailable } from '../ai/minimax-files.js';
+import type { FilePurpose } from '../ai/minimax-files.js';
 import { listAllTools } from '../tools/tool-registry.js';
 import { createLibrary, listLibraries, deleteLibrary, indexLibrary, searchDocuments, getDocumentContent, listDocuments } from '../storage/doc-library.js';
 
@@ -1300,6 +1303,60 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       } finally {
         activeSpeechRequests--;
       }
+    });
+
+    // ─── MiniMax File Management ───
+
+    handle(socket, 'file:upload', FileUploadSchema, async (parsed, ack) => {
+      if (!isFileManagementAvailable()) {
+        if (ack) ack({ ok: false, error: { code: 'FILES_NOT_AVAILABLE', message: 'MiniMax File Management is not available. MINIMAX_API_KEY is not configured.', retryable: false } });
+        return;
+      }
+
+      // Validate base64 before decoding (reject invalid characters that would silently corrupt data)
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(parsed.fileData)) {
+        if (ack) ack({ ok: false, error: { code: 'INVALID_INPUT', message: 'fileData must be valid base64', retryable: false } });
+        return;
+      }
+      const fileBuffer = Buffer.from(parsed.fileData, 'base64');
+      const result = await uploadFile(fileBuffer, parsed.filename, parsed.purpose as FilePurpose);
+
+      if (!result.ok) {
+        if (ack) ack(result);
+        return;
+      }
+
+      if (ack) ack({ ok: true, data: result.data });
+    });
+
+    handle(socket, 'file:retrieve', FileRetrieveSchema, async (parsed, ack) => {
+      if (!isFileManagementAvailable()) {
+        if (ack) ack({ ok: false, error: { code: 'FILES_NOT_AVAILABLE', message: 'MiniMax File Management is not available. MINIMAX_API_KEY is not configured.', retryable: false } });
+        return;
+      }
+
+      const result = await retrieveFile(parsed.fileId);
+      if (ack) ack(result.ok ? { ok: true, data: result.data } : result);
+    });
+
+    handle(socket, 'file:list', FileListSchema, async (parsed, ack) => {
+      if (!isFileManagementAvailable()) {
+        if (ack) ack({ ok: false, error: { code: 'FILES_NOT_AVAILABLE', message: 'MiniMax File Management is not available. MINIMAX_API_KEY is not configured.', retryable: false } });
+        return;
+      }
+
+      const result = await listFiles(parsed.purpose as FilePurpose);
+      if (ack) ack(result.ok ? { ok: true, data: { files: result.data } } : result);
+    });
+
+    handle(socket, 'file:delete', FileDeleteSchema, async (parsed, ack) => {
+      if (!isFileManagementAvailable()) {
+        if (ack) ack({ ok: false, error: { code: 'FILES_NOT_AVAILABLE', message: 'MiniMax File Management is not available. MINIMAX_API_KEY is not configured.', retryable: false } });
+        return;
+      }
+
+      const result = await deleteFile(parsed.fileId, parsed.purpose as FilePurpose);
+      if (ack) ack(result.ok ? { ok: true, data: result.data } : result);
     });
 
     // ─── Agent Stats ───
