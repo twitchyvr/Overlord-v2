@@ -616,10 +616,12 @@ export class OnboardingWizard extends Component {
     const cards = h('div', { class: 'effort-level-choices' });
 
     for (const level of EFFORT_LEVELS) {
+      const isSelected = this._selectedEffort?.id === level.id;
       const card = h('div', {
-        class: `effort-level-card${this._selectedEffort?.id === level.id ? ' selected' : ''}`,
+        class: `effort-level-card${isSelected ? ' selected' : ''}`,
         tabindex: '0',
         role: 'option',
+        'aria-selected': isSelected ? 'true' : 'false',
       });
 
       card.appendChild(h('div', { class: 'effort-level-icon' }, level.icon));
@@ -662,10 +664,12 @@ export class OnboardingWizard extends Component {
     const grid = h('div', { class: 'wizard-type-grid' });
 
     for (const type of PROJECT_TYPES) {
+      const isSelected = this._selectedType?.id === type.id;
       const card = h('div', {
-        class: `wizard-type-card${this._selectedType?.id === type.id ? ' selected' : ''}`,
+        class: `wizard-type-card${isSelected ? ' selected' : ''}`,
         tabindex: '0',
         role: 'option',
+        'aria-selected': isSelected ? 'true' : 'false',
       });
 
       card.appendChild(h('div', { class: 'wizard-type-icon' }, type.icon));
@@ -709,10 +713,12 @@ export class OnboardingWizard extends Component {
     const grid = h('div', { class: 'wizard-scale-grid' });
 
     for (const scale of SCALE_OPTIONS) {
+      const isSelected = this._selectedScale?.id === scale.id;
       const card = h('div', {
-        class: `wizard-scale-card${this._selectedScale?.id === scale.id ? ' selected' : ''}`,
+        class: `wizard-scale-card${isSelected ? ' selected' : ''}`,
         tabindex: '0',
         role: 'option',
+        'aria-selected': isSelected ? 'true' : 'false',
       });
 
       card.appendChild(h('div', { class: 'wizard-scale-icon' }, scale.icon));

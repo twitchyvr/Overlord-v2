@@ -2251,6 +2251,8 @@ describe('SecurityView', () => {
   });
 
   it('renders empty state when no events', async () => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', 'test-building-123', { silent: true });
     const { SecurityView } = await import('../../../public/ui/views/security-view.js');
     const el = document.createElement('div');
     const view = new SecurityView(el);
@@ -2262,7 +2264,20 @@ describe('SecurityView', () => {
     expect(el.textContent).toContain('No Security Events');
   });
 
+  it('renders no-building guard when no building selected', async () => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', null, { silent: true });
+    const { SecurityView } = await import('../../../public/ui/views/security-view.js');
+    const el = document.createElement('div');
+    const view = new SecurityView(el);
+    view.mount();
+
+    expect(el.textContent).toContain('No Building Selected');
+  });
+
   it('renders stats bar with 4 stat cards', async () => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', 'test-building-123', { silent: true });
     const { SecurityView } = await import('../../../public/ui/views/security-view.js');
     const el = document.createElement('div');
     const view = new SecurityView(el);
@@ -2277,6 +2292,8 @@ describe('SecurityView', () => {
   });
 
   it('renders filter pills for all, blocked, warnings, allowed', async () => {
+    const store = OverlordUI.getStore();
+    store.set('building.active', 'test-building-123', { silent: true });
     const { SecurityView } = await import('../../../public/ui/views/security-view.js');
     const el = document.createElement('div');
     const view = new SecurityView(el);
@@ -2292,6 +2309,7 @@ describe('SecurityView', () => {
 
   it('renders events when store has data', async () => {
     const store = OverlordUI.getStore();
+    store.set('building.active', 'test-building-123', { silent: true });
     store.set('security.events', [
       { action: 'block', toolName: 'write_file', message: 'Blocked rm -rf', timestamp: Date.now(), pluginId: 'shell-guard' },
       { action: 'warn', toolName: 'execute_command', message: 'SQL detected', timestamp: Date.now() - 1000, pluginId: 'code-scanner' },

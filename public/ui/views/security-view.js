@@ -122,6 +122,17 @@ export class SecurityView extends Component {
     this.el.textContent = '';
     this.el.className = 'security-view';
 
+    // #918 — No building selected guard
+    const store = OverlordUI.getStore();
+    if (!store?.get('building.active')) {
+      this.el.appendChild(h('div', { class: 'view-empty-state' },
+        h('div', { class: 'view-empty-icon' }, '\uD83D\uDEE1'),
+        h('h2', { class: 'view-empty-title' }, 'No Building Selected'),
+        h('p', { class: 'view-empty-text' }, 'Select a project from the Dashboard to view security events.')
+      ));
+      return;
+    }
+
     // ── Header ──
     const header = h('div', { class: 'security-view-header' },
       h('div', { class: 'security-view-title-row' },

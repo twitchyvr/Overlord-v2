@@ -220,15 +220,11 @@ export class GlobalSearch extends Component {
       return;
     }
 
-    // Check if query matches commands first (#703)
+    // #922 — Store matching commands so _renderResults can show them alongside results
     const q = query.toLowerCase();
-    const matchingCmds = BUILT_IN_COMMANDS.filter(cmd =>
+    this._matchingCmds = BUILT_IN_COMMANDS.filter(cmd =>
       cmd.label.toLowerCase().includes(q) || cmd.id.includes(q)
     );
-    if (matchingCmds.length > 0) {
-      this._renderCommands(query);
-      return;
-    }
 
     const store = OverlordUI.getStore();
     const buildingId = store?.get('building.active');
@@ -251,6 +247,12 @@ export class GlobalSearch extends Component {
 
   _buildFlatItems() {
     this._flatItems = [];
+    // #922 — Include matching commands in keyboard navigation
+    if (this._matchingCmds) {
+      for (const cmd of this._matchingCmds) {
+        this._flatItems.push({ type: 'command', item: cmd });
+      }
+    }
     if (!this._results || !this._results.groups) return;
     for (const group of this._results.groups) {
       for (const item of group.items) {
@@ -269,14 +271,38 @@ export class GlobalSearch extends Component {
       return;
     }
 
-    if (this._results.groups.length === 0) {
+    // #922 — Show matching commands above search results (not preempting)
+    let flatIdx = 0;
+    if (this._matchingCmds && this._matchingCmds.length > 0) {
+      const cmdSection = h('div', { class: 'global-search-group' });
+      cmdSection.appendChild(
+        h('div', { class: 'global-search-group-header' },
+          h('span', { class: 'global-search-group-icon' }, '\u2318'),
+          h('span', null, `Commands (${this._matchingCmds.length})`)
+        )
+      );
+      for (const cmd of this._matchingCmds) {
+        const idx = flatIdx++;
+        const row = h('div', {
+          class: `global-search-item${idx === this._selectedIdx ? ' selected' : ''}`,
+          'data-idx': String(idx),
+        });
+        row.appendChild(h('span', { class: 'global-search-cmd-icon' }, cmd.icon || '\u25B6'));
+        row.appendChild(h('span', null, cmd.label));
+        row.addEventListener('click', () => { cmd.action(); this.close(); });
+        row.addEventListener('mouseenter', () => { this._selectedIdx = idx; this._updateSelectionStyles(); });
+        cmdSection.appendChild(row);
+      }
+      this._resultsEl.appendChild(cmdSection);
+    }
+
+    if (this._results.groups.length === 0 && flatIdx === 0) {
       this._resultsEl.appendChild(
         h('div', { class: 'global-search-empty' }, `No results for "${escapeHtml(this._query)}"`)
       );
       return;
     }
 
-    let flatIdx = 0;
     for (const group of this._results.groups) {
       const section = h('div', { class: 'global-search-group' });
       section.appendChild(

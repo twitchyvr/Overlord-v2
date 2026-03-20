@@ -55,8 +55,14 @@ export function setSecurityBus(bus: { emit: (event: string, data: Record<string,
   _securityBus = bus;
 }
 
+const VALID_SECURITY_ACTIONS = new Set(['allow', 'warn', 'block']);
+
 /** Log a security event (called from Lua plugins via overlord.security.logEvent) */
 export function logSecurityEvent(event: Omit<SecurityEvent, 'timestamp'>): void {
+  // #917 — Validate action to prevent arbitrary values from breaking stats filtering
+  if (!event.action || !VALID_SECURITY_ACTIONS.has(event.action)) {
+    event = { ...event, action: 'warn' }; // Default invalid actions to 'warn'
+  }
   const entry: SecurityEvent = { ...event, timestamp: Date.now() };
   securityEvents.push(entry);
   if (securityEvents.length > MAX_SECURITY_EVENTS) {
@@ -243,8 +249,36 @@ function removeDangerousGlobals(engine: LuaEngine): void {
 // ─── Regex Safety (#890 — addresses ReDoS from untrusted plugin patterns) ───
 
 const MAX_PATTERN_LENGTH = 200;
-// Detect known ReDoS-prone constructs: nested quantifiers like (a+)+, (.+)+, (a*)*
-const REDOS_PATTERN = /(\+|\*|\{)\s*\)(\+|\*|\?|\{)/;
+
+/**
+ * Detect known ReDoS-prone constructs via string scanning (no regex).
+ * Catches nested quantifiers like (a+)+, (.*)*, (x{2,})+, etc.
+ * Uses a simple character walk to avoid the irony of a ReDoS check
+ * that is itself vulnerable to ReDoS (#916).
+ */
+function _hasNestedQuantifiers(pattern: string): boolean {
+  const QUANTIFIERS = new Set(['+', '*', '?']);
+  for (let i = 0; i < pattern.length - 1; i++) {
+    // Look for `)` followed by a quantifier, preceded by a quantifier before the group
+    if (pattern[i] === ')' && (QUANTIFIERS.has(pattern[i + 1]) || pattern[i + 1] === '{')) {
+      // Walk backwards to find the matching `(` and check for quantifier before it
+      let depth = 1;
+      for (let j = i - 1; j >= 0; j--) {
+        if (pattern[j] === ')') depth++;
+        else if (pattern[j] === '(') depth--;
+        if (depth === 0) {
+          // Check if there's a quantifier inside the group before the closing `)`
+          const groupBody = pattern.slice(j + 1, i);
+          if (/[+*?]|\{\d/.test(groupBody)) {
+            return true; // Nested quantifier detected
+          }
+          break;
+        }
+      }
+    }
+  }
+  return false;
+}
 
 /**
  * Compile a regex from untrusted plugin input, returning null if:
@@ -256,7 +290,7 @@ function _safeRegex(pattern: string, flags: string): RegExp | null {
   if (typeof pattern !== 'string' || pattern.length === 0 || pattern.length > MAX_PATTERN_LENGTH) {
     return null;
   }
-  if (REDOS_PATTERN.test(pattern)) {
+  if (_hasNestedQuantifiers(pattern)) {
     return null;
   }
   try {
