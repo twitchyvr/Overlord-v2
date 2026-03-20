@@ -285,7 +285,7 @@ function getDefaultProviderForRoom(roomType: string): string {
 function getModelForProvider(provider: string): string {
   switch (provider) {
     case 'anthropic': return process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
-    case 'minimax': return process.env.MINIMAX_MODEL || 'MiniMax-M2.5';
+    case 'minimax': return process.env.MINIMAX_MODEL || 'MiniMax-M2.7';
     case 'openai': return process.env.OPENAI_MODEL || 'gpt-4o';
     case 'ollama': return process.env.OLLAMA_MODEL || 'llama3';
     default: return 'unknown';

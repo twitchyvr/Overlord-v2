@@ -32,7 +32,7 @@ const PROVIDER_DEFAULTS: Record<string, ThinkingConfig> = {
   minimax: {
     enabled: true,
     budget: 8192,
-    model: 'MiniMax-M2.5',
+    model: 'MiniMax-M2.7',
   },
 };
 

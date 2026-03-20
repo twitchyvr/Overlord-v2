@@ -25,7 +25,7 @@ describe('Thinking Config', () => {
       const config = getThinkingConfig('minimax');
       expect(config.enabled).toBe(true);
       expect(config.budget).toBeGreaterThan(0);
-      expect(config.model).toBe('MiniMax-M2.5');
+      expect(config.model).toBe('MiniMax-M2.7');
     });
 
     it('returns disabled config for OpenAI', () => {
@@ -66,7 +66,7 @@ describe('Thinking Config', () => {
     });
 
     it('adds thinking config for MiniMax', () => {
-      const options: Record<string, unknown> = { model: 'MiniMax-M2.5' };
+      const options: Record<string, unknown> = { model: 'MiniMax-M2.7' };
       const result = applyThinkingToRequest('minimax', options);
 
       expect(result.thinking).toEqual({

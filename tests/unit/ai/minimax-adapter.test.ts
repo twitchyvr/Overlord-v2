@@ -31,7 +31,7 @@ function makeConfig(overrides: Record<string, unknown> = {}): Config {
   const values: Record<string, unknown> = {
     MINIMAX_API_KEY: 'test-key',
     MINIMAX_BASE_URL: 'https://api.minimax.io/anthropic',
-    MINIMAX_MODEL: 'MiniMax-M2.5',
+    MINIMAX_MODEL: 'MiniMax-M2.7',
     AI_REQUEST_TIMEOUT_MS: 60_000,
     ...overrides,
   };
@@ -46,7 +46,7 @@ const standardResponse = {
   id: 'msg_minimax_1',
   role: 'assistant',
   content: [{ type: 'text', text: 'Hello from MiniMax' }],
-  model: 'MiniMax-M2.5',
+  model: 'MiniMax-M2.7',
   stop_reason: 'end_turn',
   usage: { input_tokens: 50, output_tokens: 10 },
 };
@@ -96,11 +96,11 @@ describe('MiniMax Adapter (Anthropic-Compatible)', () => {
     ) as Record<string, unknown>;
 
     expect(result.id).toBe('msg_minimax_2');
-    expect(result.model).toBe('MiniMax-M2.5');
+    expect(result.model).toBe('MiniMax-M2.7');
     expect(result.stop_reason).toBe('end_turn');
 
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      model: 'MiniMax-M2.5',
+      model: 'MiniMax-M2.7',
       max_tokens: 8192,
       system: 'You are a math tutor',
     }));
@@ -116,7 +116,7 @@ describe('MiniMax Adapter (Anthropic-Compatible)', () => {
         name: 'read_file',
         input: { path: '/test.ts' },
       }],
-      model: 'MiniMax-M2.5',
+      model: 'MiniMax-M2.7',
       stop_reason: 'tool_use',
       usage: { input_tokens: 200, output_tokens: 50 },
     });
@@ -175,7 +175,7 @@ describe('MiniMax Adapter (Anthropic-Compatible)', () => {
     await adapter.sendMessage([{ role: 'user', content: 'hi' }], [], {});
 
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      model: 'MiniMax-M2.5',
+      model: 'MiniMax-M2.7',
     }));
   });
 

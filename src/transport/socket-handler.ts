@@ -3271,7 +3271,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         },
         minimax: {
           configured: !!process.env.MINIMAX_API_KEY,
-          model: process.env.MINIMAX_MODEL || 'MiniMax-M2.5',
+          model: process.env.MINIMAX_MODEL || 'MiniMax-M2.7',
           baseUrl: process.env.MINIMAX_BASE_URL || 'https://api.minimax.io/anthropic',
         },
         openai: {
