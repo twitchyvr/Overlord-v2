@@ -14,7 +14,7 @@
  * - SOTA on SWE-Pro (56.22%), TerminalBench2 (57.0%), SWE-Multilingual (76.5%)
  *
  * Features:
- * - 1M token context window
+ * - 204,800 token context window (API limit)
  * - ~60 tokens/sec output (~100 tokens/sec highspeed)
  * - Tool use (Anthropic-native format)
  * - Interleaved thinking (extended thinking support)
@@ -151,26 +151,26 @@ export function createMinimaxAdapter(cfg: Config): AIAdapter {
         'MiniMax response received',
       );
 
-      // Normalize content: separate thinking blocks from text/tool_use blocks.
-      // MiniMax may return { type: 'thinking' } blocks (extended thinking) which
-      // consumers don't expect in the content array.
+      // M2.7 interleaved thinking: preserve ALL content blocks including thinking.
+      // Per MiniMax docs: "the complete model response must be appended to the
+      // conversation history to maintain the continuity of the reasoning chain."
+      // The conversation loop at line 555 pushes response.content directly to
+      // messages[], so we must NOT strip thinking blocks here.
       const rawContent = response.content as AnthropicContentBlock[];
-      const thinkingBlocks = rawContent.filter((b) => b.type === 'thinking');
-      const normalizedContent = rawContent.filter((b) => b.type !== 'thinking');
 
-      // Combine thinking text for consumers that want it
-      const thinkingText = thinkingBlocks
+      // Extract thinking text for the separate `thinking` field (UI display)
+      const thinkingText = rawContent
+        .filter((b) => b.type === 'thinking')
         .map((b) => b.thinking || b.text || '')
         .filter(Boolean)
         .join('\n\n');
 
-      // If only thinking blocks remain (max_tokens exhausted on thinking),
-      // synthesize a text block from the thinking content
-      let finalContent = normalizedContent;
-      if (finalContent.length === 0 && thinkingText) {
-        finalContent = [{ type: 'text' as const, text: thinkingText }];
-      } else if (finalContent.length === 0) {
-        finalContent = rawContent;
+      // If response contains ONLY thinking blocks (max_tokens exhausted on thinking),
+      // synthesize a text block so consumers always have at least one text block.
+      let finalContent = rawContent;
+      const hasNonThinking = rawContent.some((b) => b.type !== 'thinking');
+      if (!hasNonThinking && thinkingText) {
+        finalContent = [...rawContent, { type: 'text' as const, text: thinkingText }];
       }
 
       return {

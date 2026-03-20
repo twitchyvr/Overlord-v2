@@ -236,6 +236,84 @@ describe('MiniMax Adapter (Anthropic-Compatible)', () => {
     });
   });
 
+  describe('Thinking block preservation (#909 — M2.7 interleaved thinking)', () => {
+    it('preserves thinking blocks in content for multi-turn conversations', async () => {
+      mockCreate.mockResolvedValueOnce({
+        id: 'msg_think_1',
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'Let me analyze this...' },
+          { type: 'text', text: 'The answer is 4' },
+        ],
+        model: 'MiniMax-M2.7',
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 50, output_tokens: 30 },
+      });
+
+      const adapter = createMinimaxAdapter(makeConfig());
+      const result = await adapter.sendMessage(
+        [{ role: 'user', content: 'What is 2+2?' }], [], {},
+      ) as { content: AnthropicContentBlock[]; thinking: string };
+
+      // Content must include thinking blocks (not strip them)
+      expect(result.content).toHaveLength(2);
+      expect(result.content[0].type).toBe('thinking');
+      expect(result.content[1].type).toBe('text');
+      // Thinking field should still be populated for UI
+      expect(result.thinking).toBe('Let me analyze this...');
+    });
+
+    it('preserves interleaved thinking between tool calls', async () => {
+      mockCreate.mockResolvedValueOnce({
+        id: 'msg_think_2',
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'I need to read the file first' },
+          { type: 'tool_use', id: 'toolu_1', name: 'read_file', input: { path: '/test.ts' } },
+        ],
+        model: 'MiniMax-M2.7',
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 100, output_tokens: 50 },
+      });
+
+      const adapter = createMinimaxAdapter(makeConfig());
+      const result = await adapter.sendMessage(
+        [{ role: 'user', content: 'Read test.ts' }],
+        [{ name: 'read_file', description: 'Read a file', inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } }],
+        {},
+      ) as { content: AnthropicContentBlock[]; thinking: string };
+
+      // Both thinking and tool_use must be in content
+      expect(result.content).toHaveLength(2);
+      expect(result.content[0].type).toBe('thinking');
+      expect(result.content[1].type).toBe('tool_use');
+    });
+
+    it('synthesizes text block when response has only thinking blocks', async () => {
+      mockCreate.mockResolvedValueOnce({
+        id: 'msg_think_3',
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'Deep analysis in progress...' },
+        ],
+        model: 'MiniMax-M2.7',
+        stop_reason: 'max_tokens',
+        usage: { input_tokens: 50, output_tokens: 500 },
+      });
+
+      const adapter = createMinimaxAdapter(makeConfig());
+      const result = await adapter.sendMessage(
+        [{ role: 'user', content: 'Complex question' }], [], {},
+      ) as { content: AnthropicContentBlock[] };
+
+      // Should have original thinking block + synthesized text block
+      expect(result.content).toHaveLength(2);
+      expect(result.content[0].type).toBe('thinking');
+      expect(result.content[1].type).toBe('text');
+      expect(result.content[1].text).toBe('Deep analysis in progress...');
+    });
+  });
+
   describe('Model name construction (#853)', () => {
     it('appends -highspeed when USE_HIGHSPEED=true and model lacks suffix', async () => {
       mockCreate.mockResolvedValueOnce(standardResponse);

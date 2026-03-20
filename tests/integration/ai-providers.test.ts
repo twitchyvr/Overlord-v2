@@ -68,7 +68,9 @@ describe.skipIf(!hasMinimaxKey)('MiniMax Integration (Anthropic-Compatible)', ()
 
     expect(response.id).toBeTruthy();
     expect(response.content.length).toBeGreaterThan(0);
-    expect(response.content[0].type).toBe('text');
+    // M2.7 interleaved thinking: first block may be 'thinking', so check for at least one text block
+    const hasText = response.content.some((b) => b.type === 'text');
+    expect(hasText).toBe(true);
     expect(response.usage.input_tokens).toBeGreaterThan(0);
     expect(response.usage.output_tokens).toBeGreaterThan(0);
   }, 30000);
