@@ -53,6 +53,7 @@
 - [[Testing Guide]]
 - [[Architecture Compliance]]
 - [[Plugin Development]]
+- [[Lua Scripting Guide]]
 
 **Roadmap**
 - [[Implementation Phases]]
