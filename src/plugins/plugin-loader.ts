@@ -61,6 +61,7 @@ let systemTools: InitPluginsParams['tools'] | null = null;
 const VALID_PERMISSIONS: Set<PluginPermission> = new Set([
   'room:read', 'room:write', 'tool:execute', 'agent:read',
   'bus:emit', 'storage:read', 'storage:write', 'fs:read', 'fs:write', 'net:http',
+  'security:read', 'security:write',
 ]);
 
 // ─── Valid Engines ───
