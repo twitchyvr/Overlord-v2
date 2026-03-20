@@ -23,7 +23,7 @@ const ConfigSchema = z.object({
   MINIMAX_API_KEY: z.string().optional(),
   MINIMAX_BASE_URL: z.string().default('https://api.minimax.io/anthropic'),
   MINIMAX_GROUP_ID: z.string().optional(),
-  MINIMAX_MODEL: z.string().default('MiniMax-M2.5'),
+  MINIMAX_MODEL: z.string().default('MiniMax-M2.7'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o'),
   OLLAMA_BASE_URL: z.string().default('http://localhost:11434'),

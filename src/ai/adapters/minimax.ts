@@ -1,15 +1,21 @@
 /**
  * MiniMax Adapter — Anthropic-Compatible API
  *
- * MiniMax M2.5 exposes an Anthropic-compatible endpoint at:
+ * MiniMax M2.7 (and M2.5) exposes an Anthropic-compatible endpoint at:
  *   https://api.minimax.io/anthropic
  *
  * This means we use the Anthropic SDK directly with a baseURL override.
  * No format translation needed — MiniMax speaks Anthropic-native.
  *
+ * M2.7 improvements over M2.5:
+ * - Full-trajectory perturbation training for better agentic reasoning
+ * - Interleaved thinking between tool calls (not just at start)
+ * - Agent Teams: native multi-agent collaboration
+ * - SOTA on SWE-Pro (56.22%), TerminalBench2 (57.0%), SWE-Multilingual (76.5%)
+ *
  * Features:
- * - 204,800 token context window
- * - ~60 tokens/sec output
+ * - 1M token context window
+ * - ~60 tokens/sec output (~100 tokens/sec highspeed)
  * - Tool use (Anthropic-native format)
  * - Interleaved thinking (extended thinking support)
  * - Prompt caching via cache_control (Anthropic-style)

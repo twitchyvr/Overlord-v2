@@ -17,7 +17,7 @@ function makeConfig(): Config {
     ANTHROPIC_MODEL: 'claude-sonnet-4-20250514',
     MINIMAX_API_KEY: undefined,
     MINIMAX_BASE_URL: 'https://api.minimax.io/anthropic',
-    MINIMAX_MODEL: 'MiniMax-M2.5',
+    MINIMAX_MODEL: 'MiniMax-M2.7',
     OPENAI_API_KEY: undefined,
     OPENAI_MODEL: 'gpt-4o',
     OLLAMA_BASE_URL: 'http://localhost:11434',

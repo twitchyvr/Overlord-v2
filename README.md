@@ -59,7 +59,7 @@ Agents are lightweight identity cards — name, role, capabilities, room access.
 <td width="33%" valign="top">
 
 ### 🧠 Provider-Agnostic AI
-Swap AI providers per room. **Anthropic Claude** for reasoning. **MiniMax M2.5** for coding. **OpenAI GPT-4o** or local **Ollama**. One adapter interface.
+Swap AI providers per room. **Anthropic Claude** for reasoning. **MiniMax M2.7** for coding. **OpenAI GPT-4o** or local **Ollama**. One adapter interface.
 
 </td>
 <td width="33%" valign="top">
@@ -260,7 +260,7 @@ strategy ──► discovery ──► architecture ──► execution ──�
 | **OpenAI** | ✅ Full | GPT-4o | — | 128K |
 | **Ollama** | ✅ Full | Llama 3 (local) | Varies | Varies |
 
-> **💡 Provider-per-Room:** Anthropic powers reasoning-heavy rooms (Discovery, Architecture, Review). MiniMax M2.5 powers coding rooms (Code Lab, Testing Lab). Configure per room via environment variables.
+> **💡 Provider-per-Room:** Anthropic powers reasoning-heavy rooms (Discovery, Architecture, Review). MiniMax M2.7 powers coding rooms (Code Lab, Testing Lab). Configure per room via environment variables.
 
 ---
 
@@ -339,7 +339,7 @@ docker run -d \
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-20250514` | Model ID |
 | `MINIMAX_API_KEY` | — | MiniMax API key |
 | `MINIMAX_BASE_URL` | `https://api.minimax.io/anthropic` | MiniMax endpoint |
-| `MINIMAX_MODEL` | `MiniMax-M2.5` | Model ID |
+| `MINIMAX_MODEL` | `MiniMax-M2.7` | Model ID |
 | `OPENAI_API_KEY` | — | OpenAI API key |
 | `OPENAI_MODEL` | `gpt-4o` | Model ID |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
@@ -506,7 +506,7 @@ Overlord-v2/
 │   │   ├── ai-provider.ts         #    Adapter registry & dispatcher
 │   │   ├── adapters/
 │   │   │   ├── anthropic.ts       #    Anthropic Claude
-│   │   │   ├── minimax.ts         #    MiniMax M2.5
+│   │   │   ├── minimax.ts         #    MiniMax M2.7
 │   │   │   ├── openai.ts          #    OpenAI GPT-4o
 │   │   │   └── ollama.ts          #    Ollama (local)
 │   │   ├── profile-generator.ts   #    AI-generated agent bios
@@ -607,7 +607,7 @@ Overlord-v2/
 | 🟦 Language | **TypeScript 5.7+** (strict mode) |
 | 🟩 Runtime | **Node.js 20+** |
 | 💾 Database | **SQLite** via better-sqlite3 (WAL mode) |
-| 🧠 AI Providers | **Anthropic**, **MiniMax M2.5**, **OpenAI**, **Ollama** |
+| 🧠 AI Providers | **Anthropic**, **MiniMax M2.7**, **OpenAI**, **Ollama** |
 | 🌐 Transport | **Socket.IO 4** + **Express 5** |
 | ✅ Validation | **Zod 3** |
 | 📡 Events | **EventEmitter3** |

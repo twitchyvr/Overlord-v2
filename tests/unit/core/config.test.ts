@@ -65,7 +65,7 @@ describe('Config Service', () => {
       expect(config.get('NODE_ENV')).toBe('development');
       expect(config.get('DB_PATH')).toBe('./data/overlord.db');
       expect(config.get('ANTHROPIC_MODEL')).toBe('claude-sonnet-4-20250514');
-      expect(config.get('MINIMAX_MODEL')).toBe('MiniMax-M2.5');
+      expect(config.get('MINIMAX_MODEL')).toBe('MiniMax-M2.7');
       expect(config.get('MINIMAX_BASE_URL')).toBe('https://api.minimax.io/anthropic');
       expect(config.get('OPENAI_MODEL')).toBe('gpt-4o');
       expect(config.get('OLLAMA_MODEL')).toBe('llama3');
