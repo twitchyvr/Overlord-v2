@@ -136,6 +136,7 @@ vi.mock('../../src/rooms/building-manager.js', () => ({
     ok: true,
     data: [{ id: 'bld_1', name: 'Test', active_phase: 'strategy' }],
   })),
+  autoDiscoverRepos: vi.fn(() => 0),
 }));
 
 vi.mock('../../src/commands/index.js', () => ({

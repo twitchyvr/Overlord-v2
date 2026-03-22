@@ -29,7 +29,7 @@ import { initEscalationHandler } from './rooms/escalation-handler.js';
 import { initDevLoopEnforcer } from './rooms/dev-loop-enforcer.js';
 import { initEmailOrchestrator } from './rooms/email-orchestrator.js';
 import { initBudgetTracker } from './agents/budget-tracker.js';
-import { listBuildings } from './rooms/building-manager.js';
+import { listBuildings, autoDiscoverRepos } from './rooms/building-manager.js';
 import { initCommands } from './commands/index.js';
 import { initPlugins } from './plugins/index.js';
 import type { InitPluginsParams } from './plugins/index.js';
@@ -50,6 +50,12 @@ async function start(): Promise<void> {
   // 2. Init layers bottom-up
   await initStorage(config);
   log.info('Storage initialized');
+
+  // Auto-discover repos from ~/GitRepos/ on first run (empty DB)
+  const discovered = autoDiscoverRepos();
+  if (discovered > 0) {
+    log.info({ discovered }, 'Auto-discovered repos seeded as buildings');
+  }
 
   const ai = initAI(config, bus);
   log.info('AI layer initialized');

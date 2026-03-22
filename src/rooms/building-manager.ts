@@ -9,7 +9,10 @@
  */
 
 import { randomUUID } from 'crypto';
-import { resolve as resolvePath } from 'node:path';
+import { readdirSync, statSync, existsSync } from 'node:fs';
+import { resolve as resolvePath, join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { homedir } from 'node:os';
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
 import { ok, err, safeJsonParse } from '../core/contracts.js';
@@ -880,4 +883,89 @@ export function getHealthScore(buildingId: string): Result {
     buildingId,
     score: { phaseProgress, taskCompletion, raidHealth, agentActivity, total },
   });
+}
+
+// ─── Auto-Discovery of Local Repos (#971) ───
+
+/** Directories to skip during auto-discovery (case-insensitive) */
+const AUTO_DISCOVER_SKIP = new Set(['overlord-v2', 'development docs']);
+
+/** Humanize a directory name: kebab-case / snake_case → Title Case */
+function humanizeDirName(dirName: string): string {
+  return dirName
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Scan ~/GitRepos/ for git repositories and create a building for each.
+ * Skips Overlord-v2 itself and non-git directories.
+ * Only runs when the buildings table is empty (first run / fresh DB).
+ *
+ * Returns the number of buildings created.
+ */
+export function autoDiscoverRepos(): number {
+  const db = getDb();
+
+  const existingCount = (db.prepare('SELECT COUNT(*) as count FROM buildings').get() as { count: number }).count;
+  if (existingCount > 0) {
+    log.info({ existingCount }, 'Buildings already exist — skipping auto-discovery');
+    return 0;
+  }
+
+  const gitReposDir = join(homedir(), 'GitRepos');
+  if (!existsSync(gitReposDir)) {
+    log.warn({ path: gitReposDir }, 'GitRepos directory not found — skipping auto-discovery');
+    return 0;
+  }
+
+  let entries: string[];
+  try {
+    entries = readdirSync(gitReposDir);
+  } catch (e) {
+    log.error({ err: e }, 'Failed to read GitRepos directory');
+    return 0;
+  }
+
+  let created = 0;
+
+  for (const entry of entries) {
+    const fullPath = join(gitReposDir, entry);
+
+    try {
+      if (!statSync(fullPath).isDirectory()) continue;
+    } catch {
+      continue;
+    }
+
+    if (AUTO_DISCOVER_SKIP.has(entry.toLowerCase())) continue;
+    if (!existsSync(join(fullPath, '.git'))) continue;
+
+    // Try to get remote URL
+    let repoUrl: string | undefined;
+    try {
+      repoUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: fullPath, encoding: 'utf8', timeout: 5000 }).trim();
+    } catch {
+      // No remote — that's fine
+    }
+
+    const displayName = humanizeDirName(entry);
+    const result = createBuilding({
+      name: displayName,
+      projectId: `project_${entry.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+      workingDirectory: fullPath,
+      repoUrl,
+      allowedPaths: [fullPath],
+    });
+
+    if (result.ok) {
+      created++;
+      log.info({ name: displayName, path: fullPath, repoUrl }, 'Auto-discovered repo → building created');
+    } else {
+      log.error({ name: displayName, error: result.error }, 'Failed to create building for discovered repo');
+    }
+  }
+
+  log.info({ created, scanned: entries.length }, 'Auto-discovery complete');
+  return created;
 }

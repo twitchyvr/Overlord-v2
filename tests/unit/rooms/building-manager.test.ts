@@ -19,6 +19,7 @@ import {
   applyBlueprint,
   applyCustomPlan,
   getHealthScore,
+  autoDiscoverRepos,
 } from '../../../src/rooms/building-manager.js';
 
 let memDb: Database.Database;
@@ -634,5 +635,149 @@ describe('getHealthScore', () => {
     const s = result.data.score;
     expect(s.total).toBe(s.phaseProgress + s.taskCompletion + s.raidHealth + s.agentActivity);
     expect(s.total).toBe(17 + 25 + 25 + 0);
+  });
+});
+
+// ─── Auto-Discovery Tests (#971) ───
+
+// We need to mock the node:fs, node:child_process, and node:os modules
+// that autoDiscoverRepos uses internally. Since they're top-level imports
+// in building-manager.ts, we mock them via vi.mock.
+
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  return {
+    ...actual,
+    homedir: vi.fn(() => '/mock/home'),
+  };
+});
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    execFileSync: vi.fn(() => 'https://github.com/user/repo.git\n'),
+  };
+});
+
+// Mock fs functions for auto-discover only — keep real behavior for other uses
+const mockReaddirSync = vi.fn<() => string[]>(() => []);
+const mockStatSync = vi.fn(() => ({ isDirectory: () => true }));
+const mockExistsSync = vi.fn(() => true);
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    readdirSync: (...args: unknown[]) => {
+      const path = args[0] as string;
+      // Only intercept the GitRepos directory reads
+      if (path.includes('GitRepos') || path.includes('/mock/home')) {
+        return mockReaddirSync();
+      }
+      return actual.readdirSync(path as string);
+    },
+    statSync: (...args: unknown[]) => {
+      const path = args[0] as string;
+      if (path.includes('GitRepos') || path.includes('/mock/home')) {
+        return mockStatSync();
+      }
+      return actual.statSync(path as string);
+    },
+    existsSync: (...args: unknown[]) => {
+      const path = args[0] as string;
+      if (path.includes('GitRepos') || path.includes('/mock/home')) {
+        return mockExistsSync(path);
+      }
+      return actual.existsSync(path as string);
+    },
+  };
+});
+
+describe('autoDiscoverRepos (#971)', () => {
+  beforeEach(() => {
+    memDb = setupDb();
+    vi.spyOn(dbModule, 'getDb').mockReturnValue(memDb as unknown as ReturnType<typeof dbModule.getDb>);
+    mockReaddirSync.mockReset();
+    mockStatSync.mockReset().mockReturnValue({ isDirectory: () => true });
+    mockExistsSync.mockReset().mockReturnValue(true);
+  });
+
+  it('returns 0 when buildings already exist', () => {
+    createBuilding({ name: 'Existing' });
+    const count = autoDiscoverRepos();
+    expect(count).toBe(0);
+  });
+
+  it('returns 0 when GitRepos directory does not exist', () => {
+    mockExistsSync.mockReturnValue(false);
+    const count = autoDiscoverRepos();
+    expect(count).toBe(0);
+  });
+
+  it('creates buildings for discovered git repos', () => {
+    mockReaddirSync.mockReturnValue(['my-project', 'another-repo']);
+    mockExistsSync.mockReturnValue(true); // Both GitRepos dir and .git dirs exist
+
+    const count = autoDiscoverRepos();
+    expect(count).toBe(2);
+
+    const result = listBuildings();
+    expect(result.ok).toBe(true);
+    expect(result.data).toHaveLength(2);
+
+    const names = result.data.map((b: { name: string }) => b.name);
+    expect(names).toContain('My Project');
+    expect(names).toContain('Another Repo');
+  });
+
+  it('skips Overlord-v2 directory', () => {
+    mockReaddirSync.mockReturnValue(['Overlord-v2', 'real-project']);
+    mockExistsSync.mockReturnValue(true);
+
+    const count = autoDiscoverRepos();
+    expect(count).toBe(1);
+
+    const result = listBuildings();
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].name).toBe('Real Project');
+  });
+
+  it('skips non-directory entries', () => {
+    mockReaddirSync.mockReturnValue(['file.txt', 'real-repo']);
+    mockStatSync.mockImplementation(() => {
+      // First call = file.txt → not a directory; second = real-repo → directory
+      return { isDirectory: () => true };
+    });
+    // For file.txt, statSync should say it's not a directory
+    let callCount = 0;
+    mockStatSync.mockImplementation(() => {
+      callCount++;
+      return { isDirectory: () => callCount > 1 };
+    });
+    mockExistsSync.mockReturnValue(true);
+
+    const count = autoDiscoverRepos();
+    expect(count).toBe(1);
+  });
+
+  it('returns 0 when no repos found', () => {
+    mockReaddirSync.mockReturnValue([]);
+    const count = autoDiscoverRepos();
+    expect(count).toBe(0);
+  });
+
+  it('sets working directory and project ID correctly', () => {
+    mockReaddirSync.mockReturnValue(['StatusOwl']);
+    mockExistsSync.mockReturnValue(true);
+
+    autoDiscoverRepos();
+
+    const result = listBuildings();
+    expect(result.data).toHaveLength(1);
+    const building = result.data[0];
+    expect(building.name).toBe('StatusOwl');
+    expect(building.working_directory).toBe('/mock/home/GitRepos/StatusOwl');
+    expect(building.project_id).toBe('project_statusowl');
   });
 });
