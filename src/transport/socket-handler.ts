@@ -44,6 +44,7 @@ import {
   AgentGeneratePhotoSchema,
   AgentSpeakSchema,
   FileUploadSchema, FileRetrieveSchema, FileListSchema, FileDeleteSchema,
+  VoiceCloneSchema, VoiceDesignSchema, AgentVoiceAssignSchema,
   ChatMessageSchema, ChatHistorySchema,
   ConversationListSchema, ConversationLoadSchema, ConversationCreateSchema, ConversationDeleteSchema,
   EmptyPayloadSchema, PhaseStatusSchema, PhaseGateSchema, PhaseGateCreateSchema,
@@ -123,6 +124,8 @@ import { synthesizeSpeech, isSpeechAvailable } from '../ai/minimax-speech.js';
 import type { SpeechOptions } from '../ai/minimax-speech.js';
 import { uploadFile, retrieveFile, listFiles, deleteFile, isFileManagementAvailable } from '../ai/minimax-files.js';
 import type { FilePurpose } from '../ai/minimax-files.js';
+import { cloneVoice, designVoice, isVoiceServiceAvailable } from '../ai/minimax-voice.js';
+import type { VoiceCloneOptions } from '../ai/minimax-voice.js';
 import { listAllTools } from '../tools/tool-registry.js';
 import { createLibrary, listLibraries, deleteLibrary, indexLibrary, searchDocuments, getDocumentContent, listDocuments } from '../storage/doc-library.js';
 
@@ -1357,6 +1360,93 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
 
       const result = await deleteFile(parsed.fileId, parsed.purpose as FilePurpose);
       if (ack) ack(result.ok ? { ok: true, data: result.data } : result);
+    });
+
+    // ─── MiniMax Voice Cloning & Design ───
+
+    handle(socket, 'voice:clone', VoiceCloneSchema, async (parsed, ack) => {
+      if (!isVoiceServiceAvailable()) {
+        if (ack) ack({ ok: false, error: { code: 'VOICE_NOT_AVAILABLE', message: 'MiniMax Voice service is not available. MINIMAX_API_KEY is not configured.', retryable: false } });
+        return;
+      }
+
+      const opts: VoiceCloneOptions = {};
+      if (parsed.noiseReduction !== undefined) opts.noiseReduction = parsed.noiseReduction;
+      if (parsed.volumeNormalization !== undefined) opts.volumeNormalization = parsed.volumeNormalization;
+
+      const result = await cloneVoice(parsed.fileId, parsed.voiceId, parsed.previewText, opts);
+
+      if (!result.ok) {
+        if (ack) ack(result);
+        return;
+      }
+
+      // Convert preview audio Buffer to base64 for socket transport
+      if (ack) ack({
+        ok: true,
+        data: {
+          voiceId: result.data.voiceId,
+          previewAudio: result.data.previewAudio.toString('base64'),
+          status: result.data.status,
+        },
+      });
+    });
+
+    handle(socket, 'voice:design', VoiceDesignSchema, async (parsed, ack) => {
+      if (!isVoiceServiceAvailable()) {
+        if (ack) ack({ ok: false, error: { code: 'VOICE_NOT_AVAILABLE', message: 'MiniMax Voice service is not available. MINIMAX_API_KEY is not configured.', retryable: false } });
+        return;
+      }
+
+      const result = await designVoice(parsed.description, parsed.previewText, parsed.voiceId);
+
+      if (!result.ok) {
+        if (ack) ack(result);
+        return;
+      }
+
+      if (ack) ack({
+        ok: true,
+        data: {
+          voiceId: result.data.voiceId,
+          previewAudio: result.data.previewAudio.toString('base64'),
+          voiceProfile: result.data.voiceProfile,
+        },
+      });
+    });
+
+    handle(socket, 'agent:assign-voice', AgentVoiceAssignSchema, async (parsed, ack) => {
+      // Update agent config with voice assignment
+      const db = getDb();
+      try {
+        const agent = db.prepare('SELECT config FROM agents WHERE id = ?').get(parsed.agentId) as { config: string } | undefined;
+        if (!agent) {
+          if (ack) ack({ ok: false, error: { code: 'AGENT_NOT_FOUND', message: `Agent ${parsed.agentId} not found`, retryable: false } });
+          return;
+        }
+
+        let agentConfig: Record<string, unknown> = {};
+        try { agentConfig = JSON.parse(agent.config || '{}'); } catch { /* empty config */ }
+
+        agentConfig.voice = {
+          voiceId: parsed.voiceId,
+          type: parsed.voiceType,
+          assignedAt: new Date().toISOString(),
+        };
+
+        db.prepare('UPDATE agents SET config = ?, updated_at = ? WHERE id = ?').run(
+          JSON.stringify(agentConfig),
+          new Date().toISOString(),
+          parsed.agentId,
+        );
+
+        bus.emit('agent:updated', { agentId: parsed.agentId, changes: { config: agentConfig } });
+        if (ack) ack({ ok: true, data: { agentId: parsed.agentId, voiceId: parsed.voiceId, voiceType: parsed.voiceType } });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        log.error({ error: message, agentId: parsed.agentId }, 'Failed to assign voice to agent');
+        if (ack) ack({ ok: false, error: { code: 'VOICE_ASSIGN_FAILED', message: `Failed to assign voice: ${message}`, retryable: false } });
+      }
     });
 
     // ─── Agent Stats ───
