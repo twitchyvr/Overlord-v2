@@ -673,6 +673,9 @@ export class ResourceLockManager {
           metadata: state.metadata,
         });
       }
+    } else {
+      // Log failure so callers can distinguish "no locks" from "error reading locks" (#956)
+      log.warn({ error: locksResult.error.code }, 'getStateSnapshot: listLocks failed, returning empty snapshot');
     }
 
     return {
@@ -690,7 +693,10 @@ export class ResourceLockManager {
     try {
       const snapshot = this.getStateSnapshot();
       const stateFile = path.join(this.lockDir, 'state.json');
-      fs.writeFileSync(stateFile, JSON.stringify(snapshot, null, 2), 'utf-8');
+      // Atomic write: tmp file + rename to prevent partial reads (#956)
+      const tmpFile = `${stateFile}.${process.pid}.tmp`;
+      fs.writeFileSync(tmpFile, JSON.stringify(snapshot, null, 2), 'utf-8');
+      fs.renameSync(tmpFile, stateFile);
     } catch (e) {
       log.warn({ err: e instanceof Error ? e.message : String(e) }, 'Failed to write lock state file');
     }
