@@ -8,7 +8,7 @@
  * and verify they're called in the correct order.
  */
 
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 
 // Track initialization order
 const initOrder: string[] = [];
@@ -54,6 +54,13 @@ vi.mock('../../src/storage/db.js', () => ({
   initStorage: vi.fn(async () => {
     initOrder.push('storage');
   }),
+  getDb: vi.fn(() => ({
+    prepare: vi.fn(() => ({
+      run: vi.fn(() => ({ changes: 0 })),
+      get: vi.fn(() => undefined),
+      all: vi.fn(() => []),
+    })),
+  })),
 }));
 
 vi.mock('../../src/ai/ai-provider.js', () => ({
@@ -129,6 +136,29 @@ vi.mock('../../src/rooms/escalation-handler.js', () => ({
   initEscalationHandler: vi.fn(() => {
     initOrder.push('escalation-handler');
   }),
+}));
+
+vi.mock('../../src/rooms/dev-loop-enforcer.js', () => ({
+  initDevLoopEnforcer: vi.fn(() => {
+    initOrder.push('dev-loop-enforcer');
+  }),
+}));
+
+vi.mock('../../src/rooms/email-orchestrator.js', () => ({
+  initEmailOrchestrator: vi.fn(() => {
+    initOrder.push('email-orchestrator');
+  }),
+}));
+
+vi.mock('../../src/agents/budget-tracker.js', () => ({
+  initBudgetTracker: vi.fn(() => {
+    initOrder.push('budget-tracker');
+  }),
+}));
+
+vi.mock('../../src/ai/agent-photo-store.js', () => ({
+  getPhotosDirectory: vi.fn(() => '/tmp/photos'),
+  getPhotosUrlPrefix: vi.fn(() => '/photos'),
 }));
 
 vi.mock('../../src/rooms/building-manager.js', () => ({
