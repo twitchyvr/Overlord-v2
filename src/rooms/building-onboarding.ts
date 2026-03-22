@@ -191,26 +191,27 @@ function onboardOrphanedBuildings({ bus, rooms, agents }: OnboardingDeps): void 
   const db = getDb();
 
   try {
-    // Find buildings that have floors but zero rooms
-    const orphaned = db.prepare(`
-      SELECT b.id, b.name, b.working_directory FROM buildings b
+    // Find buildings with incomplete onboarding:
+    // - Zero rooms (never onboarded), OR
+    // - Only a strategist room (onboarded but blueprint never applied)
+    // A fully onboarded building has rooms on multiple floors (discovery, code-lab, etc.)
+    const incomplete = db.prepare(`
+      SELECT b.id, b.name, b.working_directory,
+        (SELECT COUNT(*) FROM rooms r JOIN floors f ON r.floor_id = f.id WHERE f.building_id = b.id) as room_count
+      FROM buildings b
       WHERE EXISTS (SELECT 1 FROM floors f WHERE f.building_id = b.id)
-        AND NOT EXISTS (
-          SELECT 1 FROM rooms r
-          JOIN floors f ON r.floor_id = f.id
-          WHERE f.building_id = b.id
-        )
-    `).all() as Array<{ id: string; name: string; working_directory: string | null }>;
+        AND (SELECT COUNT(*) FROM rooms r JOIN floors f ON r.floor_id = f.id WHERE f.building_id = b.id) <= 1
+    `).all() as Array<{ id: string; name: string; working_directory: string | null; room_count: number }>;
 
-    if (orphaned.length === 0) {
-      log.info('No orphaned buildings found — all buildings have rooms');
+    if (incomplete.length === 0) {
+      log.info('No incomplete buildings found — all buildings are fully onboarded');
       return;
     }
 
-    log.info({ count: orphaned.length }, 'Found orphaned buildings with no rooms — analyzing and onboarding');
+    log.info({ count: incomplete.length }, 'Found buildings with incomplete onboarding — analyzing and applying blueprints');
 
     let successCount = 0;
-    for (const building of orphaned) {
+    for (const building of incomplete) {
       log.info({ buildingId: building.id, name: building.name }, 'Analyzing orphaned building');
 
       // Try to detect project type from the working directory
@@ -314,7 +315,7 @@ function onboardOrphanedBuildings({ bus, rooms, agents }: OnboardingDeps): void 
       }
     }
 
-    log.info({ onboarded: successCount, total: orphaned.length }, 'Orphaned building onboarding complete');
+    log.info({ onboarded: successCount, total: incomplete.length }, 'Building onboarding complete');
   } catch (e) {
     log.error({ err: e instanceof Error ? e.message : String(e) }, 'Failed to check for orphaned buildings');
   }
