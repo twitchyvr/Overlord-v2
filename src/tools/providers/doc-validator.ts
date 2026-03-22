@@ -27,7 +27,6 @@ interface ValidationReport {
 
 export function validateDocumentation(params: {
   workingDirectory: string;
-  allowedPaths?: string[];
 }): Result<ValidationReport> {
   const dir = params.workingDirectory;
 

@@ -1530,19 +1530,12 @@ function registerBuiltinTools(): void {
     category: 'documentation',
     inputSchema: {
       type: 'object',
-      properties: {
-        scope: {
-          type: 'string',
-          description: 'What to validate: "all", "changelog", "readme", or a specific file path',
-          default: 'all',
-        },
-      },
+      properties: {},
     },
     execute: async (_p, ctx) => {
       const { validateDocumentation } = await import('./providers/doc-validator.js');
       const result = validateDocumentation({
         workingDirectory: ctx?.workingDirectory || '.',
-        allowedPaths: ctx?.allowedPaths,
       });
       if (!result.ok) return { output: result.error?.message || 'Validation failed', error: true };
       const report = result.data;
