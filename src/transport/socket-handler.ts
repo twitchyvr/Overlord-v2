@@ -62,7 +62,7 @@ import {
   CitationListSchema, CitationBacklinksSchema,
   TableSetContextSchema, TableGetContextSchema, TableClearContextSchema,
   TableGetAssignmentsSchema, TableDivideWorkSchema,
-  AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema, RoomActivityLogSchema, FloorActivityLogSchema, BuildingActivityLogSchema,
+  AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema, RoomActivityLogSchema, FloorActivityLogSchema, BuildingActivityLogSchema, TelemetryRatesSchema,
   BudgetGetSchema, BudgetSetSchema, BudgetBuildingSchema,
   TodoCheckoutSchema, TodoReleaseSchema, TodoCompleteCheckoutSchema,
   TodoLockStatusSchema, CheckedOutTodosSchema,
@@ -97,7 +97,7 @@ import {
   LockStateGetSchema,
   MergeQueueGetSchema,
 } from './schemas.js';
-import { getStatsSummary, getActivityLog, getBuildingActivityLog, getRoomActivityLog, getFloorActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd, recordActivity } from '../agents/agent-stats.js';
+import { getStatsSummary, getActivityLog, getBuildingActivityLog, getRoomActivityLog, getFloorActivityLog, getLeaderboard, getTelemetryRates, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd, recordActivity } from '../agents/agent-stats.js';
 import { checkBudget, setAgentBudget, getBuildingBudgets } from '../agents/budget-tracker.js';
 import { checkoutTodo, releaseTodo, completeTodo, getLockStatus, getCheckedOutTodos, releaseExpiredLocks } from '../agents/task-checkout.js';
 import { createVisualTest, reviewVisualTest, listVisualTests, getUATSummary, checkUATGate } from '../rooms/visual-testing.js';
@@ -1565,6 +1565,12 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         eventType: parsed.eventType,
       });
       if (ack) ack({ ok: true, data: entries });
+    });
+
+    // Telemetry rates (#804)
+    handle(socket, 'telemetry:rates', TelemetryRatesSchema, (parsed, ack) => {
+      const rates = getTelemetryRates(parsed.buildingId);
+      if (ack) ack({ ok: true, data: rates });
     });
 
     handle(socket, 'agent:leaderboard', AgentLeaderboardSchema, (parsed, ack) => {
