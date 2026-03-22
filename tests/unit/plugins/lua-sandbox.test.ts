@@ -200,10 +200,17 @@ describe('Lua Sandbox', () => {
   // to verify they are correctly removed from the sandbox.
 
   describe('blocked globals', () => {
-    it('blocks access to os library', async () => {
+    it('provides safe os subset — time/date/clock only (#982)', async () => {
       const sandbox = await createLuaSandbox(manifest, context);
-      const result = sandbox.execute('if os ~= nil then error("os is accessible") end');
-      expect(result.ok).toBe(true);
+      // os should exist with safe functions
+      const hasTime = sandbox.execute('if os == nil then error("os is nil") end; os.time()');
+      expect(hasTime.ok).toBe(true);
+      // os.execute should NOT exist
+      const noExec = sandbox.execute('if os.execute ~= nil then error("os.execute is accessible") end');
+      expect(noExec.ok).toBe(true);
+      // os.remove should NOT exist
+      const noRemove = sandbox.execute('if os.remove ~= nil then error("os.remove is accessible") end');
+      expect(noRemove.ok).toBe(true);
       sandbox.destroy();
     });
 

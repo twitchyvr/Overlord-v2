@@ -103,7 +103,7 @@ const VALID_HOOKS: PluginHook[] = [
 
 /** Dangerous Lua globals that are removed from the sandbox */
 const BLOCKED_LUA_GLOBALS = [
-  'os',          // System operations (execute, remove, rename, etc.)
+  // 'os' — NOT blocked; replaced with safe subset below (#982)
   'io',          // File I/O operations
   'loadfile',    // Load Lua from filesystem
   'dofile',      // Execute Lua from filesystem
@@ -138,6 +138,9 @@ export async function createLuaSandbox(
 
   // Remove dangerous globals
   removeDangerousGlobals(engine);
+
+  // Replace os with safe subset (#982)
+  injectSafeOs(engine);
 
   // Inject the Overlord API
   injectOverlordAPI(engine, manifest, context);
@@ -243,6 +246,28 @@ function removeDangerousGlobals(engine: LuaEngine): void {
     } catch {
       // Some globals may not exist — that's fine
     }
+  }
+}
+
+/**
+ * Replace the full `os` library with a safe subset (#982).
+ * Exposes: os.time, os.date, os.clock, os.difftime
+ * Blocks: os.execute, os.remove, os.rename, os.exit, os.tmpname, os.getenv, os.setlocale
+ */
+function injectSafeOs(engine: LuaEngine): void {
+  try {
+    engine.doStringSync(`
+      local _safe_os = {
+        time = os.time,
+        date = os.date,
+        clock = os.clock,
+        difftime = os.difftime,
+      }
+      os = _safe_os
+    `);
+  } catch (e) {
+    log.warn({ err: e instanceof Error ? e.message : String(e) }, 'Failed to inject safe os — os will be nil');
+    try { engine.doStringSync('os = nil'); } catch { /* fallback */ }
   }
 }
 
