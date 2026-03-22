@@ -28,6 +28,7 @@ function setupDb(): Database.Database {
     `CREATE TABLE buildings (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      working_directory TEXT,
       active_phase TEXT DEFAULT 'strategy',
       created_at TEXT DEFAULT (datetime('now'))
     )`,
