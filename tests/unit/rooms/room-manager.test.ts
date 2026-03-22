@@ -186,14 +186,15 @@ describe('Room Manager', () => {
       }
     });
 
-    it('updates agent status to active and assigns table', () => {
+    it('seats agent in room without changing status (#998)', () => {
       enterRoom({ roomId, agentId: 'agent_1' });
       const agent = db.prepare('SELECT status, current_room_id, current_table_id FROM agents WHERE id = ?').get('agent_1') as {
         status: string;
         current_room_id: string;
         current_table_id: string;
       };
-      expect(agent.status).toBe('active');
+      // enterRoom should NOT change status — only play button transitions to 'active'
+      expect(agent.status).toBe('idle');
       expect(agent.current_room_id).toBe(roomId);
       expect(agent.current_table_id).toBeDefined();
       expect(agent.current_table_id).toMatch(/^table_/);

@@ -210,10 +210,10 @@ export function enterRoom({ roomId, agentId, tableType }: EnterRoomParams): Resu
       }
 
       // Seat the agent atomically within the same transaction
-      db.prepare('UPDATE agents SET current_room_id = ?, current_table_id = ?, status = ? WHERE id = ?').run(
+      // Keep current status (idle) — only the play button should transition to 'active' (#998)
+      db.prepare('UPDATE agents SET current_room_id = ?, current_table_id = ? WHERE id = ?').run(
         roomId,
         tableRow.id,
-        'active',
         agentId,
       );
 
