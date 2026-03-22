@@ -62,7 +62,7 @@ import {
   CitationListSchema, CitationBacklinksSchema,
   TableSetContextSchema, TableGetContextSchema, TableClearContextSchema,
   TableGetAssignmentsSchema, TableDivideWorkSchema,
-  AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema, RoomActivityLogSchema, FloorActivityLogSchema,
+  AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema, RoomActivityLogSchema, FloorActivityLogSchema, BuildingActivityLogSchema,
   BudgetGetSchema, BudgetSetSchema, BudgetBuildingSchema,
   TodoCheckoutSchema, TodoReleaseSchema, TodoCompleteCheckoutSchema,
   TodoLockStatusSchema, CheckedOutTodosSchema,
@@ -1542,6 +1542,15 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
 
     handle(socket, 'floor:activity-log', FloorActivityLogSchema, (parsed, ack) => {
       const entries = getFloorActivityLog(parsed.floorId, {
+        limit: parsed.limit,
+        offset: parsed.offset,
+        eventType: parsed.eventType,
+      });
+      if (ack) ack({ ok: true, data: entries });
+    });
+
+    handle(socket, 'building:activity-log', BuildingActivityLogSchema, (parsed, ack) => {
+      const entries = getBuildingActivityLog(parsed.buildingId, {
         limit: parsed.limit,
         offset: parsed.offset,
         eventType: parsed.eventType,
