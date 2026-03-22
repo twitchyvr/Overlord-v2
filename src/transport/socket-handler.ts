@@ -464,8 +464,8 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
 
 Your tasks:
 1. Use read_file and list_dir to explore the project structure, key files, and configuration
-2. Create a milestone for the Strategy phase using create_milestone (title it based on what you find)
-3. Create 3-5 tasks using create_task for the most important next steps (e.g., "Review architecture", "Assess test coverage", "Identify dependencies")
+2. Create a milestone FIRST using create_milestone (title it based on what you find). Note the milestone ID from the response.
+3. Create 3-5 tasks using create_task for the most important next steps. IMPORTANT: include the milestone_id from step 2 in each create_task call so tasks are linked to the milestone.
 4. Log 2-3 risks or assumptions using create_raid_entry (e.g., missing tests, outdated dependencies, unclear requirements)
 5. Provide a brief summary of your findings
 
