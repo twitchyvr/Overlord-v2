@@ -201,7 +201,15 @@ async function processNext(params: MergeQueueParams): Promise<Result<MergeQueueE
   const branch = row.branch;
   const wtPath = row.worktree_path;
 
+  // Defense-in-depth: re-validate branch from DB before shell use (#958)
+  rejectShellMeta(branch, 'branch name (from DB)');
+  rejectShellMeta(wtPath, 'worktree path (from DB)');
+
   log.info({ entryId, branch }, 'Processing merge queue entry');
+
+  // NOTE: Atomicity of SELECT→UPDATE is guaranteed by the external git:static
+  // resource lock acquired by tool-middleware. processNext is never called
+  // concurrently for the same building. See tool-resource-map.ts (#958).
 
   // ── Step 1: Check drift ──
   const updateStatus = (status: string, extra?: Record<string, unknown>) => {
@@ -318,18 +326,19 @@ async function processNext(params: MergeQueueParams): Promise<Result<MergeQueueE
     timeout: 30_000,
   });
 
-  if (pushResult.exitCode !== 0) {
-    // Merge succeeded locally but push failed — still mark as merged but log warning
-    log.warn({ entryId, branch, stderr: pushResult.stderr }, 'Push after merge failed');
+  const pushFailed = pushResult.exitCode !== 0;
+  if (pushFailed) {
+    // Merge succeeded locally but push failed — log warning (#958)
+    log.warn({ entryId, branch, stderr: pushResult.stderr }, 'Push after merge failed — merged locally only');
   }
 
   // ── Step 7: Mark complete ──
-  updateStatus('merged');
+  updateStatus('merged', pushFailed ? { failureReason: 'PUSH_FAILED_LOCAL_ONLY' } : undefined);
 
   const updatedRow = db.prepare(`SELECT * FROM merge_queue WHERE id = ?`).get(entryId) as MergeQueueRow;
   const entry = rowToEntry(updatedRow);
 
-  log.info({ entryId, branch }, 'Branch merged successfully');
+  log.info({ entryId, branch, pushFailed }, 'Branch merged successfully');
   return ok(entry);
 }
 
@@ -378,6 +387,8 @@ async function checkDrift(params: MergeQueueParams): Promise<Result<MergeDriftIn
 // ── Internal Helpers ──
 
 async function detectDrift(cwd: string, branch?: string): Promise<MergeDriftInfo | null> {
+  // Defense-in-depth: validate branch before shell interpolation (#958)
+  if (branch) rejectShellMeta(branch, 'branch name (drift check)');
   const ref = branch ? `${branch}` : 'HEAD';
 
   // Count commits behind main
