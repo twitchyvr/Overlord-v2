@@ -990,6 +990,7 @@ export class EmailView extends Component {
               subject,
               body,
               priority: prioritySelect.value,
+              buildingId: store.get('building.active'),
             });
           }
 
