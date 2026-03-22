@@ -13,7 +13,7 @@
 
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
-import { getDb } from '../storage/db.js';
+import { buildDocContextInjection } from '../storage/doc-library.js';
 import { getAgent } from './agent-registry.js';
 import { AgentSession } from './agent-session.js';
 import { estimateTokens, allocateBudget, pruneMessages, getContextMetrics } from './context-manager.js';
@@ -984,24 +984,16 @@ function buildSystemPrompt(
     }
   }
 
-  // Inject documentation library context (#811)
+  // Inject smart documentation context (#811, #814)
   const buildingId = (context as Record<string, unknown>).buildingId as string | undefined;
   if (buildingId) {
     try {
-      const db = getDb();
-      const libs = db.prepare(
-        'SELECT id, name, description FROM doc_libraries WHERE building_id = ? OR building_id IS NULL',
-      ).all(buildingId) as Array<{ id: string; name: string; description: string | null }>;
-
-      if (libs.length > 0) {
-        sections.push('', '## Documentation Libraries');
-        sections.push('You have access to project documentation. Use `search_library` to find information and `get_document` to read full documents.');
-        sections.push('');
-        for (const lib of libs) {
-          const docCount = (db.prepare('SELECT COUNT(*) as cnt FROM doc_entries WHERE library_id = ?').get(lib.id) as { cnt: number }).cnt;
-          sections.push(`- **${lib.name}** — ${docCount} documents${lib.description ? ` (${lib.description})` : ''}`);
-        }
-        sections.push('', 'When you need to understand project architecture, API specs, or implementation details, search the library first before reading raw source files.');
+      const docContext = buildDocContextInjection({
+        buildingId,
+        taskDescription: (context as Record<string, unknown>).taskDescription as string | undefined,
+      });
+      if (docContext) {
+        sections.push('', docContext);
       }
     } catch { /* DB not ready */ }
   }

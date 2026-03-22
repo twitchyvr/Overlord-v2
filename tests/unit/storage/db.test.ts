@@ -85,7 +85,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 27 tables', () => {
+  describe('schema — all 30 tables', () => {
     const expectedTables = [
       'buildings',
       'floors',
@@ -114,20 +114,23 @@ describe('Storage Layer', () => {
       'repo_file_origins',
       'doc_libraries',
       'doc_entries',
+      'doc_entries_fts',
+      'doc_toc',
       'merge_queue',
     ];
 
-    it('creates all 28 tables', async () => {
+    it('creates all 29 tables (plus FTS5 shadow tables)', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
+      // Exclude FTS5 shadow tables (data, idx, content, docsize, config) but include core tables
       const tables = db
-        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'doc_entries_fts_%' ORDER BY name")
         .all() as { name: string }[];
 
       const tableNames = tables.map((t) => t.name).sort();
       expect(tableNames).toEqual(expectedTables.sort());
-      expect(tableNames).toHaveLength(28);
+      expect(tableNames).toHaveLength(30);
     });
 
     it.each(expectedTables)('creates table: %s', async (tableName) => {
@@ -219,7 +222,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 50 indexes', () => {
+  describe('schema — all 51 indexes', () => {
     const expectedIndexes = [
       'idx_rooms_floor',
       'idx_rooms_type',
@@ -274,12 +277,13 @@ describe('Storage Layer', () => {
       'idx_doc_libraries_building',
       'idx_doc_entries_library',
       'idx_doc_entries_path',
+      'idx_doc_toc_entry',
       'idx_merge_queue_building',
       'idx_merge_queue_status',
       'idx_merge_queue_position',
     ];
 
-    it('creates all 56 custom indexes', async () => {
+    it('creates all 57 custom indexes', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -289,7 +293,7 @@ describe('Storage Layer', () => {
 
       const indexNames = indexes.map((i) => i.name).sort();
       expect(indexNames).toEqual(expectedIndexes.sort());
-      expect(indexNames).toHaveLength(56);
+      expect(indexNames).toHaveLength(57);
     });
 
     it.each(expectedIndexes)('creates index: %s', async (indexName) => {
@@ -332,7 +336,8 @@ describe('Storage Layer', () => {
         .prepare("SELECT count(*) as cnt FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         .get() as { cnt: number };
 
-      expect(tables.cnt).toBe(28);
+      // 29 regular tables + FTS5 shadow tables (doc_entries_fts + 5 shadow tables)
+      expect(tables.cnt).toBe(34);
     });
   });
 

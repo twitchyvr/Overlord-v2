@@ -440,6 +440,24 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_doc_entries_library ON doc_entries(library_id);
   CREATE INDEX IF NOT EXISTS idx_doc_entries_path ON doc_entries(file_path);
 
+  -- Documentation FTS5 full-text search (#814)
+  CREATE VIRTUAL TABLE IF NOT EXISTS doc_entries_fts USING fts5(
+    title, summary, tags, file_path,
+    content=doc_entries,
+    content_rowid=rowid
+  );
+
+  -- Documentation TOC entries (#814)
+  CREATE TABLE IF NOT EXISTS doc_toc (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id TEXT NOT NULL REFERENCES doc_entries(id) ON DELETE CASCADE,
+    level INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    line_number INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_doc_toc_entry ON doc_toc(entry_id);
+
   -- Merge Queue (#944) — Sequential merge strategy for worktree branches
   CREATE TABLE IF NOT EXISTS merge_queue (
     id TEXT PRIMARY KEY,
