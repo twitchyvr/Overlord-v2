@@ -278,6 +278,74 @@
 .health-badge-yellow { background: var(--accent-amber); }
 .health-badge-orange { background: var(--accent-orange, #f97316); }
 .health-badge-red { background: var(--accent-red, #ef4444); }
+
+/* ── Building Execution Controls (#965, #969) ── */
+.exec-state-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  margin-right: var(--sp-2);
+  flex-shrink: 0;
+}
+.exec-state-stopped { background: var(--text-muted); }
+.exec-state-running {
+  background: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+  animation: exec-pulse 1.5s ease-in-out infinite;
+}
+.exec-state-paused { background: var(--accent-amber); }
+@keyframes exec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.exec-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  border-top: 1px solid var(--border-subtle, var(--border-default));
+  margin-top: var(--sp-2);
+}
+.exec-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-default);
+  padding: 0;
+  line-height: 1;
+}
+.exec-btn:hover { background: var(--bg-secondary); }
+.exec-btn-play { color: var(--accent-green); border-color: var(--accent-green); }
+.exec-btn-play:hover { background: var(--accent-green); color: var(--bg-primary); }
+.exec-btn-pause { color: var(--accent-amber); border-color: var(--accent-amber); }
+.exec-btn-pause:hover { background: var(--accent-amber); color: var(--bg-primary); }
+.exec-btn-stop { color: var(--accent-red, #ef4444); border-color: var(--accent-red, #ef4444); }
+.exec-btn-stop:hover { background: var(--accent-red, #ef4444); color: var(--bg-primary); }
+
+.exec-live-stats {
+  display: flex;
+  gap: var(--sp-2);
+  margin-left: auto;
+  align-items: center;
+}
+.exec-stat {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.exec-stat-tokens { color: var(--accent-blue, #3b82f6); }
+.exec-stat-cost { color: var(--accent-green); font-weight: var(--font-semibold); }
+
 .card-footer {
   display: flex;
   align-items: center;

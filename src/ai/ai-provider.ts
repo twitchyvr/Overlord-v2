@@ -12,6 +12,7 @@ import { createAnthropicAdapter } from './adapters/anthropic.js';
 import { createOpenAIAdapter } from './adapters/openai.js';
 import { createMinimaxAdapter } from './adapters/minimax.js';
 import { createOllamaAdapter } from './adapters/ollama.js';
+import { getBuildingExecutionState } from '../core/execution-signal.js';
 import type { Result, AIAdapter, AIProviderAPI, ToolDefinition, Config } from '../core/contracts.js';
 import type { Bus } from '../core/bus.js';
 
@@ -63,6 +64,36 @@ export async function sendMessage(params: {
   const adapter = adapters.get(params.provider);
   if (!adapter) {
     return err('UNKNOWN_PROVIDER', `AI provider "${params.provider}" is not registered`);
+  }
+
+  // ── Execution guard (#968, #969) ──
+  // Block AI API calls for buildings that are paused or stopped.
+  // This is the last line of defense — even if the conversation loop has
+  // a bug, the AI layer refuses to send requests for non-running buildings.
+  const rawBuildingId = params.options?.buildingId;
+  const buildingId = typeof rawBuildingId === 'string' ? rawBuildingId : undefined;
+  if (buildingId) {
+    const execState = getBuildingExecutionState(buildingId);
+    if (execState === 'aborted' || execState === 'stopped') {
+      log.info({ buildingId, provider: params.provider }, 'AI request blocked: building stopped');
+      if (_bus) {
+        _bus.emit('api:blocked', { buildingId, provider: params.provider, reason: 'stopped' });
+      }
+      return err('EXECUTION_BLOCKED', `Building ${buildingId} is stopped — no API calls allowed`, {
+        retryable: false,
+        context: { buildingId, executionState: execState },
+      });
+    }
+    if (execState === 'paused') {
+      log.info({ buildingId, provider: params.provider }, 'AI request blocked: building paused');
+      if (_bus) {
+        _bus.emit('api:blocked', { buildingId, provider: params.provider, reason: 'paused' });
+      }
+      return err('EXECUTION_PAUSED', `Building ${buildingId} is paused — no API calls allowed`, {
+        retryable: false,
+        context: { buildingId, executionState: execState },
+      });
+    }
   }
 
   try {

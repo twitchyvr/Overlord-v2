@@ -16,10 +16,11 @@ import { randomUUID } from 'crypto';
 import { logger, broadcastLog } from '../core/logger.js';
 import { config as appConfig } from '../core/config.js';
 import type { Bus } from '../core/bus.js';
+import { removeExecutionSignal } from '../core/execution-signal.js';
 import type { RoomManagerAPI, AgentRegistryAPI, ToolRegistryAPI, AIProviderAPI } from '../core/contracts.js';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { AgentSession } from '../agents/agent-session.js';
-import { createBuilding, getBuilding, listBuildings, updateBuilding, addAllowedPath, removeAllowedPath, listFloors, getFloor, createFloor, updateFloor, deleteFloor, sortFloors, getHealthScore } from '../rooms/building-manager.js';
+import { createBuilding, getBuilding, listBuildings, updateBuilding, addAllowedPath, removeAllowedPath, listFloors, getFloor, createFloor, updateFloor, deleteFloor, sortFloors, getHealthScore, transitionBuildingExecution, getBuildingExecState, getBuildingExecutionStats } from '../rooms/building-manager.js';
 import { getGitInfo, initGitRepo, cloneGitRepo } from '../tools/git-detector.js';
 import { getGates, canAdvance, signoffGate, createGate, getPendingGates, resolveConditions, getStalePendingGates, getPhaseOrder } from '../rooms/phase-gate.js';
 import { searchRaid, addRaidEntry, updateRaidEntry, updateRaidStatus } from '../rooms/raid-log.js';
@@ -34,6 +35,7 @@ import type { z } from 'zod';
 import {
   validate,
   BuildingCreateSchema, BuildingGetSchema, BuildingDeleteSchema, BuildingListSchema, BuildingApplyBlueprintSchema, BuildingUpdateSchema, BuildingHealthScoreSchema,
+  BuildingStartSchema, BuildingPauseSchema, BuildingStopSchema, BuildingExecStateSchema, BuildingExecStatsSchema,
   FolderAddPathSchema, FolderRemovePathSchema, FolderListPathsSchema,
   GitDetectSchema, GitInitSchema, GitCloneSchema,
   FloorListSchema, FloorGetSchema, FloorCreateSchema, FloorUpdateSchema, FloorDeleteSchema, FloorSortSchema,
@@ -329,6 +331,9 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       const db = getDb();
       const buildingId = parsed.buildingId;
 
+      // Clean up execution signal (aborts waiting agents, frees memory) (#969)
+      removeExecutionSignal(buildingId);
+
       // Verify building exists
       const building = db.prepare('SELECT name FROM buildings WHERE id = ?').get(buildingId) as { name: string } | undefined;
       if (!building) {
@@ -409,6 +414,58 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
 
     handle(socket, 'building:health-score', BuildingHealthScoreSchema, (parsed, ack) => {
       if (ack) ack(getHealthScore(parsed.buildingId));
+    });
+
+    // ─── Building Execution Control (#965, #969) ───
+
+    handle(socket, 'building:start', BuildingStartSchema, (parsed, ack) => {
+      const result = transitionBuildingExecution(parsed.buildingId, 'running');
+      if (result.ok) {
+        const data = result.data as { buildingId: string; executionState: string; previousState: string };
+        broadcastLog('info', `Building started: ${data.buildingId}`, 'building');
+        io.emit('building:execution-changed', {
+          buildingId: data.buildingId,
+          executionState: data.executionState,
+          previousState: data.previousState,
+        });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'building:pause', BuildingPauseSchema, (parsed, ack) => {
+      const result = transitionBuildingExecution(parsed.buildingId, 'paused');
+      if (result.ok) {
+        const data = result.data as { buildingId: string; executionState: string; previousState: string };
+        broadcastLog('info', `Building paused: ${data.buildingId}`, 'building');
+        io.emit('building:execution-changed', {
+          buildingId: data.buildingId,
+          executionState: data.executionState,
+          previousState: data.previousState,
+        });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'building:stop', BuildingStopSchema, (parsed, ack) => {
+      const result = transitionBuildingExecution(parsed.buildingId, 'aborted');
+      if (result.ok) {
+        const data = result.data as { buildingId: string; executionState: string; previousState: string };
+        broadcastLog('info', `Building stopped: ${data.buildingId}`, 'building');
+        io.emit('building:execution-changed', {
+          buildingId: data.buildingId,
+          executionState: data.executionState,
+          previousState: data.previousState,
+        });
+      }
+      if (ack) ack(result);
+    });
+
+    handle(socket, 'building:exec-state', BuildingExecStateSchema, (parsed, ack) => {
+      if (ack) ack(getBuildingExecState(parsed.buildingId));
+    });
+
+    handle(socket, 'building:exec-stats', BuildingExecStatsSchema, (parsed, ack) => {
+      if (ack) ack(getBuildingExecutionStats(parsed.buildingId));
     });
 
     // ─── Folder / Path Permission Events ───
