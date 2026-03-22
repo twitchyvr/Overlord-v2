@@ -144,6 +144,7 @@ export class BreadcrumbNav extends Component {
         li.appendChild(h('span', {
           class: `breadcrumb-label${isLast ? ' breadcrumb-current' : ''}`,
           'aria-current': isLast ? 'page' : undefined,
+          title: seg.label,
         }, seg.label));
       } else {
         // Clickable link

@@ -162,7 +162,7 @@ export class DashboardView extends Component {
         class: `project-pill${isActive ? ' active' : ''}`
       },
         h('span', { class: 'project-pill-icon' }, '\u{1F3D7}\uFE0F'),
-        h('span', { class: 'project-pill-name' }, building.name || 'Untitled')
+        h('span', { class: 'project-pill-name', title: building.name || 'Untitled' }, building.name || 'Untitled')
       );
 
       pill.addEventListener('click', () => {
