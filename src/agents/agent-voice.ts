@@ -60,10 +60,44 @@ function simpleHash(str: string): number {
 }
 
 /**
- * Get (or assign) a voice profile for an agent.
- * Assignment is deterministic based on name + role.
+ * Custom voice configuration stored in agent config JSON.
  */
-export function getAgentVoice(agentId: string, name: string, role: string): VoiceProfile {
+export interface CustomVoiceConfig {
+  voiceId: string;
+  type: 'cloned' | 'designed' | 'system';
+  tone?: string;
+  speed?: number;
+  assignedAt?: string;
+}
+
+/**
+ * Get (or assign) a voice profile for an agent.
+ *
+ * If the agent has a custom voice configured (cloned or designed),
+ * that takes priority. Otherwise, falls back to deterministic
+ * assignment based on name + role hash.
+ *
+ * @param agentId - Agent identifier
+ * @param name - Agent name
+ * @param role - Agent role
+ * @param config - Optional agent config object (may contain voice settings)
+ */
+export function getAgentVoice(agentId: string, name: string, role: string, config?: Record<string, unknown>): VoiceProfile {
+  // Check for custom voice in agent config
+  const voiceConfig = config?.voice as CustomVoiceConfig | undefined;
+  if (voiceConfig?.voiceId && voiceConfig.type !== 'system') {
+    const customProfile: VoiceProfile = {
+      voiceId: voiceConfig.voiceId,
+      name: 'Custom',
+      gender: 'neutral',
+      tone: voiceConfig.tone ?? 'custom',
+      speed: voiceConfig.speed ?? 1.0,
+    };
+    agentVoices.set(agentId, customProfile);
+    log.debug({ agentId, name, voiceId: customProfile.voiceId, type: voiceConfig.type }, 'Custom voice assigned to agent');
+    return customProfile;
+  }
+
   if (agentVoices.has(agentId)) {
     return agentVoices.get(agentId)!;
   }

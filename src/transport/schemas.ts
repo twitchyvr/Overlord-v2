@@ -647,6 +647,38 @@ export const FileDeleteSchema = z.object({
   purpose: z.enum(['voice_clone', 'prompt_audio', 't2a_async_input']),
 });
 
+// ─── MiniMax Voice Cloning & Design ───
+
+export const VoiceCloneSchema = z.object({
+  /** MiniMax file ID of the uploaded audio sample */
+  fileId: z.string().min(1).max(100),
+  /** Custom voice identifier (8-256 chars, starts with letter) */
+  voiceId: z.string().min(8).max(256).regex(/^[a-zA-Z][a-zA-Z0-9_-]{6,254}[a-zA-Z0-9]$/),
+  /** Text to synthesize as a preview of the cloned voice */
+  previewText: z.string().min(1).max(500),
+  /** Apply noise reduction to source audio */
+  noiseReduction: z.boolean().optional(),
+  /** Normalize volume levels */
+  volumeNormalization: z.boolean().optional(),
+});
+
+export const VoiceDesignSchema = z.object({
+  /** Natural language voice description */
+  description: z.string().min(1).max(1000),
+  /** Text to synthesize as a preview */
+  previewText: z.string().min(1).max(500),
+  /** Optional custom voice ID (auto-generated if omitted) */
+  voiceId: z.string().min(8).max(256).regex(/^[a-zA-Z][a-zA-Z0-9_-]{6,254}[a-zA-Z0-9]$/).optional(),
+});
+
+export const AgentVoiceAssignSchema = z.object({
+  agentId: id(),
+  /** Voice ID to assign (system voice or custom cloned/designed) */
+  voiceId: z.string().min(1).max(256),
+  /** Source type of the voice */
+  voiceType: z.enum(['cloned', 'designed', 'system']),
+});
+
 // ─── Citations ───
 
 export const CitationListSchema = z.object({
