@@ -6,10 +6,12 @@
  * routes to the correct detail view.
  *
  * Supported entity types:
- *   - 'agent'  → opens agent detail drawer
- *   - 'room'   → dispatches building:room-selected (triggers RoomView)
- *   - 'task'   → opens task detail drawer
- *   - 'raid'   → opens RAID entry detail drawer
+ *   - 'agent'    → opens agent detail drawer
+ *   - 'room'     → opens room detail drawer (#980)
+ *   - 'floor'    → opens floor detail drawer (#980)
+ *   - 'building' → opens building detail drawer (#980)
+ *   - 'task'     → opens task detail drawer
+ *   - 'raid'     → opens RAID entry detail drawer
  */
 
 import { OverlordUI } from './engine.js';
@@ -821,21 +823,10 @@ async function _openBuildingDetail(buildingId) {
     content: container,
   });
 
-  // Fetch building activity async (uses existing fetchBuildingActivityLog or activity store)
+  // Fetch building activity async via dedicated socket call (#991)
   try {
-    const activityItems = (store?.get('activity.items') || [])
-      .filter(item => item.buildingId === buildingId)
-      .slice(0, 30);
-    // Convert store format to ActivityLogEntry format
-    const entries = activityItems.map(item => ({
-      id: item.id || '',
-      agent_id: item.agentId || '',
-      event_type: item.event || item.type || '',
-      event_data: {},
-      building_id: buildingId,
-      room_id: item.roomId || null,
-      created_at: item.ts || item.timestamp || '',
-    }));
+    const res = await window.overlordSocket.fetchBuildingActivityLog(buildingId, { limit: 30 });
+    const entries = res?.ok ? (res.data || []) : [];
     const timeline = _renderActivityTimeline(entries, { limit: 30 });
     activityPlaceholder.replaceWith(timeline);
   } catch (e) {

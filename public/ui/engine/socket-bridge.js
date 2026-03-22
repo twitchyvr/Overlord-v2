@@ -1770,6 +1770,10 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithTimeout('floor:activity-log', { floorId, ...opts });
     },
 
+    fetchBuildingActivityLog(buildingId, opts = {}) {
+      return _emitWithTimeout('building:activity-log', { buildingId, ...opts });
+    },
+
     fetchLeaderboard(metric, opts = {}) {
       return _emitWithTimeout('agent:leaderboard', { metric, ...opts });
     },
