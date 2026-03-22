@@ -28,10 +28,11 @@ export class Card {
    * @param {string} [options.variant='glass'] — 'glass' | 'solid' | 'outlined'
    * @param {string} [options.className]       — additional CSS class
    * @param {object} [options.actions]          — { label: handler } for action buttons
+   * @param {function} [options.onClick]         — card body click handler (not action buttons)
    * @returns {HTMLElement}
    */
   static create(type, data, options = {}) {
-    const { variant = 'glass', className = '', actions = {} } = options;
+    const { variant = 'glass', className = '', actions = {}, onClick } = options;
 
     const card = h('div', {
       class: `card card-${type} card-${variant} ${className}`.trim(),
@@ -63,6 +64,16 @@ export class Card {
         actionsEl.appendChild(btn);
       }
       card.appendChild(actionsEl);
+    }
+
+    // Card body click handler — distinct from action buttons (#1006)
+    if (typeof onClick === 'function') {
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', (e) => {
+        // Don't trigger on button/link clicks inside the card
+        if (e.target.closest('button, a, .card-actions')) return;
+        onClick(data, card);
+      });
     }
 
     return card;
