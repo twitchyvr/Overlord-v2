@@ -3071,7 +3071,11 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
         const pipelineResult = getTaskPipelineStatus(taskId);
         if (pipelineResult.ok) {
           const pipelineData = pipelineResult.data as { allPassed: boolean; currentStage: number; stages: Array<{ stage: string; status: string }> };
-          if (!pipelineData.allPassed) {
+          // Only enforce pipeline if at least one stage has been started (has evidence).
+          // Tasks created by strategy/discovery/architecture agents are analysis tasks
+          // that don't go through the dev loop pipeline (#1023).
+          const hasAnyEvidence = pipelineData.stages.some(s => s.status !== 'not-reached');
+          if (hasAnyEvidence && !pipelineData.allPassed) {
             const incomplete = pipelineData.stages.filter(s => s.status !== 'passed').map(s => s.stage);
             if (ack) ack({
               ok: false,
@@ -3084,7 +3088,7 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
             return;
           }
         }
-        // If no pipeline exists, allow closure (task may not require pipeline)
+        // If no pipeline evidence exists, allow closure (task may not require pipeline)
       }
 
       fields.push("updated_at = datetime(?)");
