@@ -31,6 +31,8 @@ export class ReviewRoom extends BaseRoom {
       'qa_run_tests',
       'qa_check_lint',
       'session_note',
+      'update_task',
+      'create_raid_entry',
     ],
     fileScope: 'read-only',
     exitRequired: {

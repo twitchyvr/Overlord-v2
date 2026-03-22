@@ -615,47 +615,47 @@ function getDefaultTable(roomType: string): Record<string, boolean> {
  * Each phase's agent gets instructions relevant to their role.
  */
 function _getPhasePrompt(phase: string, buildingId: string): string {
-  // Fetch pending tasks for this phase to include in the prompt
+  // Fetch pending tasks (with IDs) so agents can call update_task (#1022)
   const db = getDb();
   const tasks = db.prepare(
-    "SELECT title FROM tasks WHERE building_id = ? AND phase = ? AND status = 'pending' LIMIT 10"
-  ).all(buildingId, phase) as { title: string }[];
+    "SELECT id, title FROM tasks WHERE building_id = ? AND (phase = ? OR phase IS NULL) AND status = 'pending' LIMIT 10"
+  ).all(buildingId, phase) as { id: string; title: string }[];
 
   const taskList = tasks.length > 0
-    ? `\n\nTasks assigned to this phase:\n${tasks.map((t, i) => `${i + 1}. ${t.title}`).join('\n')}`
+    ? `\n\nPending tasks (use update_task with the task_id to mark progress):\n${tasks.map((t, i) => `${i + 1}. "${t.title}" (task_id: ${t.id})`).join('\n')}\n\nFor each task: call update_task with status "in_progress" when you start, then "done" when finished.`
     : '';
 
   const prompts: Record<string, string> = {
     discovery: `The project has advanced to the Discovery phase. Your role is to research requirements, gather information, and identify unknowns.
 
-Review the strategist's findings, explore the codebase in more detail, and document what you discover. Create tasks for any gaps you find.${taskList}
+Review the strategist's findings, explore the codebase in more detail, and document what you discover. Work through the pending tasks below — mark each one as done when complete.${taskList}
 
 Focus on understanding what the project needs to succeed. Use plain language.`,
 
     architecture: `The project has advanced to the Architecture phase. Your role is to design the technical approach.
 
-Review prior findings, analyze the code structure, and propose architectural improvements or confirm the current approach is sound. Create tasks for any structural changes needed.${taskList}
+Review prior findings, analyze the code structure, and propose architectural improvements or confirm the current approach is sound. Work through pending tasks.${taskList}
 
 Focus on practical, actionable architecture decisions. Use plain language.`,
 
     execution: `The project has advanced to the Execution phase. Your role is to implement changes.
 
-Review the tasks assigned to this phase and begin working through them. Use your tools to read, write, and modify code as needed. Mark tasks as done when complete.${taskList}
+Work through the tasks below. Use your tools to read, write, and modify code as needed. Mark each task done when complete.${taskList}
 
 Focus on making progress on the most important tasks first.`,
 
     review: `The project has advanced to the Review phase. Your role is to verify quality.
 
-Review the work done in previous phases. Check for issues, verify test coverage, and ensure the codebase meets quality standards. Log any issues found as RAID entries.${taskList}
+Review the work done in previous phases. Check for issues, verify test coverage, and ensure quality standards are met. Work through review tasks below.${taskList}
 
 Focus on catching problems before they reach production.`,
 
     deploy: `The project has advanced to the Deploy phase. Your role is to prepare for release.
 
-Review the project readiness, verify all gates are passed, and prepare deployment documentation. Create a final checklist of deployment steps.${taskList}
+Review project readiness and prepare deployment documentation. Complete the deployment checklist tasks below.${taskList}
 
 Focus on ensuring a smooth, safe deployment.`,
   };
 
-  return prompts[phase] || `The project has advanced to the ${phase} phase. Analyze the current state and create a plan for this phase.${taskList}`;
+  return prompts[phase] || `The project has advanced to the ${phase} phase. Analyze the current state and work through any pending tasks.${taskList}`;
 }

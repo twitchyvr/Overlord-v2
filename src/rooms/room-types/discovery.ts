@@ -29,6 +29,9 @@ export class DiscoveryRoom extends BaseRoom {
       'record_note',
       'recall_notes',
       'session_note',
+      'create_task',
+      'update_task',
+      'create_raid_entry',
     ],
     fileScope: 'read-only',
     exitRequired: {

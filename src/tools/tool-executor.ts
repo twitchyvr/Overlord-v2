@@ -49,6 +49,7 @@ export async function executeTool(params: {
       fileScope: params.room.fileScope,
       workingDirectory: params.workingDirectory,
       allowedPaths: params.allowedPaths,
+      bus: params.bus,  // #1022 — pass bus to tools for real-time event emission
     },
   });
 

@@ -39,6 +39,9 @@ export class CodeLab extends BaseRoom {
       'game_engine',
       'dev_server',
       'workspace_sandbox',
+      'create_task',
+      'update_task',
+      'create_raid_entry',
     ],
     fileScope: 'assigned',
     exitRequired: {

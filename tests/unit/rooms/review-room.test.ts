@@ -82,9 +82,9 @@ describe('ReviewRoom', () => {
       expect(room.type).toBe('review');
     });
 
-    it('getAllowedTools returns 7 review tools', () => {
+    it('getAllowedTools returns 9 review tools', () => {
       const room = new ReviewRoom('room_1');
-      expect(room.getAllowedTools()).toHaveLength(7);
+      expect(room.getAllowedTools()).toHaveLength(9);
     });
 
     it('getRules emphasizes evidence-based review', () => {

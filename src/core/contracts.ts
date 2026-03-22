@@ -426,6 +426,8 @@ export interface ToolContext {
   workingDirectory?: string;
   /** Additional paths the building has been granted access to */
   allowedPaths?: string[];
+  /** Event bus for real-time event emission from tools (#1022) */
+  bus?: unknown;
   /** Linked repos and file origin tracking for this building */
   repoContext?: {
     repos: RepoContextEntry[];

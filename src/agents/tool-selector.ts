@@ -68,6 +68,7 @@ const TOOL_KEYWORDS: Record<string, string[]> = {
   // Work item creation (#1015) — triggered by project planning/analysis
   // Avoid single-word keywords that collide with other tools (e.g., 'issue' collides with github)
   create_task: ['task', 'work item', 'todo', 'action item', 'task breakdown', 'next step'],
+  update_task: ['mark done', 'complete task', 'in progress', 'finish task', 'update task', 'mark task'],
   create_raid_entry: ['risk', 'assumption', 'log issue', 'decision', 'concern', 'dependency', 'constraint', 'blocker', 'raid'],
   create_milestone: ['milestone', 'deliverable', 'target date', 'sprint', 'release'],
 };
