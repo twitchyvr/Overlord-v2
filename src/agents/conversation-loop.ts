@@ -729,6 +729,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
               repoContext: params.repoContext,
               buildingId: (params.options?.buildingId as string) || '',
             },
+            resourceLocking: room.config.resourceLocking,
           }),
           TOOL_TIMEOUT_MS,
           `Tool "${toolName}"`,

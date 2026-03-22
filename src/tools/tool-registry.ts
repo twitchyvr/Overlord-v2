@@ -31,10 +31,13 @@ import { analyzeScreenshot } from './providers/screenshot-analyzer.js';
 import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
 import { getDb } from '../storage/db.js';
 import { searchDocuments, getDocumentContent, listDocuments, listLibraries } from '../storage/doc-library.js';
+import { MiddlewareChain, ResourceLockMiddleware } from './tool-middleware.js';
+import { getDefaultResourceDescriptors } from './tool-resource-map.js';
 
 const log = logger.child({ module: 'tool-registry' });
 
 const tools = new Map<string, ToolDefinition>();
+let middlewareChain: MiddlewareChain | null = null;
 
 /**
  * Reject strings containing shell metacharacters that could enable injection.
@@ -50,7 +53,20 @@ function rejectShellMeta(input: string, context: string): void {
 
 export function initTools(_config: Config): ToolRegistryAPI {
   registerBuiltinTools();
-  log.info({ count: tools.size }, 'Tool registry initialized');
+
+  // Attach resource descriptors to registered tools (#941)
+  for (const [name, tool] of tools) {
+    const descriptors = getDefaultResourceDescriptors(name);
+    if (descriptors) {
+      tool.resources = descriptors;
+    }
+  }
+
+  // Initialize middleware chain (#941)
+  middlewareChain = new MiddlewareChain();
+  middlewareChain.add(new ResourceLockMiddleware());
+
+  log.info({ count: tools.size, middlewares: middlewareChain.size }, 'Tool registry initialized');
   return { registerTool, getTool, getToolsForRoom, executeInRoom };
 }
 
@@ -91,6 +107,8 @@ export async function executeInRoom(params: {
   params: Record<string, unknown>;
   roomAllowedTools: string[];
   context: ToolContext;
+  /** Whether resource locking is enabled. Default: true (#941). */
+  resourceLocking?: boolean;
 }): Promise<Result> {
   if (!params.roomAllowedTools.includes(params.toolName)) {
     return err(
@@ -105,8 +123,17 @@ export async function executeInRoom(params: {
   }
 
   try {
-    const result = await tool.execute(params.params, params.context);
-    return ok(result);
+    const finalExecute = async (): Promise<Result> => {
+      const result = await tool.execute(params.params, params.context);
+      return ok(result);
+    };
+
+    // Route through middleware chain if available and locking enabled (#941)
+    if (middlewareChain && params.resourceLocking !== false) {
+      return await middlewareChain.execute(tool, params.params, params.context, finalExecute);
+    }
+
+    return await finalExecute();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return err('TOOL_EXECUTION_ERROR', message, {
