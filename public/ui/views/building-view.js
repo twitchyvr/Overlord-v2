@@ -116,7 +116,7 @@ export class BuildingView extends Component {
     const header = h('div', { class: 'building-header' });
 
     const headerTop = h('div', { class: 'building-header-top' },
-      h('div', { class: 'building-name' }, this._buildingData.name || 'Building'),
+      h('div', { class: 'building-name', title: this._buildingData.name || 'Building' }, this._buildingData.name || 'Building'),
       h('div', { class: 'building-phase' },
         h('span', { class: `phase-badge phase-${this._buildingData.active_phase || 'strategy'}` },
           this._buildingData.active_phase || 'strategy'

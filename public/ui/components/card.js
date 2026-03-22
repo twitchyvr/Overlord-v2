@@ -227,7 +227,7 @@ export class Card {
     const header = h('div', { class: 'card-header' },
       // Execution state indicator dot
       h('span', { class: `exec-state-dot exec-state-${execState}`, title: execState }),
-      h('span', null, data.name || 'Building'),
+      h('span', { title: data.name || 'Building' }, data.name || 'Building'),
       isArchived
         ? h('span', { class: 'card-archived-badge' }, 'ARCHIVED')
         : null,

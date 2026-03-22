@@ -706,7 +706,7 @@ export class AgentsView extends Component {
 
     // Name, nickname, specialization, and role
     const nameGroup = h('div', { class: 'agents-view-card-name-group' },
-      h('div', { class: 'agents-view-card-name' }, displayName),
+      h('div', { class: 'agents-view-card-name', title: displayName }, displayName),
       agent.nickname
         ? h('div', { class: 'agents-view-card-nickname' }, `"${agent.nickname}"`)
         : null,
