@@ -390,6 +390,16 @@ export const MERGE_PRIORITY_ORDER: Record<MergeQueuePriority, number> = {
   auto: 3,
 };
 
+// ── Agent Error Boundary Types (#945) ──
+
+/** Structured event emitted when an agent fails within its error boundary. */
+export interface AgentErrorEvent {
+  agentId: string;
+  error: { code: string; message: string };
+  timestamp: number;
+  sessionId?: string;
+}
+
 export interface RepoContextEntry {
   name: string;
   url: string;
