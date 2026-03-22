@@ -467,7 +467,19 @@ Your tasks:
 2. Create a milestone FIRST using create_milestone (title it based on what you find). Note the milestone ID from the response.
 3. Create 3-5 tasks using create_task for the most important next steps. IMPORTANT: include the milestone_id from step 2 in each create_task call so tasks are linked to the milestone.
 4. Log 2-3 risks or assumptions using create_raid_entry (e.g., missing tests, outdated dependencies, unclear requirements)
-5. Provide a brief summary of your findings
+5. After all tool calls, output your strategy exit document as a JSON code block. This is REQUIRED to advance the project. Fill in projectGoals and successCriteria based on what you found. Example:
+
+\`\`\`json
+{
+  "effortLevel": "easy",
+  "projectGoals": ["Describe goal 1 from codebase", "Describe goal 2"],
+  "successCriteria": ["Criterion 1", "Criterion 2"],
+  "floorsNeeded": ["strategy", "collaboration", "execution", "governance", "operations"],
+  "roomConfig": [{"floor": "strategy", "rooms": ["strategist"]}, {"floor": "collaboration", "rooms": ["discovery", "architecture"]}, {"floor": "execution", "rooms": ["code-lab", "testing-lab"]}, {"floor": "governance", "rooms": ["review"]}, {"floor": "operations", "rooms": ["deploy"]}],
+  "agentRoster": [{"name": "Strategist", "role": "strategist", "rooms": ["strategist"]}, {"name": "Analyst", "role": "analyst", "rooms": ["discovery"]}, {"name": "Architect", "role": "architect", "rooms": ["architecture"]}],
+  "estimatedPhases": ["strategy", "discovery", "architecture", "execution", "review", "deploy"]
+}
+\`\`\`
 
 Focus on being helpful to a non-technical project owner. Use plain language.`,
             });
