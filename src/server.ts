@@ -51,6 +51,15 @@ async function start(): Promise<void> {
   await initStorage(config);
   log.info('Storage initialized');
 
+  // Reset stale execution state from previous session (#1004)
+  // Buildings should not persist 'running' across restarts
+  const resetDb = (await import('./storage/db.js')).getDb();
+  const resetBuildings = resetDb.prepare("UPDATE buildings SET execution_state = 'stopped' WHERE execution_state != 'stopped'").run();
+  const resetAgents = resetDb.prepare("UPDATE agents SET status = 'idle' WHERE status = 'active'").run();
+  if (resetBuildings.changes > 0 || resetAgents.changes > 0) {
+    log.info({ buildings: resetBuildings.changes, agents: resetAgents.changes }, 'Reset stale execution state from previous session');
+  }
+
   const ai = initAI(config, bus);
   log.info('AI layer initialized');
 

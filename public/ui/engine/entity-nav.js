@@ -914,9 +914,12 @@ function _getTooltipContent(type, id) {
     }
     case 'room': {
       const room = resolveRoom(id);
-      if (!room || room.name === id) return null;
-      container.appendChild(h('div', { class: 'entity-tooltip-name' }, room.name));
-      if (room.type) container.appendChild(h('div', { class: 'entity-tooltip-meta' }, _formatRoomType(room.type)));
+      if (!room) return null;
+      // Only show tooltip if it adds info beyond the link text
+      const roomType = _formatRoomType(room.type);
+      if (room.name === roomType) return null; // tooltip would just repeat the link
+      if (roomType) container.appendChild(h('div', { class: 'entity-tooltip-meta' }, roomType));
+      else return null;
       return container;
     }
     case 'task': {
@@ -969,7 +972,7 @@ function _createEntityLink(type, id, displayName) {
     class: `entity-link entity-link-${type}`,
     'data-entity-type': type,
     'data-entity-id': id,
-    title: `View ${type}: ${displayName}`,
+    // No title attr — custom tooltip handles hover info (#1001)
     role: 'button',
     tabindex: '0',
   }, displayName || id);
