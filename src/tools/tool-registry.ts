@@ -31,7 +31,7 @@ import { executeMergeQueue } from './providers/merge-queue.js';
 import { analyzeScreenshot } from './providers/screenshot-analyzer.js';
 import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
 import { getDb } from '../storage/db.js';
-import { searchDocuments, getDocumentContent, listDocuments, listLibraries } from '../storage/doc-library.js';
+import { searchDocuments, getDocumentContent, listDocuments, getDocumentToc, generateManifest } from '../storage/doc-library.js';
 import { MiddlewareChain, ResourceLockMiddleware } from './tool-middleware.js';
 import { getDefaultResourceDescriptors, getToolConcurrencyMode } from './tool-resource-map.js';
 
@@ -1443,8 +1443,14 @@ function registerBuiltinTools(): void {
     execute: async (p) => {
       const result = getDocumentContent(p.documentId as string);
       if (!result.ok) return { output: result.error?.message || 'Document not found', error: true };
-      const doc = result.data as { title: string; content: string; file_path: string };
-      return { output: `# ${doc.title}\n\n${doc.content}` };
+      const doc = result.data as { title: string; content: string; file_path: string; toc: Array<{ level: number; title: string; lineNumber: number }> };
+      // Include TOC navigation if available (#814)
+      let tocSection = '';
+      if (doc.toc && doc.toc.length > 0) {
+        const tocLines = doc.toc.map(t => `${'  '.repeat(t.level - 1)}- ${t.title} (line ${t.lineNumber})`);
+        tocSection = `\n## Table of Contents\n${tocLines.join('\n')}\n\n---\n\n`;
+      }
+      return { output: `# ${doc.title}\n${tocSection}${doc.content}` };
     },
   });
 
@@ -1466,6 +1472,53 @@ function registerBuiltinTools(): void {
       if (docs.length === 0) return { output: 'Library is empty.' };
       const lines = docs.map(d => `- ${d.title} (${d.format}, ${d.word_count} words) — ${d.file_path}`);
       return { output: `${docs.length} documents:\n\n${lines.join('\n')}` };
+    },
+  });
+
+  registerTool({
+    name: 'get_document_toc',
+    description: 'Get the table of contents (heading structure) for a document. Useful for navigating large documents without reading the full content.',
+    category: 'documentation',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        documentId: { type: 'string', description: 'Document entry ID' },
+      },
+      required: ['documentId'],
+    },
+    execute: async (p) => {
+      const result = getDocumentToc(p.documentId as string);
+      if (!result.ok) return { output: result.error?.message || 'TOC not found', error: true };
+      const toc = result.data as Array<{ level: number; title: string; lineNumber: number }>;
+      if (toc.length === 0) return { output: 'No table of contents available for this document.' };
+      const lines = toc.map(t => `${'  '.repeat(t.level - 1)}- ${t.title} (line ${t.lineNumber})`);
+      return { output: `Table of Contents:\n\n${lines.join('\n')}` };
+    },
+  });
+
+  registerTool({
+    name: 'get_library_manifest',
+    description: 'Get a complete manifest of a documentation library — all documents, their summaries, topics, and table of contents. Use this for a comprehensive overview of available documentation.',
+    category: 'documentation',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        libraryId: { type: 'string', description: 'Library ID' },
+      },
+      required: ['libraryId'],
+    },
+    execute: async (p) => {
+      const result = generateManifest(p.libraryId as string);
+      if (!result.ok) return { output: result.error?.message || 'Library not found', error: true };
+      const manifest = result.data;
+      const header = `# ${manifest.name}\n\n${manifest.description || ''}\n\n` +
+        `**${manifest.documentCount} documents** | ${manifest.totalWords.toLocaleString()} words | ` +
+        `Topics: ${manifest.topTopics.slice(0, 8).join(', ')}\n`;
+      const docList = manifest.documents.map(d => {
+        const tocPreview = d.toc.length > 0 ? `\n    TOC: ${d.toc.slice(0, 5).map(t => t.title).join(' → ')}${d.toc.length > 5 ? '...' : ''}` : '';
+        return `- **${d.title}** (${d.format}, ${d.wordCount} words)\n  ${d.summary}${tocPreview}`;
+      });
+      return { output: `${header}\n## Documents\n\n${docList.join('\n\n')}` };
     },
   });
 

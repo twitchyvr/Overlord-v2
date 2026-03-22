@@ -195,13 +195,16 @@ describe('allocateBudget', () => {
     expect(budget.reserved).toBe(8192 + Math.ceil(200_000 * 0.05));
   });
 
-  it('splits available tokens 80/20 between history and toolResults', () => {
+  it('splits available tokens 65/15/20 between history, documentation, and toolResults (#814)', () => {
     const budget = allocateBudget('anthropic', 1000);
     // total=200000, reserved=14096, available=200000-1000-14096=184904
-    // history=floor(184904*0.8)=147923, toolResults=184904-147923=36981
+    // history=floor(184904*0.65), documentation=floor(184904*0.15), toolResults=remainder
     const available = 200_000 - 1000 - budget.reserved;
-    expect(budget.history).toBe(Math.floor(available * 0.8));
-    expect(budget.toolResults).toBe(available - Math.floor(available * 0.8));
+    const expectedHistory = Math.floor(available * 0.65);
+    const expectedDocs = Math.floor(available * 0.15);
+    expect(budget.history).toBe(expectedHistory);
+    expect(budget.documentation).toBe(expectedDocs);
+    expect(budget.toolResults).toBe(available - expectedHistory - expectedDocs);
   });
 
   it('enforces minimum 1000 tokens for history', () => {

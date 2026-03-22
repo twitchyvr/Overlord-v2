@@ -99,6 +99,7 @@ export interface ContextBudget {
   systemPrompt: number;    // Reserved for system prompt
   history: number;         // Available for conversation history
   toolResults: number;     // Reserved for tool result overhead
+  documentation: number;   // Reserved for documentation context (#814)
   reserved: number;        // Safety margin (response tokens + overhead)
 }
 
@@ -109,7 +110,7 @@ export interface ContextBudget {
  *  - System prompt (measured)
  *  - Response generation (configurable, default 4096)
  *  - Safety margin (5% of total)
- *  - Remaining split: 80% history, 20% tool results
+ *  - Remaining split: 65% history, 15% documentation (#814), 20% tool results
  */
 export function allocateBudget(
   provider: string,
@@ -120,14 +121,16 @@ export function allocateBudget(
   const reserved = responseReserve + Math.ceil(total * 0.05);
   const available = total - systemPromptTokens - reserved;
 
-  const history = Math.floor(available * 0.8);
-  const toolResults = available - history;
+  const history = Math.floor(available * 0.65);
+  const documentation = Math.floor(available * 0.15);
+  const toolResults = available - history - documentation;
 
   return {
     total,
     systemPrompt: systemPromptTokens,
     history: Math.max(history, 1000), // Minimum 1000 tokens for history
     toolResults: Math.max(toolResults, 500),
+    documentation: Math.max(documentation, 200), // Minimum 200 tokens for doc context
     reserved,
   };
 }
