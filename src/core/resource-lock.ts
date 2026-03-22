@@ -1,5 +1,5 @@
 /**
- * Resource Lock — Two-Level Filesystem Locking for Parallel Agent Coordination (#939)
+ * Resource Lock — Two-Level Filesystem Locking for Parallel Agent Coordination (#939, #940)
  *
  * Prevents concurrent agents from corrupting shared resources (files, git, browser,
  * build artifacts). Inspired by @m13v's browser-lock architecture:
@@ -12,6 +12,11 @@
  *
  * Lock lifecycle: Acquire -> Refresh -> Expire (no mandatory explicit release).
  * Crashed agents never permanently block resources — TTL expiry handles cleanup.
+ *
+ * #940 additions:
+ *   - Background sweep timer (auto-removes expired locks every 10s)
+ *   - withLockRefresh() wrapper (auto-refreshes lock during long-running operations)
+ *   - LockHandle.isExpired() / timeRemaining() convenience methods
  *
  * Layer: Core (no upper-layer imports)
  *
@@ -44,8 +49,18 @@ export interface LockHandle {
   resource: string;
   agentId: string;
   acquiredAt: number;
+  /** Timestamp of last refresh. May be mutated by `withLockRefresh()` to stay accurate. */
   refreshedAt: number;
   ttl: number;
+
+  /** Check if this lock handle has expired based on current time (includes grace period). */
+  isExpired(): boolean;
+
+  /**
+   * Milliseconds remaining before this lock expires. Returns 0 if expired.
+   * Includes the 2-second grace period in the calculation.
+   */
+  timeRemaining(): number;
 }
 
 export interface LockOptions {
@@ -75,15 +90,74 @@ const MUTEX_EXPIRY_MS = 5_000;
 const MUTEX_POLL_MS = 50;
 const GRACE_PERIOD_MS = 2_000;
 const MAX_LOCK_COUNT = 1_000;
+export const SWEEP_INTERVAL_MS = 10_000;
+
+/**
+ * Create a LockHandle with isExpired() and timeRemaining() convenience methods.
+ * These methods are evaluated at call-time against the current clock.
+ */
+function makeLockHandle(resource: string, agentId: string, acquiredAt: number, refreshedAt: number, ttl: number): LockHandle {
+  return {
+    resource, agentId, acquiredAt, refreshedAt, ttl,
+    isExpired(): boolean {
+      return Date.now() > this.refreshedAt + this.ttl + GRACE_PERIOD_MS;
+    },
+    timeRemaining(): number {
+      const remaining = (this.refreshedAt + this.ttl + GRACE_PERIOD_MS) - Date.now();
+      return remaining > 0 ? remaining : 0;
+    },
+  };
+}
 
 // ── ResourceLockManager ──
 
 export class ResourceLockManager {
   private readonly lockDir: string;
+  private _sweepTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(lockDir?: string) {
     this.lockDir = lockDir ?? path.join(process.cwd(), '.overlord', 'locks');
     this._ensureLockDir();
+  }
+
+  // ── Background Sweep Timer ──
+
+  /**
+   * Start the background sweep timer that removes expired locks every SWEEP_INTERVAL_MS.
+   * Idempotent — calling multiple times does not create multiple timers.
+   */
+  startSweepTimer(intervalMs?: number): void {
+    if (this._sweepTimer) return; // Already running
+    const interval = intervalMs ?? SWEEP_INTERVAL_MS;
+    this._sweepTimer = setInterval(() => {
+      try {
+        this.sweepExpired();
+      } catch (e) {
+        log.error({ err: e instanceof Error ? e.message : String(e) }, 'Background sweep failed');
+      }
+    }, interval);
+    // Ensure the timer doesn't prevent Node.js from exiting
+    if (this._sweepTimer && typeof this._sweepTimer === 'object' && 'unref' in this._sweepTimer) {
+      this._sweepTimer.unref();
+    }
+    log.info({ intervalMs: interval }, 'Lock sweep timer started');
+  }
+
+  /**
+   * Stop the background sweep timer. Idempotent.
+   */
+  stopSweepTimer(): void {
+    if (!this._sweepTimer) return;
+    clearInterval(this._sweepTimer);
+    this._sweepTimer = null;
+    log.info('Lock sweep timer stopped');
+  }
+
+  /**
+   * Whether the background sweep timer is running.
+   */
+  isSweepTimerRunning(): boolean {
+    return this._sweepTimer !== null;
   }
 
   // ── Public API ──
@@ -177,13 +251,7 @@ export class ResourceLockManager {
       this._writeLockFile(lockFile, updated);
 
       log.debug({ agentId, resource, ttl: state.ttl }, 'Lock refreshed');
-      return ok({
-        resource: updated.resource,
-        agentId: updated.agentId,
-        acquiredAt: updated.acquiredAt,
-        refreshedAt: updated.refreshedAt,
-        ttl: updated.ttl,
-      });
+      return ok(makeLockHandle(updated.resource, updated.agentId, updated.acquiredAt, updated.refreshedAt, updated.ttl));
     });
   }
 
@@ -330,12 +398,7 @@ export class ResourceLockManager {
           const updated: LockState = { ...existing, refreshedAt: now, ttl };
           this._writeLockFile(lockFile, updated);
           log.debug({ agentId, resource }, 'Lock re-acquired (same agent)');
-          return ok({
-            resource, agentId,
-            acquiredAt: existing.acquiredAt,
-            refreshedAt: now,
-            ttl,
-          });
+          return ok(makeLockHandle(resource, agentId, existing.acquiredAt, now, ttl));
         }
 
         // Different agent — check expiry (with grace period)
@@ -384,12 +447,7 @@ export class ResourceLockManager {
       this._writeLockFile(lockFile, state);
       log.info({ agentId, resource, ttl }, 'Lock acquired');
 
-      return ok({
-        resource, agentId,
-        acquiredAt: now,
-        refreshedAt: now,
-        ttl,
-      });
+      return ok(makeLockHandle(resource, agentId, now, now, ttl));
     });
   }
 
@@ -567,6 +625,69 @@ export class ResourceLockManager {
   private _sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
+
+  // ── Public: withLockRefresh ──
+
+  /**
+   * Execute an async function while automatically refreshing a held lock.
+   * Refreshes the lock at ~half the TTL interval to keep it alive during
+   * long-running operations. The refresh loop stops when the function
+   * completes (or throws).
+   *
+   * **Important:** If the lock is lost during execution (e.g., force-released
+   * by another agent or filesystem error), `fn()` continues running but will
+   * no longer be protected by the lock. The refresh failure is logged as a
+   * warning. If `fn()` needs to know the lock is still held, it should
+   * periodically check `handle.isExpired()`.
+   *
+   * **Side effect:** `handle.refreshedAt` is mutated on each successful
+   * refresh, keeping `isExpired()` and `timeRemaining()` accurate.
+   *
+   * Usage:
+   *   const handle = (await mgr.acquire(agentId, resource)).data;
+   *   const result = await mgr.withLockRefresh(handle, async () => {
+   *     // ... long-running tool work ...
+   *   });
+   */
+  async withLockRefresh<T>(handle: LockHandle, fn: () => Promise<T>): Promise<T> {
+    const refreshInterval = Math.max(handle.ttl / 2, 1_000); // At least 1s
+    let stopped = false;
+
+    const refreshLoop = async (): Promise<void> => {
+      while (!stopped) {
+        await this._sleep(refreshInterval);
+        if (stopped) break;
+        try {
+          const result = await this.refresh(handle.agentId, handle.resource);
+          if (result.ok) {
+            // Update the handle's refreshedAt so isExpired/timeRemaining stay accurate
+            handle.refreshedAt = result.data.refreshedAt;
+          } else {
+            log.warn({
+              agentId: handle.agentId,
+              resource: handle.resource,
+              error: result.error.code,
+            }, 'Lock refresh failed during withLockRefresh');
+            break; // Stop refreshing if we lost the lock
+          }
+        } catch (e) {
+          log.warn({ err: e instanceof Error ? e.message : String(e) }, 'Lock refresh error');
+          break;
+        }
+      }
+    };
+
+    // Start refresh loop in background (fire-and-forget, errors already logged inside)
+    const refreshPromise = refreshLoop().catch(() => { /* logged inside refreshLoop */ });
+
+    try {
+      return await fn();
+    } finally {
+      stopped = true;
+      // Wait for the refresh loop to notice the stop flag (at most one interval)
+      await Promise.race([refreshPromise, this._sleep(100)]);
+    }
+  }
 }
 
 // ── Singleton (lazy init with configurable path) ──
@@ -585,7 +706,10 @@ export function getResourceLockManager(lockDir?: string): ResourceLockManager {
   return _instance;
 }
 
-/** Reset singleton (for testing) */
+/** Reset singleton (for testing). Stops sweep timer if running. */
 export function _resetResourceLockManager(): void {
+  if (_instance) {
+    _instance.stopSweepTimer();
+  }
   _instance = null;
 }

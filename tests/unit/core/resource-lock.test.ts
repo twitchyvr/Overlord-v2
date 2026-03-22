@@ -1,8 +1,10 @@
 /**
- * Resource Lock — Unit Tests (#939)
+ * Resource Lock — Unit Tests (#939, #940)
  *
  * Tests the two-level filesystem locking system for parallel agent coordination.
  * Uses isolated temp directories per test to avoid cross-test interference.
+ *
+ * #940 additions: LockHandle methods, withLockRefresh, background sweep timer.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -49,6 +51,7 @@ describe('ResourceLockManager', () => {
   });
 
   afterEach(() => {
+    manager.stopSweepTimer();
     cleanDir(lockDir);
   });
 
@@ -583,6 +586,176 @@ describe('ResourceLockManager', () => {
       expect(lockFiles.length).toBe(1);
       const content = fs.readFileSync(path.join(lockDir, lockFiles[0]), 'utf-8');
       expect(() => JSON.parse(content)).not.toThrow();
+    });
+  });
+
+  // ── LockHandle Methods (#940) ──
+
+  describe('LockHandle.isExpired() and timeRemaining()', () => {
+    it('should return false for isExpired on a fresh lock', async () => {
+      const result = await manager.acquire('agent-1', 'file:test.ts', { ttl: 30_000 });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.data.isExpired()).toBe(false);
+      }
+    });
+
+    it('should return positive timeRemaining on a fresh lock', async () => {
+      const result = await manager.acquire('agent-1', 'file:test.ts', { ttl: 30_000 });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const remaining = result.data.timeRemaining();
+        // Should be close to ttl + grace (32000) but at least > 29000
+        expect(remaining).toBeGreaterThan(29_000);
+        expect(remaining).toBeLessThanOrEqual(32_001); // ttl + grace + 1ms tolerance
+      }
+    });
+
+    it('should return true for isExpired after TTL + grace elapses', async () => {
+      const result = await manager.acquire('agent-1', 'file:test.ts', { ttl: 1 });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        // Wait for TTL + grace period
+        await new Promise(resolve => setTimeout(resolve, 2_100));
+        expect(result.data.isExpired()).toBe(true);
+        expect(result.data.timeRemaining()).toBe(0);
+      }
+    });
+
+    it('should update timeRemaining after refresh', async () => {
+      const result = await manager.acquire('agent-1', 'file:test.ts', { ttl: 5_000 });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      // Wait a bit
+      await new Promise(resolve => setTimeout(resolve, 1_000));
+      const beforeRefresh = result.data.timeRemaining();
+
+      // Refresh returns a new handle with updated refreshedAt
+      const refreshed = await manager.refresh('agent-1', 'file:test.ts');
+      expect(refreshed.ok).toBe(true);
+      if (refreshed.ok) {
+        const afterRefresh = refreshed.data.timeRemaining();
+        // After refresh, remaining should be greater than before
+        expect(afterRefresh).toBeGreaterThan(beforeRefresh);
+      }
+    });
+  });
+
+  // ── withLockRefresh (#940) ──
+
+  describe('withLockRefresh', () => {
+    it('should execute the function and return its result', async () => {
+      const acquired = await manager.acquire('agent-1', 'file:test.ts', { ttl: 5_000 });
+      expect(acquired.ok).toBe(true);
+      if (!acquired.ok) return;
+
+      const result = await manager.withLockRefresh(acquired.data, async () => {
+        return 'hello from tool';
+      });
+
+      expect(result).toBe('hello from tool');
+    });
+
+    it('should refresh the lock during a long-running operation', async () => {
+      // Use a short TTL so refresh behavior is observable
+      const acquired = await manager.acquire('agent-1', 'file:test.ts', { ttl: 2_000 });
+      expect(acquired.ok).toBe(true);
+      if (!acquired.ok) return;
+
+      const handle = acquired.data;
+      const initialRefresh = handle.refreshedAt;
+
+      await manager.withLockRefresh(handle, async () => {
+        // Wait longer than half TTL (1s) to trigger at least one refresh
+        await new Promise(resolve => setTimeout(resolve, 1_500));
+      });
+
+      // The handle's refreshedAt should have been updated by the auto-refresh loop
+      expect(handle.refreshedAt).toBeGreaterThan(initialRefresh);
+    });
+
+    it('should propagate errors from the wrapped function', async () => {
+      const acquired = await manager.acquire('agent-1', 'file:test.ts', { ttl: 5_000 });
+      expect(acquired.ok).toBe(true);
+      if (!acquired.ok) return;
+
+      await expect(
+        manager.withLockRefresh(acquired.data, async () => {
+          throw new Error('tool exploded');
+        }),
+      ).rejects.toThrow('tool exploded');
+    });
+
+    it('should stop refreshing after the function completes', async () => {
+      const acquired = await manager.acquire('agent-1', 'file:test.ts', { ttl: 2_000 });
+      expect(acquired.ok).toBe(true);
+      if (!acquired.ok) return;
+
+      await manager.withLockRefresh(acquired.data, async () => {
+        return 'done';
+      });
+
+      // After completion, release the lock
+      await manager.release('agent-1', 'file:test.ts');
+
+      // Wait long enough that another refresh would have fired if the loop was still running
+      await new Promise(resolve => setTimeout(resolve, 1_500));
+
+      // Lock should still be released (not re-acquired by a rogue refresh loop)
+      const lockState = await manager.isLocked('file:test.ts');
+      expect(lockState.ok).toBe(true);
+      if (lockState.ok) {
+        expect(lockState.data).toBeNull();
+      }
+    });
+  });
+
+  // ── Background Sweep Timer (#940) ──
+
+  describe('sweep timer', () => {
+    it('should start and stop the sweep timer', () => {
+      expect(manager.isSweepTimerRunning()).toBe(false);
+      manager.startSweepTimer(500);
+      expect(manager.isSweepTimerRunning()).toBe(true);
+      manager.stopSweepTimer();
+      expect(manager.isSweepTimerRunning()).toBe(false);
+    });
+
+    it('should be idempotent — multiple starts do not create multiple timers', () => {
+      manager.startSweepTimer(500);
+      manager.startSweepTimer(500);
+      expect(manager.isSweepTimerRunning()).toBe(true);
+      manager.stopSweepTimer();
+      expect(manager.isSweepTimerRunning()).toBe(false);
+    });
+
+    it('should automatically sweep expired locks', async () => {
+      await manager.acquire('agent-1', 'file:will-expire.ts', { ttl: 1 });
+      await manager.acquire('agent-2', 'file:will-stay.ts', { ttl: 60_000 });
+
+      // Start sweep timer with fast interval
+      manager.startSweepTimer(200);
+
+      // Wait for TTL + grace + sweep interval
+      await new Promise(resolve => setTimeout(resolve, 2_500));
+
+      manager.stopSweepTimer();
+
+      // Expired lock should be gone
+      const locks = manager.listLocks();
+      expect(locks.ok).toBe(true);
+      if (locks.ok) {
+        expect(locks.data.length).toBe(1);
+        expect(locks.data[0].resource).toBe('file:will-stay.ts');
+      }
+    });
+
+    it('stopSweepTimer should be idempotent', () => {
+      manager.stopSweepTimer(); // Not running — should not throw
+      manager.startSweepTimer(500);
+      manager.stopSweepTimer();
+      manager.stopSweepTimer(); // Already stopped — should not throw
     });
   });
 });
