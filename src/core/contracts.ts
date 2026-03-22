@@ -325,6 +325,71 @@ export interface ToolDefinition {
   concurrencyMode?: ToolConcurrencyMode;
 }
 
+// ── Merge Queue Types (#944) ──
+
+export type MergeQueuePriority = 'hotfix' | 'feature' | 'refactor' | 'auto';
+
+export type MergeQueueEntryStatus =
+  | 'queued'
+  | 'rebasing'
+  | 'testing'
+  | 'merging'
+  | 'merged'
+  | 'failed'
+  | 'cancelled';
+
+export interface MergeQueueEntry {
+  id: string;
+  buildingId: string;
+  branch: string;
+  worktreePath: string;
+  agentId: string;
+  priority: MergeQueuePriority;
+  status: MergeQueueEntryStatus;
+  position: number;
+  mainDrift: MergeDriftInfo | null;
+  failureReason: string | null;
+  enqueuedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface MergeDriftInfo {
+  commitsBehind: number;
+  overlappingFiles: string[];
+  driftLevel: 'low' | 'medium' | 'high';
+}
+
+export interface MergeQueueSnapshot {
+  buildingId: string;
+  entries: MergeQueueEntry[];
+  currentlyMerging: string | null;
+  updatedAt: number;
+}
+
+export interface MergeQueueRow {
+  id: string;
+  building_id: string;
+  branch: string;
+  worktree_path: string;
+  agent_id: string;
+  priority: string;
+  status: string;
+  position: number;
+  main_drift: string;
+  failure_reason: string | null;
+  enqueued_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export const MERGE_PRIORITY_ORDER: Record<MergeQueuePriority, number> = {
+  hotfix: 0,
+  feature: 1,
+  refactor: 2,
+  auto: 3,
+};
+
 export interface RepoContextEntry {
   name: string;
   url: string;

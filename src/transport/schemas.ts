@@ -1222,3 +1222,8 @@ export const SecurityEventsSchema = z.object({
 // Lock state dashboard (#943)
 export const LockStateGetSchema = z.object({}).strict().optional().default({});
 
+// Merge queue (#944)
+export const MergeQueueGetSchema = z.object({
+  buildingId: z.string().min(1),
+}).strict();
+

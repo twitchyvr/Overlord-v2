@@ -93,6 +93,7 @@ import {
   ProviderSetKeySchema,
   SecurityStatsSchema, SecurityEventsSchema,
   LockStateGetSchema,
+  MergeQueueGetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { checkBudget, setAgentBudget, getBuildingBudgets } from '../agents/budget-tracker.js';
@@ -3785,6 +3786,49 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       const mgr = getResourceLockManager();
       const snapshot = mgr.getStateSnapshot();
       if (ack) ack({ ok: true, data: snapshot });
+    });
+
+    // ─── Merge Queue Dashboard (#944) ───
+
+    handle(socket, 'merge:queue:status', MergeQueueGetSchema, (parsed, ack) => {
+      const db = getDb();
+      const rows = db.prepare(
+        `SELECT * FROM merge_queue
+         WHERE building_id = ? AND status NOT IN ('merged', 'cancelled')
+         ORDER BY
+           CASE priority WHEN 'hotfix' THEN 0 WHEN 'feature' THEN 1 WHEN 'refactor' THEN 2 WHEN 'auto' THEN 3 END,
+           position ASC`,
+      ).all(parsed.buildingId) as import('../core/contracts.js').MergeQueueRow[];
+
+      const entries = rows.map(r => ({
+        id: r.id,
+        buildingId: r.building_id,
+        branch: r.branch,
+        worktreePath: r.worktree_path,
+        agentId: r.agent_id,
+        priority: r.priority,
+        status: r.status,
+        position: r.position,
+        mainDrift: (() => { try { const p = JSON.parse(r.main_drift); return p?.commitsBehind !== undefined && p?.commitsBehind !== null ? p : null; } catch { return null; } })(),
+        failureReason: r.failure_reason,
+        enqueuedAt: r.enqueued_at,
+        startedAt: r.started_at,
+        completedAt: r.completed_at,
+      }));
+
+      const currentlyMerging = rows.find(r =>
+        ['rebasing', 'testing', 'merging'].includes(r.status),
+      )?.id ?? null;
+
+      if (ack) ack({
+        ok: true,
+        data: {
+          buildingId: parsed.buildingId,
+          entries,
+          currentlyMerging,
+          updatedAt: Date.now(),
+        },
+      });
     });
 
     // ─── Provider Key Management (#762) ───
