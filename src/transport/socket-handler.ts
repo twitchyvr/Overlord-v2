@@ -431,11 +431,9 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         // Record to activity log for historical queries (#983)
         recordActivity('__user__', 'building_started', { buildingId: data.buildingId, previousState: data.previousState }, data.buildingId);
 
-        // #1007 — Activate agents and dispatch initial work
-        // Set all building agents to 'active' and send strategist an initial prompt
+        // #1007 — Dispatch strategist to analyze codebase on Play
+        // Only activate the strategist agent — other agents activate as work flows through phases
         const db = getDb();
-        db.prepare("UPDATE agents SET status = 'active' WHERE building_id = ?").run(parsed.buildingId);
-        io.emit('agents:status-changed', { buildingId: parsed.buildingId, status: 'active' });
 
         // Find the strategist room and its agent, then kick off a conversation
         const stratRoom = db.prepare(`
@@ -452,6 +450,10 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
           `).get(parsed.buildingId, stratRoom.id) as { id: string } | undefined;
 
           if (stratAgent) {
+            // Activate only the strategist agent
+            db.prepare("UPDATE agents SET status = 'active' WHERE id = ?").run(stratAgent.id);
+            io.emit('agent:status-changed', { agentId: stratAgent.id, status: 'active', buildingId: parsed.buildingId });
+
             // Emit a chat message to trigger the conversation loop
             bus.emit('chat:message', {
               socketId: `auto:${parsed.buildingId}`,
@@ -461,7 +463,11 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
               text: 'The project has been started. Analyze the codebase, understand its structure, and prepare a strategy assessment. Use your available tools to read files and explore the project.',
             });
             log.info({ buildingId: parsed.buildingId, roomId: stratRoom.id, agentId: stratAgent.id }, 'Play button triggered strategist conversation loop');
+          } else {
+            log.warn({ buildingId: parsed.buildingId, roomId: stratRoom.id }, 'No agent assigned to strategist room — play did not start any work');
           }
+        } else {
+          log.warn({ buildingId: parsed.buildingId }, 'No strategist room found — play did not start any work');
         }
       }
       if (ack) ack(result);
@@ -478,6 +484,10 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
           previousState: data.previousState,
         });
         recordActivity('__user__', 'building_paused', { buildingId: data.buildingId, previousState: data.previousState }, data.buildingId);
+
+        // Pause active agents — consistent with start/stop (#1007 review)
+        const db = getDb();
+        db.prepare("UPDATE agents SET status = 'idle' WHERE building_id = ? AND status = 'active'").run(parsed.buildingId);
       }
       if (ack) ack(result);
     });
@@ -496,8 +506,10 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
 
         // #1007 — Deactivate all building agents on stop
         const db = getDb();
-        db.prepare("UPDATE agents SET status = 'idle' WHERE building_id = ?").run(parsed.buildingId);
-        io.emit('agents:status-changed', { buildingId: parsed.buildingId, status: 'idle' });
+        const deactivated = db.prepare("UPDATE agents SET status = 'idle' WHERE building_id = ? AND status = 'active'").run(parsed.buildingId);
+        if (deactivated.changes > 0) {
+          log.info({ buildingId: parsed.buildingId, count: deactivated.changes }, 'Deactivated agents on building stop');
+        }
       }
       if (ack) ack(result);
     });
