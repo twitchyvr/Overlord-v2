@@ -274,6 +274,7 @@ export class StrategistOffice extends BaseRoom {
       'recall_notes',
       'session_note',
       'create_task',
+      'update_task',
       'create_raid_entry',
       'create_milestone',
       'search_library',

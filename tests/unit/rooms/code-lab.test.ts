@@ -80,7 +80,7 @@ describe('CodeLab', () => {
     it('getAllowedTools returns all implementation tools', () => {
       const room = new CodeLab('room_1');
       const tools = room.getAllowedTools();
-      expect(tools).toHaveLength(15); // includes copy_file (#595), e2e_test + screenshot + analyze_screenshot (#655, #657)
+      expect(tools).toHaveLength(18); // includes copy_file (#595), e2e_test + screenshot + analyze_screenshot (#655, #657), create_task + update_task + create_raid_entry
     });
 
     it('hasTool returns true for write tools', () => {

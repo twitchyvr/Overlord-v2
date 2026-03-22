@@ -1327,6 +1327,53 @@ function registerBuiltinTools(): void {
     },
   });
 
+  // ── Update Task Status (#1022) ──
+  registerTool({
+    name: 'update_task',
+    description: 'Update a task status. Use this to mark tasks as in_progress when you start working on them, or done when you finish.',
+    category: 'project',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: 'The task ID to update (from create_task response or task listing)' },
+        status: { type: 'string', enum: ['in_progress', 'done', 'blocked'], description: 'New status for the task' },
+        note: { type: 'string', description: 'Optional completion note describing what was done' },
+      },
+      required: ['task_id', 'status'],
+    },
+    execute: async (p, ctx) => {
+      const buildingId = ctx?.buildingId;
+      if (!buildingId) return { output: 'Error: no active building', error: true };
+
+      const db = getDb();
+      const taskId = p.task_id as string;
+      const status = p.status as string;
+      const note = (p.note as string) || '';
+
+      // Verify task exists and belongs to this building
+      const task = db.prepare('SELECT id, title, status FROM tasks WHERE id = ? AND building_id = ?').get(taskId, buildingId) as { id: string; title: string; status: string } | undefined;
+      if (!task) return { output: `Error: task ${taskId} not found in this building`, error: true };
+
+      db.prepare('UPDATE tasks SET status = ?, updated_at = datetime(?) WHERE id = ?')
+        .run(status, new Date().toISOString(), taskId);
+
+      // Append completion note to description if provided
+      if (note) {
+        db.prepare("UPDATE tasks SET description = COALESCE(description, '') || ? WHERE id = ?")
+          .run(`\n\n---\n**${status === 'done' ? 'Completed' : 'Update'}:** ${note}`, taskId);
+      }
+
+      // Emit event for real-time UI updates (#1023)
+      if (ctx?.bus && typeof (ctx.bus as { emit?: unknown }).emit === 'function') {
+        (ctx.bus as { emit: (e: string, d: Record<string, unknown>) => void }).emit('task:updated', { taskId, buildingId, status, previousStatus: task.status, title: task.title, agentId: ctx.agentId });
+      }
+
+      return {
+        output: `Task "${task.title}" updated: ${task.status} → ${status}${note ? ` (${note})` : ''}`,
+      };
+    },
+  });
+
   registerTool({
     name: 'create_raid_entry',
     description: 'Log a Risk, Assumption, Issue, or Decision in the project RAID log. Use this proactively when you identify risks, make assumptions, discover issues, or make decisions.',

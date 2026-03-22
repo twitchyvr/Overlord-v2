@@ -70,10 +70,10 @@ describe('DiscoveryRoom', () => {
       expect(room.id).toBe('room_1');
     });
 
-    it('getAllowedTools returns all 7 research tools', () => {
+    it('getAllowedTools returns all 10 research + project tools', () => {
       const room = new DiscoveryRoom('room_1');
       const tools = room.getAllowedTools();
-      expect(tools).toHaveLength(7);
+      expect(tools).toHaveLength(10);
       expect(tools).toContain('web_search');
       expect(tools).toContain('recall_notes');
     });
@@ -124,7 +124,7 @@ describe('DiscoveryRoom', () => {
       const ctx = room.buildContextInjection();
       expect(ctx.roomType).toBe('discovery');
       expect(ctx.fileScope).toBe('read-only');
-      expect(ctx.tools).toHaveLength(7);
+      expect(ctx.tools).toHaveLength(10);
       expect(ctx.rules).toEqual(room.getRules());
       expect(ctx.exitTemplate).toEqual(DiscoveryRoom.contract.exitRequired);
       expect(ctx.outputFormat).toEqual(room.getOutputFormat());

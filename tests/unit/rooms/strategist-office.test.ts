@@ -38,9 +38,10 @@ describe('StrategistOffice', () => {
       expect(contract.tools).toContain('recall_notes');
       expect(contract.tools).toContain('session_note');
       expect(contract.tools).toContain('create_task');
+      expect(contract.tools).toContain('update_task');
       expect(contract.tools).toContain('create_raid_entry');
       expect(contract.tools).toContain('create_milestone');
-      expect(contract.tools).toHaveLength(13);
+      expect(contract.tools).toHaveLength(14);
       expect(contract.tools).not.toContain('write_file');
       expect(contract.tools).not.toContain('bash');
     });
@@ -165,9 +166,9 @@ describe('StrategistOffice', () => {
       expect(room.type).toBe('strategist');
     });
 
-    it('getAllowedTools returns 10 tools (research + project management)', () => {
+    it('getAllowedTools returns 14 tools (research + project management)', () => {
       const room = new StrategistOffice('room_1');
-      expect(room.getAllowedTools()).toHaveLength(13);
+      expect(room.getAllowedTools()).toHaveLength(14);
     });
 
     it('hasTool returns true for read/research tools, false for write/exec tools', () => {
@@ -207,7 +208,7 @@ describe('StrategistOffice', () => {
       const ctx = room.buildContextInjection();
       expect(ctx.roomType).toBe('strategist');
       expect(ctx.fileScope).toBe('read-only');
-      expect((ctx.tools as string[])).toHaveLength(13);
+      expect((ctx.tools as string[])).toHaveLength(14);
     });
 
     it('validates complete exit document (building blueprint)', () => {
