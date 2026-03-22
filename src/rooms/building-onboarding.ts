@@ -165,6 +165,40 @@ export function initBuildingOnboarding({ bus, rooms, agents }: OnboardingDeps): 
         { buildingId, nextPhase, roomId: result.roomId, agentId: result.agentId },
         'Next phase room provisioned',
       );
+
+      // #1021 — Auto-dispatch the agent to start working on the new phase
+      // Only dispatch if the building is currently running (play was pressed)
+      let isRunning = false;
+      try {
+        const buildingRow = getDb().prepare(
+          'SELECT execution_state FROM buildings WHERE id = ?'
+        ).get(buildingId) as { execution_state: string } | undefined;
+        isRunning = buildingRow?.execution_state === 'running';
+      } catch {
+        // execution_state column may not exist in test DBs — skip dispatch
+        isRunning = false;
+      }
+
+      if (isRunning && result.agentId && result.roomId) {
+        // Activate the agent
+        getDb().prepare("UPDATE agents SET status = 'active' WHERE id = ?").run(result.agentId);
+
+        // Build phase-specific prompt
+        const phasePrompt = _getPhasePrompt(nextPhase, buildingId);
+
+        bus.emit('chat:message', {
+          socketId: `auto-phase:${buildingId}:${nextPhase}`,
+          roomId: result.roomId,
+          agentId: result.agentId,
+          buildingId,
+          text: phasePrompt,
+        });
+
+        log.info(
+          { buildingId, nextPhase, roomId: result.roomId, agentId: result.agentId },
+          'Phase agent auto-dispatched',
+        );
+      }
     } else {
       log.error({ buildingId, nextPhase, error: result.error }, 'Failed to provision next phase room');
     }
@@ -574,4 +608,54 @@ function getDefaultTable(roomType: string): Record<string, boolean> {
   };
   const table = TABLE_DEFAULTS[roomType] || 'focus';
   return { [table]: true };
+}
+
+/**
+ * Get a phase-specific prompt for auto-dispatching agents (#1021).
+ * Each phase's agent gets instructions relevant to their role.
+ */
+function _getPhasePrompt(phase: string, buildingId: string): string {
+  // Fetch pending tasks for this phase to include in the prompt
+  const db = getDb();
+  const tasks = db.prepare(
+    "SELECT title FROM tasks WHERE building_id = ? AND phase = ? AND status = 'pending' LIMIT 10"
+  ).all(buildingId, phase) as { title: string }[];
+
+  const taskList = tasks.length > 0
+    ? `\n\nTasks assigned to this phase:\n${tasks.map((t, i) => `${i + 1}. ${t.title}`).join('\n')}`
+    : '';
+
+  const prompts: Record<string, string> = {
+    discovery: `The project has advanced to the Discovery phase. Your role is to research requirements, gather information, and identify unknowns.
+
+Review the strategist's findings, explore the codebase in more detail, and document what you discover. Create tasks for any gaps you find.${taskList}
+
+Focus on understanding what the project needs to succeed. Use plain language.`,
+
+    architecture: `The project has advanced to the Architecture phase. Your role is to design the technical approach.
+
+Review prior findings, analyze the code structure, and propose architectural improvements or confirm the current approach is sound. Create tasks for any structural changes needed.${taskList}
+
+Focus on practical, actionable architecture decisions. Use plain language.`,
+
+    execution: `The project has advanced to the Execution phase. Your role is to implement changes.
+
+Review the tasks assigned to this phase and begin working through them. Use your tools to read, write, and modify code as needed. Mark tasks as done when complete.${taskList}
+
+Focus on making progress on the most important tasks first.`,
+
+    review: `The project has advanced to the Review phase. Your role is to verify quality.
+
+Review the work done in previous phases. Check for issues, verify test coverage, and ensure the codebase meets quality standards. Log any issues found as RAID entries.${taskList}
+
+Focus on catching problems before they reach production.`,
+
+    deploy: `The project has advanced to the Deploy phase. Your role is to prepare for release.
+
+Review the project readiness, verify all gates are passed, and prepare deployment documentation. Create a final checklist of deployment steps.${taskList}
+
+Focus on ensuring a smooth, safe deployment.`,
+  };
+
+  return prompts[phase] || `The project has advanced to the ${phase} phase. Analyze the current state and create a plan for this phase.${taskList}`;
 }
