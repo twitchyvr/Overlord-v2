@@ -2966,6 +2966,68 @@
   margin-top: 2px;
 }
 
+/* ── Entity Detail Drawers (#980) ── */
+
+.entity-detail-header {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.entity-detail-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.entity-detail-title h3 { margin: 0; font-size: var(--text-lg); }
+.entity-detail-subtitle { font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px; }
+.entity-detail-section { display: flex; flex-direction: column; gap: 6px; }
+.entity-detail-section-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+.entity-detail-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 6px;
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
+}
+.entity-detail-row:hover { background: var(--surface-2); }
+.entity-detail-label { color: var(--text-muted); min-width: 70px; font-size: var(--text-xs); }
+.entity-detail-value { color: var(--text-primary); font-size: var(--text-sm); }
+.entity-detail-meta { color: var(--text-muted); font-size: var(--text-xs); margin-left: auto; }
+.entity-detail-empty { color: var(--text-muted); font-size: var(--text-sm); padding: 6px 0; }
+.entity-detail-loading { color: var(--text-muted); font-size: var(--text-sm); padding: 6px 0; }
+.entity-detail-status { font-size: var(--text-xs); padding: 2px 6px; border-radius: var(--radius-sm); text-transform: capitalize; margin-left: auto; }
+.entity-detail-status-active { background: color-mix(in srgb, var(--accent-green) 15%, transparent); color: var(--accent-green); }
+.entity-detail-status-idle { background: var(--surface-2); color: var(--text-muted); }
+.entity-detail-activity-list { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto; }
+.entity-detail-activity-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 6px;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-sm);
+}
+.entity-detail-activity-row:hover { background: var(--surface-2); }
+.entity-detail-activity-icon { flex-shrink: 0; width: 18px; text-align: center; }
+.entity-detail-activity-event { color: var(--text-secondary); flex-shrink: 0; }
+.entity-detail-activity-time { color: var(--text-muted); margin-left: auto; flex-shrink: 0; }
+
 /* ── Agent Quick Actions Bar ── */
 .agent-detail-quick-actions {
   display: flex;

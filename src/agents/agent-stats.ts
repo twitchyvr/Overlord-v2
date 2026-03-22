@@ -162,6 +162,86 @@ export function getBuildingActivityLog(
   }));
 }
 
+/**
+ * Get activity log entries for a specific room.
+ */
+export function getRoomActivityLog(
+  roomId: string,
+  opts: { limit?: number; offset?: number; eventType?: string } = {},
+): ActivityLogEntry[] {
+  const db = getDb();
+  const limit = opts.limit ?? 100;
+  const offset = opts.offset ?? 0;
+
+  let sql = 'SELECT * FROM agent_activity_log WHERE room_id = ?';
+  const params: unknown[] = [roomId];
+
+  if (opts.eventType) {
+    sql += ' AND event_type = ?';
+    params.push(opts.eventType);
+  }
+
+  sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const rows = db.prepare(sql).all(...params) as Array<{
+    id: string;
+    agent_id: string;
+    event_type: string;
+    event_data: string;
+    building_id: string | null;
+    room_id: string | null;
+    created_at: string;
+  }>;
+
+  return rows.map((row) => ({
+    ...row,
+    event_data: safeJsonParse(row.event_data),
+  }));
+}
+
+/**
+ * Get activity log entries for a specific floor (aggregate of all rooms on that floor).
+ */
+export function getFloorActivityLog(
+  floorId: string,
+  opts: { limit?: number; offset?: number; eventType?: string } = {},
+): ActivityLogEntry[] {
+  const db = getDb();
+  const limit = opts.limit ?? 100;
+  const offset = opts.offset ?? 0;
+
+  let sql = `
+    SELECT a.* FROM agent_activity_log a
+    JOIN rooms r ON a.room_id = r.id
+    WHERE r.floor_id = ?
+  `;
+  const params: unknown[] = [floorId];
+
+  if (opts.eventType) {
+    sql += ' AND a.event_type = ?';
+    params.push(opts.eventType);
+  }
+
+  sql += ' ORDER BY a.created_at DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
+
+  const rows = db.prepare(sql).all(...params) as Array<{
+    id: string;
+    agent_id: string;
+    event_type: string;
+    event_data: string;
+    building_id: string | null;
+    room_id: string | null;
+    created_at: string;
+  }>;
+
+  return rows.map((row) => ({
+    ...row,
+    event_data: safeJsonParse(row.event_data),
+  }));
+}
+
 // ─── Stats Aggregation ───
 
 /**
