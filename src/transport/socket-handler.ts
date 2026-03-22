@@ -600,6 +600,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
             taskCount: taskMap.get(b.id)?.total || 0,
             activeTaskCount: taskMap.get(b.id)?.active || 0,
             healthScore: healthMap.get(b.id) || null,
+            executionState: (() => { const r = getBuildingExecState(b.id); return r.ok ? (r.data as { executionState: string }).executionState : 'stopped'; })(),
           })),
         },
       });

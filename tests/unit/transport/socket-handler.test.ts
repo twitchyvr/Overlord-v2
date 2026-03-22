@@ -18,6 +18,9 @@ vi.mock('../../../src/rooms/building-manager.js', () => ({
   listFloors: vi.fn().mockReturnValue({ ok: true, data: [] }),
   getFloor: vi.fn().mockReturnValue({ ok: true, data: { id: 'floor_1', type: 'collaboration', rooms: [] } }),
   getHealthScore: vi.fn().mockReturnValue({ ok: true, data: { buildingId: 'bld_1', score: { phaseProgress: 8, taskCompletion: 12, raidHealth: 25, agentActivity: 5, total: 50 } } }),
+  getBuildingExecState: vi.fn().mockReturnValue({ ok: true, data: { buildingId: 'bld_1', executionState: 'stopped' } }),
+  transitionBuildingExecution: vi.fn().mockReturnValue({ ok: true, data: { buildingId: 'bld_1', executionState: 'running', previousState: 'stopped' } }),
+  getBuildingExecutionStats: vi.fn().mockReturnValue({ ok: true, data: {} }),
 }));
 
 import { createBuilding, getBuilding, listBuildings, listFloors, getFloor } from '../../../src/rooms/building-manager.js';
@@ -574,6 +577,7 @@ describe('Socket Handler (Transport Layer)', () => {
             taskCount: 0,
             activeTaskCount: 0,
             healthScore: { phaseProgress: 8, taskCompletion: 12, raidHealth: 25, agentActivity: 5, total: 50 },
+            executionState: 'stopped',
           }],
         },
       });
