@@ -10,11 +10,25 @@ export class DocumentationRoom extends BaseRoom {
       focus: { chairs: 1, description: 'Solo documentation authoring' },
       collab: { chairs: 4, description: 'Multi-author documentation collaboration' },
     },
-    tools: ['read_file', 'write_file', 'patch_file', 'list_dir', 'web_search', 'fetch_webpage', 'session_note'],
+    tools: [
+      'read_file', 'write_file', 'patch_file', 'list_dir',
+      'web_search', 'fetch_webpage', 'session_note',
+      // Documentation library tools (#814)
+      'search_library', 'get_document', 'list_library',
+      'get_document_toc', 'get_library_manifest',
+      // Document format tools (#812)
+      'read_pdf', 'read_docx',
+      // Documentation specialist tools (#815)
+      'validate_documentation',
+    ],
     fileScope: 'assigned',
     exitRequired: {
       type: 'documentation-report',
-      fields: ['documentsWritten', 'documentsUpdated', 'coverageAreas', 'remainingGaps'],
+      fields: [
+        'documentsWritten', 'documentsUpdated', 'coverageAreas', 'remainingGaps',
+        // Enhanced fields (#815)
+        'changelogEntries', 'readmeSectionsUpdated', 'validationResults',
+      ],
     },
     escalation: { onComplete: 'review' },
     provider: 'configurable',
@@ -22,12 +36,19 @@ export class DocumentationRoom extends BaseRoom {
 
   override getRules(): string[] {
     return [
-      'You are in the Documentation Room. Write clear, comprehensive documentation.',
-      'Target audience is NON-TECHNICAL users. Avoid jargon and technical implementation details.',
-      'Update existing documentation before creating new files — reduce duplication.',
-      'Include practical examples in every document.',
-      'Use consistent formatting: headings, bullet points, and step-by-step instructions.',
-      'Your exit document must list all documents written and updated.',
+      'You are a Documentation Specialist in the Documentation Room.',
+      'Your primary job is keeping all project documentation accurate, complete, and in sync with the codebase.',
+      'Target audience is NON-TECHNICAL users unless the building config specifies otherwise.',
+      // Documentation workflow rules (#815)
+      'ALWAYS check the current code state before writing or updating documentation.',
+      'Cross-reference CHANGELOG with recent git activity to ensure accuracy.',
+      'Validate all code examples — they must reflect the current API and behavior.',
+      'Ensure version numbers are consistent across README, CHANGELOG, and package files.',
+      'Follow Keep a Changelog format for CHANGELOG.md: Added, Changed, Fixed, Removed, Security.',
+      'When updating README: maintain existing structure, update version badges, keep examples current.',
+      'When writing new docs: include practical examples, step-by-step instructions, and links to related docs.',
+      'Use consistent formatting: headings, bullet points, code blocks with language tags.',
+      'Your exit document must include validation results from the validate_documentation tool.',
     ];
   }
 
@@ -37,12 +58,26 @@ export class DocumentationRoom extends BaseRoom {
       documentsUpdated: [{ path: 'string', changesDescription: 'string' }],
       coverageAreas: ['string'],
       remainingGaps: ['string'],
+      changelogEntries: [{ version: 'string', section: 'string', entry: 'string' }],
+      readmeSectionsUpdated: ['string'],
+      validationResults: {
+        freshness: 'pass | warn | fail',
+        completeness: 'pass | warn | fail',
+        consistency: 'pass | warn | fail',
+        details: ['string'],
+      },
     };
   }
 
   override validateExitDocumentValues(document: Record<string, unknown>): Result {
     const documentsWritten = document.documentsWritten as unknown[];
-    if (!Array.isArray(documentsWritten) || documentsWritten.length === 0) return err('EXIT_DOC_INVALID', 'documentsWritten must be a non-empty array');
+    const documentsUpdated = document.documentsUpdated as unknown[];
+    // At least one document must be written or updated
+    const hasWritten = Array.isArray(documentsWritten) && documentsWritten.length > 0;
+    const hasUpdated = Array.isArray(documentsUpdated) && documentsUpdated.length > 0;
+    if (!hasWritten && !hasUpdated) {
+      return err('EXIT_DOC_INVALID', 'At least one document must be written or updated (documentsWritten or documentsUpdated)');
+    }
     return ok(document);
   }
 

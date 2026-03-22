@@ -1522,6 +1522,40 @@ function registerBuiltinTools(): void {
     },
   });
 
+  // ── Documentation Specialist Tools (#815) ──
+
+  registerTool({
+    name: 'validate_documentation',
+    description: 'Validate project documentation for freshness, completeness, and consistency. Checks CHANGELOG, README, and other doc files against the current code state.',
+    category: 'documentation',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+    execute: async (_p, ctx) => {
+      const { validateDocumentation } = await import('./providers/doc-validator.js');
+      const result = validateDocumentation({
+        workingDirectory: ctx?.workingDirectory || '.',
+      });
+      if (!result.ok) return { output: result.error?.message || 'Validation failed', error: true };
+      const report = result.data;
+      const sections: string[] = [
+        `## Documentation Validation Report`,
+        '',
+        `**Freshness:** ${report.freshness.status} — ${report.freshness.details}`,
+        `**Completeness:** ${report.completeness.status} — ${report.completeness.details}`,
+        `**Consistency:** ${report.consistency.status} — ${report.consistency.details}`,
+      ];
+      if (report.issues.length > 0) {
+        sections.push('', '### Issues Found', ...report.issues.map((i: string, idx: number) => `${idx + 1}. ${i}`));
+      }
+      if (report.suggestions.length > 0) {
+        sections.push('', '### Suggestions', ...report.suggestions.map((s: string) => `- ${s}`));
+      }
+      return { output: sections.join('\n') };
+    },
+  });
+
   // ── Document Format Tools (#812) ──
 
   registerTool({
