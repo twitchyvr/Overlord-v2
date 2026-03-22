@@ -8,6 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Building Agent Control & Observability (Epic #969)** — building-level play/pause/stop controls with execution state machine (stopped/running/paused), conversation loop interrupt via cooperative ConversationSignal checkpoints, AI-layer execution guard blocking API calls for non-running buildings, live building cards with active agent count and token usage display, real-time WebSocket state broadcasts (#965, #966, #967, #968)
 - **Multi-repo support (Epic #605)** — Link multiple GitHub repositories as building blocks during project creation:
   - **Phase 1: Data model + socket events** — `project_repos` and `repo_file_origins` tables with 5 relationship types (main, dependency, fork, reference, submodule); `repo:add`, `repo:remove`, `repo:list`, `repo:update` socket events with Zod validation (#638, PR #639)
   - **Phase 2: UI picker** — repo URL input with protocol validation in project creation wizard; relationship dropdown; pending repo list with remove; linked repos display in Settings Folders tab (#640, PR #641)

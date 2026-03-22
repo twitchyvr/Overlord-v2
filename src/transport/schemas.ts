@@ -95,6 +95,13 @@ export const BuildingHealthScoreSchema = z.object({
   buildingId: id(),
 });
 
+// ─── Building Execution Control (#965, #969) ───
+export const BuildingStartSchema = z.object({ buildingId: id() });
+export const BuildingPauseSchema = z.object({ buildingId: id() });
+export const BuildingStopSchema = z.object({ buildingId: id() });
+export const BuildingExecStateSchema = z.object({ buildingId: id() });
+export const BuildingExecStatsSchema = z.object({ buildingId: id() });
+
 // ─── Building Update Schema ───
 
 export const BuildingUpdateSchema = z.object({

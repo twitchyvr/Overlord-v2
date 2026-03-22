@@ -498,6 +498,8 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['todos', 'locked_by', 'TEXT REFERENCES agents(id)'],
   ['todos', 'checked_out_at', 'TEXT'],
   ['todos', 'lock_expires_at', 'TEXT'],
+  // Building execution control (#969)
+  ['buildings', 'execution_state', "TEXT DEFAULT 'stopped'"],
 ];
 
 /**

@@ -13,6 +13,8 @@ import { resolve as resolvePath } from 'node:path';
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
 import { ok, err, safeJsonParse } from '../core/contracts.js';
+import { setBuildingExecutionState, getBuildingExecutionState } from '../core/execution-signal.js';
+import type { ExecutionState } from '../core/execution-signal.js';
 import type { Result, ErrResult, BuildingRow, FloorRow } from '../core/contracts.js';
 
 function uid(prefix: string): string {
@@ -208,6 +210,96 @@ export function updateBuilding(buildingId: string, updates: { name?: string; wor
 
   log.info({ buildingId, updates: Object.keys(updates) }, 'Building updated');
   return ok({ buildingId });
+}
+
+// ─── Building Execution Control (#965, #969) ───
+
+const VALID_EXECUTION_STATES = new Set<ExecutionState>(['running', 'paused', 'aborted']);
+const VALID_TRANSITIONS: Record<string, ExecutionState[]> = {
+  stopped: ['running'],
+  running: ['paused', 'aborted'],
+  paused: ['running', 'aborted'],
+};
+
+/**
+ * Get a building's current execution state.
+ * Reads from the in-memory signal (authoritative) with DB fallback.
+ */
+export function getBuildingExecState(buildingId: string): Result {
+  const state = getBuildingExecutionState(buildingId);
+  // Map internal 'aborted' to user-friendly 'stopped'
+  const userState = state === 'aborted' ? 'stopped' : state;
+  return ok({ buildingId, executionState: userState });
+}
+
+/**
+ * Transition a building's execution state (start/pause/stop).
+ * Validates the transition and updates both in-memory signal and DB.
+ */
+export function transitionBuildingExecution(buildingId: string, targetState: ExecutionState): Result {
+  const db = getDb();
+  const building = db.prepare('SELECT id, execution_state FROM buildings WHERE id = ?').get(buildingId) as { id: string; execution_state?: string } | undefined;
+  if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
+
+  if (!VALID_EXECUTION_STATES.has(targetState)) {
+    return err('INVALID_STATE', `Invalid execution state: ${targetState}`);
+  }
+
+  // Get current in-memory state (authoritative)
+  const currentState = getBuildingExecutionState(buildingId);
+
+  // Validate transition
+  const allowed = VALID_TRANSITIONS[currentState] || ['running'];
+  if (!allowed.includes(targetState)) {
+    return err('INVALID_TRANSITION', `Cannot transition from ${currentState} to ${targetState}`);
+  }
+
+  // Update in-memory signal (immediate effect on all agents)
+  setBuildingExecutionState(buildingId, targetState);
+
+  // Persist to DB (user-friendly mapping: 'aborted' → 'stopped')
+  const dbState = targetState === 'aborted' ? 'stopped' : targetState;
+  db.prepare('UPDATE buildings SET execution_state = ?, updated_at = datetime(?) WHERE id = ?')
+    .run(dbState, new Date().toISOString(), buildingId);
+
+  const userState = targetState === 'aborted' ? 'stopped' : targetState;
+  log.info({ buildingId, from: currentState, to: targetState, userState }, 'Building execution state changed');
+  return ok({ buildingId, executionState: userState, previousState: currentState === 'aborted' ? 'stopped' : currentState });
+}
+
+/**
+ * Get execution stats for a building (agent counts, for live dashboard).
+ */
+export function getBuildingExecutionStats(buildingId: string): Result {
+  const db = getDb();
+  const building = db.prepare('SELECT id FROM buildings WHERE id = ?').get(buildingId) as { id: string } | undefined;
+  if (!building) return err('BUILDING_NOT_FOUND', `Building ${buildingId} does not exist`);
+
+  const state = getBuildingExecutionState(buildingId);
+  const userState = state === 'aborted' ? 'stopped' : state;
+
+  const totalAgents = db.prepare('SELECT COUNT(*) as count FROM agents WHERE building_id = ?').get(buildingId) as { count: number };
+  const activeAgents = db.prepare("SELECT COUNT(*) as count FROM agents WHERE building_id = ? AND status = 'active'").get(buildingId) as { count: number };
+
+  // Get token usage from agent_stats (all-time for this building's agents)
+  let tokensUsed = 0;
+  try {
+    const row = db.prepare(`
+      SELECT COALESCE(SUM(CAST(value AS INTEGER)), 0) as total
+      FROM agent_stats
+      WHERE agent_id IN (SELECT id FROM agents WHERE building_id = ?)
+        AND metric = 'tokens_total' AND period = 'all-time'
+    `).get(buildingId) as { total: number } | undefined;
+    tokensUsed = row?.total || 0;
+  } catch { /* stats table may not exist in tests */ }
+
+  return ok({
+    buildingId,
+    executionState: userState,
+    activeAgents: activeAgents.count,
+    totalAgents: totalAgents.count,
+    tokensUsed,
+  });
 }
 
 /**

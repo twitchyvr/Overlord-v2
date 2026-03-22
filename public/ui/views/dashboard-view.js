@@ -342,6 +342,7 @@ export class DashboardView extends Component {
       }
 
       const card = Card.create('building', {
+        id: building.id,
         name: building.name,
         activePhase: building.activePhase || building.active_phase,
         description: building.description || building.project_description || '',
@@ -352,6 +353,10 @@ export class DashboardView extends Component {
         activeTaskCount: building.activeTaskCount ?? 0,
         repoUrl: building.repoUrl || building.repo_url || '',
         healthScore: building.healthScore || null,
+        executionState: building.executionState || building.execution_state || 'stopped',
+        activeAgentCount: building.activeAgentCount ?? 0,
+        tokensUsed: building.tokensUsed ?? 0,
+        estimatedCost: building.estimatedCost ?? 0,
       }, {
         variant: isActive ? 'solid' : 'glass',
         className: isActive ? 'building-card-active' : '',

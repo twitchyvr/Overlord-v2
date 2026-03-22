@@ -524,6 +524,21 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('building:updated', data);
   });
 
+  // ── Building Execution Control (#965, #969) ──
+  socket.on('building:execution-changed', (data) => {
+    store.update('building.list', (buildings) => {
+      const list = buildings || [];
+      const idx = list.findIndex((b) => b.id === data.buildingId);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], execution_state: data.executionState, executionState: data.executionState };
+        return next;
+      }
+      return list;
+    });
+    engine.dispatch('building:execution-changed', data);
+  });
+
   socket.on('deploy:check', (data) => {
     store.update('activity.items', (items) => [{ event: 'deploy:check', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
     engine.dispatch('deploy:check', data);

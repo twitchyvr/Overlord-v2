@@ -22,6 +22,7 @@ import { acquireSlot, releaseSlot } from '../ai/rate-limiter.js';
 import { checkBudget, recordUsage } from './budget-tracker.js';
 import { buildPerception, extractToolResults } from './perception-builder.js';
 import { selectToolsForTask } from './tool-selector.js';
+import { getExecutionSignal, ExecutionAbortedError } from '../core/execution-signal.js';
 import type { Bus } from '../core/bus.js';
 import type {
   Result,
@@ -387,10 +388,30 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   const systemPromptTokens = estimateTokens(systemPrompt);
   const contextBudget = allocateBudget(provider, systemPromptTokens);
 
+  // ── Execution signal (#966, #969) ──
+  // Get the building's execution signal for cooperative interrupts.
+  // Agents check this at safe yield points to support pause/stop.
+  const executionSignal = buildingId ? getExecutionSignal(buildingId) : null;
+
   let iteration = 0;
 
   while (iteration < MAX_TOOL_ITERATIONS) {
     iteration++;
+
+    // ── Execution signal checkpoint (#966) ──
+    // Check before every AI call. If building is paused, wait. If stopped, exit.
+    if (executionSignal) {
+      try {
+        await executionSignal.checkpoint();
+      } catch (e) {
+        if (e instanceof ExecutionAbortedError) {
+          log.info({ agentId, buildingId, iteration }, 'Conversation aborted: building stopped');
+          bus.emit('agent:execution-halted', { agentId, buildingId, reason: 'building_stopped', iteration });
+          break;
+        }
+        throw e;
+      }
+    }
 
     // ── Budget enforcement (#851) ──
     // Check per-agent budget BEFORE sending to AI
@@ -822,6 +843,21 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         const outcome = await executeSingleTool(toolBlock);
         toolResults.push(outcome.result);
         toolCallLog.push(outcome.logEntry);
+      }
+    }
+
+    // ── Post-tool execution signal checkpoint (#966) ──
+    // After all tools complete, check if building was paused/stopped during execution.
+    if (executionSignal) {
+      try {
+        await executionSignal.checkpoint();
+      } catch (e) {
+        if (e instanceof ExecutionAbortedError) {
+          log.info({ agentId, buildingId, iteration }, 'Conversation aborted after tool execution: building stopped');
+          bus.emit('agent:execution-halted', { agentId, buildingId, reason: 'building_stopped', iteration });
+          break;
+        }
+        throw e;
       }
     }
 

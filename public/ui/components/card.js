@@ -219,7 +219,14 @@ export class Card {
       card.classList.add('card-archived');
     }
 
+    // Execution state (#965, #969)
+    const execState = data.executionState || 'stopped';
+    card.dataset.executionState = execState;
+    card.dataset.buildingId = data.id || '';
+
     const header = h('div', { class: 'card-header' },
+      // Execution state indicator dot
+      h('span', { class: `exec-state-dot exec-state-${execState}`, title: execState }),
       h('span', null, data.name || 'Building'),
       isArchived
         ? h('span', { class: 'card-archived-badge' }, 'ARCHIVED')
@@ -227,6 +234,81 @@ export class Card {
       data.activePhase ? h('span', { class: `phase-badge phase-${data.activePhase}` }, data.activePhase) : null
     );
     card.appendChild(header);
+
+    // ── Execution Controls (#965, #969) ──
+    if (!isArchived) {
+      const controls = h('div', { class: 'exec-controls' });
+      const buildingId = data.id;
+
+      if (execState === 'stopped' || execState === 'paused') {
+        const playBtn = h('button', {
+          class: 'exec-btn exec-btn-play',
+          title: execState === 'paused' ? 'Resume agents' : 'Start agents',
+          'aria-label': execState === 'paused' ? 'Resume' : 'Start',
+        }, '\u25B6'); // ▶
+        playBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (window.overlordSocket?.socket) {
+            window.overlordSocket.socket.emit('building:start', { buildingId }, () => {});
+          }
+        });
+        controls.appendChild(playBtn);
+      }
+
+      if (execState === 'running') {
+        const pauseBtn = h('button', {
+          class: 'exec-btn exec-btn-pause',
+          title: 'Pause agents',
+          'aria-label': 'Pause',
+        }, '\u23F8'); // ⏸
+        pauseBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (window.overlordSocket?.socket) {
+            window.overlordSocket.socket.emit('building:pause', { buildingId }, () => {});
+          }
+        });
+        controls.appendChild(pauseBtn);
+      }
+
+      if (execState === 'running' || execState === 'paused') {
+        const stopBtn = h('button', {
+          class: 'exec-btn exec-btn-stop',
+          title: 'Stop all agents',
+          'aria-label': 'Stop',
+        }, '\u23F9'); // ⏹
+        stopBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (window.overlordSocket?.socket) {
+            window.overlordSocket.socket.emit('building:stop', { buildingId }, () => {});
+          }
+        });
+        controls.appendChild(stopBtn);
+      }
+
+      // Live stats row (#967)
+      const liveStats = h('div', { class: 'exec-live-stats', 'data-building-live-stats': buildingId });
+      if (data.activeAgentCount !== undefined && data.totalAgentCount !== undefined) {
+        liveStats.appendChild(h('span', { class: 'exec-stat' },
+          `${data.activeAgentCount}/${data.totalAgentCount} agents`
+        ));
+      }
+      if (data.tokensUsed !== undefined && data.tokensUsed > 0) {
+        const formatted = data.tokensUsed >= 1000
+          ? `${(data.tokensUsed / 1000).toFixed(1)}K`
+          : String(data.tokensUsed);
+        liveStats.appendChild(h('span', { class: 'exec-stat exec-stat-tokens' },
+          `${formatted} tokens`
+        ));
+      }
+      if (data.estimatedCost !== undefined && data.estimatedCost > 0) {
+        liveStats.appendChild(h('span', { class: 'exec-stat exec-stat-cost' },
+          `$${data.estimatedCost.toFixed(2)}`
+        ));
+      }
+
+      controls.appendChild(liveStats);
+      card.appendChild(controls);
+    }
 
     // Health score badge (if available)
     if (data.healthScore) {
