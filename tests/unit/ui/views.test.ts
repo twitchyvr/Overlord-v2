@@ -105,8 +105,8 @@ describe('BuildingView', () => {
 
     const statsInline = el.querySelector('.building-stats-inline');
     expect(statsInline).not.toBeNull();
-    expect(statsInline!.textContent).toContain('1F'); // 1 floor
-    expect(statsInline!.textContent).toContain('2R'); // 2 rooms
+    expect(statsInline!.textContent).toContain('1 floor');
+    expect(statsInline!.textContent).toContain('2 rooms');
   });
 
   it('shows agent indicator when agents are on a floor', async () => {

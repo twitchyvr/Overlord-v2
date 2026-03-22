@@ -203,12 +203,15 @@ export class BuildingView extends Component {
     this.el.appendChild(tree);
 
     // ── Compact inline stats (#726) ──
+    const floorCount = this._floors.length;
+    const roomCount = this._countTotalRooms();
+    const activeCount = this._countActiveAgents();
     const stats = h('div', { class: 'building-stats-inline' },
-      h('span', null, `${this._floors.length}F`),
+      h('span', null, `${floorCount} ${floorCount === 1 ? 'floor' : 'floors'}`),
       h('span', { class: 'building-stats-sep' }, '\u00B7'),
-      h('span', null, `${this._countTotalRooms()}R`),
+      h('span', null, `${roomCount} ${roomCount === 1 ? 'room' : 'rooms'}`),
       h('span', { class: 'building-stats-sep' }, '\u00B7'),
-      h('span', null, `${this._countActiveAgents()} active`),
+      h('span', null, `${activeCount} active`),
     );
     this.el.appendChild(stats);
 
