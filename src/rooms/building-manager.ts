@@ -888,7 +888,7 @@ export function getHealthScore(buildingId: string): Result {
 // ─── Auto-Discovery of Local Repos (#971) ───
 
 /** Directories to skip during auto-discovery (case-insensitive) */
-const AUTO_DISCOVER_SKIP = new Set(['overlord-v2', 'development docs']);
+const AUTO_DISCOVER_SKIP = new Set(['overlord-v2', 'overlord-v2.wiki', 'development docs']);
 
 /** Humanize a directory name: kebab-case / snake_case → Title Case */
 function humanizeDirName(dirName: string): string {
