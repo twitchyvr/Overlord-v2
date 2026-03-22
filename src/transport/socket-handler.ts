@@ -460,7 +460,16 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
               roomId: stratRoom.id,
               agentId: stratAgent.id,
               buildingId: parsed.buildingId,
-              text: 'The project has been started. Analyze the codebase, understand its structure, and prepare a strategy assessment. Use your available tools to read files and explore the project.',
+              text: `The project has been started. Analyze the codebase and create a strategy assessment.
+
+Your tasks:
+1. Use read_file and list_dir to explore the project structure, key files, and configuration
+2. Create a milestone for the Strategy phase using create_milestone (title it based on what you find)
+3. Create 3-5 tasks using create_task for the most important next steps (e.g., "Review architecture", "Assess test coverage", "Identify dependencies")
+4. Log 2-3 risks or assumptions using create_raid_entry (e.g., missing tests, outdated dependencies, unclear requirements)
+5. Provide a brief summary of your findings
+
+Focus on being helpful to a non-technical project owner. Use plain language.`,
             });
             log.info({ buildingId: parsed.buildingId, roomId: stratRoom.id, agentId: stratAgent.id }, 'Play button triggered strategist conversation loop');
           } else {

@@ -64,6 +64,11 @@ const TOOL_KEYWORDS: Record<string, string[]> = {
   // Notes
   record_note: ['note', 'remember', 'save note'],
   recall_notes: ['recall', 'what did', 'previous note', 'notes'],
+
+  // Work item creation (#1015) — triggered by project planning/analysis
+  create_task: ['task', 'work item', 'todo', 'action item', 'plan', 'breakdown', 'next step', 'analyze', 'assess', 'strategy'],
+  create_raid_entry: ['risk', 'assumption', 'issue', 'decision', 'concern', 'dependency', 'constraint', 'blocker'],
+  create_milestone: ['milestone', 'deliverable', 'target', 'goal', 'phase', 'sprint', 'release'],
 };
 
 /** Tools that should be included together (if one is selected, include its companions) */
@@ -74,6 +79,10 @@ const TOOL_GROUPS: Record<string, string[]> = {
   screenshot: ['analyze_screenshot'],
   qa_run_tests: ['bash'],
   dev_server: ['bash', 'screenshot'],
+  // Work item tools travel together (#1015)
+  create_task: ['create_milestone', 'create_raid_entry'],
+  create_milestone: ['create_task', 'create_raid_entry'],
+  create_raid_entry: ['create_task', 'create_milestone'],
 };
 
 // ─── Public API ───
