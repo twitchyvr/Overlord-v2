@@ -92,6 +92,7 @@ import {
   DocSearchSchema, DocGetSchema, DocListSchema,
   ProviderSetKeySchema,
   SecurityStatsSchema, SecurityEventsSchema,
+  LockStateGetSchema,
 } from './schemas.js';
 import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
 import { checkBudget, setAgentBudget, getBuildingBudgets } from '../agents/budget-tracker.js';
@@ -107,6 +108,7 @@ import { validateLuaSyntax } from '../plugins/lua-validator.js';
 import { exportBundle, importBundle } from '../plugins/plugin-bundler.js';
 import { sendEmail, getInbox, getSentEmails, getEmail, getThread, markAsRead, getUnreadCount, replyToEmail, forwardEmail } from '../agents/agent-email.js';
 import { recordEvidence, getTaskEvidence, getTaskPipelineStatus, getBuildingEvidence, loopBackToCode, getPipelineDashboard } from '../rooms/pipeline-evidence.js';
+import { getResourceLockManager } from '../core/resource-lock.js';
 import { searchMemory, getRecentContext, getMemoryStats } from '../agents/agent-memory.js';
 import { listModels, getProviderModels, getRecommendedModel, getModel, compareModels } from '../ai/model-registry.js';
 import { GnapMessagingAdapter } from '../agents/gnap-messaging-adapter.js';
@@ -3775,6 +3777,14 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         limit: parsed.limit ?? 100,
       });
       if (ack) ack({ ok: true, data: events });
+    });
+
+    // ─── Lock State Dashboard (#943) ───
+
+    handle(socket, 'lock:state', LockStateGetSchema, (_parsed, ack) => {
+      const mgr = getResourceLockManager();
+      const snapshot = mgr.getStateSnapshot();
+      if (ack) ack({ ok: true, data: snapshot });
     });
 
     // ─── Provider Key Management (#762) ───
