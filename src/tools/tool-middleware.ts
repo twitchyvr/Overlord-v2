@@ -1,5 +1,5 @@
 /**
- * Tool Middleware — Transparent Tool Interception (#941)
+ * Tool Middleware — Transparent Tool Interception (#941, #942)
  *
  * Provides a composable middleware chain for tool execution. The primary
  * middleware is ResourceLockMiddleware, which acquires/releases resource
@@ -9,11 +9,17 @@
  *   execute(tool, params, context, next) → Promise<Result>
  *   Call next() to proceed. Return early to short-circuit (e.g., lock failure).
  *
+ * Concurrency modes (#942):
+ *   - 'concurrent': No locking (read-only tools) — zero overhead passthrough
+ *   - 'serialized': Per-resource locking (write tools) — sorted acquisition
+ *   - 'exclusive': Global lock (destructive ops) — blocks all other tool execution
+ *
  * Layer: Tools (imports from Core only)
  *
  * Attribution:
  *   Pattern inspired by @m13v's browser-lock PreToolUse/PostToolUse hooks.
  *   https://github.com/m13v/browser-lock
+ *   Concurrency model inspired by mediar-ai/terminator Send+Sync trait bounds.
  */
 
 import { logger } from '../core/logger.js';
@@ -23,6 +29,9 @@ import type { Result, ToolDefinition, ToolContext, ToolResourceDescriptor } from
 import type { LockHandle } from '../core/resource-lock.js';
 
 const log = logger.child({ module: 'tool-middleware' });
+
+/** Well-known resource key for the global exclusive lock (#942). */
+export const EXCLUSIVE_LOCK_KEY = '__exclusive__';
 
 // ── Middleware Interface ──
 
@@ -81,11 +90,12 @@ export class MiddlewareChain {
  * Transparently acquires/releases resource locks around tool execution.
  *
  * Flow:
- *   1. Check tool.resources — if empty, pass through (zero overhead)
- *   2. Resolve resource keys from descriptors + params
- *   3. Acquire locks in sorted order (deadlock prevention)
- *   4. Execute tool (with auto-refresh for single locks)
- *   5. Release locks in finally block (TTL is crash safety net)
+ *   1. Check concurrencyMode — 'concurrent' tools pass through (zero overhead)
+ *   2. For 'exclusive' tools, prepend the global exclusive lock key
+ *   3. Resolve resource keys from descriptors + params
+ *   4. Acquire locks in sorted order (deadlock prevention)
+ *   5. Execute tool (with auto-refresh for single locks)
+ *   6. Release locks in finally block (TTL is crash safety net)
  */
 export class ResourceLockMiddleware implements ToolMiddleware {
   name = 'resource-lock';
@@ -96,8 +106,18 @@ export class ResourceLockMiddleware implements ToolMiddleware {
     context: ToolContext,
     next: () => Promise<Result>,
   ): Promise<Result> {
-    // No resources declared = no locking needed (zero overhead path)
-    if (!tool.resources || tool.resources.length === 0) {
+    // Determine effective concurrency mode (#942)
+    const mode = tool.concurrencyMode ?? (
+      (tool.resources && tool.resources.length > 0) ? 'serialized' : 'concurrent'
+    );
+
+    // Concurrent tools — no locking needed (zero overhead path)
+    if (mode === 'concurrent') {
+      return next();
+    }
+
+    // No resources and not exclusive — also pass through (defensive)
+    if ((!tool.resources || tool.resources.length === 0) && mode !== 'exclusive') {
       return next();
     }
 
@@ -105,23 +125,31 @@ export class ResourceLockMiddleware implements ToolMiddleware {
     const agentId = context.agentId;
 
     // Resolve resource keys from descriptors + tool params
-    const resourceKeys = this._resolveResources(tool.resources, params, context);
+    const resourceKeys = tool.resources
+      ? this._resolveResources(tool.resources, params, context)
+      : [];
 
-    // Sort keys alphabetically to prevent deadlocks
+    // For exclusive mode, add the global exclusive lock (#942)
+    // This prevents ANY other tool from executing while an exclusive tool runs.
+    if (mode === 'exclusive') {
+      resourceKeys.push(EXCLUSIVE_LOCK_KEY);
+    }
+
+    // Sort keys alphabetically to prevent deadlocks, deduplicate
     const sortedKeys = [...new Set(resourceKeys)].sort();
 
     // Acquire all locks
     const handles: LockHandle[] = [];
     for (const key of sortedKeys) {
       // Find the descriptor for this key to get lockOptions
-      const descriptor = tool.resources.find(
+      const descriptor = tool.resources?.find(
         r => this._makeKey(r, params, context) === key,
       );
 
       const lockResult = await mgr.acquire(agentId, key, {
         ttl: descriptor?.lockOptions?.ttl,
         maxWait: descriptor?.lockOptions?.maxWait ?? 30_000,
-        metadata: { toolName: tool.name, roomId: context.roomId },
+        metadata: { toolName: tool.name, roomId: context.roomId, concurrencyMode: mode },
       });
 
       if (!lockResult.ok) {
@@ -134,6 +162,7 @@ export class ResourceLockMiddleware implements ToolMiddleware {
           agentId,
           toolName: tool.name,
           resource: key,
+          concurrencyMode: mode,
           error: lockResult.error.code,
         }, 'Tool blocked by resource lock');
 
@@ -142,7 +171,7 @@ export class ResourceLockMiddleware implements ToolMiddleware {
           `Cannot execute ${tool.name}: resource "${key}" is locked. ${lockResult.error.message}`,
           {
             retryable: true,
-            context: { toolName: tool.name, resource: key, agentId },
+            context: { toolName: tool.name, resource: key, agentId, concurrencyMode: mode },
           },
         );
       }
@@ -154,6 +183,7 @@ export class ResourceLockMiddleware implements ToolMiddleware {
       agentId,
       toolName: tool.name,
       resources: sortedKeys,
+      concurrencyMode: mode,
     }, 'Locks acquired for tool execution');
 
     // Execute tool with lock management
@@ -174,6 +204,7 @@ export class ResourceLockMiddleware implements ToolMiddleware {
         agentId,
         toolName: tool.name,
         resources: sortedKeys,
+        concurrencyMode: mode,
       }, 'Locks released after tool execution');
     }
   }

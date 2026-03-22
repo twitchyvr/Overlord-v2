@@ -1,14 +1,16 @@
 /**
- * Tool Resource Map Tests (#941)
+ * Tool Resource Map Tests (#941, #942)
  *
  * Tests: resource descriptor mapping, write vs read-only classification,
- * coverage of all registered tools.
+ * concurrency mode declarations, coverage of all registered tools.
  */
 
 import { describe, it, expect } from 'vitest';
 import {
   getDefaultResourceDescriptors,
   getLockedToolNames,
+  getToolConcurrencyMode,
+  getExclusiveToolNames,
   READ_ONLY_TOOLS,
 } from '../../../src/tools/tool-resource-map.js';
 
@@ -147,6 +149,72 @@ describe('Tool Resource Map', () => {
       expect(READ_ONLY_TOOLS.has('write_file')).toBe(false);
       expect(READ_ONLY_TOOLS.has('bash')).toBe(false);
       expect(READ_ONLY_TOOLS.has('git_workflow')).toBe(false);
+    });
+  });
+
+  // ── Concurrency mode tests (#942) ──
+
+  describe('getToolConcurrencyMode', () => {
+    it('returns "exclusive" for browser_tools', () => {
+      expect(getToolConcurrencyMode('browser_tools')).toBe('exclusive');
+    });
+
+    it('returns "exclusive" for game_engine', () => {
+      expect(getToolConcurrencyMode('game_engine')).toBe('exclusive');
+    });
+
+    it('returns "exclusive" for dev_server', () => {
+      expect(getToolConcurrencyMode('dev_server')).toBe('exclusive');
+    });
+
+    it('returns "serialized" for write tools with resources (inferred)', () => {
+      expect(getToolConcurrencyMode('write_file')).toBe('serialized');
+      expect(getToolConcurrencyMode('patch_file')).toBe('serialized');
+      expect(getToolConcurrencyMode('git_workflow')).toBe('serialized');
+      expect(getToolConcurrencyMode('bash')).toBe('serialized');
+    });
+
+    it('returns "concurrent" for read-only tools (inferred)', () => {
+      expect(getToolConcurrencyMode('read_file')).toBe('concurrent');
+      expect(getToolConcurrencyMode('list_dir')).toBe('concurrent');
+      expect(getToolConcurrencyMode('web_search')).toBe('concurrent');
+    });
+
+    it('returns "concurrent" for unknown tools (no resources = concurrent)', () => {
+      expect(getToolConcurrencyMode('totally_unknown_tool')).toBe('concurrent');
+    });
+
+    it('all READ_ONLY_TOOLS are concurrent', () => {
+      for (const tool of READ_ONLY_TOOLS) {
+        expect(getToolConcurrencyMode(tool)).toBe('concurrent');
+      }
+    });
+
+    it('all tools with resources are serialized or exclusive', () => {
+      for (const name of getLockedToolNames()) {
+        const mode = getToolConcurrencyMode(name);
+        expect(['serialized', 'exclusive']).toContain(mode);
+      }
+    });
+  });
+
+  describe('getExclusiveToolNames', () => {
+    it('returns exclusive tools', () => {
+      const exclusive = getExclusiveToolNames();
+      expect(exclusive).toContain('browser_tools');
+      expect(exclusive).toContain('game_engine');
+      expect(exclusive).toContain('dev_server');
+    });
+
+    it('does not include serialized or concurrent tools', () => {
+      const exclusive = new Set(getExclusiveToolNames());
+      expect(exclusive.has('write_file')).toBe(false);
+      expect(exclusive.has('read_file')).toBe(false);
+      expect(exclusive.has('bash')).toBe(false);
+    });
+
+    it('returns non-empty array', () => {
+      expect(getExclusiveToolNames().length).toBeGreaterThan(0);
     });
   });
 });
