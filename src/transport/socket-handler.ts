@@ -561,6 +561,14 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
       ).all() as Array<{ building_id: string; count: number }>;
       const agentMap = new Map(agentCounts.map(r => [r.building_id, r.count]));
 
+      // Room counts per building (#804)
+      const roomCounts = db.prepare(
+        `SELECT f.building_id, COUNT(r.id) as count FROM rooms r
+         JOIN floors f ON r.floor_id = f.id
+         GROUP BY f.building_id`
+      ).all() as Array<{ building_id: string; count: number }>;
+      const roomMap = new Map(roomCounts.map(r => [r.building_id, r.count]));
+
       // Total agents per building (including idle ones not in rooms) (#780)
       const totalAgentCounts = db.prepare(
         'SELECT building_id, COUNT(*) as count FROM agents WHERE building_id IS NOT NULL GROUP BY building_id'
@@ -595,6 +603,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
             description: (b.config as Record<string, unknown>)?.description || '',
             repoUrl: b.repo_url || '',
             floorCount: floorMap.get(b.id) || 0,
+            roomCount: roomMap.get(b.id) || 0,
             agentCount: agentMap.get(b.id) || 0,
             totalAgentCount: totalAgentMap.get(b.id) || 0,
             taskCount: taskMap.get(b.id)?.total || 0,

@@ -43,6 +43,10 @@ export class DashboardView extends Component {
       this._updateKPIs();
     });
 
+    this.subscribe(store, 'rooms.list', () => {
+      this._updateKPIs();
+    });
+
     this.subscribe(store, 'raid.entries', (entries) => {
       this._raidEntries = entries || [];
       this._updateKPIs();
@@ -191,9 +195,8 @@ export class DashboardView extends Component {
 
     const totalBuildings = this._buildings.length;
     const totalRooms = this._buildings.reduce((sum, b) => sum + (b.floorCount ?? b.floor_count ?? 0), 0);
-    const totalAgents = this._buildings.reduce((sum, b) => sum + (b.agentCount ?? b.agent_count ?? 0), 0);
-    // Use live agent list count when it exceeds building-level metadata
-    const liveAgentCount = this._agents.length > totalAgents ? this._agents.length : totalAgents;
+    // Use totalAgentCount (all agents) not agentCount (only in-room agents)
+    const liveAgentCount = this._agents.length || this._buildings.reduce((sum, b) => sum + (b.totalAgentCount ?? b.agentCount ?? b.agent_count ?? 0), 0);
 
     const kpis = [
       { label: 'Total Projects', value: totalBuildings, icon: '\u{1F4C1}', color: 'var(--accent-cyan)' },
@@ -229,9 +232,9 @@ export class DashboardView extends Component {
         color: this._getAvgHealthColor()
       },
       {
-        label: 'Agents',
-        value: this._getAgentCount(),
-        icon: '\u{1F916}',
+        label: 'Rooms',
+        value: this._getRoomCount(),
+        icon: '\u{1F3E0}',
         color: 'var(--accent-green)'
       },
       {
@@ -395,6 +398,14 @@ export class DashboardView extends Component {
     return this._buildings.reduce((sum, b) => sum + (b.agentCount ?? b.agent_count ?? 0), 0);
   }
 
+  _getRoomCount() {
+    const store = OverlordUI.getStore();
+    const rooms = store?.get('rooms.list') || [];
+    if (rooms.length > 0) return rooms.length;
+    // Fallback: sum from building metadata
+    return this._buildings.reduce((sum, b) => sum + (b.roomCount ?? 0), 0);
+  }
+
   _getAvgHealth() {
     const scores = this._buildings
       .filter(b => b.healthScore && b.healthScore.total !== undefined)
@@ -418,7 +429,7 @@ export class DashboardView extends Component {
     if (kpiValues.length >= 5) {
       kpiValues[0].textContent = String(this._buildings.length);
       kpiValues[1].textContent = String(this._getAvgHealth());
-      kpiValues[2].textContent = String(this._getAgentCount());
+      kpiValues[2].textContent = String(this._getRoomCount());
       kpiValues[3].textContent = String(this._raidEntries.length);
       const s = this._securityStats;
       kpiValues[4].textContent = s.blocked > 0
