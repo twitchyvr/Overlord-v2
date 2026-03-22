@@ -1299,6 +1299,7 @@ function registerBuiltinTools(): void {
         description: { type: 'string', description: 'Detailed description of what needs to be done' },
         priority: { type: 'string', enum: ['low', 'normal', 'high', 'critical'], description: 'Task priority (default: normal)' },
         phase: { type: 'string', description: 'Project phase this task belongs to (e.g., strategy, discovery, architecture, execution)' },
+        milestone_id: { type: 'string', description: 'ID of the milestone to link this task to (from create_milestone response)' },
       },
       required: ['title'],
     },
@@ -1312,14 +1313,15 @@ function registerBuiltinTools(): void {
       const description = (p.description as string) || '';
       const priority = (p.priority as string) || 'normal';
       const phase = (p.phase as string) || null;
+      const milestoneId = (p.milestone_id as string) || null;
 
       db.prepare(`
-        INSERT INTO tasks (id, building_id, title, description, priority, phase, status, assignee_id)
-        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-      `).run(id, buildingId, title, description, priority, phase, ctx?.agentId || null);
+        INSERT INTO tasks (id, building_id, title, description, priority, phase, status, assignee_id, milestone_id)
+        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+      `).run(id, buildingId, title, description, priority, phase, ctx?.agentId || null, milestoneId);
 
       return {
-        output: `Task created: "${title}" (${priority} priority)${phase ? ` for ${phase} phase` : ''}`,
+        output: `Task created: "${title}" (${priority} priority)${phase ? ` for ${phase} phase` : ''}${milestoneId ? ` [linked to milestone]` : ''}`,
         taskId: id,
       };
     },
