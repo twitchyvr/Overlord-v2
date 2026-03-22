@@ -3901,6 +3901,17 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
           // They should only be removed via explicit 'agent:remove' events.
           for (const agentId of assoc.agentIds) {
             try {
+              // #945: Release any resource locks held by disconnecting agent
+              try {
+                const lockMgr = getResourceLockManager();
+                const lockResult = lockMgr.releaseAllForAgent(agentId);
+                if (lockResult.ok && lockResult.data.released > 0) {
+                  log.info({ agentId, released: lockResult.data.released, socketId: socket.id }, 'Released agent locks on disconnect');
+                }
+              } catch (lockErr) {
+                log.warn({ agentId, err: lockErr, socketId: socket.id }, 'Failed to release locks on disconnect');
+              }
+
               const disconnectAgent = agents.getAgent(agentId);
               bus.emit('agent:status-changed', { agentId, status: 'idle', reason: 'disconnect', buildingId: disconnectAgent?.building_id });
               cleanedAgents++;

@@ -16,10 +16,14 @@
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { runConversationLoop } from '../agents/conversation-loop.js';
+import type { ConversationResult } from '../agents/conversation-loop.js';
+import { AgentErrorBoundary } from '../agents/agent-error-boundary.js';
+import { getResourceLockManager } from '../core/resource-lock.js';
 import { queryHook } from '../plugins/plugin-loader.js';
 import { getDb } from '../storage/db.js';
 import type { Bus, BusEventData } from '../core/bus.js';
 import type {
+  Result,
   RoomManagerAPI,
   AgentRegistryAPI,
   ToolRegistryAPI,
@@ -364,8 +368,13 @@ async function handleChatMessage(
       historyMessages = [{ role: 'user' as const, content: userContent }];
     }
 
-    // 10. Run the conversation loop with full history
-    const result = await runConversationLoop({
+    // 10. Run the conversation loop inside error boundary (#945)
+    // The boundary catches unexpected throws and cleans up agent state (locks, events).
+    // runConversationLoop returns Result<T> itself, so boundary.execute() returns
+    // Result<Result<T>>. We unwrap: if the boundary caught an error, use its err;
+    // otherwise use the inner Result from the conversation loop.
+    const boundary = new AgentErrorBoundary(resolvedAgentId, getResourceLockManager(), bus);
+    const boundaryResult = await boundary.execute(() => runConversationLoop({
       provider,
       room,
       agentId: resolvedAgentId,
@@ -382,7 +391,9 @@ async function handleChatMessage(
         buildingId,
         socketId,
       },
-    });
+    }));
+    // Unwrap: boundary caught a throw → use boundary's err; otherwise use inner result
+    const result: Result<ConversationResult> = boundaryResult.ok ? boundaryResult.data : boundaryResult;
 
     // 11. Emit the final response and persist assistant message
     if (result.ok) {
