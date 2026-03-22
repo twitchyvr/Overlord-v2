@@ -413,27 +413,84 @@ export class OnboardingWizard extends Component {
       h('div', { class: 'wizard-welcome-icon' }, '\u{1F3D7}\uFE0F'),
       h('h1', { class: 'wizard-welcome-title' }, 'Welcome to Overlord'),
       h('p', { class: 'wizard-welcome-subtitle' },
-        'Your AI-powered project management team. Let\u2019s set up your first project in under a minute.'
-      ),
-      h('div', { class: 'wizard-welcome-features' },
-        this._featureItem('\u{1F916}', 'AI Team Members', 'Specialized assistants that plan, build, review, and deploy your project'),
-        this._featureItem('\u{1F4CB}', 'Automated Workflow', 'From idea to launch, every step is tracked and managed'),
-        this._featureItem('\u{1F50D}', 'Full Visibility', 'See what\u2019s happening across your entire project at a glance')
+        'Your AI-powered project management team. Choose how you\u2019d like to get started:'
       )
     );
 
-    // ─── "Use Existing Codebase" section (#872) ───
-    const existingSection = h('div', { class: 'wizard-existing-codebase' },
-      h('div', { class: 'wizard-oneshot-divider' },
-        h('span', null, 'already have a project?')
-      ),
-    );
-    const existingCard = h('div', { class: 'onboarding-path-card onboarding-path-primary' });
-    existingCard.appendChild(h('div', { class: 'onboarding-path-body' },
-      h('h3', { class: 'onboarding-path-title' }, '\u{1F4C2} Use Existing Codebase'),
-      h('p', { class: 'onboarding-path-desc' }, 'Point to a folder on your machine and I\'ll figure out what kind of project it is and set everything up for you.'),
+    // ─── Three distinct path cards ───
+    const paths = h('div', { class: 'wizard-path-grid' });
+
+    // Path 1: Just Build It (fastest, most prominent)
+    const justBuildCard = h('div', { class: 'wizard-path-card wizard-path-featured' });
+    justBuildCard.appendChild(h('div', { class: 'wizard-path-badge' }, 'Fastest'));
+    justBuildCard.appendChild(h('div', { class: 'wizard-path-icon' }, '\u26A1'));
+    justBuildCard.appendChild(h('h3', { class: 'wizard-path-title' }, 'Just Build It'));
+    justBuildCard.appendChild(h('p', { class: 'wizard-path-benefit' },
+      'Describe your idea in plain English and your AI team starts building immediately.'
     ));
-    const existingInput = h('div', { class: 'onboarding-path-input' });
+    justBuildCard.appendChild(h('p', { class: 'wizard-path-best-for' },
+      'Best for: "I know what I want \u2014 just make it happen"'
+    ));
+    const oneShotInput = h('textarea', {
+      class: 'wizard-textarea wizard-path-textarea',
+      placeholder: 'e.g. "Build me a customer portal called ClientHub"\nor "I need a mobile app for tracking fitness goals"',
+      rows: '3',
+      maxlength: '500'
+    });
+    justBuildCard.appendChild(oneShotInput);
+    const oneShotBtn = h('button', {
+      class: 'wizard-btn wizard-btn-accent'
+    }, '\u26A1 Build It Now');
+    oneShotBtn.addEventListener('click', () => {
+      const description = oneShotInput.value.trim();
+      if (!description) {
+        Toast.error('Please describe what you want to build.');
+        oneShotInput.focus();
+        return;
+      }
+      this._handleOneShot(description);
+    });
+    oneShotInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const description = oneShotInput.value.trim();
+        if (description) this._handleOneShot(description);
+      }
+    });
+    justBuildCard.appendChild(oneShotBtn);
+    paths.appendChild(justBuildCard);
+
+    // Path 2: Guided Setup (step-by-step wizard)
+    const guidedCard = h('div', { class: 'wizard-path-card wizard-path-standard' });
+    guidedCard.appendChild(h('div', { class: 'wizard-path-icon' }, '\u{1F9ED}'));
+    guidedCard.appendChild(h('h3', { class: 'wizard-path-title' }, 'Guided Setup'));
+    guidedCard.appendChild(h('p', { class: 'wizard-path-benefit' },
+      'Answer a few simple questions and we\u2019ll configure the perfect team, tools, and workflow for your project.'
+    ));
+    guidedCard.appendChild(h('p', { class: 'wizard-path-best-for' },
+      'Best for: "I want to customize my project before starting"'
+    ));
+    const guidedBtn = h('button', {
+      class: 'wizard-btn wizard-btn-primary'
+    }, 'Start Guided Setup \u2192');
+    guidedBtn.addEventListener('click', () => {
+      this._step = 2;
+      this.render();
+    });
+    guidedCard.appendChild(guidedBtn);
+    paths.appendChild(guidedCard);
+
+    // Path 3: Use Existing Codebase
+    const existingCard = h('div', { class: 'wizard-path-card wizard-path-standard' });
+    existingCard.appendChild(h('div', { class: 'wizard-path-icon' }, '\u{1F4C2}'));
+    existingCard.appendChild(h('h3', { class: 'wizard-path-title' }, 'Use Existing Codebase'));
+    existingCard.appendChild(h('p', { class: 'wizard-path-benefit' },
+      'Point to a folder on your machine. Overlord scans your code and sets up a matching AI team automatically.'
+    ));
+    existingCard.appendChild(h('p', { class: 'wizard-path-best-for' },
+      'Best for: "I already have code and want AI help with it"'
+    ));
+    const existingInput = h('div', { class: 'wizard-path-input-row' });
     const codebasePathInput = h('input', {
       class: 'wizard-input',
       type: 'text',
@@ -461,77 +518,20 @@ export class OnboardingWizard extends Component {
         h('span', null, 'Scanning your project...'),
       ));
     }
-    existingSection.appendChild(existingCard);
-    content.appendChild(existingSection);
+    paths.appendChild(existingCard);
 
-    // ─── "Just Build It" one-shot section ───
-    const oneShotSection = h('div', { class: 'wizard-oneshot' },
-      h('div', { class: 'wizard-oneshot-divider' },
-        h('span', null, 'or just tell me what you want')
-      )
-    );
+    content.appendChild(paths);
 
-    const oneShotInput = h('textarea', {
-      class: 'wizard-textarea wizard-oneshot-input',
-      placeholder: 'e.g. "Build me a customer portal called ClientHub" or "I need a mobile app for tracking fitness goals"...',
-      rows: '3',
-      maxlength: '500'
-    });
-    oneShotSection.appendChild(oneShotInput);
-
-    const oneShotBtn = h('button', {
-      class: 'wizard-btn wizard-btn-accent wizard-btn-lg'
-    }, '\u26A1 Just Build It');
-    oneShotBtn.addEventListener('click', () => {
-      const description = oneShotInput.value.trim();
-      if (!description) {
-        Toast.error('Please describe what you want to build.');
-        oneShotInput.focus();
-        return;
-      }
-      this._handleOneShot(description);
-    });
-    oneShotInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        const description = oneShotInput.value.trim();
-        if (description) this._handleOneShot(description);
-      }
-    });
-    oneShotSection.appendChild(oneShotBtn);
-    content.appendChild(oneShotSection);
-
-    // ─── Standard wizard actions ───
-    const actions = h('div', { class: 'wizard-actions' });
-    const startBtn = h('button', {
-      class: 'wizard-btn wizard-btn-primary wizard-btn-lg'
-    }, 'Get Started');
-    startBtn.addEventListener('click', () => {
-      this._step = 2;
-      this.render();
-    });
-    actions.appendChild(startBtn);
-
-    const skipBtn = h('button', {
-      class: 'wizard-btn wizard-btn-ghost'
-    }, 'Skip \u2014 I\u2019ll set up manually');
-    skipBtn.addEventListener('click', () => {
+    // ─── Skip link for power users ───
+    const skipLink = h('button', {
+      class: 'wizard-btn wizard-btn-ghost wizard-skip-link'
+    }, 'Skip \u2014 I\u2019ll configure everything manually');
+    skipLink.addEventListener('click', () => {
       OverlordUI.dispatch('navigate:strategist');
     });
-    actions.appendChild(skipBtn);
+    content.appendChild(skipLink);
 
-    content.appendChild(actions);
     this.el.appendChild(content);
-  }
-
-  _featureItem(icon, title, desc) {
-    return h('div', { class: 'wizard-feature' },
-      h('span', { class: 'wizard-feature-icon' }, icon),
-      h('div', null,
-        h('strong', null, title),
-        h('p', null, desc)
-      )
-    );
   }
 
   // ─── Step 2: Project Name ───

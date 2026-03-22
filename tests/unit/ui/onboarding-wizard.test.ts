@@ -112,14 +112,16 @@ describe('OnboardingWizard', () => {
     it('renders the welcome screen on mount', () => {
       const { container } = createWizard();
       expect(container.textContent).toContain('Welcome to Overlord');
-      expect(container.textContent).toContain('Get Started');
+      expect(container.textContent).toContain('Start Guided Setup');
     });
 
-    it('shows feature highlights', () => {
+    it('shows three distinct path cards with benefits', () => {
       const { container } = createWizard();
-      expect(container.textContent).toContain('AI Team Members');
-      expect(container.textContent).toContain('Automated Workflow');
-      expect(container.textContent).toContain('Full Visibility');
+      expect(container.textContent).toContain('Just Build It');
+      expect(container.textContent).toContain('Guided Setup');
+      expect(container.textContent).toContain('Use Existing Codebase');
+      // Each path has a "Best for" tagline
+      expect(container.textContent).toContain('Best for');
     });
 
     it('has a skip button that navigates to strategist', () => {
@@ -128,9 +130,9 @@ describe('OnboardingWizard', () => {
       expect(mockDispatch).toHaveBeenCalledWith('navigate:strategist');
     });
 
-    it('advances to step 2 on Get Started click', () => {
+    it('advances to step 2 on Start Guided Setup click', () => {
       const { container } = createWizard();
-      clickButton(container, 'Get Started');
+      clickButton(container, 'Start Guided Setup');
       expect(container.textContent).toContain('project called');
     });
 
@@ -143,7 +145,7 @@ describe('OnboardingWizard', () => {
   describe('Step 2: Name', () => {
     function goToStep2() {
       const { container, wizard } = createWizard();
-      clickButton(container, 'Get Started');
+      clickButton(container, 'Start Guided Setup');
       return { container, wizard };
     }
 
@@ -190,7 +192,7 @@ describe('OnboardingWizard', () => {
   describe('Step 3: Effort Level', () => {
     function goToStep3() {
       const { container, wizard } = createWizard();
-      clickButton(container, 'Get Started');
+      clickButton(container, 'Start Guided Setup');
       const input = container.querySelector('input[type="text"]') as HTMLInputElement;
       input.value = 'My App';
       input.dispatchEvent(new Event('input'));
@@ -221,7 +223,7 @@ describe('OnboardingWizard', () => {
   describe('Step 4: Type Selection', () => {
     function goToStep4() {
       const { container, wizard } = createWizard();
-      clickButton(container, 'Get Started');
+      clickButton(container, 'Start Guided Setup');
       const input = container.querySelector('input[type="text"]') as HTMLInputElement;
       input.value = 'My App';
       input.dispatchEvent(new Event('input'));
@@ -264,7 +266,7 @@ describe('OnboardingWizard', () => {
   describe('Step 5: Scale Selection', () => {
     function goToStep5() {
       const { container, wizard } = createWizard();
-      clickButton(container, 'Get Started');
+      clickButton(container, 'Start Guided Setup');
       const input = container.querySelector('input[type="text"]') as HTMLInputElement;
       input.value = 'My App';
       input.dispatchEvent(new Event('input'));
@@ -296,7 +298,7 @@ describe('OnboardingWizard', () => {
   describe('Step 6: Review', () => {
     function goToStep6(scale = 'Medium') {
       const { container, wizard } = createWizard();
-      clickButton(container, 'Get Started');
+      clickButton(container, 'Start Guided Setup');
       const input = container.querySelector('input[type="text"]') as HTMLInputElement;
       input.value = 'Customer Portal';
       input.dispatchEvent(new Event('input'));
@@ -354,7 +356,7 @@ describe('OnboardingWizard', () => {
   describe('Project Creation', () => {
     function goToReview() {
       const { container, wizard } = createWizard();
-      clickButton(container, 'Get Started');
+      clickButton(container, 'Start Guided Setup');
       const input = container.querySelector('input[type="text"]') as HTMLInputElement;
       input.value = 'My Project';
       input.dispatchEvent(new Event('input'));
@@ -515,7 +517,7 @@ describe('OnboardingWizard', () => {
     it('resets to step 1 on navigate:onboarding event', () => {
       const { container } = createWizard();
       // Advance to step 2
-      clickButton(container, 'Get Started');
+      clickButton(container, 'Start Guided Setup');
       expect(container.textContent).toContain('project called');
 
       // Simulate navigate event
