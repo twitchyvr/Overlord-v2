@@ -58,6 +58,8 @@ export interface RoomContract {
   exitRequired: ExitTemplate;
   escalation?: Record<string, string>;
   provider: string;
+  /** Whether resource locking is enabled for tools in this room. Default: true (#941). */
+  resourceLocking?: boolean;
 }
 
 export interface SecurityBadge {
@@ -280,12 +282,33 @@ export interface TodoRow {
 
 // ─── Tool Types ───
 
+/**
+ * Describes a resource that a tool requires a lock on.
+ * Used by the tool middleware to transparently acquire/release locks (#941).
+ */
+export interface ToolResourceDescriptor {
+  /** Resource type prefix: 'file', 'git', 'browser', 'build', 'shell', 'database', etc. */
+  type: string;
+  /**
+   * How to derive the resource key:
+   *  - 'static': lock on `type:<buildingId>` (e.g., 'git:building-123')
+   *  - 'param': lock on `type:<paramValue>` (e.g., 'file:src/foo.ts')
+   */
+  mode: 'static' | 'param';
+  /** Which param key to read when mode is 'param' (e.g., 'path', 'destination') */
+  paramKey?: string;
+  /** Override lock options for this resource */
+  lockOptions?: { ttl?: number; maxWait?: number };
+}
+
 export interface ToolDefinition {
   name: string;
   description: string;
   category: string;
   inputSchema: Record<string, unknown>;
   execute: (params: Record<string, unknown>, context?: ToolContext) => Promise<unknown>;
+  /** Resources this tool needs locks on. Empty/undefined = no locking needed (#941). */
+  resources?: ToolResourceDescriptor[];
 }
 
 export interface RepoContextEntry {
@@ -403,6 +426,8 @@ export interface ToolRegistryAPI {
   executeInRoom: (params: {
     toolName: string; params: Record<string, unknown>;
     roomAllowedTools: string[]; context: ToolContext;
+    /** Whether resource locking is enabled. Default: true (#941). */
+    resourceLocking?: boolean;
   }) => Promise<Result>;
 }
 
