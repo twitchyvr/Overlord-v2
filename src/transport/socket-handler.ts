@@ -97,7 +97,7 @@ import {
   LockStateGetSchema,
   MergeQueueGetSchema,
 } from './schemas.js';
-import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd } from '../agents/agent-stats.js';
+import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd, recordActivity } from '../agents/agent-stats.js';
 import { checkBudget, setAgentBudget, getBuildingBudgets } from '../agents/budget-tracker.js';
 import { checkoutTodo, releaseTodo, completeTodo, getLockStatus, getCheckedOutTodos, releaseExpiredLocks } from '../agents/task-checkout.js';
 import { createVisualTest, reviewVisualTest, listVisualTests, getUATSummary, checkUATGate } from '../rooms/visual-testing.js';
@@ -428,6 +428,8 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
           executionState: data.executionState,
           previousState: data.previousState,
         });
+        // Record to activity log for historical queries (#983)
+        recordActivity('__user__', 'building_started', { buildingId: data.buildingId, previousState: data.previousState }, data.buildingId);
       }
       if (ack) ack(result);
     });
@@ -442,6 +444,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
           executionState: data.executionState,
           previousState: data.previousState,
         });
+        recordActivity('__user__', 'building_paused', { buildingId: data.buildingId, previousState: data.previousState }, data.buildingId);
       }
       if (ack) ack(result);
     });
@@ -456,6 +459,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
           executionState: data.executionState,
           previousState: data.previousState,
         });
+        recordActivity('__user__', 'building_stopped', { buildingId: data.buildingId, previousState: data.previousState }, data.buildingId);
       }
       if (ack) ack(result);
     });
