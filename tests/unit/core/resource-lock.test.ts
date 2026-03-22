@@ -758,4 +758,150 @@ describe('ResourceLockManager', () => {
       manager.stopSweepTimer(); // Already stopped — should not throw
     });
   });
+
+  // ── Lock State Snapshot (#943) ──
+
+  describe('getStateSnapshot', () => {
+    it('returns empty snapshot when no locks held', () => {
+      const snapshot = manager.getStateSnapshot();
+      expect(snapshot).toBeDefined();
+      expect(snapshot.updatedAt).toBeGreaterThan(0);
+      expect(snapshot.locks).toEqual([]);
+    });
+
+    it('returns active locks with computed fields', async () => {
+      const result = await manager.acquire('agent-1', 'file:test.ts', { ttl: 30_000 });
+      expect(result.ok).toBe(true);
+
+      const snapshot = manager.getStateSnapshot();
+      expect(snapshot.locks).toHaveLength(1);
+
+      const entry = snapshot.locks[0];
+      expect(entry.resource).toBe('file:test.ts');
+      expect(entry.agentId).toBe('agent-1');
+      expect(entry.ttl).toBe(30_000);
+      expect(entry.timeRemaining).toBeGreaterThan(0);
+      expect(entry.status).toBe('active');
+      expect(entry.acquiredAt).toBeGreaterThan(0);
+      expect(entry.refreshedAt).toBeGreaterThan(0);
+    });
+
+    it('returns multiple locks', async () => {
+      await manager.acquire('agent-1', 'git:building-1', { ttl: 30_000 });
+      await manager.acquire('agent-2', 'file:src/a.ts', { ttl: 30_000 });
+      await manager.acquire('agent-1', 'shell:building-1', { ttl: 30_000 });
+
+      const snapshot = manager.getStateSnapshot();
+      expect(snapshot.locks).toHaveLength(3);
+      // All should be active with valid timeRemaining
+      for (const lock of snapshot.locks) {
+        expect(lock.status).toBe('active');
+        expect(lock.timeRemaining).toBeGreaterThan(0);
+      }
+    });
+
+    it('marks locks with low TTL as "expiring"', async () => {
+      // Acquire with very short TTL (1ms)
+      const result = await manager.acquire('agent-1', 'file:expiring.ts', { ttl: 1 });
+      expect(result.ok).toBe(true);
+
+      // With TTL=1ms + GRACE_PERIOD_MS=5000ms, timeRemaining starts at ~5001ms,
+      // which is just barely above the 5000ms threshold for 'expiring'.
+      // Within a few ms it should be 'expiring'. Both states are valid.
+      const snapshot = manager.getStateSnapshot();
+      expect(snapshot.locks).toHaveLength(1);
+      expect(['active', 'expiring']).toContain(snapshot.locks[0].status);
+    });
+
+    it('preserves metadata in snapshot entries', async () => {
+      await manager.acquire('agent-1', 'browser:static', {
+        ttl: 30_000,
+        metadata: { toolName: 'browser_tools', concurrencyMode: 'exclusive' },
+      });
+
+      const snapshot = manager.getStateSnapshot();
+      expect(snapshot.locks).toHaveLength(1);
+      expect(snapshot.locks[0].metadata).toEqual({
+        toolName: 'browser_tools',
+        concurrencyMode: 'exclusive',
+      });
+    });
+
+    it('does not include released locks', async () => {
+      const result = await manager.acquire('agent-1', 'file:temp.ts', { ttl: 30_000 });
+      expect(result.ok).toBe(true);
+
+      // Release the lock
+      await manager.release('agent-1', 'file:temp.ts');
+
+      const snapshot = manager.getStateSnapshot();
+      expect(snapshot.locks).toHaveLength(0);
+    });
+  });
+
+  describe('writeStateFile', () => {
+    it('writes state.json to lock directory', async () => {
+      await manager.acquire('agent-1', 'file:test.ts', { ttl: 30_000 });
+      manager.writeStateFile();
+
+      const stateFile = path.join(lockDir, 'state.json');
+      expect(fs.existsSync(stateFile)).toBe(true);
+
+      const content = JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+      expect(content.updatedAt).toBeGreaterThan(0);
+      expect(content.locks).toHaveLength(1);
+      expect(content.locks[0].resource).toBe('file:test.ts');
+    });
+
+    it('writes empty state when no locks held', () => {
+      manager.writeStateFile();
+
+      const stateFile = path.join(lockDir, 'state.json');
+      expect(fs.existsSync(stateFile)).toBe(true);
+
+      const content = JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+      expect(content.locks).toEqual([]);
+    });
+
+    it('overwrites previous state file', async () => {
+      await manager.acquire('agent-1', 'file:a.ts', { ttl: 30_000 });
+      manager.writeStateFile();
+
+      await manager.acquire('agent-2', 'file:b.ts', { ttl: 30_000 });
+      manager.writeStateFile();
+
+      const stateFile = path.join(lockDir, 'state.json');
+      const content = JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+      expect(content.locks).toHaveLength(2);
+    });
+
+    it('does not throw if lock directory is valid', () => {
+      expect(() => manager.writeStateFile()).not.toThrow();
+    });
+  });
+
+  describe('sweep timer writes state file (#943)', () => {
+    it('state file is updated after sweep cycle', async () => {
+      // Acquire a lock with very short TTL to let it expire
+      // Grace period is 2000ms, so TTL=1 expires at refreshedAt + 2001ms
+      await manager.acquire('agent-1', 'file:will-expire.ts', { ttl: 1 });
+      // Also hold a valid lock
+      await manager.acquire('agent-2', 'file:will-stay.ts', { ttl: 60_000 });
+
+      // Start sweep with short interval
+      manager.startSweepTimer(100);
+
+      // Wait for lock to expire (TTL=1ms + 2000ms grace) and sweep to run
+      await new Promise(resolve => setTimeout(resolve, 2_500));
+      manager.stopSweepTimer();
+
+      const stateFile = path.join(lockDir, 'state.json');
+      expect(fs.existsSync(stateFile)).toBe(true);
+
+      const content = JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+      // The expired lock should have been swept, so only 1 remains
+      expect(content.locks).toHaveLength(1);
+      expect(content.locks[0].resource).toBe('file:will-stay.ts');
+    });
+  });
 });

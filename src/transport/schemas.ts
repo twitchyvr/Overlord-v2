@@ -1219,3 +1219,6 @@ export const SecurityEventsSchema = z.object({
   limit: z.number().int().min(1).max(500).optional(),
 });
 
+// Lock state dashboard (#943)
+export const LockStateGetSchema = z.object({}).strict().optional().default({});
+

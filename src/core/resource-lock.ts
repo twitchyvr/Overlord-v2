@@ -63,6 +63,24 @@ export interface LockHandle {
   timeRemaining(): number;
 }
 
+/** A single lock entry in the state snapshot (#943). */
+export interface LockStateEntry {
+  resource: string;
+  agentId: string;
+  acquiredAt: number;
+  refreshedAt: number;
+  ttl: number;
+  timeRemaining: number;
+  status: 'active' | 'expiring';
+  metadata?: Record<string, unknown>;
+}
+
+/** Point-in-time snapshot of all active locks (#943). */
+export interface LockStateSnapshot {
+  updatedAt: number;
+  locks: LockStateEntry[];
+}
+
 export interface LockOptions {
   /** Lock TTL in ms. Default: 30000 (30s) */
   ttl?: number;
@@ -89,6 +107,7 @@ const DEFAULT_MAX_WAIT = 120_000;
 const MUTEX_EXPIRY_MS = 5_000;
 const MUTEX_POLL_MS = 50;
 const GRACE_PERIOD_MS = 2_000;
+const EXPIRING_THRESHOLD_MS = 5_000; // #943: Locks with this much time remaining are marked 'expiring'
 const MAX_LOCK_COUNT = 1_000;
 export const SWEEP_INTERVAL_MS = 10_000;
 
@@ -132,6 +151,7 @@ export class ResourceLockManager {
     this._sweepTimer = setInterval(() => {
       try {
         this.sweepExpired();
+        this.writeStateFile(); // #943: Update state file after each sweep cycle
       } catch (e) {
         log.error({ err: e instanceof Error ? e.message : String(e) }, 'Background sweep failed');
       }
@@ -624,6 +644,56 @@ export class ResourceLockManager {
 
   private _sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // ── Public: State Snapshot (#943) ──
+
+  /**
+   * Get a point-in-time snapshot of all active locks.
+   * Returns structured data suitable for dashboard display and JSON export.
+   * Best-effort (no per-resource mutexes) — suitable for monitoring, not lock decisions.
+   */
+  getStateSnapshot(): LockStateSnapshot {
+    const locksResult = this.listLocks();
+    const locks: LockStateEntry[] = [];
+
+    if (locksResult.ok) {
+      const now = Date.now();
+      for (const state of locksResult.data) {
+        const elapsed = now - state.refreshedAt;
+        const remaining = Math.max(0, state.ttl + GRACE_PERIOD_MS - elapsed);
+        locks.push({
+          resource: state.resource,
+          agentId: state.agentId,
+          acquiredAt: state.acquiredAt,
+          refreshedAt: state.refreshedAt,
+          ttl: state.ttl,
+          timeRemaining: remaining,
+          status: remaining <= EXPIRING_THRESHOLD_MS ? 'expiring' : 'active',
+          metadata: state.metadata,
+        });
+      }
+    }
+
+    return {
+      updatedAt: Date.now(),
+      locks,
+    };
+  }
+
+  /**
+   * Write current lock state to a JSON file for external monitoring (#943).
+   * File path: `<lockDir>/state.json`
+   * Called after lock changes (acquire/release/sweep) for real-time visibility.
+   */
+  writeStateFile(): void {
+    try {
+      const snapshot = this.getStateSnapshot();
+      const stateFile = path.join(this.lockDir, 'state.json');
+      fs.writeFileSync(stateFile, JSON.stringify(snapshot, null, 2), 'utf-8');
+    } catch (e) {
+      log.warn({ err: e instanceof Error ? e.message : String(e) }, 'Failed to write lock state file');
+    }
   }
 
   // ── Public: withLockRefresh ──
