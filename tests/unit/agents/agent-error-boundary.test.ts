@@ -199,5 +199,59 @@ describe('AgentErrorBoundary (#945)', () => {
       expect(() => boundary.cleanup()).not.toThrow();
       expect(mockBus.emit).toHaveBeenCalled();
     });
+
+    it('handles lock cleanup failure gracefully (#960)', () => {
+      mockLockMgr.releaseAllForAgent.mockImplementation(() => { throw new Error('lock dir gone'); });
+      const boundary = new AgentErrorBoundary('agent-1', mockLockMgr as any, mockBus as any);
+
+      // Should not throw — gracefully handles lock failure during cleanup
+      expect(() => boundary.cleanup()).not.toThrow();
+      // Bus event should still be emitted
+      expect(mockBus.emit).toHaveBeenCalledWith('agent:cleanup', expect.objectContaining({
+        agentId: 'agent-1',
+      }));
+    });
+  });
+
+  describe('retryable flag propagation (#960)', () => {
+    it('defaults to retryable: true for plain Error', async () => {
+      const boundary = new AgentErrorBoundary('agent-1', mockLockMgr as any, mockBus as any);
+
+      const result = await boundary.execute(async () => { throw new Error('transient'); });
+
+      expect(result.ok).toBe(false);
+      expect(result.error!.retryable).toBe(true);
+    });
+
+    it('propagates retryable: false from error with retryable property', async () => {
+      const boundary = new AgentErrorBoundary('agent-1', mockLockMgr as any, mockBus as any);
+      const fatalError = Object.assign(new Error('config missing'), { retryable: false });
+
+      const result = await boundary.execute(async () => { throw fatalError; });
+
+      expect(result.ok).toBe(false);
+      expect(result.error!.retryable).toBe(false);
+    });
+
+    it('propagates retryable: true from error with retryable property', async () => {
+      const boundary = new AgentErrorBoundary('agent-1', mockLockMgr as any, mockBus as any);
+      const transientError = Object.assign(new Error('timeout'), { retryable: true });
+
+      const result = await boundary.execute(async () => { throw transientError; });
+
+      expect(result.ok).toBe(false);
+      expect(result.error!.retryable).toBe(true);
+    });
+
+    it('defaults to retryable: true for non-Error throws', async () => {
+      const boundary = new AgentErrorBoundary('agent-1', mockLockMgr as any, mockBus as any);
+
+      const result = await boundary.execute(async () => {
+        throw 'string error';  // eslint-disable-line no-throw-literal
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.error!.retryable).toBe(true);
+    });
   });
 });

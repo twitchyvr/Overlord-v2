@@ -80,8 +80,14 @@ export class AgentErrorBoundary {
     }
 
     // 3. Return contained error — does NOT propagate to other agents
+    // Propagate retryable flag from original error if available (#960);
+    // default to true for unknown errors (might be transient network/timeout)
+    const retryable = (error instanceof Error && 'retryable' in error)
+      ? Boolean((error as Error & { retryable?: boolean }).retryable)
+      : true;
+
     return err('AGENT_ERROR', `Agent ${this.agentId} failed: ${message}`, {
-      retryable: true,
+      retryable,
       context: { agentId: this.agentId },
     });
   }
