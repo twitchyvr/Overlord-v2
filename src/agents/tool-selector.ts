@@ -66,9 +66,10 @@ const TOOL_KEYWORDS: Record<string, string[]> = {
   recall_notes: ['recall', 'what did', 'previous note', 'notes'],
 
   // Work item creation (#1015) — triggered by project planning/analysis
-  create_task: ['task', 'work item', 'todo', 'action item', 'plan', 'breakdown', 'next step', 'analyze', 'assess', 'strategy'],
-  create_raid_entry: ['risk', 'assumption', 'issue', 'decision', 'concern', 'dependency', 'constraint', 'blocker'],
-  create_milestone: ['milestone', 'deliverable', 'target', 'goal', 'phase', 'sprint', 'release'],
+  // Avoid single-word keywords that collide with other tools (e.g., 'issue' collides with github)
+  create_task: ['task', 'work item', 'todo', 'action item', 'task breakdown', 'next step'],
+  create_raid_entry: ['risk', 'assumption', 'log issue', 'decision', 'concern', 'dependency', 'constraint', 'blocker', 'raid'],
+  create_milestone: ['milestone', 'deliverable', 'target date', 'sprint', 'release'],
 };
 
 /** Tools that should be included together (if one is selected, include its companions) */
