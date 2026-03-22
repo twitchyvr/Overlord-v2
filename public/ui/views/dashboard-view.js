@@ -43,6 +43,10 @@ export class DashboardView extends Component {
       this._updateKPIs();
     });
 
+    this.subscribe(store, 'rooms.list', () => {
+      this._updateKPIs();
+    });
+
     this.subscribe(store, 'raid.entries', (entries) => {
       this._raidEntries = entries || [];
       this._updateKPIs();
@@ -143,6 +147,9 @@ export class DashboardView extends Component {
       this.el.appendChild(this._buildDevLoopPipeline());
     }
 
+    // Live Telemetry (#804)
+    this.el.appendChild(this._buildTelemetryPanel());
+
     // Tool Activity Summary (#661)
     this.el.appendChild(this._buildToolActivity());
 
@@ -191,9 +198,8 @@ export class DashboardView extends Component {
 
     const totalBuildings = this._buildings.length;
     const totalRooms = this._buildings.reduce((sum, b) => sum + (b.floorCount ?? b.floor_count ?? 0), 0);
-    const totalAgents = this._buildings.reduce((sum, b) => sum + (b.agentCount ?? b.agent_count ?? 0), 0);
-    // Use live agent list count when it exceeds building-level metadata
-    const liveAgentCount = this._agents.length > totalAgents ? this._agents.length : totalAgents;
+    // Use totalAgentCount (all agents) not agentCount (only in-room agents)
+    const liveAgentCount = this._agents.length || this._buildings.reduce((sum, b) => sum + (b.totalAgentCount ?? b.agentCount ?? b.agent_count ?? 0), 0);
 
     const kpis = [
       { label: 'Total Projects', value: totalBuildings, icon: '\u{1F4C1}', color: 'var(--accent-cyan)' },
@@ -229,9 +235,9 @@ export class DashboardView extends Component {
         color: this._getAvgHealthColor()
       },
       {
-        label: 'Agents',
-        value: this._getAgentCount(),
-        icon: '\u{1F916}',
+        label: 'Rooms',
+        value: this._getRoomCount(),
+        icon: '\u{1F3E0}',
         color: 'var(--accent-green)'
       },
       {
@@ -395,6 +401,14 @@ export class DashboardView extends Component {
     return this._buildings.reduce((sum, b) => sum + (b.agentCount ?? b.agent_count ?? 0), 0);
   }
 
+  _getRoomCount() {
+    const store = OverlordUI.getStore();
+    const rooms = store?.get('rooms.list') || [];
+    if (rooms.length > 0) return rooms.length;
+    // Fallback: sum from building metadata
+    return this._buildings.reduce((sum, b) => sum + (b.roomCount ?? 0), 0);
+  }
+
   _getAvgHealth() {
     const scores = this._buildings
       .filter(b => b.healthScore && b.healthScore.total !== undefined)
@@ -418,7 +432,7 @@ export class DashboardView extends Component {
     if (kpiValues.length >= 5) {
       kpiValues[0].textContent = String(this._buildings.length);
       kpiValues[1].textContent = String(this._getAvgHealth());
-      kpiValues[2].textContent = String(this._getAgentCount());
+      kpiValues[2].textContent = String(this._getRoomCount());
       kpiValues[3].textContent = String(this._raidEntries.length);
       const s = this._securityStats;
       kpiValues[4].textContent = s.blocked > 0
@@ -492,6 +506,319 @@ export class DashboardView extends Component {
       const newPipeline = this._buildDevLoopPipeline();
       existing.replaceWith(newPipeline);
     }
+  }
+
+  // ─── Live Telemetry (#804) ───
+
+  _buildTelemetryPanel() {
+    const panel = h('div', { class: 'telemetry-panel' });
+    panel.appendChild(h('h3', null, 'Live Telemetry'));
+
+    const grid = h('div', { class: 'telemetry-grid' });
+
+    // Token Usage Chart
+    const tokenChart = h('div', { class: 'telemetry-card glass-card' });
+    tokenChart.appendChild(h('div', { class: 'telemetry-card-header' }, 'Token Usage'));
+    const tokenSvg = this._createTokenChart();
+    tokenChart.appendChild(tokenSvg);
+    grid.appendChild(tokenChart);
+
+    // API Calls / Minute Sparkline
+    const apiChart = h('div', { class: 'telemetry-card glass-card' });
+    apiChart.appendChild(h('div', { class: 'telemetry-card-header' }, 'API Calls'));
+    const apiSvg = this._createApiSparkline();
+    apiChart.appendChild(apiSvg);
+    grid.appendChild(apiChart);
+
+    // Tool Breakdown Bar Chart
+    const toolChart = h('div', { class: 'telemetry-card glass-card' });
+    toolChart.appendChild(h('div', { class: 'telemetry-card-header' }, 'Tool Usage'));
+    const toolSvg = this._createToolBarChart();
+    toolChart.appendChild(toolSvg);
+    grid.appendChild(toolChart);
+
+    // Agent Status Overview
+    const agentChart = h('div', { class: 'telemetry-card glass-card' });
+    agentChart.appendChild(h('div', { class: 'telemetry-card-header' }, 'Agent Status'));
+    const agentSvg = this._createAgentStatusChart();
+    agentChart.appendChild(agentSvg);
+    grid.appendChild(agentChart);
+
+    panel.appendChild(grid);
+
+    // Subscribe to live updates
+    const store = OverlordUI.getStore();
+    if (store) {
+      store.subscribe('ai.callLog', () => this._updateTelemetry());
+      store.subscribe('activity.items', () => this._updateTelemetry());
+      store.subscribe('ai.usage', () => this._updateTelemetry());
+    }
+
+    this._telemetryPanel = panel;
+    return panel;
+  }
+
+  _updateTelemetry() {
+    if (!this._telemetryPanel) return;
+    const cards = this._telemetryPanel.querySelectorAll('.telemetry-card');
+    if (cards[0]) { const svg = this._createTokenChart(); cards[0].querySelector('svg')?.replaceWith(svg); }
+    if (cards[1]) { const svg = this._createApiSparkline(); cards[1].querySelector('svg')?.replaceWith(svg); }
+    if (cards[2]) { const svg = this._createToolBarChart(); cards[2].querySelector('svg')?.replaceWith(svg); }
+    if (cards[3]) { const svg = this._createAgentStatusChart(); cards[3].querySelector('svg')?.replaceWith(svg); }
+  }
+
+  _createSvg(w, h, viewBox) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', String(w));
+    svg.setAttribute('height', String(h));
+    svg.setAttribute('viewBox', viewBox || `0 0 ${w} ${h}`);
+    svg.style.display = 'block';
+    return svg;
+  }
+
+  _svgEl(tag, attrs = {}) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v !== null && v !== undefined) el.setAttribute(k, String(v));
+    }
+    return el;
+  }
+
+  _createTokenChart() {
+    const store = OverlordUI.getStore();
+    const callLog = store?.get('ai.callLog') || [];
+    const usage = store?.get('ai.usage') || { total: { input: 0, output: 0, calls: 0 } };
+
+    const W = 320, H = 120, PAD = 30;
+    const svg = this._createSvg('100%', H, `0 0 ${W} ${H}`);
+
+    // Background
+    svg.appendChild(this._svgEl('rect', { x: 0, y: 0, width: W, height: H, fill: 'transparent' }));
+
+    if (callLog.length === 0) {
+      const txt = this._svgEl('text', { x: W / 2, y: H / 2, fill: '#64748b', 'font-size': '12', 'text-anchor': 'middle' });
+      txt.textContent = 'No API calls yet';
+      svg.appendChild(txt);
+
+      // Show totals
+      const totalTxt = this._svgEl('text', { x: W / 2, y: H / 2 + 18, fill: '#475569', 'font-size': '10', 'text-anchor': 'middle' });
+      totalTxt.textContent = `Total: ${(usage.total.input + usage.total.output).toLocaleString()} tokens`;
+      svg.appendChild(totalTxt);
+      return svg;
+    }
+
+    // Build time series (last 20 calls, newest first → reverse for left-to-right)
+    const points = callLog.slice(0, 20).reverse();
+    const maxTokens = Math.max(...points.map(p => (p.inputTokens || 0) + (p.outputTokens || 0)), 1);
+
+    // Grid lines
+    for (let i = 0; i <= 3; i++) {
+      const y = PAD + ((H - PAD * 2) * i) / 3;
+      svg.appendChild(this._svgEl('line', { x1: PAD, y1: y, x2: W - 10, y2: y, stroke: '#334155', 'stroke-width': '0.5', 'stroke-dasharray': '3,3' }));
+    }
+
+    // Input tokens line (cyan)
+    const inputPath = points.map((p, i) => {
+      const x = PAD + (i / Math.max(points.length - 1, 1)) * (W - PAD - 10);
+      const y = PAD + (1 - (p.inputTokens || 0) / maxTokens) * (H - PAD * 2);
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    svg.appendChild(this._svgEl('path', { d: inputPath, fill: 'none', stroke: '#22d3ee', 'stroke-width': '2', 'stroke-linejoin': 'round' }));
+
+    // Output tokens line (green)
+    const outputPath = points.map((p, i) => {
+      const x = PAD + (i / Math.max(points.length - 1, 1)) * (W - PAD - 10);
+      const y = PAD + (1 - (p.outputTokens || 0) / maxTokens) * (H - PAD * 2);
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    svg.appendChild(this._svgEl('path', { d: outputPath, fill: 'none', stroke: '#4ade80', 'stroke-width': '2', 'stroke-linejoin': 'round' }));
+
+    // Legend
+    svg.appendChild(this._svgEl('circle', { cx: PAD, cy: H - 8, r: 3, fill: '#22d3ee' }));
+    const inLabel = this._svgEl('text', { x: PAD + 8, y: H - 5, fill: '#94a3b8', 'font-size': '9' });
+    inLabel.textContent = `In: ${usage.total.input.toLocaleString()}`;
+    svg.appendChild(inLabel);
+
+    svg.appendChild(this._svgEl('circle', { cx: PAD + 100, cy: H - 8, r: 3, fill: '#4ade80' }));
+    const outLabel = this._svgEl('text', { x: PAD + 108, y: H - 5, fill: '#94a3b8', 'font-size': '9' });
+    outLabel.textContent = `Out: ${usage.total.output.toLocaleString()}`;
+    svg.appendChild(outLabel);
+
+    // Calls count
+    const callsLabel = this._svgEl('text', { x: W - 10, y: H - 5, fill: '#64748b', 'font-size': '9', 'text-anchor': 'end' });
+    callsLabel.textContent = `${usage.total.calls} calls`;
+    svg.appendChild(callsLabel);
+
+    return svg;
+  }
+
+  _createApiSparkline() {
+    const store = OverlordUI.getStore();
+    const callLog = store?.get('ai.callLog') || [];
+
+    const W = 320, H = 120;
+    const svg = this._createSvg('100%', H, `0 0 ${W} ${H}`);
+
+    if (callLog.length === 0) {
+      const txt = this._svgEl('text', { x: W / 2, y: H / 2, fill: '#64748b', 'font-size': '12', 'text-anchor': 'middle' });
+      txt.textContent = 'No API activity';
+      svg.appendChild(txt);
+      return svg;
+    }
+
+    // Bucket calls into 1-minute windows (last 10 minutes)
+    const now = Date.now();
+    const buckets = new Array(10).fill(0);
+    for (const call of callLog) {
+      const ts = call.timestamp || call.ts || 0;
+      const age = (now - ts) / 60000; // minutes ago
+      const bucket = Math.floor(age);
+      if (bucket >= 0 && bucket < 10) buckets[9 - bucket]++;
+    }
+
+    const maxCalls = Math.max(...buckets, 1);
+    const barW = (W - 40) / buckets.length;
+
+    // Bars
+    buckets.forEach((count, i) => {
+      const barH = (count / maxCalls) * (H - 40);
+      const x = 20 + i * barW + 2;
+      const y = H - 20 - barH;
+      svg.appendChild(this._svgEl('rect', {
+        x, y, width: barW - 4, height: Math.max(barH, 1),
+        rx: 2, fill: count > 0 ? '#8b5cf6' : '#1e293b',
+        opacity: count > 0 ? 0.8 : 0.3,
+      }));
+      if (count > 0) {
+        const label = this._svgEl('text', { x: x + (barW - 4) / 2, y: y - 4, fill: '#a78bfa', 'font-size': '9', 'text-anchor': 'middle' });
+        label.textContent = String(count);
+        svg.appendChild(label);
+      }
+    });
+
+    // X-axis labels
+    const timeLabels = ['10m', '', '', '', '', '5m', '', '', '', 'now'];
+    timeLabels.forEach((label, i) => {
+      if (!label) return;
+      const txt = this._svgEl('text', { x: 20 + i * barW + barW / 2, y: H - 5, fill: '#475569', 'font-size': '8', 'text-anchor': 'middle' });
+      txt.textContent = label;
+      svg.appendChild(txt);
+    });
+
+    return svg;
+  }
+
+  _createToolBarChart() {
+    const store = OverlordUI.getStore();
+    const items = store?.get('activity.items') || [];
+
+    const W = 320, H = 120;
+    const svg = this._createSvg('100%', H, `0 0 ${W} ${H}`);
+
+    // Count tool executions
+    const toolCounts = {};
+    for (const item of items) {
+      if (item.event === 'tool:executed' || item.type === 'tool:executed') {
+        const name = item.toolName || item.tool || 'unknown';
+        toolCounts[name] = (toolCounts[name] || 0) + 1;
+      }
+    }
+
+    const entries = Object.entries(toolCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+    if (entries.length === 0) {
+      const txt = this._svgEl('text', { x: W / 2, y: H / 2, fill: '#64748b', 'font-size': '12', 'text-anchor': 'middle' });
+      txt.textContent = 'No tool calls yet';
+      svg.appendChild(txt);
+      return svg;
+    }
+
+    const maxCount = Math.max(...entries.map(e => e[1]), 1);
+    const barH = Math.min(16, (H - 20) / entries.length - 4);
+    const colors = ['#22d3ee', '#4ade80', '#f59e0b', '#8b5cf6', '#ec4899', '#f97316'];
+
+    entries.forEach(([name, count], i) => {
+      const y = 10 + i * (barH + 4);
+      const barW = (count / maxCount) * (W - 120);
+
+      // Bar
+      svg.appendChild(this._svgEl('rect', { x: 100, y, width: Math.max(barW, 2), height: barH, rx: 3, fill: colors[i % colors.length], opacity: 0.7 }));
+
+      // Label
+      const label = this._svgEl('text', { x: 95, y: y + barH / 2 + 4, fill: '#94a3b8', 'font-size': '10', 'text-anchor': 'end' });
+      label.textContent = name.length > 12 ? name.slice(0, 12) + '...' : name;
+      svg.appendChild(label);
+
+      // Count
+      const countLabel = this._svgEl('text', { x: 105 + barW, y: y + barH / 2 + 4, fill: '#e2e8f0', 'font-size': '10' });
+      countLabel.textContent = String(count);
+      svg.appendChild(countLabel);
+    });
+
+    return svg;
+  }
+
+  _createAgentStatusChart() {
+    const W = 320, H = 120;
+    const svg = this._createSvg('100%', H, `0 0 ${W} ${H}`);
+
+    const agents = this._agents.length > 0 ? this._agents : [];
+    if (agents.length === 0) {
+      // Use building-level agent counts
+      const total = this._buildings.reduce((sum, b) => sum + (b.totalAgentCount ?? b.agentCount ?? 0), 0);
+      const txt = this._svgEl('text', { x: W / 2, y: H / 2, fill: '#64748b', 'font-size': '12', 'text-anchor': 'middle' });
+      txt.textContent = total > 0 ? `${total} agents across ${this._buildings.length} projects` : 'No agents';
+      svg.appendChild(txt);
+      return svg;
+    }
+
+    // Count by status
+    const statusCounts = { active: 0, idle: 0, paused: 0, error: 0 };
+    for (const a of agents) {
+      const s = a.status || 'idle';
+      statusCounts[s] = (statusCounts[s] || 0) + 1;
+    }
+
+    // Donut chart
+    const cx = 60, cy = 60, r = 40;
+    const total = agents.length;
+    const slices = [
+      { label: 'Active', count: statusCounts.active, color: '#4ade80' },
+      { label: 'Idle', count: statusCounts.idle, color: '#64748b' },
+      { label: 'Paused', count: statusCounts.paused, color: '#f59e0b' },
+      { label: 'Error', count: statusCounts.error, color: '#ef4444' },
+    ].filter(s => s.count > 0);
+
+    let angle = -Math.PI / 2;
+    for (const slice of slices) {
+      const sliceAngle = (slice.count / total) * Math.PI * 2;
+      const x1 = cx + r * Math.cos(angle);
+      const y1 = cy + r * Math.sin(angle);
+      const x2 = cx + r * Math.cos(angle + sliceAngle);
+      const y2 = cy + r * Math.sin(angle + sliceAngle);
+      const largeArc = sliceAngle > Math.PI ? 1 : 0;
+
+      const path = `M ${cx} ${cy} L ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z`;
+      svg.appendChild(this._svgEl('path', { d: path, fill: slice.color, opacity: 0.8 }));
+      angle += sliceAngle;
+    }
+
+    // Center hole (donut)
+    svg.appendChild(this._svgEl('circle', { cx, cy, r: r * 0.55, fill: 'var(--bg-primary, #0f172a)' }));
+    const centerTxt = this._svgEl('text', { x: cx, y: cy + 4, fill: '#e2e8f0', 'font-size': '16', 'font-weight': 'bold', 'text-anchor': 'middle' });
+    centerTxt.textContent = String(total);
+    svg.appendChild(centerTxt);
+
+    // Legend (right side)
+    slices.forEach((slice, i) => {
+      const ly = 20 + i * 22;
+      svg.appendChild(this._svgEl('circle', { cx: 140, cy: ly, r: 5, fill: slice.color }));
+      const label = this._svgEl('text', { x: 150, y: ly + 4, fill: '#94a3b8', 'font-size': '11' });
+      label.textContent = `${slice.label}: ${slice.count}`;
+      svg.appendChild(label);
+    });
+
+    return svg;
   }
 
   // ─── Tool Activity Summary (#661) ───

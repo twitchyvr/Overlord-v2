@@ -572,6 +572,7 @@ describe('Socket Handler (Transport Layer)', () => {
             description: '',
             repoUrl: '',
             floorCount: 0,
+            roomCount: 0,
             agentCount: 0,
             totalAgentCount: 0,
             taskCount: 0,

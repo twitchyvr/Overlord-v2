@@ -179,7 +179,23 @@ export function listBuildings(projectId?: string): Result {
   } else {
     rows = db.prepare('SELECT * FROM buildings ORDER BY created_at').all() as BuildingRow[];
   }
-  return ok(rows.map((b) => ({ ...b, config: safeJsonParse(b.config, {}) })));
+  // Enrich with agent and room counts for dashboard KPIs (#804)
+  const agentCounts = db.prepare('SELECT building_id, COUNT(*) as cnt FROM agents GROUP BY building_id').all() as Array<{ building_id: string; cnt: number }>;
+  const roomCounts = db.prepare(`
+    SELECT f.building_id, COUNT(r.id) as cnt FROM rooms r
+    JOIN floors f ON r.floor_id = f.id
+    GROUP BY f.building_id
+  `).all() as Array<{ building_id: string; cnt: number }>;
+
+  const agentMap = new Map(agentCounts.map(r => [r.building_id, r.cnt]));
+  const roomMap = new Map(roomCounts.map(r => [r.building_id, r.cnt]));
+
+  return ok(rows.map((b) => ({
+    ...b,
+    config: safeJsonParse(b.config, {}),
+    agentCount: agentMap.get(b.id) || 0,
+    roomCount: roomMap.get(b.id) || 0,
+  })));
 }
 
 /**

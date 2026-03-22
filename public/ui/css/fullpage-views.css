@@ -3854,6 +3854,43 @@
 }
 
 /* ═══════════════════════════════════════════════════════
+   #804 — Live Telemetry Panel
+   ═══════════════════════════════════════════════════════ */
+
+.telemetry-panel {
+  margin-top: var(--sp-4, 1rem);
+}
+.telemetry-panel h3 {
+  font-size: var(--text-base, 1rem);
+  font-weight: var(--font-semibold, 600);
+  margin: 0 0 var(--sp-3, 0.75rem) 0;
+}
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--sp-3, 0.75rem);
+}
+.telemetry-card {
+  padding: var(--sp-3, 0.75rem);
+  border-radius: var(--radius-lg, 12px);
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+}
+.telemetry-card-header {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: var(--font-semibold, 600);
+  color: var(--text-secondary, rgba(255,255,255,0.7));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--sp-2, 0.5rem);
+}
+.telemetry-card svg {
+  flex: 1;
+  width: 100%;
+}
+
+/* ═══════════════════════════════════════════════════════
    #930 — Agent List UX: Collapsible Groups, Action Bar,
           Activity Preview, Token Badge
    ═══════════════════════════════════════════════════════ */

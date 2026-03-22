@@ -816,13 +816,13 @@ describe('DashboardView', () => {
     store.set('building.list', []);
 
     const kpiValues = el.querySelectorAll('.kpi-card-value');
-    expect(kpiValues[2].textContent).toBe('0'); // agents KPI
+    expect(kpiValues[2].textContent).toBe('0'); // rooms KPI
 
-    // Update agents
-    store.set('agents.list', [
-      { id: 'a1', name: 'Agent 1' },
-      { id: 'a2', name: 'Agent 2' },
-      { id: 'a3', name: 'Agent 3' }
+    // Update rooms
+    store.set('rooms.list', [
+      { id: 'r1', name: 'Room 1' },
+      { id: 'r2', name: 'Room 2' },
+      { id: 'r3', name: 'Room 3' }
     ]);
 
     expect(kpiValues[2].textContent).toBe('3');
