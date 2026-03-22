@@ -3275,6 +3275,9 @@
   margin: 0 auto;
   padding: var(--sp-8) var(--sp-6);
   animation: wizard-fade-in 0.4s ease;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 @keyframes wizard-fade-in {
