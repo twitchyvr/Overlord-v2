@@ -27,6 +27,7 @@ import { executeGameEngine } from './providers/game-engine.js';
 import { executeDevServer } from './providers/dev-server.js';
 import { executeBrowserTools } from './providers/browser-tools.js';
 import { executeWorkspaceSandbox } from './providers/workspace-sandbox.js';
+import { executeMergeQueue } from './providers/merge-queue.js';
 import { analyzeScreenshot } from './providers/screenshot-analyzer.js';
 import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } from '../core/contracts.js';
 import { getDb } from '../storage/db.js';
@@ -1222,12 +1223,12 @@ function registerBuiltinTools(): void {
   // ─── Workspace Sandbox ───
   registerTool({
     name: 'workspace_sandbox',
-    description: 'Manage isolated git worktree sandboxes: create, destroy, list, status',
+    description: 'Manage isolated git worktree sandboxes: create, destroy, list, status, merge-ready',
     category: 'workspace',
     inputSchema: {
       type: 'object',
       properties: {
-        action: { type: 'string', description: 'Action: create, destroy, list, status' },
+        action: { type: 'string', description: 'Action: create, destroy, list, status, merge-ready' },
         projectDir: { type: 'string', description: 'Git repository directory' },
         branch: { type: 'string', description: 'Branch name (default: main)' },
       },
@@ -1235,7 +1236,7 @@ function registerBuiltinTools(): void {
     },
     execute: async (p) => {
       const result = await executeWorkspaceSandbox({
-        action: p.action as 'create' | 'destroy' | 'list' | 'status',
+        action: p.action as 'create' | 'destroy' | 'list' | 'status' | 'merge-ready',
         projectDir: p.projectDir as string,
         branch: p.branch as string | undefined,
       });
@@ -1244,6 +1245,44 @@ function registerBuiltinTools(): void {
       }
       const { output: wsOutput, ...wsRest } = result.data;
       return { output: wsOutput, ...wsRest };
+    },
+  });
+
+  // ─── Merge Queue (#944) ───
+
+  registerTool({
+    name: 'merge_queue',
+    description: 'Manage sequential merge queue for worktree branches: enqueue, dequeue, process, status, drift',
+    category: 'workspace',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', description: 'Action: enqueue, dequeue, process, status, drift' },
+        buildingId: { type: 'string', description: 'Building ID' },
+        projectDir: { type: 'string', description: 'Git repository directory' },
+        branch: { type: 'string', description: 'Branch name (for enqueue/drift)' },
+        worktreePath: { type: 'string', description: 'Worktree path (for enqueue)' },
+        agentId: { type: 'string', description: 'Agent requesting merge (for enqueue)' },
+        priority: { type: 'string', description: 'Priority: hotfix, feature, refactor, auto' },
+        entryId: { type: 'string', description: 'Queue entry ID (for dequeue)' },
+      },
+      required: ['action', 'buildingId'],
+    },
+    execute: async (p, ctx) => {
+      const result = await executeMergeQueue({
+        action: p.action as string,
+        buildingId: p.buildingId as string,
+        projectDir: p.projectDir as string | undefined,
+        branch: p.branch as string | undefined,
+        worktreePath: p.worktreePath as string | undefined,
+        agentId: (p.agentId as string) || ctx?.agentId || 'unknown',
+        priority: (p.priority as string) || 'feature',
+        entryId: p.entryId as string | undefined,
+      });
+      if (!result.ok) {
+        return { output: result.error.message, error: true };
+      }
+      return result.data;
     },
   });
 

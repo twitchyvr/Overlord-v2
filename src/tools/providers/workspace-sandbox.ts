@@ -10,7 +10,7 @@ import { ok, err } from '../../core/contracts.js';
 import { executeShell } from './shell.js';
 import type { Result } from '../../core/contracts.js';
 
-export type SandboxAction = 'create' | 'destroy' | 'list' | 'status';
+export type SandboxAction = 'create' | 'destroy' | 'list' | 'status' | 'merge-ready';
 
 export interface WorktreeEntry {
   worktreePath: string;
@@ -25,6 +25,8 @@ export interface WorkspaceSandboxResult {
   branch?: string;
   isClean?: boolean;
   worktrees?: WorktreeEntry[];
+  ready?: boolean;
+  commitsAhead?: number;
   output: string;
 }
 
@@ -92,6 +94,8 @@ export async function executeWorkspaceSandbox(params: {
         return await listWorktrees(projectDir);
       case 'status':
         return await worktreeStatus(projectDir, branch || 'main');
+      case 'merge-ready':
+        return await checkMergeReady(projectDir, branch || 'main');
       default:
         return err('INVALID_ACTION', `Unknown sandbox action: ${action}`, { retryable: false });
     }
@@ -215,5 +219,65 @@ async function worktreeStatus(projectDir: string, branch: string): Promise<Resul
     branch,
     isClean,
     output: `Worktree at ${wtPath}: ${isClean ? 'clean' : 'has uncommitted changes'}`,
+  });
+}
+
+/**
+ * Check if a worktree branch is ready to merge (#944).
+ * Verifies the worktree exists, is clean, and has commits ahead of main.
+ */
+async function checkMergeReady(projectDir: string, branch: string): Promise<Result<WorkspaceSandboxResult>> {
+  const wtPath = worktreePath(projectDir, branch);
+
+  // Check worktree exists
+  const listResult = await executeShell({
+    command: 'git worktree list --porcelain',
+    cwd: projectDir,
+    timeout: 10_000,
+  });
+
+  const worktrees = parseWorktreeList(listResult.stdout);
+  const entry = worktrees.find(w => w.worktreePath === wtPath);
+
+  if (!entry) {
+    return ok({
+      action: 'merge-ready',
+      worktreePath: wtPath,
+      branch,
+      ready: false,
+      isClean: false,
+      commitsAhead: 0,
+      output: `Worktree does not exist at ${wtPath}`,
+    });
+  }
+
+  // Check if working tree is clean
+  const statusResult = await executeShell({
+    command: 'git status --porcelain',
+    cwd: wtPath,
+    timeout: 10_000,
+  });
+  const isClean = statusResult.stdout.trim().length === 0;
+
+  // Count commits ahead of main
+  const countResult = await executeShell({
+    command: 'git rev-list --count main..HEAD',
+    cwd: wtPath,
+    timeout: 10_000,
+  });
+  const commitsAhead = parseInt(countResult.stdout.trim(), 10) || 0;
+
+  const ready = isClean && commitsAhead > 0;
+
+  return ok({
+    action: 'merge-ready',
+    worktreePath: wtPath,
+    branch,
+    ready,
+    isClean,
+    commitsAhead,
+    output: ready
+      ? `Worktree at ${wtPath} is ready to merge (${commitsAhead} commits ahead, clean)`
+      : `Worktree at ${wtPath} is NOT ready: ${!isClean ? 'has uncommitted changes' : 'no commits ahead of main'}`,
   });
 }

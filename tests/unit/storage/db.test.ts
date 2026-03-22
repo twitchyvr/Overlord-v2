@@ -114,9 +114,10 @@ describe('Storage Layer', () => {
       'repo_file_origins',
       'doc_libraries',
       'doc_entries',
+      'merge_queue',
     ];
 
-    it('creates all 27 tables', async () => {
+    it('creates all 28 tables', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -126,7 +127,7 @@ describe('Storage Layer', () => {
 
       const tableNames = tables.map((t) => t.name).sort();
       expect(tableNames).toEqual(expectedTables.sort());
-      expect(tableNames).toHaveLength(27);
+      expect(tableNames).toHaveLength(28);
     });
 
     it.each(expectedTables)('creates table: %s', async (tableName) => {
@@ -273,9 +274,12 @@ describe('Storage Layer', () => {
       'idx_doc_libraries_building',
       'idx_doc_entries_library',
       'idx_doc_entries_path',
+      'idx_merge_queue_building',
+      'idx_merge_queue_status',
+      'idx_merge_queue_position',
     ];
 
-    it('creates all 53 custom indexes', async () => {
+    it('creates all 56 custom indexes', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -285,7 +289,7 @@ describe('Storage Layer', () => {
 
       const indexNames = indexes.map((i) => i.name).sort();
       expect(indexNames).toEqual(expectedIndexes.sort());
-      expect(indexNames).toHaveLength(53);
+      expect(indexNames).toHaveLength(56);
     });
 
     it.each(expectedIndexes)('creates index: %s', async (indexName) => {
@@ -328,7 +332,7 @@ describe('Storage Layer', () => {
         .prepare("SELECT count(*) as cnt FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         .get() as { cnt: number };
 
-      expect(tables.cnt).toBe(27);
+      expect(tables.cnt).toBe(28);
     });
   });
 

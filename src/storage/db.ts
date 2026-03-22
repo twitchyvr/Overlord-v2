@@ -439,6 +439,27 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_doc_libraries_building ON doc_libraries(building_id);
   CREATE INDEX IF NOT EXISTS idx_doc_entries_library ON doc_entries(library_id);
   CREATE INDEX IF NOT EXISTS idx_doc_entries_path ON doc_entries(file_path);
+
+  -- Merge Queue (#944) — Sequential merge strategy for worktree branches
+  CREATE TABLE IF NOT EXISTS merge_queue (
+    id TEXT PRIMARY KEY,
+    building_id TEXT NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
+    branch TEXT NOT NULL,
+    worktree_path TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    priority TEXT NOT NULL DEFAULT 'feature' CHECK(priority IN ('hotfix', 'feature', 'refactor', 'auto')),
+    status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued', 'rebasing', 'testing', 'merging', 'merged', 'failed', 'cancelled')),
+    position INTEGER NOT NULL DEFAULT 0,
+    main_drift TEXT DEFAULT '{}',
+    failure_reason TEXT,
+    enqueued_at TEXT DEFAULT (datetime('now')),
+    started_at TEXT,
+    completed_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_merge_queue_building ON merge_queue(building_id);
+  CREATE INDEX IF NOT EXISTS idx_merge_queue_status ON merge_queue(status);
+  CREATE INDEX IF NOT EXISTS idx_merge_queue_position ON merge_queue(building_id, position);
 `;
 
 /**

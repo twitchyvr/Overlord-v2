@@ -41,6 +41,9 @@ const TOOL_RESOURCE_MAP: Record<string, ToolResourceDescriptor[]> = {
   github: [{ type: 'git', mode: 'static' }],
   workspace_sandbox: [{ type: 'git', mode: 'static' }],
 
+  // ── Merge Queue (sequential merge serialized on git lock) ──
+  merge_queue: [{ type: 'git', mode: 'static' }],
+
   // ── GitHub API (separate from local git) ──
   github_issues: [{ type: 'github-api', mode: 'static' }],
 
