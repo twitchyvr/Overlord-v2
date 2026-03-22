@@ -28,6 +28,7 @@ function setupDb(): Database.Database {
     `CREATE TABLE buildings (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      working_directory TEXT,
       active_phase TEXT DEFAULT 'strategy',
       created_at TEXT DEFAULT (datetime('now'))
     )`,
@@ -185,6 +186,8 @@ describe('Building Onboarding', () => {
 
   it('handles unknown phase gracefully', () => {
     seedBuilding('bld_3', 'Unknown Phase');
+    // Pre-seed a room so the building isn't treated as orphaned (#975)
+    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_seed_3', 'floor_strategy_bld_3', 'strategist', 'Seeded Room');
 
     initBuildingOnboarding({ bus, rooms, agents });
     bus._trigger('phase:advanced', { buildingId: 'bld_3', to: 'unknown-phase' });
@@ -251,6 +254,38 @@ describe('Building Onboarding', () => {
     expect(rooms.enterRoom).toHaveBeenCalledWith(
       expect.objectContaining({ agentId: expect.stringContaining('agent_') }),
     );
+  });
+
+  it('auto-onboards orphaned buildings with floors but no rooms (#975)', () => {
+    // Create two buildings: one with rooms, one without
+    seedBuilding('bld_orphan', 'Orphaned Project');
+    seedBuilding('bld_healthy', 'Healthy Project');
+    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_h', 'floor_strategy_bld_healthy', 'strategist', 'Existing Room');
+
+    initBuildingOnboarding({ bus, rooms, agents });
+
+    // Only orphaned building should get a room provisioned
+    const createCalls = (rooms.createRoom as ReturnType<typeof vi.fn>).mock.calls;
+    const orphanCalls = createCalls.filter((call) => call[0]?.floorId?.includes('bld_orphan'));
+    expect(orphanCalls.length).toBeGreaterThanOrEqual(1);
+    expect(orphanCalls[0][0].type).toBe('strategist');
+
+    // Should emit building:onboarded with wasOrphaned flag
+    const onboarded = bus._emissions.find(
+      (e) => e.event === 'building:onboarded' && (e.data as Record<string, unknown>).buildingId === 'bld_orphan',
+    );
+    expect(onboarded).toBeDefined();
+    expect((onboarded!.data as Record<string, unknown>).wasOrphaned).toBe(true);
+  });
+
+  it('skips buildings that already have rooms during orphan check (#975)', () => {
+    seedBuilding('bld_ok', 'Has Rooms');
+    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_ok', 'floor_strategy_bld_ok', 'strategist', 'Existing Room');
+
+    initBuildingOnboarding({ bus, rooms, agents });
+
+    // No orphan onboarding should happen
+    expect(rooms.createRoom).not.toHaveBeenCalled();
   });
 
   it('deduplicates agents — does not re-register existing agent', () => {

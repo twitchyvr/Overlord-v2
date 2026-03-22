@@ -16,6 +16,9 @@
 
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
+import { analyzeCodebase } from '../ai/codebase-analysis-service.js';
+import { applyBlueprint } from './building-manager.js';
+import { QUICK_START_TEMPLATES } from './room-types/strategist.js';
 import type { Bus, BusEventData } from '../core/bus.js';
 import type {
   RoomManagerAPI,
@@ -167,7 +170,154 @@ export function initBuildingOnboarding({ bus, rooms, agents }: OnboardingDeps): 
     }
   });
 
+  // On startup: detect buildings with no rooms and onboard them (#975)
+  onboardOrphanedBuildings({ bus, rooms, agents });
+
   log.info('Building onboarding initialized');
+}
+
+/**
+ * Detect buildings that have floors but no rooms provisioned (#975).
+ * These are "orphaned" buildings created by auto-discover or other paths
+ * that bypassed the onboarding flow.
+ *
+ * For each orphaned building:
+ * 1. Analyze the working directory to detect project type
+ * 2. Select the matching quick-start template
+ * 3. Apply the full blueprint (rooms + agents across floors)
+ * 4. Fall back to Strategist-only if analysis fails
+ */
+function onboardOrphanedBuildings({ bus, rooms, agents }: OnboardingDeps): void {
+  const db = getDb();
+
+  try {
+    // Find buildings that have floors but zero rooms
+    const orphaned = db.prepare(`
+      SELECT b.id, b.name, b.working_directory FROM buildings b
+      WHERE EXISTS (SELECT 1 FROM floors f WHERE f.building_id = b.id)
+        AND NOT EXISTS (
+          SELECT 1 FROM rooms r
+          JOIN floors f ON r.floor_id = f.id
+          WHERE f.building_id = b.id
+        )
+    `).all() as Array<{ id: string; name: string; working_directory: string | null }>;
+
+    if (orphaned.length === 0) {
+      log.info('No orphaned buildings found — all buildings have rooms');
+      return;
+    }
+
+    log.info({ count: orphaned.length }, 'Found orphaned buildings with no rooms — analyzing and onboarding');
+
+    let successCount = 0;
+    for (const building of orphaned) {
+      log.info({ buildingId: building.id, name: building.name }, 'Analyzing orphaned building');
+
+      // Try to detect project type from the working directory
+      let blueprintApplied = false;
+
+      if (building.working_directory) {
+        try {
+          const analysis = analyzeCodebase(building.working_directory);
+          if (analysis.ok) {
+            const templateId = analysis.data.recommendedTemplate;
+            const template = QUICK_START_TEMPLATES.find(t => t.id === templateId);
+
+            if (template) {
+              log.info(
+                { buildingId: building.id, name: building.name, template: templateId, projectType: analysis.data.projectType, language: analysis.data.primaryLanguage },
+                'Detected project type — applying blueprint',
+              );
+
+              // Use the recommended agents from analysis if available, otherwise use template defaults
+              const agentRoster = analysis.data.recommendedAgents.length > 0
+                ? analysis.data.recommendedAgents.map(a => ({ name: a.name, role: a.role, rooms: a.roomAccess }))
+                : template.agentRoster;
+
+              const result = applyBlueprint(building.id, {
+                floorsNeeded: template.floorsNeeded,
+                roomConfig: template.roomConfig,
+                agentRoster,
+              });
+
+              if (result.ok) {
+                const data = result.data as { floorsCreated: number; roomsCreated: number; agentsCreated: number };
+                blueprintApplied = true;
+
+                bus.emit('building:onboarded', {
+                  buildingId: building.id,
+                  name: building.name,
+                  phase: 'strategy',
+                  template: templateId,
+                  projectType: analysis.data.projectType,
+                  language: analysis.data.primaryLanguage,
+                  framework: analysis.data.framework,
+                  floorsCreated: data.floorsCreated,
+                  roomsCreated: data.roomsCreated,
+                  agentsCreated: data.agentsCreated,
+                  wasOrphaned: true,
+                  wasAutoAnalyzed: true,
+                });
+
+                successCount++;
+                log.info(
+                  { buildingId: building.id, name: building.name, template: templateId, ...data },
+                  'Orphaned building fully onboarded via codebase analysis',
+                );
+              }
+            }
+          }
+        } catch (e) {
+          log.warn(
+            { buildingId: building.id, dir: building.working_directory, err: e instanceof Error ? e.message : String(e) },
+            'Codebase analysis failed — falling back to Strategist-only',
+          );
+        }
+      }
+
+      // Fallback: just provision a Strategist room + agent team
+      if (!blueprintApplied) {
+        log.info({ buildingId: building.id, name: building.name }, 'No analysis available — provisioning Strategist room');
+
+        const result = provisionPhaseRoom({
+          buildingId: building.id,
+          phase: 'strategy',
+          rooms,
+          agents,
+        });
+
+        if (result.success) {
+          const teamCreated = provisionAgentTeam({ buildingId: building.id, agents, rooms });
+
+          bus.emit('building:onboarded', {
+            buildingId: building.id,
+            name: building.name,
+            roomId: result.roomId,
+            agentId: result.agentId,
+            phase: 'strategy',
+            roomType: 'strategist',
+            teamSize: teamCreated + 1,
+            wasOrphaned: true,
+          });
+
+          successCount++;
+          log.info(
+            { buildingId: building.id, name: building.name, teamCreated },
+            'Orphaned building onboarded with Strategist fallback',
+          );
+        } else {
+          log.error(
+            { buildingId: building.id, name: building.name, error: result.error },
+            'Failed to onboard orphaned building',
+          );
+        }
+      }
+    }
+
+    log.info({ onboarded: successCount, total: orphaned.length }, 'Orphaned building onboarding complete');
+  } catch (e) {
+    log.error({ err: e instanceof Error ? e.message : String(e) }, 'Failed to check for orphaned buildings');
+  }
 }
 
 interface ProvisionResult {
