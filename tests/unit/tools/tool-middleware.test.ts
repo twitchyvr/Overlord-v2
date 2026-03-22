@@ -17,12 +17,14 @@ import { ok, err } from '../../../src/core/contracts.js';
 const mockAcquire = vi.fn();
 const mockRelease = vi.fn();
 const mockWithLockRefresh = vi.fn();
+const mockIsLocked = vi.fn();
 
 vi.mock('../../../src/core/resource-lock.js', () => ({
   getResourceLockManager: () => ({
     acquire: mockAcquire,
     release: mockRelease,
     withLockRefresh: mockWithLockRefresh,
+    isLocked: mockIsLocked,
   }),
 }));
 
@@ -153,6 +155,7 @@ describe('ResourceLockMiddleware', () => {
     mockAcquire.mockReset();
     mockRelease.mockReset().mockResolvedValue(ok(undefined));
     mockWithLockRefresh.mockReset();
+    mockIsLocked.mockReset().mockResolvedValue(ok(null)); // No exclusive lock held by default
   });
 
   afterEach(() => {
@@ -284,6 +287,7 @@ describe('ResourceLockMiddleware', () => {
       acquireOrder.push(resource);
       return ok(makeLockHandle(resource));
     });
+    mockWithLockRefresh.mockImplementation(async (_h: unknown, fn: () => Promise<unknown>) => fn());
 
     await middleware.execute(tool, params, context, nextFn);
 
@@ -292,7 +296,7 @@ describe('ResourceLockMiddleware', () => {
     expect(nextFn).toHaveBeenCalledOnce();
   });
 
-  it('does not use withLockRefresh for multiple locks (TTL suffices)', async () => {
+  it('uses withLockRefresh on first handle for multiple locks (#954)', async () => {
     const resources: ToolResourceDescriptor[] = [
       { type: 'git', mode: 'static' },
       { type: 'shell', mode: 'static' },
@@ -300,10 +304,12 @@ describe('ResourceLockMiddleware', () => {
     const tool = makeTool({ name: 'multi_tool', resources });
 
     mockAcquire.mockImplementation(async (_a: string, r: string) => ok(makeLockHandle(r)));
+    mockWithLockRefresh.mockImplementation(async (_h: unknown, fn: () => Promise<unknown>) => fn());
 
     await middleware.execute(tool, {}, makeContext(), nextFn);
 
-    expect(mockWithLockRefresh).not.toHaveBeenCalled();
+    // Now refreshes the first handle (sorted alphabetically)
+    expect(mockWithLockRefresh).toHaveBeenCalledOnce();
     expect(nextFn).toHaveBeenCalledOnce();
   });
 
@@ -477,6 +483,7 @@ describe('ResourceLockMiddleware', () => {
       acquiredKeys.push(resource);
       return ok(makeLockHandle(resource));
     });
+    mockWithLockRefresh.mockImplementation(async (_h: unknown, fn: () => Promise<unknown>) => fn());
 
     await middleware.execute(tool, {}, context, nextFn);
 
@@ -512,6 +519,7 @@ describe('ResourceLockMiddleware', () => {
     });
 
     mockAcquire.mockImplementation(async (_a: string, r: string) => ok(makeLockHandle(r)));
+    mockWithLockRefresh.mockImplementation(async (_h: unknown, fn: () => Promise<unknown>) => fn());
 
     await middleware.execute(tool, {}, makeContext(), nextFn);
 
@@ -557,6 +565,112 @@ describe('ResourceLockMiddleware', () => {
     expect(nextFn).toHaveBeenCalledOnce();
     expect(mockAcquire).not.toHaveBeenCalled();
   });
+
+  // ── Exclusive gate (#954) ──
+
+  it('blocks serialized tool when exclusive lock is held by another agent', async () => {
+    // Simulate __exclusive__ held by agent-2
+    mockIsLocked.mockResolvedValue(ok({
+      resource: EXCLUSIVE_LOCK_KEY,
+      agentId: 'agent-2',
+      acquiredAt: Date.now(),
+      refreshedAt: Date.now(),
+      ttl: 30_000,
+    }));
+
+    const resources: ToolResourceDescriptor[] = [{ type: 'file', mode: 'param', paramKey: 'path' }];
+    const tool = makeTool({ name: 'write_file', resources });
+    const params = { path: 'src/foo.ts' };
+
+    const result = await middleware.execute(tool, params, makeContext(), nextFn);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('EXCLUSIVE_GATE_TIMEOUT');
+      expect(result.error.message).toContain('exclusive operation in progress');
+      expect(result.error.message).toContain('agent-2');
+      expect(result.error.retryable).toBe(true);
+    }
+    expect(nextFn).not.toHaveBeenCalled();
+    expect(mockAcquire).not.toHaveBeenCalled();
+  }, 35_000);
+
+  it('allows serialized tool when exclusive lock is not held', async () => {
+    // Default: mockIsLocked returns ok(null) — no exclusive lock
+    const resources: ToolResourceDescriptor[] = [{ type: 'git', mode: 'static' }];
+    const tool = makeTool({ name: 'git_workflow', resources });
+    const handle = makeLockHandle('git:building-1');
+
+    mockAcquire.mockResolvedValue(ok(handle));
+    mockWithLockRefresh.mockImplementation(async (_h: unknown, fn: () => Promise<unknown>) => fn());
+
+    const result = await middleware.execute(tool, {}, makeContext(), nextFn);
+
+    expect(result.ok).toBe(true);
+    expect(mockIsLocked).toHaveBeenCalledWith(EXCLUSIVE_LOCK_KEY);
+    expect(nextFn).toHaveBeenCalledOnce();
+  });
+
+  it('allows serialized tool when exclusive lock is held by same agent', async () => {
+    // Exclusive held by agent-1 (same as the serialized tool's agent)
+    mockIsLocked.mockResolvedValue(ok({
+      resource: EXCLUSIVE_LOCK_KEY,
+      agentId: 'agent-1',
+      acquiredAt: Date.now(),
+      refreshedAt: Date.now(),
+      ttl: 30_000,
+    }));
+
+    const resources: ToolResourceDescriptor[] = [{ type: 'git', mode: 'static' }];
+    const tool = makeTool({ name: 'git_workflow', resources });
+    const handle = makeLockHandle('git:building-1');
+
+    mockAcquire.mockResolvedValue(ok(handle));
+    mockWithLockRefresh.mockImplementation(async (_h: unknown, fn: () => Promise<unknown>) => fn());
+
+    const result = await middleware.execute(tool, {}, makeContext(), nextFn);
+
+    expect(result.ok).toBe(true);
+    expect(nextFn).toHaveBeenCalledOnce();
+  });
+
+  it('does not check exclusive gate for concurrent tools', async () => {
+    const tool = makeTool({
+      name: 'read_file',
+      concurrencyMode: 'concurrent',
+    });
+
+    await middleware.execute(tool, {}, makeContext(), nextFn);
+
+    // Concurrent tools skip gate entirely — zero overhead
+    expect(mockIsLocked).not.toHaveBeenCalled();
+    expect(nextFn).toHaveBeenCalledOnce();
+  });
+
+  it('uses tool max descriptor TTL for exclusive lock (#954)', async () => {
+    const resources: ToolResourceDescriptor[] = [{
+      type: 'build',
+      mode: 'static',
+      lockOptions: { ttl: 120_000 },
+    }];
+    const tool = makeTool({
+      name: 'game_engine',
+      concurrencyMode: 'exclusive',
+      resources,
+    });
+
+    mockAcquire.mockImplementation(async (_a: string, r: string) => ok(makeLockHandle(r)));
+    mockWithLockRefresh.mockImplementation(async (_h: unknown, fn: () => Promise<unknown>) => fn());
+
+    await middleware.execute(tool, {}, makeContext(), nextFn);
+
+    // The __exclusive__ lock should get the max TTL from descriptors
+    const exclusiveCall = mockAcquire.mock.calls.find(
+      (c: unknown[]) => c[1] === EXCLUSIVE_LOCK_KEY,
+    );
+    expect(exclusiveCall).toBeDefined();
+    expect(exclusiveCall![2]).toEqual(expect.objectContaining({ ttl: 120_000 }));
+  });
 });
 
 describe('ResourceLockMiddleware integration with MiddlewareChain', () => {
@@ -564,6 +678,7 @@ describe('ResourceLockMiddleware integration with MiddlewareChain', () => {
     mockAcquire.mockReset();
     mockRelease.mockReset().mockResolvedValue(ok(undefined));
     mockWithLockRefresh.mockReset();
+    mockIsLocked.mockReset().mockResolvedValue(ok(null));
   });
 
   it('works correctly when composed in a chain', async () => {
