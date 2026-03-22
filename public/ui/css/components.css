@@ -828,7 +828,7 @@
 
 /* ── Phase Progress Bar ── */
 .phase-bar {
-  display: flex;
+  display: none; /* Hidden — takes too much space with no interactivity (#1001) */
   align-items: center;
   gap: 0;
   padding: var(--sp-2) var(--sp-4);
