@@ -131,38 +131,7 @@ export class DashboardView extends Component {
     this.el.appendChild(this._buildBuildingList());
   }
 
-  _buildProjectSwitcher() {
-    const switcher = h('div', { class: 'project-switcher' });
-
-    for (const building of this._buildings) {
-      const isActive = building.id === this._activeBuilding;
-      const pill = h('button', {
-        class: `project-pill${isActive ? ' active' : ''}`
-      },
-        h('span', { class: 'project-pill-icon' }, '\u{1F3D7}\uFE0F'),
-        h('span', { class: 'project-pill-name', title: building.name || 'Untitled' }, building.name || 'Untitled')
-      );
-
-      pill.addEventListener('click', () => {
-        if (window.overlordSocket) {
-          window.overlordSocket.selectBuilding(building.id);
-        }
-        OverlordUI.dispatch('building:selected', { buildingId: building.id });
-      });
-
-      switcher.appendChild(pill);
-    }
-
-    // "New Project" mini-button at end of switcher
-    const addPill = h('button', { class: 'project-pill project-pill-add' },
-      h('span', { class: 'project-pill-icon' }, '+'),
-      h('span', { class: 'project-pill-name' }, 'New')
-    );
-    addPill.addEventListener('click', () => OverlordUI.dispatch('navigate:onboarding'));
-    switcher.appendChild(addPill);
-
-    return switcher;
-  }
+  // Project switcher pills removed per user feedback (#1006)
 
   _buildCrossProjectKPIs() {
     const section = h('div', { class: 'cross-project-kpis' });
@@ -296,10 +265,14 @@ export class DashboardView extends Component {
       const isArchived = (building.name || '').includes('(Archived');
       const cardActions = {
         'Open': () => {
+          const bid = building.id;
+          // Load building data then navigate — use navigate:chat directly
+          // because building:selected dispatch gets swallowed by re-renders (#1006)
           if (window.overlordSocket) {
-            window.overlordSocket.selectBuilding(building.id);
+            window.overlordSocket.selectBuilding(bid).then(() => {
+              OverlordUI.dispatch('navigate:chat');
+            });
           }
-          OverlordUI.dispatch('building:selected', { buildingId: building.id });
         }
       };
 
@@ -338,6 +311,16 @@ export class DashboardView extends Component {
         variant: isActive ? 'solid' : 'glass',
         className: isActive ? 'building-card-active' : '',
         actions: cardActions,
+        // Card body click selects building in sidebar without navigating (#1006)
+        onClick: () => {
+          this._activeBuilding = building.id;
+          if (window.overlordSocket) {
+            window.overlordSocket.selectBuilding(building.id);
+          }
+          // Don't dispatch building:selected — that navigates to chat.
+          // Just re-render to highlight the active card.
+          this.render();
+        },
       });
 
       grid.appendChild(card);
