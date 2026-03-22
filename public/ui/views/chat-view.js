@@ -1236,9 +1236,13 @@ export class ChatView extends Component {
         const allAgents = store?.get('agents.list') || [];
         const roomAgents = allAgents.filter(a => a.current_room_id === activeRoomId);
         if (roomAgents.length > 0) {
-          const names = roomAgents.map(a => a.display_name || a.name || 'Agent').join(', ');
-          agentsEl.textContent = names;
-          agentsEl.title = `Agents in this room: ${names}`;
+          // Agent names are clickable — open detail panel (#979)
+          agentsEl.textContent = '';
+          roomAgents.forEach((a, i) => {
+            if (i > 0) agentsEl.appendChild(document.createTextNode(', '));
+            agentsEl.appendChild(EntityLink.agent(a.id, a.display_name || a.name || 'Agent'));
+          });
+          agentsEl.title = `Agents in this room: ${roomAgents.map(a => a.display_name || a.name).join(', ')}`;
           agentsEl.hidden = false;
         } else {
           agentsEl.textContent = '';
