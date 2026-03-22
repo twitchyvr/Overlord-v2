@@ -1004,6 +1004,7 @@ export class ActivityView extends Component {
     if (eventType.startsWith('phase:')) return '\u{1F4CB}';
     if (eventType.startsWith('agent:')) return '\u{1F464}';
     if (eventType.startsWith('task:')) return '\u{1F4DD}';
+    if (eventType.startsWith('building:')) return '\u{1F3D7}';
     return null;
   }
 
@@ -1026,6 +1027,7 @@ export class ActivityView extends Component {
     if (event === 'raid:entry:added') return 'warning';
     if (event.startsWith('tool:')) return 'neutral';
     if (event.startsWith('task:')) return 'info';
+    if (event.startsWith('building:')) return 'success';
     return 'neutral';
   }
 

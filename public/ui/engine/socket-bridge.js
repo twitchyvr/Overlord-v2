@@ -524,7 +524,7 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('building:updated', data);
   });
 
-  // ── Building Execution Control (#965, #969) ──
+  // ── Building Execution Control (#965, #969, #983) ──
   socket.on('building:execution-changed', (data) => {
     store.update('building.list', (buildings) => {
       const list = buildings || [];
@@ -536,6 +536,9 @@ export function initSocketBridge(socket, store, engine) {
       }
       return list;
     });
+    // Push to activity feed (#983)
+    store.update('activity.items', (items) => [{ event: 'building:execution-changed', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    engine.dispatch('activity:new', { event: 'building:execution-changed', ...data });
     engine.dispatch('building:execution-changed', data);
   });
 
