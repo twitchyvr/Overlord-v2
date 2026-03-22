@@ -153,17 +153,19 @@ export function getDocumentToc(entryId: string): Result {
 // ── FTS5 Sync (#814) ──
 
 /** Sync a doc entry to the FTS5 index */
-function _syncFts(entryId: string, title: string, summary: string, tags: string, filePath: string, isUpdate: boolean): void {
+function _syncFts(
+  entryId: string, title: string, summary: string, tags: string, filePath: string,
+  oldValues?: { title: string; summary: string; tags: string; filePath: string },
+): void {
   const db = getDb();
   try {
-    // Get the rowid for this entry
     const row = db.prepare('SELECT rowid FROM doc_entries WHERE id = ?').get(entryId) as { rowid: number } | undefined;
     if (!row) return;
 
-    if (isUpdate) {
-      // For updates: delete old, insert new
+    if (oldValues) {
+      // FTS5 content-sync delete requires the OLD values that are currently in the index
       db.prepare("INSERT INTO doc_entries_fts(doc_entries_fts, rowid, title, summary, tags, file_path) VALUES('delete', ?, ?, ?, ?, ?)").run(
-        row.rowid, title, summary, tags, filePath,
+        row.rowid, oldValues.title || '', oldValues.summary || '', oldValues.tags || '', oldValues.filePath,
       );
     }
     db.prepare('INSERT INTO doc_entries_fts(rowid, title, summary, tags, file_path) VALUES(?, ?, ?, ?, ?)').run(
@@ -221,18 +223,24 @@ export function indexLibrary(libraryId: string): Result {
       const id = existing?.id || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
       if (existing) {
+        // Fetch old values BEFORE update for FTS5 content-sync delete
+        const oldRow = db.prepare('SELECT title, summary, tags, file_path FROM doc_entries WHERE id = ?').get(id) as {
+          title: string; summary: string; tags: string; file_path: string;
+        } | undefined;
         db.prepare(`
           UPDATE doc_entries SET title = ?, summary = ?, format = ?, content_hash = ?,
             word_count = ?, tags = ?, indexed_at = datetime('now'), updated_at = datetime('now')
           WHERE id = ?
         `).run(title, summary, format, hash, wordCount, tagsJson, id);
-        _syncFts(id, title, summary, tagsJson, relPath, true);
+        _syncFts(id, title, summary, tagsJson, relPath, oldRow ? {
+          title: oldRow.title, summary: oldRow.summary, tags: oldRow.tags, filePath: oldRow.file_path,
+        } : undefined);
       } else {
         db.prepare(`
           INSERT INTO doc_entries (id, library_id, file_path, title, summary, format, content_hash, word_count, tags, indexed_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         `).run(id, libraryId, relPath, title, summary, format, hash, wordCount, tagsJson);
-        _syncFts(id, title, summary, tagsJson, relPath, false);
+        _syncFts(id, title, summary, tagsJson, relPath);
       }
 
       // Extract and store TOC for markdown files (#814)
@@ -261,6 +269,8 @@ export function searchDocuments(params: {
   libraryId?: string;
   limit?: number;
 }): Result {
+  if (!params.query || !params.query.trim()) return ok([]);
+
   const db = getDb();
   const limit = params.limit || 20;
 
@@ -553,7 +563,6 @@ function _extractKeywords(text: string): string[] {
 export function buildDocContextInjection(params: {
   buildingId: string;
   taskDescription?: string;
-  maxTokenBudget?: number;
 }): string {
   const db = getDb();
   const sections: string[] = [];

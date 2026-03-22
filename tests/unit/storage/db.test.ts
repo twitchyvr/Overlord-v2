@@ -85,7 +85,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 28 tables', () => {
+  describe('schema — all 30 tables', () => {
     const expectedTables = [
       'buildings',
       'floors',
