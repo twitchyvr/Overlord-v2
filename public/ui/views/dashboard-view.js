@@ -121,37 +121,8 @@ export class DashboardView extends Component {
     );
     this.el.appendChild(header);
 
-    // Project Switcher (multi-building selector)
-    if (this._buildings.length > 0) {
-      this.el.appendChild(this._buildProjectSwitcher());
-    }
-
-    // Cross-project KPIs (aggregate stats)
-    if (this._buildings.length > 1) {
-      this.el.appendChild(this._buildCrossProjectKPIs());
-    }
-
-    // Per-building KPI Cards
-    this.el.appendChild(this._buildKPISection());
-
-    // Phase Progress (if active building)
-    if (this._activeBuilding) {
-      const building = this._buildings.find(b => b.id === this._activeBuilding);
-      if (building) {
-        this.el.appendChild(this._buildPhaseProgress(building));
-      }
-    }
-
-    // Dev Loop Pipeline (#661)
-    if (this._activeBuilding) {
-      this.el.appendChild(this._buildDevLoopPipeline());
-    }
-
-    // Live Telemetry (#804)
+    // Live Telemetry (#804) — most important, show first
     this.el.appendChild(this._buildTelemetryPanel());
-
-    // Tool Activity Summary (#661)
-    this.el.appendChild(this._buildToolActivity());
 
     // Recent Activity Mini-Feed (#661)
     this.el.appendChild(this._buildRecentActivity());

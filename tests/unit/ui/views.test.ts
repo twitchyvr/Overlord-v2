@@ -737,7 +737,7 @@ describe('DashboardView', () => {
     expect(mod.DashboardView).toBeDefined();
   });
 
-  it('renders KPI cards and header on mount', async () => {
+  it('renders header and telemetry on mount (#1001)', async () => {
     const { DashboardView } = await import('../../../public/ui/views/dashboard-view.js');
     const el = document.createElement('div');
     const view = new DashboardView(el);
@@ -745,7 +745,7 @@ describe('DashboardView', () => {
 
     expect(el.querySelector('.dashboard-header')).not.toBeNull();
     expect(el.querySelector('.dashboard-title')!.textContent).toBe('Dashboard');
-    expect(el.querySelectorAll('.kpi-card').length).toBe(5);
+    expect(el.querySelector('.telemetry-panel')).not.toBeNull();
   });
 
   it('shows building list section', async () => {
@@ -775,20 +775,15 @@ describe('DashboardView', () => {
     expect(grid!.children.length).toBe(2);
   });
 
-  it('shows phase progress when active building is set', async () => {
+  it('shows telemetry rate cards (#1001)', async () => {
     const { DashboardView } = await import('../../../public/ui/views/dashboard-view.js');
     const el = document.createElement('div');
     const view = new DashboardView(el);
     view.mount();
 
-    // Set store data AFTER mount so subscriptions fire and trigger render
-    const store = OverlordUI.getStore();
-    store.set('building.list', [
-      { id: 'b1', name: 'Test', activePhase: 'architecture' }
-    ]);
-    store.set('building.active', 'b1');
-
-    expect(el.querySelector('.dashboard-phase-section')).not.toBeNull();
+    // Telemetry rate cards should be rendered
+    const rateCards = el.querySelectorAll('.telem-rate-card');
+    expect(rateCards.length).toBe(6);
   });
 
   it('shows empty state when no buildings exist', async () => {
@@ -805,47 +800,30 @@ describe('DashboardView', () => {
     expect(buildingsSection!.textContent).toContain('No buildings yet');
   });
 
-  it('updates KPI values without full re-render', async () => {
+  it('shows building list with building cards (#1001)', async () => {
     const { DashboardView } = await import('../../../public/ui/views/dashboard-view.js');
     const el = document.createElement('div');
     const view = new DashboardView(el);
     view.mount();
 
     const store = OverlordUI.getStore();
-    // Initial render with 0 agents
-    store.set('building.list', []);
-
-    const kpiValues = el.querySelectorAll('.kpi-card-value');
-    expect(kpiValues[2].textContent).toBe('0'); // rooms KPI
-
-    // Update rooms
-    store.set('rooms.list', [
-      { id: 'r1', name: 'Room 1' },
-      { id: 'r2', name: 'Room 2' },
-      { id: 'r3', name: 'Room 3' }
+    store.set('building.list', [
+      { id: 'b1', name: 'Alpha', active_phase: 'strategy' },
+      { id: 'b2', name: 'Beta', active_phase: 'execution' },
     ]);
 
-    expect(kpiValues[2].textContent).toBe('3');
+    const grid = el.querySelector('.building-card-grid');
+    expect(grid).not.toBeNull();
+    expect(grid!.children.length).toBe(2);
   });
 
-  it('updates RAID count in KPI when entries change', async () => {
+  it('renders recent activity section (#1001)', async () => {
     const { DashboardView } = await import('../../../public/ui/views/dashboard-view.js');
     const el = document.createElement('div');
     const view = new DashboardView(el);
     view.mount();
 
-    const store = OverlordUI.getStore();
-    store.set('building.list', []);
-
-    const kpiValues = el.querySelectorAll('.kpi-card-value');
-    expect(kpiValues[3].textContent).toBe('0');
-
-    store.set('raid.entries', [
-      { id: 'r1', type: 'risk', summary: 'A' },
-      { id: 'r2', type: 'issue', summary: 'B' }
-    ]);
-
-    expect(kpiValues[3].textContent).toBe('2');
+    expect(el.querySelector('#recent-activity')).not.toBeNull();
   });
 
   it('has a New Project button that dispatches navigate:onboarding', async () => {
