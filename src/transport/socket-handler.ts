@@ -62,7 +62,7 @@ import {
   CitationListSchema, CitationBacklinksSchema,
   TableSetContextSchema, TableGetContextSchema, TableClearContextSchema,
   TableGetAssignmentsSchema, TableDivideWorkSchema,
-  AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema,
+  AgentStatsGetSchema, AgentActivityLogSchema, AgentLeaderboardSchema, RoomActivityLogSchema, FloorActivityLogSchema,
   BudgetGetSchema, BudgetSetSchema, BudgetBuildingSchema,
   TodoCheckoutSchema, TodoReleaseSchema, TodoCompleteCheckoutSchema,
   TodoLockStatusSchema, CheckedOutTodosSchema,
@@ -97,7 +97,7 @@ import {
   LockStateGetSchema,
   MergeQueueGetSchema,
 } from './schemas.js';
-import { getStatsSummary, getActivityLog, getBuildingActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd, recordActivity } from '../agents/agent-stats.js';
+import { getStatsSummary, getActivityLog, getBuildingActivityLog, getRoomActivityLog, getFloorActivityLog, getLeaderboard, onRoomJoin, onRoomLeave, onStatusChange, onTaskComplete, onTaskAssign, onMessageSent, onSessionStart, onSessionEnd, recordActivity } from '../agents/agent-stats.js';
 import { checkBudget, setAgentBudget, getBuildingBudgets } from '../agents/budget-tracker.js';
 import { checkoutTodo, releaseTodo, completeTodo, getLockStatus, getCheckedOutTodos, releaseExpiredLocks } from '../agents/task-checkout.js';
 import { createVisualTest, reviewVisualTest, listVisualTests, getUATSummary, checkUATGate } from '../rooms/visual-testing.js';
@@ -1523,6 +1523,25 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
 
     handle(socket, 'agent:activity-log', AgentActivityLogSchema, (parsed, ack) => {
       const entries = getActivityLog(parsed.agentId, {
+        limit: parsed.limit,
+        offset: parsed.offset,
+        eventType: parsed.eventType,
+      });
+      if (ack) ack({ ok: true, data: entries });
+    });
+
+    // Room/Floor activity (#980)
+    handle(socket, 'room:activity-log', RoomActivityLogSchema, (parsed, ack) => {
+      const entries = getRoomActivityLog(parsed.roomId, {
+        limit: parsed.limit,
+        offset: parsed.offset,
+        eventType: parsed.eventType,
+      });
+      if (ack) ack({ ok: true, data: entries });
+    });
+
+    handle(socket, 'floor:activity-log', FloorActivityLogSchema, (parsed, ack) => {
+      const entries = getFloorActivityLog(parsed.floorId, {
         limit: parsed.limit,
         offset: parsed.offset,
         eventType: parsed.eventType,

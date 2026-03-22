@@ -1761,6 +1761,15 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithTimeout('agent:activity-log', { agentId, ...opts });
     },
 
+    // Room/Floor activity (#980)
+    fetchRoomActivityLog(roomId, opts = {}) {
+      return _emitWithTimeout('room:activity-log', { roomId, ...opts });
+    },
+
+    fetchFloorActivityLog(floorId, opts = {}) {
+      return _emitWithTimeout('floor:activity-log', { floorId, ...opts });
+    },
+
     fetchLeaderboard(metric, opts = {}) {
       return _emitWithTimeout('agent:leaderboard', { metric, ...opts });
     },

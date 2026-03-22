@@ -741,6 +741,21 @@ export const AgentActivityLogSchema = z.object({
   eventType: z.string().max(MAX_NAME).optional(),
 });
 
+// Room/Floor activity schemas (#980)
+export const RoomActivityLogSchema = z.object({
+  roomId: id(),
+  limit: z.number().int().min(1).max(200).optional().default(50),
+  offset: z.number().int().min(0).optional().default(0),
+  eventType: z.string().max(MAX_NAME).optional(),
+});
+
+export const FloorActivityLogSchema = z.object({
+  floorId: id(),
+  limit: z.number().int().min(1).max(200).optional().default(50),
+  offset: z.number().int().min(0).optional().default(0),
+  eventType: z.string().max(MAX_NAME).optional(),
+});
+
 // Budget schemas (#680)
 export const BudgetGetSchema = z.object({
   agentId: id(),

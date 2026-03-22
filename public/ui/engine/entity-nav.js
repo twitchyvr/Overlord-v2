@@ -38,7 +38,13 @@ export function initEntityNav() {
         _openAgentDetail(data.id);
         break;
       case 'room':
-        OverlordUI.dispatch('building:room-selected', { roomId: data.id });
+        _openRoomDetail(data.id);
+        break;
+      case 'floor':
+        _openFloorDetail(data.id);
+        break;
+      case 'building':
+        _openBuildingDetail(data.id);
         break;
       case 'task':
         _openTaskDetail(data.id);
@@ -554,6 +560,291 @@ function _openRaidDetail(entryId) {
 let _tooltipEl = null;
 let _tooltipTimer = null;
 
+// ── Activity Timeline Helper (#980) ──
+
+const _activityIcons = {
+  'tool:executed': '\u{1F527}', 'tool:executing': '\u{1F527}', 'ai:request': '\u{1F916}',
+  'room:agent:entered': '\u{1F6AA}', 'room:agent:exited': '\u{1F6B6}',
+  'phase:advanced': '\u{1F6A7}', 'exit-doc:submitted': '\u{1F4C4}',
+  'task:created': '\u{1F4CB}', 'task:assigned': '\u{1F4CC}',
+  'agent:status-changed': '\u{1F504}', 'agent:activity': '\u{1F527}',
+  'building:execution-changed': '\u26A1',
+};
+
+function _renderActivityTimeline(entries, opts = {}) {
+  const maxItems = opts.limit || 30;
+  const section = h('div', { class: 'entity-detail-section' });
+  section.appendChild(h('h4', { class: 'entity-detail-section-title' },
+    `Recent Activity (${entries.length}${entries.length >= maxItems ? '+' : ''})`
+  ));
+
+  if (entries.length === 0) {
+    section.appendChild(h('div', { class: 'entity-detail-empty' }, 'No activity yet.'));
+    return section;
+  }
+
+  const list = h('div', { class: 'entity-detail-activity-list' });
+  for (const entry of entries.slice(0, maxItems)) {
+    const icon = _activityIcons[entry.event_type] || '\u2022';
+    const agentName = resolveAgentName(entry.agent_id);
+    list.appendChild(h('div', { class: 'entity-detail-activity-row' },
+      h('span', { class: 'entity-detail-activity-icon' }, icon),
+      h('span', { class: 'entity-detail-activity-event' }, entry.event_type),
+      agentName ? _createEntityLink('agent', entry.agent_id, agentName) : null,
+      h('span', { class: 'entity-detail-activity-time' }, formatTime(entry.created_at)),
+    ));
+  }
+  section.appendChild(list);
+  return section;
+}
+
+// ── Room Detail Drawer (#980) ──
+
+async function _openRoomDetail(roomId) {
+  if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+
+  const store = OverlordUI.getStore();
+  const room = resolveRoom(roomId);
+  if (!room) { Toast.error('Room not found'); return; }
+
+  const container = h('div', { class: 'entity-detail room-detail-view' });
+
+  // Header
+  const roomType = _formatRoomType(room.type);
+  container.appendChild(h('div', { class: 'entity-detail-header' },
+    h('div', { class: 'entity-detail-icon' }, '\u{1F3E0}'),
+    h('div', { class: 'entity-detail-title' },
+      h('h3', null, room.name || roomType),
+      h('div', { class: 'entity-detail-subtitle' }, roomType),
+    ),
+  ));
+
+  // Agents in room
+  const allAgents = store?.get('agents.list') || [];
+  const roomAgents = allAgents.filter(a => a.current_room_id === roomId);
+  const agentSection = h('div', { class: 'entity-detail-section' });
+  agentSection.appendChild(h('h4', { class: 'entity-detail-section-title' },
+    `Agents (${roomAgents.length})`
+  ));
+  if (roomAgents.length === 0) {
+    agentSection.appendChild(h('div', { class: 'entity-detail-empty' }, 'No agents in this room.'));
+  } else {
+    for (const a of roomAgents) {
+      agentSection.appendChild(h('div', { class: 'entity-detail-row' },
+        _createEntityLink('agent', a.id, a.display_name || a.name),
+        h('span', { class: `entity-detail-status entity-detail-status-${a.status || 'idle'}` }, a.status || 'idle'),
+      ));
+    }
+  }
+  container.appendChild(agentSection);
+
+  // Room info
+  const infoSection = h('div', { class: 'entity-detail-section' });
+  infoSection.appendChild(h('h4', { class: 'entity-detail-section-title' }, 'Details'));
+  const details = [
+    ['Type', roomType],
+    ['Floor', room.floor_id || '—'],
+  ];
+  if (room.allowed_tools) {
+    const toolCount = typeof room.allowed_tools === 'string' ? JSON.parse(room.allowed_tools || '[]').length : 0;
+    details.push(['Tools', `${toolCount} allowed`]);
+  }
+  for (const [label, value] of details) {
+    infoSection.appendChild(h('div', { class: 'entity-detail-row' },
+      h('span', { class: 'entity-detail-label' }, label),
+      h('span', { class: 'entity-detail-value' }, value),
+    ));
+  }
+  container.appendChild(infoSection);
+
+  // Activity timeline (async)
+  const activityPlaceholder = h('div', { class: 'entity-detail-section' },
+    h('h4', { class: 'entity-detail-section-title' }, 'Recent Activity'),
+    h('div', { class: 'entity-detail-loading' }, 'Loading activity...')
+  );
+  container.appendChild(activityPlaceholder);
+
+  Drawer.open('room-detail', {
+    title: `Room: ${room.name || roomType}`,
+    width: '480px',
+    content: container,
+  });
+
+  // Fetch activity async
+  try {
+    const res = await window.overlordSocket.fetchRoomActivityLog(roomId, { limit: 30 });
+    const entries = res?.ok ? (res.data || []) : [];
+    const timeline = _renderActivityTimeline(entries, { limit: 30 });
+    activityPlaceholder.replaceWith(timeline);
+  } catch (e) {
+    activityPlaceholder.querySelector('.entity-detail-loading').textContent = 'Failed to load activity.';
+  }
+}
+
+// ── Floor Detail Drawer (#980) ──
+
+async function _openFloorDetail(floorId) {
+  if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+
+  const store = OverlordUI.getStore();
+  // Resolve floor from rooms list (rooms have floor_id)
+  const allRooms = store?.get('rooms.list') || [];
+  const floorRooms = allRooms.filter(r => r.floor_id === floorId);
+  const floors = store?.get('floors.list') || [];
+  const floor = floors.find(f => f.id === floorId);
+  const floorName = floor?.name || `Floor ${floorId.slice(-4)}`;
+
+  const container = h('div', { class: 'entity-detail floor-detail-view' });
+
+  // Header
+  container.appendChild(h('div', { class: 'entity-detail-header' },
+    h('div', { class: 'entity-detail-icon' }, '\u{1F3E2}'),
+    h('div', { class: 'entity-detail-title' },
+      h('h3', null, floorName),
+      h('div', { class: 'entity-detail-subtitle' }, `${floorRooms.length} rooms`),
+    ),
+  ));
+
+  // Rooms on this floor
+  const roomSection = h('div', { class: 'entity-detail-section' });
+  roomSection.appendChild(h('h4', { class: 'entity-detail-section-title' },
+    `Rooms (${floorRooms.length})`
+  ));
+  if (floorRooms.length === 0) {
+    roomSection.appendChild(h('div', { class: 'entity-detail-empty' }, 'No rooms on this floor.'));
+  } else {
+    for (const r of floorRooms) {
+      const agentCount = (store?.get('agents.list') || []).filter(a => a.current_room_id === r.id).length;
+      roomSection.appendChild(h('div', { class: 'entity-detail-row' },
+        _createEntityLink('room', r.id, r.name || _formatRoomType(r.type)),
+        h('span', { class: 'entity-detail-meta' }, `${agentCount} agents`),
+      ));
+    }
+  }
+  container.appendChild(roomSection);
+
+  // Activity timeline (async)
+  const activityPlaceholder = h('div', { class: 'entity-detail-section' },
+    h('h4', { class: 'entity-detail-section-title' }, 'Recent Activity'),
+    h('div', { class: 'entity-detail-loading' }, 'Loading activity...')
+  );
+  container.appendChild(activityPlaceholder);
+
+  Drawer.open('floor-detail', {
+    title: `Floor: ${floorName}`,
+    width: '480px',
+    content: container,
+  });
+
+  // Fetch activity async
+  try {
+    const res = await window.overlordSocket.fetchFloorActivityLog(floorId, { limit: 30 });
+    const entries = res?.ok ? (res.data || []) : [];
+    const timeline = _renderActivityTimeline(entries, { limit: 30 });
+    activityPlaceholder.replaceWith(timeline);
+  } catch (e) {
+    activityPlaceholder.querySelector('.entity-detail-loading').textContent = 'Failed to load activity.';
+  }
+}
+
+// ── Building Detail Drawer (#980) ──
+
+async function _openBuildingDetail(buildingId) {
+  if (!window.overlordSocket) { Toast.error('Not connected'); return; }
+
+  const store = OverlordUI.getStore();
+  const buildings = store?.get('buildings.list') || [];
+  const building = buildings.find(b => b.id === buildingId);
+  const buildingName = building?.name || 'Building';
+
+  const floors = store?.get('floors.list') || [];
+  const buildingFloors = floors.filter(f => f.building_id === buildingId);
+
+  const allAgents = store?.get('agents.list') || [];
+  const buildingAgents = allAgents.filter(a => a.building_id === buildingId);
+
+  const container = h('div', { class: 'entity-detail building-detail-view' });
+
+  // Header
+  container.appendChild(h('div', { class: 'entity-detail-header' },
+    h('div', { class: 'entity-detail-icon' }, '\u{1F3D7}'),
+    h('div', { class: 'entity-detail-title' },
+      h('h3', null, buildingName),
+      h('div', { class: 'entity-detail-subtitle' },
+        `${buildingFloors.length} floors \u00B7 ${buildingAgents.length} agents`
+      ),
+    ),
+  ));
+
+  // Floors
+  const floorSection = h('div', { class: 'entity-detail-section' });
+  floorSection.appendChild(h('h4', { class: 'entity-detail-section-title' },
+    `Floors (${buildingFloors.length})`
+  ));
+  for (const f of buildingFloors) {
+    const roomCount = (store?.get('rooms.list') || []).filter(r => r.floor_id === f.id).length;
+    floorSection.appendChild(h('div', { class: 'entity-detail-row' },
+      _createEntityLink('floor', f.id, f.name || 'Floor'),
+      h('span', { class: 'entity-detail-meta' }, `${roomCount} rooms`),
+    ));
+  }
+  container.appendChild(floorSection);
+
+  // Key metrics
+  const metricsSection = h('div', { class: 'entity-detail-section' });
+  metricsSection.appendChild(h('h4', { class: 'entity-detail-section-title' }, 'Metrics'));
+  const execState = building?.executionState || building?.execution_state || 'stopped';
+  const metrics = [
+    ['Status', execState],
+    ['Phase', building?.activePhase || building?.active_phase || 'strategy'],
+    ['Agents', `${buildingAgents.length}`],
+    ['Floors', `${buildingFloors.length}`],
+  ];
+  for (const [label, value] of metrics) {
+    metricsSection.appendChild(h('div', { class: 'entity-detail-row' },
+      h('span', { class: 'entity-detail-label' }, label),
+      h('span', { class: 'entity-detail-value' }, value),
+    ));
+  }
+  container.appendChild(metricsSection);
+
+  // Activity timeline (async from building activity log)
+  const activityPlaceholder = h('div', { class: 'entity-detail-section' },
+    h('h4', { class: 'entity-detail-section-title' }, 'Recent Activity'),
+    h('div', { class: 'entity-detail-loading' }, 'Loading activity...')
+  );
+  container.appendChild(activityPlaceholder);
+
+  Drawer.open('building-detail', {
+    title: `Building: ${buildingName}`,
+    width: '480px',
+    content: container,
+  });
+
+  // Fetch building activity async (uses existing fetchBuildingActivityLog or activity store)
+  try {
+    const activityItems = (store?.get('activity.items') || [])
+      .filter(item => item.buildingId === buildingId)
+      .slice(0, 30);
+    // Convert store format to ActivityLogEntry format
+    const entries = activityItems.map(item => ({
+      id: item.id || '',
+      agent_id: item.agentId || '',
+      event_type: item.event || item.type || '',
+      event_data: {},
+      building_id: buildingId,
+      room_id: item.roomId || null,
+      created_at: item.ts || item.timestamp || '',
+    }));
+    const timeline = _renderActivityTimeline(entries, { limit: 30 });
+    activityPlaceholder.replaceWith(timeline);
+  } catch (e) {
+    activityPlaceholder.querySelector('.entity-detail-loading').textContent = 'Failed to load activity.';
+  }
+}
+
+// ── EntityLink additions (#980) ──
+
 function _initTooltip() {
   if (_tooltipEl) return;
   _tooltipEl = document.createElement('div');
@@ -762,5 +1053,17 @@ export const EntityLink = {
   raid(entryId, displayName) {
     if (!entryId) return h('span', { class: 'text-muted' }, 'No entry');
     return _createEntityLink('raid', entryId, displayName || entryId);
+  },
+
+  /** Create a clickable floor reference (#980). */
+  floor(floorId, displayName) {
+    if (!floorId) return h('span', { class: 'text-muted' }, 'No floor');
+    return _createEntityLink('floor', floorId, displayName || 'Floor');
+  },
+
+  /** Create a clickable building reference (#980). */
+  building(buildingId, displayName) {
+    if (!buildingId) return h('span', { class: 'text-muted' }, 'No building');
+    return _createEntityLink('building', buildingId, displayName || 'Building');
   },
 };

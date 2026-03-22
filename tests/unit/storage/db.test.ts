@@ -222,7 +222,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 51 indexes', () => {
+  describe('schema — all 59 indexes', () => {
     const expectedIndexes = [
       'idx_rooms_floor',
       'idx_rooms_type',
@@ -251,6 +251,8 @@ describe('Storage Layer', () => {
       'idx_activity_agent',
       'idx_activity_type',
       'idx_activity_created',
+      'idx_activity_room',
+      'idx_activity_building',
       'idx_stats_agent',
       'idx_stats_metric',
       'idx_stats_compound',
@@ -283,7 +285,7 @@ describe('Storage Layer', () => {
       'idx_merge_queue_position',
     ];
 
-    it('creates all 57 custom indexes', async () => {
+    it('creates all 59 custom indexes', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -293,7 +295,7 @@ describe('Storage Layer', () => {
 
       const indexNames = indexes.map((i) => i.name).sort();
       expect(indexNames).toEqual(expectedIndexes.sort());
-      expect(indexNames).toHaveLength(57);
+      expect(indexNames).toHaveLength(59);
     });
 
     it.each(expectedIndexes)('creates index: %s', async (indexName) => {

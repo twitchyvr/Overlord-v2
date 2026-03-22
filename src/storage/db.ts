@@ -360,6 +360,8 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_activity_agent ON agent_activity_log(agent_id);
   CREATE INDEX IF NOT EXISTS idx_activity_type ON agent_activity_log(event_type);
   CREATE INDEX IF NOT EXISTS idx_activity_created ON agent_activity_log(created_at);
+  CREATE INDEX IF NOT EXISTS idx_activity_room ON agent_activity_log(room_id);
+  CREATE INDEX IF NOT EXISTS idx_activity_building ON agent_activity_log(building_id);
   CREATE INDEX IF NOT EXISTS idx_stats_agent ON agent_stats(agent_id);
   CREATE INDEX IF NOT EXISTS idx_stats_metric ON agent_stats(metric);
   CREATE INDEX IF NOT EXISTS idx_stats_compound ON agent_stats(agent_id, metric, period);
