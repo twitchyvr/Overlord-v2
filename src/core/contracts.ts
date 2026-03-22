@@ -301,6 +301,14 @@ export interface ToolResourceDescriptor {
   lockOptions?: { ttl?: number; maxWait?: number };
 }
 
+/**
+ * Concurrency mode for a tool (#942).
+ *  - 'concurrent': Any number of agents can call simultaneously (read-only tools)
+ *  - 'serialized': One agent at a time per resource, others queue (write tools)
+ *  - 'exclusive': One agent globally, all others blocked (destructive ops like browser, rebase)
+ */
+export type ToolConcurrencyMode = 'concurrent' | 'serialized' | 'exclusive';
+
 export interface ToolDefinition {
   name: string;
   description: string;
@@ -309,6 +317,12 @@ export interface ToolDefinition {
   execute: (params: Record<string, unknown>, context?: ToolContext) => Promise<unknown>;
   /** Resources this tool needs locks on. Empty/undefined = no locking needed (#941). */
   resources?: ToolResourceDescriptor[];
+  /**
+   * Concurrency mode for this tool (#942).
+   * Default: 'serialized' for tools with resources, 'concurrent' for tools without.
+   * 'exclusive' tools acquire a global lock blocking all other tool execution.
+   */
+  concurrencyMode?: ToolConcurrencyMode;
 }
 
 export interface RepoContextEntry {

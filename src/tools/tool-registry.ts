@@ -32,7 +32,7 @@ import type { Result, ToolDefinition, ToolContext, ToolRegistryAPI, Config } fro
 import { getDb } from '../storage/db.js';
 import { searchDocuments, getDocumentContent, listDocuments, listLibraries } from '../storage/doc-library.js';
 import { MiddlewareChain, ResourceLockMiddleware } from './tool-middleware.js';
-import { getDefaultResourceDescriptors } from './tool-resource-map.js';
+import { getDefaultResourceDescriptors, getToolConcurrencyMode } from './tool-resource-map.js';
 
 const log = logger.child({ module: 'tool-registry' });
 
@@ -54,11 +54,15 @@ function rejectShellMeta(input: string, context: string): void {
 export function initTools(_config: Config): ToolRegistryAPI {
   registerBuiltinTools();
 
-  // Attach resource descriptors to registered tools (#941)
+  // Attach resource descriptors and concurrency modes to registered tools (#941, #942)
   for (const [name, tool] of tools) {
     const descriptors = getDefaultResourceDescriptors(name);
     if (descriptors) {
       tool.resources = descriptors;
+    }
+    // Set concurrency mode if not already declared (#942)
+    if (!tool.concurrencyMode) {
+      tool.concurrencyMode = getToolConcurrencyMode(name);
     }
   }
 

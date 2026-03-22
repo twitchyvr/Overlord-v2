@@ -1,13 +1,14 @@
 /**
- * Tool Middleware Tests (#941)
+ * Tool Middleware Tests (#941, #942)
  *
  * Tests: MiddlewareChain composition, ResourceLockMiddleware locking behavior,
  * short-circuit on no resources, lock failure handling, deadlock prevention,
- * lock release on tool error, room opt-out.
+ * lock release on tool error, room opt-out, concurrency modes (concurrent,
+ * serialized, exclusive).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { MiddlewareChain, ResourceLockMiddleware } from '../../../src/tools/tool-middleware.js';
+import { MiddlewareChain, ResourceLockMiddleware, EXCLUSIVE_LOCK_KEY } from '../../../src/tools/tool-middleware.js';
 import type { ToolDefinition, ToolContext, ToolResourceDescriptor } from '../../../src/core/contracts.js';
 import { ok, err } from '../../../src/core/contracts.js';
 
@@ -199,7 +200,7 @@ describe('ResourceLockMiddleware', () => {
     expect(result.ok).toBe(true);
     expect(mockAcquire).toHaveBeenCalledOnce();
     expect(mockAcquire).toHaveBeenCalledWith('agent-1', 'git:bld-42', expect.objectContaining({
-      metadata: { toolName: 'git_workflow', roomId: 'room-1' },
+      metadata: expect.objectContaining({ toolName: 'git_workflow', roomId: 'room-1' }),
     }));
     expect(mockRelease).toHaveBeenCalledWith('agent-1', 'git:bld-42');
     expect(nextFn).toHaveBeenCalledOnce();
@@ -430,6 +431,131 @@ describe('ResourceLockMiddleware', () => {
 
     // Should only acquire once due to Set dedup
     expect(mockAcquire).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Concurrency modes (#942) ──
+
+  it('passes through for tools with concurrencyMode "concurrent"', async () => {
+    const tool = makeTool({
+      name: 'read_file',
+      concurrencyMode: 'concurrent',
+      resources: undefined,
+    });
+
+    const result = await middleware.execute(tool, {}, makeContext(), nextFn);
+
+    expect(result.ok).toBe(true);
+    expect(nextFn).toHaveBeenCalledOnce();
+    expect(mockAcquire).not.toHaveBeenCalled();
+  });
+
+  it('passes through for concurrent mode even if resources are somehow set', async () => {
+    // Edge case: tool marked concurrent but has resources — concurrency mode takes precedence
+    const tool = makeTool({
+      name: 'weird_tool',
+      concurrencyMode: 'concurrent',
+      resources: [{ type: 'file', mode: 'static' }],
+    });
+
+    const result = await middleware.execute(tool, {}, makeContext(), nextFn);
+
+    expect(result.ok).toBe(true);
+    expect(mockAcquire).not.toHaveBeenCalled();
+  });
+
+  it('acquires global exclusive lock for exclusive mode tools', async () => {
+    const resources: ToolResourceDescriptor[] = [{ type: 'browser', mode: 'static' }];
+    const tool = makeTool({
+      name: 'browser_tools',
+      concurrencyMode: 'exclusive',
+      resources,
+    });
+    const context = makeContext({ buildingId: 'bld-1' });
+
+    const acquiredKeys: string[] = [];
+    mockAcquire.mockImplementation(async (_a: string, resource: string) => {
+      acquiredKeys.push(resource);
+      return ok(makeLockHandle(resource));
+    });
+
+    await middleware.execute(tool, {}, context, nextFn);
+
+    // Should acquire both the resource lock AND the global exclusive lock
+    expect(acquiredKeys).toContain(EXCLUSIVE_LOCK_KEY);
+    expect(acquiredKeys).toContain('browser:bld-1');
+    expect(nextFn).toHaveBeenCalledOnce();
+  });
+
+  it('acquires exclusive lock even when tool has no resource descriptors', async () => {
+    const tool = makeTool({
+      name: 'exclusive_no_resources',
+      concurrencyMode: 'exclusive',
+      resources: undefined,
+    });
+
+    mockAcquire.mockImplementation(async (_a: string, r: string) => ok(makeLockHandle(r)));
+    mockWithLockRefresh.mockImplementation(async (_h: unknown, fn: () => Promise<unknown>) => fn());
+
+    await middleware.execute(tool, {}, makeContext(), nextFn);
+
+    // Should acquire just the exclusive lock
+    expect(mockAcquire).toHaveBeenCalledTimes(1);
+    expect(mockAcquire).toHaveBeenCalledWith('agent-1', EXCLUSIVE_LOCK_KEY, expect.any(Object));
+  });
+
+  it('includes concurrencyMode in lock metadata for exclusive tools', async () => {
+    const resources: ToolResourceDescriptor[] = [{ type: 'browser', mode: 'static' }];
+    const tool = makeTool({
+      name: 'browser_tools',
+      concurrencyMode: 'exclusive',
+      resources,
+    });
+
+    mockAcquire.mockImplementation(async (_a: string, r: string) => ok(makeLockHandle(r)));
+
+    await middleware.execute(tool, {}, makeContext(), nextFn);
+
+    // Verify metadata includes concurrencyMode
+    expect(mockAcquire).toHaveBeenCalledWith(
+      'agent-1',
+      expect.any(String),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ concurrencyMode: 'exclusive' }),
+      }),
+    );
+  });
+
+  it('infers serialized mode for tools with resources but no explicit mode', async () => {
+    const resources: ToolResourceDescriptor[] = [{ type: 'git', mode: 'static' }];
+    const tool = makeTool({
+      name: 'git_workflow',
+      concurrencyMode: undefined, // not set
+      resources,
+    });
+    const handle = makeLockHandle('git:building-1');
+
+    mockAcquire.mockResolvedValue(ok(handle));
+    mockWithLockRefresh.mockImplementation(async (_h: unknown, fn: () => Promise<unknown>) => fn());
+
+    const result = await middleware.execute(tool, {}, makeContext(), nextFn);
+
+    expect(result.ok).toBe(true);
+    expect(mockAcquire).toHaveBeenCalledOnce();
+    expect(nextFn).toHaveBeenCalledOnce();
+  });
+
+  it('infers concurrent mode for tools without resources and no explicit mode', async () => {
+    const tool = makeTool({
+      name: 'read_file',
+      concurrencyMode: undefined,
+      resources: undefined,
+    });
+
+    const result = await middleware.execute(tool, {}, makeContext(), nextFn);
+
+    expect(result.ok).toBe(true);
+    expect(nextFn).toHaveBeenCalledOnce();
+    expect(mockAcquire).not.toHaveBeenCalled();
   });
 });
 
