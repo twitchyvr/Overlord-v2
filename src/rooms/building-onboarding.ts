@@ -167,7 +167,80 @@ export function initBuildingOnboarding({ bus, rooms, agents }: OnboardingDeps): 
     }
   });
 
+  // On startup: detect buildings with no rooms and onboard them (#975)
+  onboardOrphanedBuildings({ bus, rooms, agents });
+
   log.info('Building onboarding initialized');
+}
+
+/**
+ * Detect buildings that have floors but no rooms provisioned (#975).
+ * These are "orphaned" buildings created by auto-discover or other paths
+ * that bypassed the onboarding flow. Emit building:created for each one
+ * to trigger normal onboarding (Strategist room + agent team).
+ */
+function onboardOrphanedBuildings({ bus, rooms, agents }: OnboardingDeps): void {
+  const db = getDb();
+
+  try {
+    // Find buildings that have floors but zero rooms
+    const orphaned = db.prepare(`
+      SELECT b.id, b.name FROM buildings b
+      WHERE EXISTS (SELECT 1 FROM floors f WHERE f.building_id = b.id)
+        AND NOT EXISTS (
+          SELECT 1 FROM rooms r
+          JOIN floors f ON r.floor_id = f.id
+          WHERE f.building_id = b.id
+        )
+    `).all() as Array<{ id: string; name: string }>;
+
+    if (orphaned.length === 0) {
+      log.info('No orphaned buildings found — all buildings have rooms');
+      return;
+    }
+
+    log.info({ count: orphaned.length }, 'Found orphaned buildings with no rooms — onboarding them');
+
+    for (const building of orphaned) {
+      log.info({ buildingId: building.id, name: building.name }, 'Onboarding orphaned building');
+
+      const result = provisionPhaseRoom({
+        buildingId: building.id,
+        phase: 'strategy',
+        rooms,
+        agents,
+      });
+
+      if (result.success) {
+        const teamCreated = provisionAgentTeam({ buildingId: building.id, agents, rooms });
+
+        bus.emit('building:onboarded', {
+          buildingId: building.id,
+          name: building.name,
+          roomId: result.roomId,
+          agentId: result.agentId,
+          phase: 'strategy',
+          roomType: 'strategist',
+          teamSize: teamCreated + 1,
+          wasOrphaned: true,
+        });
+
+        log.info(
+          { buildingId: building.id, name: building.name, roomId: result.roomId, teamCreated },
+          'Orphaned building onboarded — Strategist room + agent team provisioned',
+        );
+      } else {
+        log.error(
+          { buildingId: building.id, name: building.name, error: result.error },
+          'Failed to onboard orphaned building',
+        );
+      }
+    }
+
+    log.info({ onboarded: orphaned.length }, 'Orphaned building onboarding complete');
+  } catch (e) {
+    log.error({ err: e instanceof Error ? e.message : String(e) }, 'Failed to check for orphaned buildings');
+  }
 }
 
 interface ProvisionResult {
