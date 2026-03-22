@@ -3857,38 +3857,30 @@
    #804 — Live Telemetry Panel
    ═══════════════════════════════════════════════════════ */
 
-.telemetry-panel {
-  margin-top: var(--sp-4, 1rem);
-}
-.telemetry-panel h3 {
-  font-size: var(--text-base, 1rem);
-  font-weight: var(--font-semibold, 600);
-  margin: 0 0 var(--sp-3, 0.75rem) 0;
-}
-.telemetry-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: var(--sp-3, 0.75rem);
-}
-.telemetry-card {
-  padding: var(--sp-3, 0.75rem);
-  border-radius: var(--radius-lg, 12px);
-  min-height: 140px;
-  display: flex;
-  flex-direction: column;
-}
-.telemetry-card-header {
-  font-size: var(--text-xs, 0.75rem);
-  font-weight: var(--font-semibold, 600);
-  color: var(--text-secondary, rgba(255,255,255,0.7));
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: var(--sp-2, 0.5rem);
-}
-.telemetry-card svg {
-  flex: 1;
-  width: 100%;
-}
+.telemetry-panel { margin-top: var(--sp-4, 1rem); }
+.telemetry-header { display: flex; align-items: center; gap: 8px; margin-bottom: var(--sp-3, 0.75rem); }
+.telemetry-header h3 { font-size: var(--text-base, 1rem); font-weight: var(--font-semibold, 600); margin: 0; }
+.telemetry-scope { font-size: var(--text-xs); background: var(--surface-2, rgba(255,255,255,0.05)); padding: 2px 8px; border-radius: var(--radius-sm, 4px); color: var(--text-muted); }
+.telemetry-rate-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: var(--sp-3, 0.75rem); }
+.telem-rate-card { background: var(--surface-1, rgba(255,255,255,0.03)); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: var(--radius-md, 8px); padding: 10px 12px; text-align: center; }
+.telem-rate-icon { font-size: 16px; margin-bottom: 2px; }
+.telem-rate-val-row { display: flex; align-items: baseline; justify-content: center; gap: 2px; }
+.telem-rate-value { font-size: 22px; font-weight: var(--font-bold, 700); }
+.telem-rate-unit { font-size: var(--text-xs); color: var(--text-muted); }
+.telem-rate-label { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 2px; }
+.telemetry-bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 768px) { .telemetry-bottom-row { grid-template-columns: 1fr; } }
+.telem-list-card { padding: var(--sp-3, 0.75rem); border-radius: var(--radius-md, 8px); }
+.telemetry-card-header { font-size: var(--text-xs); font-weight: var(--font-semibold, 600); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--sp-2, 0.5rem); }
+.telem-list-body { font-size: var(--text-sm); color: var(--text-muted); }
+.telem-bar-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.telem-bar-label { min-width: 80px; font-size: var(--text-xs); color: var(--text-secondary); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.telem-bar-outer { flex: 1; height: 8px; background: var(--surface-2, rgba(255,255,255,0.05)); border-radius: 4px; overflow: hidden; }
+.telem-bar-inner { height: 100%; background: var(--accent-cyan, #22d3ee); border-radius: 4px; transition: width 0.3s ease; }
+.telem-bar-count { min-width: 28px; font-size: var(--text-xs); color: var(--text-muted); text-align: right; }
+.telem-agent-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: var(--text-sm); }
+.telem-agent-name { color: var(--text-primary, #e2e8f0); }
+.telem-agent-events { color: var(--text-muted); font-size: var(--text-xs); }
 
 /* ═══════════════════════════════════════════════════════
    #930 — Agent List UX: Collapsible Groups, Action Bar,

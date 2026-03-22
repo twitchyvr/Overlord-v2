@@ -763,6 +763,11 @@ export const BuildingActivityLogSchema = z.object({
   eventType: z.string().max(MAX_NAME).optional(),
 });
 
+// Telemetry rates (#804)
+export const TelemetryRatesSchema = z.object({
+  buildingId: id().optional(),
+});
+
 // Budget schemas (#680)
 export const BudgetGetSchema = z.object({
   agentId: id(),

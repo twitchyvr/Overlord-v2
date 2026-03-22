@@ -1774,6 +1774,11 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithTimeout('building:activity-log', { buildingId, ...opts });
     },
 
+    // Telemetry rates (#804) — project-level or global
+    fetchTelemetryRates(buildingId) {
+      return _emitWithTimeout('telemetry:rates', { buildingId: buildingId || undefined });
+    },
+
     fetchLeaderboard(metric, opts = {}) {
       return _emitWithTimeout('agent:leaderboard', { metric, ...opts });
     },

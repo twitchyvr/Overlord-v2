@@ -242,6 +242,130 @@ export function getFloorActivityLog(
   }));
 }
 
+// ─── Telemetry Rates (#804) ───
+
+export interface TelemetryRates {
+  executionRate: number;      // conversation loop completions per hour
+  toolUseRate: number;        // tool calls per hour
+  agentChatRate: number;      // chat messages per hour
+  aiRequestRate: number;      // AI API calls per hour
+  totalTokens: number;        // total tokens consumed (all time)
+  totalTokensLastHour: number;
+  totalToolCalls: number;     // all time
+  totalMessages: number;      // all time
+  totalSessions: number;      // all time
+  activeAgents: number;
+  idleAgents: number;
+  topTools: Array<{ name: string; count: number }>;
+  topAgents: Array<{ name: string; id: string; events: number }>;
+  recentActivity: ActivityLogEntry[];
+}
+
+/**
+ * Get telemetry rates from the database. Supports project-level (buildingId)
+ * and global-level (no buildingId) queries.
+ */
+export function getTelemetryRates(buildingId?: string): TelemetryRates {
+  const db = getDb();
+  const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+  const whereBuilding = buildingId ? ' AND building_id = ?' : '';
+  const buildingParams = buildingId ? [buildingId] : [];
+
+  // Rates: count events in last hour
+  const hourCounts = db.prepare(`
+    SELECT event_type, COUNT(*) as cnt
+    FROM agent_activity_log
+    WHERE created_at >= ?${whereBuilding}
+    GROUP BY event_type
+  `).all(oneHourAgo, ...buildingParams) as Array<{ event_type: string; cnt: number }>;
+
+  const hourMap = new Map(hourCounts.map(r => [r.event_type, r.cnt]));
+
+  const executionRate = (hourMap.get('session_end') || 0) + (hourMap.get('agent:activity') || 0);
+  const toolUseRate = (hourMap.get('tool_executed') || 0) + (hourMap.get('tool:executed') || 0) + (hourMap.get('tool:executing') || 0);
+  const agentChatRate = (hourMap.get('message_sent') || 0) + (hourMap.get('chat:message') || 0);
+  const aiRequestRate = (hourMap.get('ai:request') || 0) + (hourMap.get('ai_request') || 0);
+
+  // Token totals from agent_stats
+  const tokenQuery = buildingId
+    ? `SELECT COALESCE(SUM(s.value), 0) as total FROM agent_stats s JOIN agents a ON s.agent_id = a.id WHERE s.metric = 'tokens_used' AND a.building_id = ?`
+    : `SELECT COALESCE(SUM(value), 0) as total FROM agent_stats WHERE metric = 'tokens_used'`;
+  const tokenResult = db.prepare(tokenQuery).get(...buildingParams) as { total: number };
+  const totalTokens = tokenResult?.total || 0;
+
+  // Tokens in last hour (from activity log event_data)
+  const tokenHourResult = db.prepare(`
+    SELECT COUNT(*) as cnt FROM agent_activity_log
+    WHERE (event_type = 'ai:request' OR event_type = 'ai_request')
+    AND created_at >= ?${whereBuilding}
+  `).get(oneHourAgo, ...buildingParams) as { cnt: number };
+  const totalTokensLastHour = tokenHourResult?.cnt || 0;
+
+  // All-time totals
+  const totalsQuery = buildingId
+    ? `SELECT event_type, COUNT(*) as cnt FROM agent_activity_log WHERE building_id = ? GROUP BY event_type`
+    : `SELECT event_type, COUNT(*) as cnt FROM agent_activity_log GROUP BY event_type`;
+  const totals = db.prepare(totalsQuery).all(...buildingParams) as Array<{ event_type: string; cnt: number }>;
+  const totalMap = new Map(totals.map(r => [r.event_type, r.cnt]));
+
+  const totalToolCalls = (totalMap.get('tool_executed') || 0) + (totalMap.get('tool:executed') || 0) + (totalMap.get('tool:executing') || 0);
+  const totalMessages = (totalMap.get('message_sent') || 0) + (totalMap.get('chat:message') || 0);
+  const totalSessions = (totalMap.get('session_end') || 0) + (totalMap.get('session_start') || 0);
+
+  // Agent status counts
+  const agentStatusQuery = buildingId
+    ? `SELECT status, COUNT(*) as cnt FROM agents WHERE building_id = ? GROUP BY status`
+    : `SELECT status, COUNT(*) as cnt FROM agents GROUP BY status`;
+  const agentStatuses = db.prepare(agentStatusQuery).all(...buildingParams) as Array<{ status: string; cnt: number }>;
+  const statusMap = new Map(agentStatuses.map(r => [r.status, r.cnt]));
+
+  // Top tools (all time, top 8)
+  const topToolsQuery = db.prepare(`
+    SELECT json_extract(event_data, '$.toolName') as name, COUNT(*) as cnt
+    FROM agent_activity_log
+    WHERE (event_type = 'tool:executed' OR event_type = 'tool_executed')
+    ${buildingId ? 'AND building_id = ?' : ''}
+    AND json_extract(event_data, '$.toolName') IS NOT NULL
+    GROUP BY name ORDER BY cnt DESC LIMIT 8
+  `).all(...buildingParams) as Array<{ name: string; cnt: number }>;
+
+  // Top agents by activity (last 24h)
+  const twentyFourHoursAgo = new Date(Date.now() - 86400000).toISOString();
+  const topAgentsQuery = db.prepare(`
+    SELECT a.agent_id as id, ag.display_name as name, COUNT(*) as events
+    FROM agent_activity_log a
+    LEFT JOIN agents ag ON a.agent_id = ag.id
+    WHERE a.created_at >= ?${whereBuilding.replace('building_id', 'a.building_id')}
+    GROUP BY a.agent_id ORDER BY events DESC LIMIT 5
+  `).all(twentyFourHoursAgo, ...buildingParams) as Array<{ id: string; name: string; events: number }>;
+
+  // Recent activity (last 20 entries)
+  const recentQuery = buildingId
+    ? `SELECT * FROM agent_activity_log WHERE building_id = ? ORDER BY created_at DESC LIMIT 20`
+    : `SELECT * FROM agent_activity_log ORDER BY created_at DESC LIMIT 20`;
+  const recentRows = db.prepare(recentQuery).all(...buildingParams) as Array<{
+    id: string; agent_id: string; event_type: string; event_data: string;
+    building_id: string | null; room_id: string | null; created_at: string;
+  }>;
+
+  return {
+    executionRate,
+    toolUseRate,
+    agentChatRate,
+    aiRequestRate,
+    totalTokens,
+    totalTokensLastHour,
+    totalToolCalls,
+    totalMessages,
+    totalSessions,
+    activeAgents: statusMap.get('active') || 0,
+    idleAgents: statusMap.get('idle') || 0,
+    topTools: topToolsQuery.map(t => ({ name: t.name, count: t.cnt })),
+    topAgents: topAgentsQuery.map(a => ({ name: a.name || 'Agent', id: a.id, events: a.events })),
+    recentActivity: recentRows.map(row => ({ ...row, event_data: safeJsonParse(row.event_data) })),
+  };
+}
+
 // ─── Stats Aggregation ───
 
 /**
