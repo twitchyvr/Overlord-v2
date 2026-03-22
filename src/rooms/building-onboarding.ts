@@ -209,6 +209,7 @@ function onboardOrphanedBuildings({ bus, rooms, agents }: OnboardingDeps): void 
 
     log.info({ count: orphaned.length }, 'Found orphaned buildings with no rooms — analyzing and onboarding');
 
+    let successCount = 0;
     for (const building of orphaned) {
       log.info({ buildingId: building.id, name: building.name }, 'Analyzing orphaned building');
 
@@ -258,6 +259,7 @@ function onboardOrphanedBuildings({ bus, rooms, agents }: OnboardingDeps): void 
                   wasAutoAnalyzed: true,
                 });
 
+                successCount++;
                 log.info(
                   { buildingId: building.id, name: building.name, template: templateId, ...data },
                   'Orphaned building fully onboarded via codebase analysis',
@@ -298,6 +300,7 @@ function onboardOrphanedBuildings({ bus, rooms, agents }: OnboardingDeps): void 
             wasOrphaned: true,
           });
 
+          successCount++;
           log.info(
             { buildingId: building.id, name: building.name, teamCreated },
             'Orphaned building onboarded with Strategist fallback',
@@ -311,7 +314,7 @@ function onboardOrphanedBuildings({ bus, rooms, agents }: OnboardingDeps): void 
       }
     }
 
-    log.info({ onboarded: orphaned.length }, 'Orphaned building onboarding complete');
+    log.info({ onboarded: successCount, total: orphaned.length }, 'Orphaned building onboarding complete');
   } catch (e) {
     log.error({ err: e instanceof Error ? e.message : String(e) }, 'Failed to check for orphaned buildings');
   }
