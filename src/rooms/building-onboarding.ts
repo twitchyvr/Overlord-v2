@@ -476,6 +476,7 @@ function provisionAgentTeam({
     { name: 'Developer Beta', role: 'developer', capabilities: ['chat', 'code', 'testing'], roomAccess: ['code-lab'] },
     { name: 'Tester', role: 'tester', capabilities: ['chat', 'testing', 'analysis'], roomAccess: ['testing-lab'] },
     { name: 'Reviewer', role: 'reviewer', capabilities: ['chat', 'review', 'analysis'], roomAccess: ['review'] },
+    { name: 'Documentation Specialist', role: 'documentation_specialist', capabilities: ['chat', 'analysis', 'documentation'], roomAccess: ['documentation', 'discovery', 'review'] },
   ];
 
   // Dedup: check which roles already exist in this building
