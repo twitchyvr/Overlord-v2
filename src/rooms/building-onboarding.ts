@@ -245,6 +245,11 @@ function onboardOrphanedBuildings({ bus, rooms, agents }: OnboardingDeps): void 
                 const data = result.data as { floorsCreated: number; roomsCreated: number; agentsCreated: number };
                 blueprintApplied = true;
 
+                // Hydrate newly created rooms into active instances
+                if (data.roomsCreated > 0) {
+                  rooms.hydrateRoomsFromDb();
+                }
+
                 bus.emit('building:onboarded', {
                   buildingId: building.id,
                   name: building.name,
