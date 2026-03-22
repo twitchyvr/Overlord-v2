@@ -186,8 +186,9 @@ describe('Building Onboarding', () => {
 
   it('handles unknown phase gracefully', () => {
     seedBuilding('bld_3', 'Unknown Phase');
-    // Pre-seed a room so the building isn't treated as orphaned (#975)
-    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_seed_3', 'floor_strategy_bld_3', 'strategist', 'Seeded Room');
+    // Pre-seed 2+ rooms so the building isn't treated as incomplete (#975)
+    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_seed_3a', 'floor_strategy_bld_3', 'strategist', 'Strategist');
+    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_seed_3b', 'floor_collab_bld_3', 'discovery', 'Discovery');
 
     initBuildingOnboarding({ bus, rooms, agents });
     bus._trigger('phase:advanced', { buildingId: 'bld_3', to: 'unknown-phase' });
@@ -256,11 +257,12 @@ describe('Building Onboarding', () => {
     );
   });
 
-  it('auto-onboards orphaned buildings with floors but no rooms (#975)', () => {
-    // Create two buildings: one with rooms, one without
+  it('auto-onboards incomplete buildings with 0-1 rooms (#975)', () => {
+    // Create two buildings: one incomplete (0 rooms), one fully onboarded (2+ rooms)
     seedBuilding('bld_orphan', 'Orphaned Project');
     seedBuilding('bld_healthy', 'Healthy Project');
-    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_h', 'floor_strategy_bld_healthy', 'strategist', 'Existing Room');
+    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_h1', 'floor_strategy_bld_healthy', 'strategist', 'Strategist');
+    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_h2', 'floor_collab_bld_healthy', 'discovery', 'Discovery');
 
     initBuildingOnboarding({ bus, rooms, agents });
 
@@ -278,13 +280,15 @@ describe('Building Onboarding', () => {
     expect((onboarded!.data as Record<string, unknown>).wasOrphaned).toBe(true);
   });
 
-  it('skips buildings that already have rooms during orphan check (#975)', () => {
+  it('skips fully onboarded buildings with multiple rooms (#975)', () => {
     seedBuilding('bld_ok', 'Has Rooms');
-    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_ok', 'floor_strategy_bld_ok', 'strategist', 'Existing Room');
+    // Seed 2+ rooms to indicate full onboarding
+    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_ok1', 'floor_strategy_bld_ok', 'strategist', 'Strategist');
+    db.prepare('INSERT INTO rooms (id, floor_id, type, name) VALUES (?, ?, ?, ?)').run('room_ok2', 'floor_collab_bld_ok', 'discovery', 'Discovery');
 
     initBuildingOnboarding({ bus, rooms, agents });
 
-    // No orphan onboarding should happen
+    // No onboarding should happen — building is fully set up
     expect(rooms.createRoom).not.toHaveBeenCalled();
   });
 
