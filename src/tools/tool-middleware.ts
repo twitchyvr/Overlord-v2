@@ -124,6 +124,14 @@ export class ResourceLockMiddleware implements ToolMiddleware {
     const mgr = getResourceLockManager();
     const agentId = context.agentId;
 
+    // ── Exclusive gate (#954) ──
+    // Serialized tools must wait if an exclusive tool is running.
+    // This ensures exclusive mode truly blocks ALL other tool execution.
+    if (mode === 'serialized') {
+      const gateResult = await this._waitForExclusiveGate(mgr, agentId, tool.name);
+      if (!gateResult.ok) return gateResult;
+    }
+
     // Resolve resource keys from descriptors + tool params
     const resourceKeys = tool.resources
       ? this._resolveResources(tool.resources, params, context)
@@ -138,6 +146,9 @@ export class ResourceLockMiddleware implements ToolMiddleware {
     // Sort keys alphabetically to prevent deadlocks, deduplicate
     const sortedKeys = [...new Set(resourceKeys)].sort();
 
+    // Derive lock TTL for the exclusive lock from tool's longest descriptor (#954)
+    const maxDescriptorTtl = this._getMaxDescriptorTtl(tool);
+
     // Acquire all locks
     const handles: LockHandle[] = [];
     for (const key of sortedKeys) {
@@ -146,9 +157,13 @@ export class ResourceLockMiddleware implements ToolMiddleware {
         r => this._makeKey(r, params, context) === key,
       );
 
+      // For EXCLUSIVE_LOCK_KEY, use the tool's longest TTL since no descriptor matches (#954)
+      const ttl = key === EXCLUSIVE_LOCK_KEY ? maxDescriptorTtl : descriptor?.lockOptions?.ttl;
+      const maxWait = key === EXCLUSIVE_LOCK_KEY ? 30_000 : (descriptor?.lockOptions?.maxWait ?? 30_000);
+
       const lockResult = await mgr.acquire(agentId, key, {
-        ttl: descriptor?.lockOptions?.ttl,
-        maxWait: descriptor?.lockOptions?.maxWait ?? 30_000,
+        ttl,
+        maxWait,
         metadata: { toolName: tool.name, roomId: context.roomId, concurrencyMode: mode },
       });
 
@@ -188,11 +203,14 @@ export class ResourceLockMiddleware implements ToolMiddleware {
 
     // Execute tool with lock management
     try {
-      if (handles.length === 1) {
-        // Single lock — use withLockRefresh for auto-TTL extension
+      if (handles.length >= 1) {
+        // Use withLockRefresh on the first handle (sorted alphabetically,
+        // which for exclusive tools means __exclusive__ comes first).
+        // For multi-lock scenarios (#954), this keeps at least the primary
+        // lock alive during long operations.
         return await mgr.withLockRefresh(handles[0], () => next());
       }
-      // Multiple locks — execute directly (TTL sufficient for crash safety)
+      // No handles (shouldn't happen, but defensive)
       return await next();
     } finally {
       // Explicit release on success/error (TTL is the crash safety net)
@@ -243,5 +261,67 @@ export class ResourceLockMiddleware implements ToolMiddleware {
     }
 
     return `${d.type}:${paramValue}`;
+  }
+
+  // ── Exclusive Gate (#954) ──
+
+  /**
+   * Wait for the global exclusive lock to be free before proceeding.
+   * Serialized tools call this to ensure they don't run alongside exclusive tools.
+   * Polls isLocked at 500ms intervals with a 30s timeout.
+   */
+  private async _waitForExclusiveGate(
+    mgr: ReturnType<typeof getResourceLockManager>,
+    agentId: string,
+    toolName: string,
+  ): Promise<Result> {
+    const maxWait = 30_000;
+    const pollInterval = 500;
+    const deadline = Date.now() + maxWait;
+
+    while (true) {
+      const lockState = await mgr.isLocked(EXCLUSIVE_LOCK_KEY);
+      if (!lockState.ok) {
+        // Can't check — proceed optimistically (same as no-lock path)
+        break;
+      }
+
+      // Not locked — gate is open
+      if (!lockState.data) break;
+
+      // Locked by us — gate is open (we hold exclusive, shouldn't happen for serialized, but safe)
+      if (lockState.data.agentId === agentId) break;
+
+      // Locked by another agent — wait
+      if (Date.now() >= deadline) {
+        log.warn({ agentId, toolName, holder: lockState.data.agentId }, 'Serialized tool timed out waiting for exclusive gate');
+        return err(
+          'EXCLUSIVE_GATE_TIMEOUT',
+          `Cannot execute ${toolName}: exclusive operation in progress by ${lockState.data.agentId}`,
+          { retryable: true, context: { toolName, agentId, holder: lockState.data.agentId } },
+        );
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    return { ok: true, data: undefined } as Result;
+  }
+
+  /**
+   * Get the maximum TTL from a tool's resource descriptors (#954).
+   * Used so the exclusive lock gets a TTL that matches the tool's needs.
+   */
+  private _getMaxDescriptorTtl(tool: ToolDefinition): number | undefined {
+    if (!tool.resources || tool.resources.length === 0) return undefined;
+
+    let maxTtl: number | undefined;
+    for (const r of tool.resources) {
+      const ttl = r.lockOptions?.ttl;
+      if (ttl !== undefined && (maxTtl === undefined || ttl > maxTtl)) {
+        maxTtl = ttl;
+      }
+    }
+    return maxTtl;
   }
 }
