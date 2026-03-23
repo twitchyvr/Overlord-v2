@@ -13,6 +13,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Global search works without building** — search across all projects when no building is selected (#1112)
 - **Version strings updated** — settings, health endpoint, MCP client all show 1.0.0-rc.2
 - **Top Tools chart populated** — JSON path fixed from $.toolName to $.tool matching actual event_data format
+- **RAID exit doc summaries readable** — shows project goals instead of raw "Effort Level: medium" field dumps (#1117)
 - **jsdom 29 merged** — major dependency update, all tests pass
 
 ### Added
