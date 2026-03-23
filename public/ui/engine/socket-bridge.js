@@ -237,6 +237,10 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'phase:advanced', ...data });
 
     // Auto-switch chat to a room matching the new phase
+    // #1129 — Don't auto-open room modal on phase advancement.
+    // Previously dispatched building:room-selected which opened a Room Config
+    // modal — confusing for users who didn't click anything.
+    // Just update the store so other components know the active room changed.
     const PHASE_TO_ROOM_TYPE = {
       discovery: 'discovery', architecture: 'architecture',
       execution: 'code-lab', review: 'review', deploy: 'deploy',
@@ -247,7 +251,7 @@ export function initSocketBridge(socket, store, engine) {
       const targetRoom = rooms.find(r => r.type === targetRoomType);
       if (targetRoom) {
         store.set('rooms.active', targetRoom.id);
-        engine.dispatch('building:room-selected', { roomId: targetRoom.id, roomType: targetRoom.type });
+        // Don't dispatch building:room-selected — that opens a modal
       }
     }
   });
