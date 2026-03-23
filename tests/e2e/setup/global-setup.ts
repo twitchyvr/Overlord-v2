@@ -87,6 +87,11 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       PORT: '4000',
       LOG_LEVEL: 'warn',
       DB_PATH: DB_PATH,  // Use isolated test database (#1081)
+      // Strip AI provider keys so E2E tests never burn real API tokens
+      ANTHROPIC_API_KEY: '',
+      MINIMAX_API_KEY: '',
+      OPENAI_API_KEY: '',
+      OLLAMA_BASE_URL: '',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false,
