@@ -1450,6 +1450,47 @@ export class AgentsView extends Component {
     // Fetch todos for this agent asynchronously
     this._fetchAgentTodos(agent.id);
 
+    // ── Task Queue (#1029) ──
+    const store = this._store;
+    const allTasks = store?.get('tasks.list') || [];
+    const agentTasks = allTasks.filter(t => t.assignee_id === agent.id);
+    if (agentTasks.length > 0) {
+      const taskQueueSection = h('div', { class: 'agents-view-detail-section' });
+      const inProgress = agentTasks.filter(t => t.status === 'in_progress');
+      const pending = agentTasks.filter(t => t.status === 'pending');
+      const done = agentTasks.filter(t => t.status === 'done');
+
+      taskQueueSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' },
+        `Task Queue (${done.length}/${agentTasks.length} done)`
+      ));
+
+      const queueList = h('div', { style: 'display:flex; flex-direction:column; gap:var(--sp-1);' });
+
+      for (const task of inProgress) {
+        queueList.appendChild(h('div', { style: 'display:flex; align-items:center; gap:var(--sp-1); padding:var(--sp-1); background:var(--surface-2); border-radius:var(--radius-sm); border-left:3px solid var(--status-active);' },
+          h('span', null, '\uD83D\uDD04'),
+          h('span', { style: 'flex:1;' }, task.title),
+          h('span', { style: 'font-size:0.7rem; color:var(--text-muted); text-transform:uppercase;' }, task.priority || 'normal')
+        ));
+      }
+      for (const task of pending) {
+        queueList.appendChild(h('div', { style: 'display:flex; align-items:center; gap:var(--sp-1); padding:var(--sp-1); opacity:0.7;' },
+          h('span', null, '\u23F3'),
+          h('span', { style: 'flex:1;' }, task.title),
+          h('span', { style: 'font-size:0.7rem; color:var(--text-muted); text-transform:uppercase;' }, task.priority || 'normal')
+        ));
+      }
+      for (const task of done) {
+        queueList.appendChild(h('div', { style: 'display:flex; align-items:center; gap:var(--sp-1); padding:var(--sp-1); opacity:0.5; text-decoration:line-through;' },
+          h('span', null, '\u2705'),
+          h('span', { style: 'flex:1;' }, task.title)
+        ));
+      }
+
+      taskQueueSection.appendChild(queueList);
+      content.appendChild(taskQueueSection);
+    }
+
     // ── Profile Generation Actions ──
     const profileActionsSection = h('div', { class: 'agents-view-detail-section' });
     profileActionsSection.appendChild(
