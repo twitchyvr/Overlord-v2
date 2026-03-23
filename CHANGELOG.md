@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [1.0.0-rc.1] — 2026-03-23
+
 ### Added
 - **Multi-phase Agent Orchestration (Epic #1019)** — Press Play and watch the entire AI team work automatically:
   - Strategist auto-creates tasks, milestones, and RAID entries from codebase analysis (#1015, #1017)
