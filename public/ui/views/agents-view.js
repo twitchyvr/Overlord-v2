@@ -1252,6 +1252,44 @@ export class AgentsView extends Component {
     modelSection.appendChild(modelForm);
     content.appendChild(modelSection);
 
+    // ── Live Work Stream (#1028) ──
+    const liveSection = h('div', { class: 'agents-view-detail-section agents-view-live-work' });
+    liveSection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Live Work Stream'));
+    const liveLog = h('div', {
+      class: 'agents-view-live-log',
+      style: 'max-height:200px; overflow-y:auto; font-family:var(--font-mono,monospace); font-size:0.75rem; padding:var(--sp-2); background:var(--surface-1,#111); border-radius:var(--radius-sm,4px);',
+    });
+
+    // Check current activity
+    const currentActivity = this._activities[agent.id];
+    if (currentActivity && (Date.now() - currentActivity.timestamp) < 60_000) {
+      const badge = _activityBadge(currentActivity.activity);
+      const actLine = h('div', { style: 'color:var(--status-active); margin-bottom:var(--sp-1);' },
+        `${badge?.emoji || ''} ${badge?.label || currentActivity.activity}${currentActivity.toolName ? ` (${currentActivity.toolName})` : ''}`
+      );
+      liveLog.appendChild(actLine);
+    } else {
+      const waitReason = this._getWaitReason(agent, this._resolveRoomId(agent));
+      liveLog.appendChild(h('div', { style: 'color:var(--text-muted);' }, waitReason === 'Ready' ? 'Waiting for Play to start work' : waitReason));
+    }
+
+    // Subscribe to live tool call events for this agent
+    const liveHandler = (data) => {
+      if (!data || data.agentId !== agent.id) return;
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const icon = data.activity === 'thinking' ? '\uD83E\uDDE0' : data.activity === 'coding' ? '\uD83D\uDCBB' : data.activity === 'reading' ? '\uD83D\uDCD6' : '\u26A1';
+      const line = h('div', { style: 'margin-bottom:2px;' },
+        h('span', { style: 'color:var(--text-muted);' }, `[${time}] `),
+        h('span', null, `${icon} ${data.activity || 'working'}${data.toolName ? ` \u2014 ${data.toolName}` : ''}`)
+      );
+      liveLog.appendChild(line);
+      liveLog.scrollTop = liveLog.scrollHeight;
+    };
+    OverlordUI.subscribe('agent:activity', liveHandler);
+
+    liveSection.appendChild(liveLog);
+    content.appendChild(liveSection);
+
     // ── Recent Activity Timeline ──
     const activitySection = h('div', { class: 'agents-view-detail-section' });
     activitySection.appendChild(h('h4', { class: 'agents-view-detail-section-title' }, 'Recent Activity'));
