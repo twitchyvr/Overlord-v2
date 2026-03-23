@@ -296,7 +296,7 @@ describe('Server Bootstrap', () => {
     mockRoutes['/health']({}, mockRes);
 
     expect(mockRes.json).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'ok', version: '1.0.0-rc.1' }),
+      expect.objectContaining({ status: 'ok', version: '1.0.0-rc.2' }),
     );
   });
 
