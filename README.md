@@ -4,17 +4,19 @@
 
 ### AI Agent Orchestration Framework
 
+[![CI](https://github.com/twitchyvr/Overlord-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/twitchyvr/Overlord-v2/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101?style=for-the-badge&logo=socket.io&logoColor=white)](https://socket.io/)
 [![SQLite](https://img.shields.io/badge/SQLite-3-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge)](CONTRIBUTING.md)
 
 *A scriptable, scalable, provider-agnostic framework for orchestrating AI agents through structured project phases.*
 
 **Built on the Building / Floor / Room / Table / Chair spatial model,<br>where rooms define behavior — not agents.**
 
-[📖 Wiki](https://github.com/twitchyvr/Overlord-v2/wiki) · [🐛 Issues](https://github.com/twitchyvr/Overlord-v2/issues) · [📋 Project Board](https://github.com/twitchyvr/Overlord-v2/projects) · [📝 Changelog](CHANGELOG.md)
+[📖 Wiki](https://github.com/twitchyvr/Overlord-v2/wiki) · [🐛 Issues](https://github.com/twitchyvr/Overlord-v2/issues) · [💬 Discussions](https://github.com/twitchyvr/Overlord-v2/discussions) · [📝 Changelog](CHANGELOG.md)
 
 </div>
 
@@ -52,8 +54,8 @@ GO / NO-GO / CONDITIONAL checkpoints between phases. Every transition requires a
 <tr>
 <td width="33%" valign="top">
 
-### 🤖 10-Line Agents
-Agents are lightweight identity cards — name, role, capabilities, room access. The room injects everything else on entry.
+### ▶️ One-Click Orchestration
+Press **Play** and watch your AI team work. The Strategist analyzes your codebase, creates tasks and milestones, identifies risks — then advances through Discovery, Architecture, Execution, Review, and Deploy automatically.
 
 </td>
 <td width="33%" valign="top">
@@ -64,8 +66,8 @@ Swap AI providers per room. **Anthropic Claude** for reasoning. **MiniMax M2.7**
 </td>
 <td width="33%" valign="top">
 
-### 🔌 Lua Scripting Platform
-In-browser Lua IDE with 26 built-in scripts. View, fork, edit, create, import/export scripts. Scriptable core — override phase gates, validation, assignment via Lua hooks.
+### 🔌 29 Built-in Plugins
+Agent activity tracking, auto-phase advance, code complexity alerts, daily standup, deadline tracker, dependency watcher, secret guard, and more — plus a Lua scripting platform for custom hooks.
 
 </td>
 </tr>
@@ -128,7 +130,7 @@ graph TD
 | 🤖 **Agents** | `src/agents/` | 7 files — registry, email, sessions, conversation loop, stats, routing, badges | Tools, AI, Storage, Core |
 | 🔧 **Tools** | `src/tools/` | 12 files — registry, MCP manager/client, 7 tool providers | AI, Storage, Core |
 | 🧠 **AI** | `src/ai/` | 13 files — 4 adapters, profile generation, image service, repo analysis, repo sync | Storage, Core |
-| 💾 **Storage** | `src/storage/` | SQLite with WAL, 17+ tables, 35+ indexes | Core |
+| 💾 **Storage** | `src/storage/` | SQLite with WAL, 30 tables, 59 indexes | Core |
 | ⚙️ **Core** | `src/core/` | Event bus, config, logger, contracts | Nothing (foundation) |
 
 </details>
@@ -283,15 +285,13 @@ npm install
 
 # Configure — add at least one AI provider key
 cp .env.example .env
+# Edit .env and add your ANTHROPIC_API_KEY, MINIMAX_API_KEY, or OPENAI_API_KEY
 
-# Initialize database
-npm run db:migrate && npm run db:seed
-
-# Launch
+# Launch (database auto-initializes on first run)
 npm run dev
 ```
 
-**→ Open `http://localhost:4000`** to access the Overlord UI.
+**→ Open `http://localhost:4000`** — your local git repos are auto-discovered as buildings. Press **Play** on any building to start AI analysis.
 
 <details>
 <summary>🐳 <b>Docker Setup</b> (click to expand)</summary>
@@ -380,7 +380,7 @@ npm run test:coverage   # V8 coverage report
 npm run validate        # Full CI pipeline: typecheck + lint + test
 ```
 
-**140 test files** across unit, integration, and E2E — organized by layer:
+**146 test files · 4,685 tests** across unit, integration, and E2E — organized by layer:
 
 <details>
 <summary>📁 <b>Test Structure</b></summary>
@@ -433,52 +433,57 @@ The Overlord UI is a custom single-page application with **14 views**, **13 reus
 ## 📸 Screenshots
 
 ### Dashboard
-KPIs, phase progress, building floor structure, and dev loop pipeline — all at a glance.
+Live telemetry, building cards with Play/Pause/Stop controls, and project overview. Click a building card to preview its structure in the sidebar without navigating away.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
+### Dashboard — Building Selected
+Selecting a building populates the sidebar with floors, rooms, and agent counts while staying on the dashboard.
+
+![Dashboard with Building](docs/screenshots/dashboard-building.png)
+
 ### Chat
-Real-time conversation with AI agents. Use `/` for commands and `@` to mention agents.
+Real-time conversation with AI agents. Agent names are clickable — opening a detail drawer with profile, stats, token usage, and activity log. Use `/` for commands and `@` to mention agents.
 
 ![Chat](docs/screenshots/chat.png)
 
 ### Agents
-Agent roster with profile cards, room assignments, status indicators, and auto-assign.
+Agent roster with profile cards, activity badges (thinking, coding, reading), room assignments, token usage, and auto-assign. Click any agent to open their full detail panel.
 
 ![Agents](docs/screenshots/agents.png)
 
-### Agent Mail
-Split-pane email view with inbox/sent/all tabs, search, and threaded conversations between agents.
+### Tasks
+AI-created tasks with priorities, phase assignments, and milestone linking. Tasks progress from Pending to In Progress to Done as agents work through them.
 
-![Mail](docs/screenshots/mail.png)
+![Tasks](docs/screenshots/tasks.png)
 
 ### Phase Gates
-Visual stepper showing project progression from Strategy through Deploy, with gate status and advance controls.
+Visual stepper showing project progression from Strategy through Deploy. Gates auto-sign in Easy mode, advancing phases automatically.
 
 ![Phase Gates](docs/screenshots/phases.png)
 
 ### RAID Log
-Risks, Assumptions, Issues, and Decisions — filterable by type and status, with full audit trail.
+Risks, Assumptions, Issues, and Decisions — auto-populated by the strategist during codebase analysis. Filterable by type and status.
 
-![RAID Log](docs/screenshots/raid-log.png)
-
-### Tasks
-Task management with filtering, assignment, and detail drawers.
-
-![Tasks](docs/screenshots/tasks.png)
+![RAID Log](docs/screenshots/raid.png)
 
 ### Activity Feed
-Real-time event feed showing agent actions, room transitions, and system events.
+Real-time event feed with 24+ event types — agent actions, tool calls, phase transitions, building lifecycle events. Filter by Rooms, Agents, Tools, or Phase Gates.
 
 ![Activity](docs/screenshots/activity.png)
 
+### Agent Mail
+Split-pane email view with inbox/sent/all tabs, search, and threaded conversations between agents and the project owner.
+
+![Mail](docs/screenshots/mail.png)
+
 ### Milestones
-Milestone tracking tied to project phases with task assignment and progress.
+Milestone tracking with linked tasks and progress bars. Auto-created by the strategist with tasks linked to milestones.
 
 ![Milestones](docs/screenshots/milestones.png)
 
-### Lua Scripts
-In-browser Lua IDE with 26 built-in scripts. View, fork, edit, create, and import/export.
+### Plugins
+29 built-in plugins including Agent Activity Tracker, Changelog Generator, Code Complexity Alert, Daily Standup, Deadline Tracker, Secret Guard, and more.
 
 ![Scripts](docs/screenshots/scripts.png)
 
@@ -500,7 +505,7 @@ Overlord-v2/
 │   │   └── logger.ts              #    Pino structured logger
 │   │
 │   ├── storage/                   # 💾 Database
-│   │   └── db.ts                  #    SQLite, migrations, 15+ tables
+│   │   └── db.ts                  #    SQLite, migrations, 30 tables, 59 indexes
 │   │
 │   ├── ai/                        # 🧠 AI Providers
 │   │   ├── ai-provider.ts         #    Adapter registry & dispatcher
@@ -578,8 +583,8 @@ Overlord-v2/
 │   │   └── contracts.ts           #    Plugin manifest schema
 │   │
 │   ├── transport/                 # 🌐 Transport
-│   │   ├── socket-handler.ts      #    45+ Socket.IO event handlers
-│   │   └── schemas.ts             #    103 Zod message schemas
+│   │   ├── socket-handler.ts      #    80+ Socket.IO event handlers
+│   │   └── schemas.ts             #    120+ Zod message schemas
 │   │
 │   └── server.ts                  #    Entry point
 │
@@ -589,7 +594,7 @@ Overlord-v2/
 │   ├── views/                     #    14 full-page views
 │   └── css/                       #    8 stylesheets (tokens, responsive, etc.)
 │
-├── tests/                         #    89 test files (unit + integration + e2e)
+├── tests/                         #    146 test files, 4,685 tests (unit + integration + e2e)
 ├── .devcontainer/                 #    VS Code Dev Container config
 ├── .github/                       #    Actions, issue templates, PR template
 ├── Dockerfile                     #    Multi-stage Alpine build
@@ -624,18 +629,15 @@ Overlord-v2/
 
 | Command | Description |
 |:--------|:------------|
-| `npm run dev` | 🔄 Start dev server with hot reload (tsx watch) |
-| `npm run build` | 🏗️ Compile TypeScript to `dist/` |
-| `npm start` | 🚀 Run compiled production server |
-| `npm test` | 🧪 Run all tests (Vitest) |
-| `npm run test:watch` | 👀 Tests in watch mode |
-| `npm run test:coverage` | 📊 Tests with V8 coverage |
-| `npm run lint` | 🔍 ESLint check |
-| `npm run lint:fix` | 🔧 ESLint auto-fix |
-| `npm run typecheck` | 🟦 TypeScript type checking |
-| `npm run validate` | ✅ **Full CI pipeline:** typecheck + lint + test |
-| `npm run db:migrate` | 💾 Run database migrations |
-| `npm run db:seed` | 🌱 Seed development data |
+| `npm run dev` | Start dev server with hot reload (tsx watch) |
+| `npm run build` | Compile TypeScript to `dist/` |
+| `npm start` | Run compiled production server |
+| `npm test` | Run all 4,685 tests (Vitest) |
+| `npm run test:e2e` | Run Playwright E2E tests |
+| `npm run test:coverage` | Tests with V8 coverage |
+| `npm run lint` | ESLint check |
+| `npm run typecheck` | TypeScript type checking |
+| `npm run validate` | Verify layer ordering (architecture compliance) |
 
 ---
 
@@ -643,23 +645,21 @@ Overlord-v2/
 
 | Branch | Purpose |
 |:-------|:--------|
-| `main` | 🔒 Stable, protected — PRs required |
-| `develop` | 🔄 Integration branch |
+| `main` | 🔒 Stable, protected — PRs required, CI must pass |
 | `feat/*` | ✨ New features |
 | `fix/*` | 🐛 Bug fixes |
 | `docs/*` | 📖 Documentation |
 | `refactor/*` | ♻️ Code restructuring |
-| `release/*` | 🚀 Release candidates |
-| `hotfix/*` | 🚨 Emergency fixes |
 
 ### Workflow
 
-1. **Branch** from `develop` → `feat/my-feature`
-2. **Create a GitHub Issue** for the work
+1. **Create a GitHub Issue** for the work
+2. **Branch** from `main` → `feat/my-feature` or `fix/my-fix`
 3. **Commit** using [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): subject`
 4. **Open a PR** with summary, test plan, and `Closes #N`
-5. **Pass validation**: `npm run validate` (typecheck + lint + test)
-6. **Never push directly to `main`**
+5. **Pass CI**: lint + typecheck + tests + architecture check + build
+6. **Get 1 review approval** — main is branch-protected
+7. **Squash merge** — delete branch immediately after merge
 
 ### Code Standards
 
