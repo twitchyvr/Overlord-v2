@@ -92,7 +92,7 @@ Manages database operations and caching.
 We chose PostgreSQL for its JSON support and full-text search capabilities.
 `);
 
-  mkdirSync(join(docDir, 'guides'), { recursive: true });
+  mkdirSync(join(docDir, 'guides'), { recursive: true, mode: 0o700 });
   writeFileSync(join(docDir, 'guides', 'deployment.md'), `# Deployment Guide
 
 Deploy the application using Docker containers.
@@ -118,9 +118,9 @@ Deploy the application using Docker containers.
 describe('Documentation Library (#811, #814)', () => {
   beforeEach(() => {
     testDir = join(tmpdir(), `overlord-doc-test-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
-    mkdirSync(testDir, { recursive: true });
+    mkdirSync(testDir, { recursive: true, mode: 0o700 });
     docDir = join(testDir, 'docs');
-    mkdirSync(docDir, { recursive: true });
+    mkdirSync(docDir, { recursive: true, mode: 0o700 });
 
     const mockConfig = createMockConfig(join(testDir, 'test.db'));
     initStorage(mockConfig);

@@ -17,7 +17,7 @@ import { ResourceLockManager } from '../../../src/core/resource-lock.js';
 
 function makeTempLockDir(): string {
   const dir = path.join(os.tmpdir(), `overlord-lock-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   return dir;
 }
 

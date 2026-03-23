@@ -2292,10 +2292,15 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
         targetDir = path.join(pluginBaseDir, plugin.manifest.id);
         fs.mkdirSync(targetDir, { recursive: true });
 
-        // Copy manifest to user dir if not present
+        // Copy manifest to user dir if not present (use exclusive flag to avoid TOCTOU race)
         const manifestDest = path.join(targetDir, 'plugin.json');
-        if (!fs.existsSync(manifestDest)) {
-          fs.writeFileSync(manifestDest, JSON.stringify(plugin.manifest, null, 2), 'utf-8');
+        try {
+          fs.writeFileSync(manifestDest, JSON.stringify(plugin.manifest, null, 2), { encoding: 'utf-8', flag: 'wx' });
+        } catch (e: unknown) {
+          // EEXIST means file already exists — that's fine, skip silently
+          if (!(e instanceof Error && 'code' in e && (e as NodeJS.ErrnoException).code === 'EEXIST')) {
+            throw e;
+          }
         }
       }
 

@@ -50,13 +50,27 @@ export function setContent(el, content) {
   }
 }
 
-/** Set trusted HTML content with sanitization */
+/** Set trusted HTML content with sanitization (#code-scanning) */
 export function setTrustedContent(el, htmlString) {
   if (typeof el.setHTML === 'function') {
+    // Sanitizer API — safe by design
     el.setHTML(htmlString);
   } else {
+    // Fallback: parse then strip dangerous elements before inserting
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlString, 'text/html');
+    // Remove script, style, iframe, object, embed, form elements
+    for (const tag of ['script', 'style', 'iframe', 'object', 'embed', 'form', 'link']) {
+      doc.querySelectorAll(tag).forEach(n => n.remove());
+    }
+    // Remove event handler attributes (onclick, onerror, etc.)
+    doc.querySelectorAll('*').forEach(n => {
+      for (const attr of [...n.attributes]) {
+        if (attr.name.startsWith('on') || attr.value.startsWith('javascript:')) {
+          n.removeAttribute(attr.name);
+        }
+      }
+    });
     el.textContent = '';
     while (doc.body.firstChild) {
       el.appendChild(document.adoptNode(doc.body.firstChild));

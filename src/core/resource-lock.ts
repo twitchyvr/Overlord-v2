@@ -584,7 +584,7 @@ export class ResourceLockManager {
    * rename() is atomic on POSIX when source and destination are on the same filesystem.
    */
   private _writeLockFile(filePath: string, state: LockState): void {
-    const tmpPath = `${filePath}.${process.pid}.tmp`;
+    const tmpPath = `${filePath}.${process.pid}.${crypto.randomUUID().slice(0, 8)}.tmp`;
     try {
       fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2), 'utf-8');
       fs.renameSync(tmpPath, filePath);

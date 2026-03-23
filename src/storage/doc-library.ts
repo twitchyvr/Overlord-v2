@@ -10,7 +10,7 @@
  * Layer: Storage (depends on Core)
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join, extname, relative } from 'path';
 import { createHash } from 'crypto';
 import { logger } from '../core/logger.js';
@@ -195,13 +195,14 @@ export function indexLibrary(libraryId: string): Result {
   for (const filePath of files) {
     const relPath = relative(lib.doc_root_path, filePath);
     const ext = extname(filePath).toLowerCase();
-    const stat = statSync(filePath);
 
-    if (stat.size > MAX_FILE_SIZE) { skipped++; continue; }
     if (!SUPPORTED_EXTENSIONS.has(ext)) { skipped++; continue; }
 
     try {
+      // Atomic read avoids TOCTOU race between stat and readFileSync
       const content = readFileSync(filePath, 'utf-8');
+
+      if (Buffer.byteLength(content, 'utf-8') > MAX_FILE_SIZE) { skipped++; continue; }
       const hash = createHash('sha256').update(content).digest('hex');
 
       // Check if already indexed with same hash

@@ -197,12 +197,15 @@ describe('Plugin Bundler', () => {
         if (filePath.endsWith('plugin.json')) {
           return JSON.stringify(sampleManifest());
         }
+        // Simulate EISDIR for directory entries (TOCTOU fix reads directly)
+        if (filePath.endsWith('subdir.lua')) {
+          const err = new Error('EISDIR: illegal operation on a directory') as NodeJS.ErrnoException;
+          err.code = 'EISDIR';
+          throw err;
+        }
         return '-- lua code';
       });
       mockFs.readdirSync.mockReturnValue(['main.lua', 'subdir.lua']);
-      mockFs.statSync.mockImplementation((filePath: string) => ({
-        isFile: () => !filePath.endsWith('subdir.lua'),
-      }));
 
       const result = exportBundle('/plugins/test-plugin');
       expect(result.ok).toBe(true);

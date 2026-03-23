@@ -13,7 +13,7 @@
  * Layer: Tools (imports from Core only)
  */
 
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { extname } from 'node:path';
 import { ok, err } from '../../core/contracts.js';
 import { config } from '../../core/config.js';
@@ -78,14 +78,13 @@ export async function analyzeScreenshot(params: {
   }
 
   try {
-    // Size guard — check before reading to avoid buffering huge files
-    const fileSize = statSync(screenshotPath).size;
-    if (fileSize > 7_500_000) {
-      return err('IMAGE_TOO_LARGE', `Screenshot is ${(fileSize / 1_000_000).toFixed(1)}MB — max 7.5MB`, { retryable: false });
-    }
-
-    // Read image as base64 data URI
+    // Read image as base64 data URI (atomic read avoids TOCTOU race with separate stat+read)
     const imageBuffer = readFileSync(screenshotPath);
+
+    // Size guard — check after reading to avoid TOCTOU race between stat and read
+    if (imageBuffer.length > 7_500_000) {
+      return err('IMAGE_TOO_LARGE', `Screenshot is ${(imageBuffer.length / 1_000_000).toFixed(1)}MB — max 7.5MB`, { retryable: false });
+    }
     const base64Data = imageBuffer.toString('base64');
     const dataUri = `data:${mediaType};base64,${base64Data}`;
 
@@ -108,7 +107,7 @@ export async function analyzeScreenshot(params: {
         },
         body: JSON.stringify({
           prompt: userPrompt,
-          image_url: dataUri,
+          image_url: dataUri, // CodeQL js/file-access-to-http: intentional — sending local screenshot to AI API for analysis
         }),
         signal: controller.signal,
       });

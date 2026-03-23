@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **30 CodeQL code scanning alerts resolved** — XSS sanitization in setTrustedContent, TOCTOU file system races fixed with atomic operations, insecure temp file permissions restricted to 0o700, unpredictable temp file names with crypto.randomUUID
+
+### Added
+- **Universal inline editing** — click-to-edit on task title, status, priority, description in detail drawer (#1037)
+- **DiceBear avatars** — instant free SVG avatars for agents, no API calls needed (#1012)
+- **Dashboard sidebar summary** — returning users see project count instead of Getting Started guide (#1016)
+- **Phase gate criteria auto-populated** from exit doc successCriteria + standard phase criteria (#1013)
+- **Social preview SVG** + version badge in README (#1073)
+- **E2E CI split** — PRs run ~3 min (skip E2E), main runs full suite (#1083)
+
 ---
 
 ## [1.0.0-rc.1] — 2026-03-23

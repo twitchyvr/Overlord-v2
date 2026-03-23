@@ -13,7 +13,7 @@ let testDir: string;
 describe('Documentation Validator (#815)', () => {
   beforeEach(() => {
     testDir = join(tmpdir(), `overlord-doc-validator-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
-    mkdirSync(testDir, { recursive: true });
+    mkdirSync(testDir, { recursive: true, mode: 0o700 });
   });
 
   afterEach(() => {

@@ -596,7 +596,8 @@ test.describe('Dogfood: Session Fixes', () => {
         return document.querySelector('script[src*="strategist"]')?.textContent || '';
       });
       // Fallback: verify via served JS
-      const viewJs = await fetch('http://localhost:4000/ui/views/strategist-view.js').then(r => r.text());
+      // Fetch via page context to use the test server URL (CodeQL: localhost HTTP is intentional in tests)
+      const viewJs = await page.evaluate(() => fetch('/ui/views/strategist-view.js').then(r => r.text()));
       expect(viewJs).toContain('project-source-card');
       expect(viewJs).toContain('Start Fresh');
       expect(viewJs).toContain('Link Local Directory');
