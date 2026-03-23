@@ -89,24 +89,41 @@ export async function readXlsxImpl(params: {
   const fullPath = resolvePath(params.filePath, params.cwd, params.allowedPaths);
   log.info({ path: fullPath }, 'Reading XLSX');
 
-  const XLSX = await import('xlsx');
-  const buffer = await readFile(fullPath);
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const ExcelJS = await import('exceljs');
+  const workbook = new ExcelJS.default.Workbook();
+  await workbook.xlsx.readFile(fullPath);
 
-  const sheetName = params.sheet || workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[sheetName];
+  const sheetNames = workbook.worksheets.map(ws => ws.name);
+  const sheetName = params.sheet || sheetNames[0];
+  const worksheet = workbook.getWorksheet(sheetName);
   if (!worksheet) {
-    return { sheets: workbook.SheetNames, data: [], headers: [], rowCount: 0 };
+    return { sheets: sheetNames, data: [], headers: [], rowCount: 0 };
   }
 
-  const jsonData = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
-  const headers = jsonData.length > 0 ? Object.keys(jsonData[0]) : [];
+  // Extract headers from first row
+  const headerRow = worksheet.getRow(1);
+  const headers: string[] = [];
+  headerRow.eachCell((cell, colNumber) => {
+    headers.push(String(cell.value || `Column${colNumber}`));
+  });
+
+  // Extract data rows as JSON objects
+  const jsonData: Record<string, unknown>[] = [];
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return; // skip header
+    const rowData: Record<string, unknown> = {};
+    row.eachCell((cell, colNumber) => {
+      const header = headers[colNumber - 1] || `Column${colNumber}`;
+      rowData[header] = cell.value;
+    });
+    jsonData.push(rowData);
+  });
 
   // Cap rows to prevent context overflow
   const capped = jsonData.slice(0, 500);
 
   return {
-    sheets: workbook.SheetNames,
+    sheets: sheetNames,
     data: capped,
     headers,
     rowCount: jsonData.length,
