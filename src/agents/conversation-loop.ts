@@ -24,6 +24,7 @@ import { buildPerception, extractToolResults } from './perception-builder.js';
 import { selectToolsForTask } from './tool-selector.js';
 import { getExecutionSignal, ExecutionAbortedError } from '../core/execution-signal.js';
 import type { Bus } from '../core/bus.js';
+import { err } from '../core/contracts.js';
 import type {
   Result,
   AIProviderAPI,
@@ -408,7 +409,10 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
         if (e instanceof ExecutionAbortedError) {
           log.info({ agentId, buildingId, iteration }, 'Conversation aborted: building stopped');
           bus.emit('agent:execution-halted', { agentId, buildingId, reason: 'building_stopped', iteration });
-          break;
+          // #1120 — Return error so chat orchestrator sends clear message to user
+          session.end();
+          try { session.save(); } catch { /* ignore */ }
+          return err('EXECUTION_STOPPED', 'Building is stopped — press Play to enable AI responses');
         }
         throw e;
       }
