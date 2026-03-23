@@ -1772,6 +1772,30 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithTimeout('agent:activity-log', { agentId, ...opts });
     },
 
+    // Building activity history — loads on page mount (#1035)
+    async fetchActivityHistory(buildingId, opts = {}) {
+      const res = await _emitWithTimeout('building:activity-log', { buildingId, ...opts });
+      if (res && res.ok && Array.isArray(res.data)) {
+        // Merge into activity.items store, converting DB format to UI format
+        const items = res.data.map(entry => ({
+          event: entry.event_type,
+          agentId: entry.agent_id,
+          agentName: entry.agent_name || entry.agent_id,
+          roomId: entry.room_id,
+          buildingId: entry.building_id,
+          timestamp: new Date(entry.created_at).getTime(),
+          ...((() => { try { return typeof entry.event_data === 'string' ? JSON.parse(entry.event_data) : (entry.event_data || {}); } catch { return {}; } })()),
+        }));
+        store.update('activity.items', (existing) => {
+          const merged = [...items, ...(existing || [])];
+          // Deduplicate by id if available, otherwise keep all
+          const seen = new Set();
+          return merged.filter(i => { const key = i.id || `${i.event}-${i.timestamp}`; if (seen.has(key)) return false; seen.add(key); return true; });
+        });
+      }
+      return res;
+    },
+
     // Room/Floor activity (#980)
     fetchRoomActivityLog(roomId, opts = {}) {
       return _emitWithTimeout('room:activity-log', { roomId, ...opts });
