@@ -66,7 +66,8 @@ export function setTrustedContent(el, htmlString) {
     // Remove event handler attributes (onclick, onerror, etc.)
     doc.querySelectorAll('*').forEach(n => {
       for (const attr of [...n.attributes]) {
-        if (attr.name.startsWith('on') || attr.value.startsWith('javascript:')) {
+        const val = attr.value.toLowerCase().trim();
+        if (attr.name.startsWith('on') || val.startsWith('javascript:') || val.startsWith('data:') || val.startsWith('vbscript:')) {
           n.removeAttribute(attr.name);
         }
       }
