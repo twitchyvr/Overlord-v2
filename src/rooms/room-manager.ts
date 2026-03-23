@@ -325,40 +325,47 @@ export function exitRoom({ roomId, agentId, reason }: ExitRoomParams): Result {
  * room type has different field names (filesModified, verdict, projectGoals, etc.)
  */
 function _extractExitDocSummary(doc: Record<string, unknown>, _docType: string, roomType: string): string {
-  // Try each field — use the first meaningful string value
-  for (const [key, value] of Object.entries(doc)) {
-    if (typeof value === 'string' && value.trim().length > 5) {
-      const text = value.trim();
-      const label = _humanizeFieldName(key);
-      const truncated = text.length > 160 ? text.slice(0, 157) + '...' : text;
-      return `${label}: ${truncated}`;
-    }
-    // For arrays of strings, join them
-    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
-      const label = _humanizeFieldName(key);
-      const joined = value.slice(0, 3).join(', ');
-      return `${label}: ${joined}${value.length > 3 ? ` (+${value.length - 3} more)` : ''}`;
-    }
+  // #1117 — Human-readable summary instead of raw field dump
+  const phaseName = _humanizeFieldName(roomType);
+
+  // If doc has projectGoals, use the first one as the summary
+  if (Array.isArray(doc.projectGoals) && doc.projectGoals.length > 0) {
+    const firstGoal = String(doc.projectGoals[0]).slice(0, 120);
+    return `${phaseName} completed — ${firstGoal}`;
   }
-  return `${_humanizeFieldName(roomType)} completed`;
+
+  // If doc has businessOutcomes, use those
+  if (Array.isArray(doc.businessOutcomes) && doc.businessOutcomes.length > 0) {
+    const firstOutcome = String(doc.businessOutcomes[0]).slice(0, 120);
+    return `${phaseName} completed — ${firstOutcome}`;
+  }
+
+  // Count total items across all array fields for a summary
+  let totalItems = 0;
+  for (const value of Object.values(doc)) {
+    if (Array.isArray(value)) totalItems += value.length;
+  }
+  if (totalItems > 0) return `${phaseName} completed — ${totalItems} deliverables documented`;
+
+  return `${phaseName} completed`;
 }
 
 /**
- * Extract rationale from exit document — concatenate key field names and values (#675).
+ * Extract rationale from exit document (#675, #1117).
+ * Shows a readable summary of what was delivered, not raw field dumps.
  */
 function _extractExitDocRationale(doc: Record<string, unknown>, _docType: string): string {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(doc)) {
-    if (key === 'artifacts') continue; // skip artifact arrays
+    if (key === 'artifacts') continue;
     const label = _humanizeFieldName(key);
-    if (typeof value === 'string' && value.trim().length > 0) {
-      parts.push(`${label}: ${value.trim().slice(0, 80)}`);
-    } else if (typeof value === 'number') {
-      parts.push(`${label}: ${value}`);
-    } else if (Array.isArray(value)) {
-      parts.push(`${label}: ${value.length} items`);
+    if (Array.isArray(value) && value.length > 0) {
+      parts.push(`${value.length} ${label.toLowerCase()}`);
+    } else if (typeof value === 'string' && value.trim().length > 0 && key !== 'effortLevel' && key !== 'mode' && key !== 'templateId') {
+      // Skip metadata fields, show meaningful text
+      parts.push(label);
     }
-    if (parts.length >= 4) break; // enough context
+    if (parts.length >= 5) break;
   }
   return parts.join(' | ') || `Exit document submitted`;
 }
