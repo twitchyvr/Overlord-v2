@@ -15,6 +15,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Top Tools chart populated** — JSON path fixed from $.toolName to $.tool matching actual event_data format
 - **RAID exit doc summaries readable** — shows project goals instead of raw "Effort Level: medium" field dumps (#1117)
 - **jsdom 29 merged** — major dependency update, all tests pass
+- **Chat stopped error** — shows "Building is stopped" error instead of infinite Thinking spinner (#1120)
 
 ### Added
 - **Universal inline editing** — click-to-edit on task title, status, priority, description in detail drawer (#1037)
