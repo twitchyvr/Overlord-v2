@@ -29,6 +29,7 @@ const SCHEMA_SQL = `
     allowed_paths TEXT DEFAULT '[]',
     config TEXT DEFAULT '{}',
     active_phase TEXT DEFAULT 'strategy',
+    execution_state TEXT DEFAULT 'stopped',
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
