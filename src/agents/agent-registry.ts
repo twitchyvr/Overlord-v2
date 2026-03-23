@@ -185,7 +185,9 @@ export function registerAgent({
 
   // Auto-generate profile photo if MiniMax API is configured and no photo was provided.
   // Runs asynchronously — does not block registration.
-  if (!photoUrl && isImageGenerationAvailable()) {
+  // Skip in test/CI mode to avoid burning API quota (#1082).
+  const isTestMode = process.env.NODE_ENV === 'test' || process.env.CI === 'true';
+  if (!photoUrl && isImageGenerationAvailable() && !isTestMode) {
     scheduleProfilePhotoGeneration(id, name, role, specialization ?? undefined, gender);
   }
 
@@ -361,6 +363,10 @@ export function resetBuildingAgents(buildingId: string): Result {
  * On success, updates the agent's photo_url and emits agent:profile-updated.
  * On failure, logs a warning but does not affect agent registration.
  */
+// Rate-limit photo generation to avoid hammering the API (#1082)
+let _photoQueueDelay = 0;
+const PHOTO_DELAY_MS = 3000; // 3s between each photo generation
+
 function scheduleProfilePhotoGeneration(
   agentId: string,
   agentName: string,
@@ -368,10 +374,16 @@ function scheduleProfilePhotoGeneration(
   specialization?: string,
   gender?: string,
 ): void {
+  const delay = _photoQueueDelay;
+  _photoQueueDelay += PHOTO_DELAY_MS;
+  // Reset delay counter after all queued photos would have finished
+  setTimeout(() => { _photoQueueDelay = Math.max(0, _photoQueueDelay - PHOTO_DELAY_MS); }, delay + PHOTO_DELAY_MS);
+
   // Use void to explicitly discard the promise (fire-and-forget)
   void (async () => {
+    if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
     try {
-      log.info({ agentId, agentName, role }, 'Starting auto profile photo generation');
+      log.info({ agentId, agentName, role, delayMs: delay }, 'Starting auto profile photo generation');
 
       const result = await generateAgentProfilePhoto(agentName, role, specialization, gender);
 
