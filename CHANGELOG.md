@@ -16,6 +16,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **RAID exit doc summaries readable** — shows project goals instead of raw "Effort Level: medium" field dumps (#1117)
 - **jsdom 29 merged** — major dependency update, all tests pass
 - **Chat stopped error** — shows "Building is stopped" error instead of infinite Thinking spinner (#1120)
+- **Room Config modal no longer auto-opens** on phase advancement — was covering chat while agents worked (#1129)
+- **Play/Pause/Stop in sidebar header** — always visible when inside a building (#1125)
+- **Task store merge** — progress bar updates after inline status change (#1123)
 
 ### Added
 - **Universal inline editing** — click-to-edit on task title, status, priority, description in detail drawer (#1037)
