@@ -273,12 +273,23 @@ export class BuildingView extends Component {
     // Chevron — uses CSS rotation for smooth animation
     const chevron = h('span', { class: 'floor-chevron' }, '\u25B8');
 
-    // Floor type icon (replaces the old 8px color dot) — reuses floorIcon from line above
-    const iconEl = h('span', { class: 'floor-type-icon', title: floorType }, floorIcon);
+    // Floor purpose descriptions (#1034) — plain language for non-technical users
+    const FLOOR_PURPOSES = {
+      strategy: 'Define the vision — analyze project, set goals, identify risks',
+      collaboration: 'Research and design — gather requirements, plan architecture',
+      execution: 'Build it — write code, run tests, create documentation',
+      governance: 'Quality check — review work, verify standards before moving forward',
+      operations: 'Ship it — prepare releases, monitor deployment',
+      integration: 'Connect systems — data exchange, provider config, plugins',
+    };
+    const floorPurpose = FLOOR_PURPOSES[floorType] || '';
+
+    // Floor type icon
+    const iconEl = h('span', { class: 'floor-type-icon', title: floorPurpose || floorType }, floorIcon);
 
     // Floor name + room count
     const floorLabel = floor.name || `${floorType.charAt(0).toUpperCase() + floorType.slice(1)} Floor`;
-    const nameEl = h('span', { class: 'floor-section-name', title: floorLabel }, floorLabel);
+    const nameEl = h('span', { class: 'floor-section-name', title: floorPurpose || floorLabel }, floorLabel);
 
     // Room count pill
     const countPill = h('span', { class: 'floor-section-count' }, String(roomCount));
