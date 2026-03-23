@@ -63,10 +63,15 @@ export function exportBundle(pluginDir: string): Result<string> {
       if (!ALLOWED_EXTENSIONS.has(ext)) continue;
 
       const filePath = path.join(resolvedDir, entry);
-      const stat = fs.statSync(filePath);
-      if (!stat.isFile()) continue;
-
-      files[entry] = fs.readFileSync(filePath, 'utf-8');
+      try {
+        // Atomic read avoids TOCTOU race between stat and readFileSync
+        files[entry] = fs.readFileSync(filePath, 'utf-8');
+      } catch (e: unknown) {
+        // EISDIR or ENOENT — skip directories and files that disappeared
+        const code = e instanceof Error && 'code' in e ? (e as NodeJS.ErrnoException).code : '';
+        if (code === 'EISDIR' || code === 'ENOENT') continue;
+        throw e;
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
