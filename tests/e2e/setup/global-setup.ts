@@ -15,7 +15,8 @@ import path from 'node:path';
 import http from 'node:http';
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
-const DB_PATH = path.join(PROJECT_ROOT, 'data', 'overlord.db');
+// Use a separate test database to avoid polluting production data (#1081)
+const DB_PATH = path.join(PROJECT_ROOT, 'data', 'overlord-test.db');
 const DB_WAL = DB_PATH + '-wal';
 const DB_SHM = DB_PATH + '-shm';
 const SERVER_URL = 'http://localhost:4000';
@@ -85,6 +86,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       NODE_ENV: 'test',
       PORT: '4000',
       LOG_LEVEL: 'warn',
+      DB_PATH: DB_PATH,  // Use isolated test database (#1081)
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false,
