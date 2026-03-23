@@ -416,21 +416,39 @@ export class ActivityView extends Component {
     // ── Content column ──
     const content = h('div', { class: 'activity-view-content' });
 
-    // Icon + summary row with event type icon
-    const typeIcon = this._eventTypeIcon(eventType);
-    const summaryRow = h('div', { class: 'activity-view-summary-row' },
-      h('span', { class: 'activity-view-icon' }, icon),
-      typeIcon ? h('span', { class: 'activity-event-icon' }, typeIcon) : null,
-      h('span', { class: 'activity-view-summary' }, this._formatSummary(item))
-    );
+    // #1035 — Phase handoff cards render as rich cards, not plain text
+    if (eventType === 'phase:advanced') {
+      const from = item.from || 'previous';
+      const to = item.to || item.newPhase || 'next';
+      const handoffCard = h('div', {
+        class: 'activity-view-handoff-card',
+        style: 'padding:var(--sp-2); background:var(--surface-2); border-radius:var(--radius-sm); border-left:3px solid var(--accent-primary,#7B68EE); margin:var(--sp-1) 0;',
+      },
+        h('div', { style: 'font-weight:600; margin-bottom:var(--sp-1);' },
+          `\u{1F4CB} Phase Handoff: ${from.charAt(0).toUpperCase() + from.slice(1)} \u2192 ${to.charAt(0).toUpperCase() + to.slice(1)}`
+        ),
+        h('div', { style: 'font-size:0.8rem; color:var(--text-muted);' },
+          `Phase gate signed GO \u2014 work passed to ${to} phase agents`
+        )
+      );
+      content.appendChild(handoffCard);
+    } else {
+      // Icon + summary row with event type icon
+      const typeIcon = this._eventTypeIcon(eventType);
+      const summaryRow = h('div', { class: 'activity-view-summary-row' },
+        h('span', { class: 'activity-view-icon' }, icon),
+        typeIcon ? h('span', { class: 'activity-event-icon' }, typeIcon) : null,
+        h('span', { class: 'activity-view-summary' }, this._formatSummary(item))
+      );
 
-    // Status badge (if applicable)
-    const badge = this._buildStatusBadge(item);
-    if (badge) {
-      summaryRow.appendChild(badge);
+      // Status badge (if applicable)
+      const badge = this._buildStatusBadge(item);
+      if (badge) {
+        summaryRow.appendChild(badge);
+      }
+
+      content.appendChild(summaryRow);
     }
-
-    content.appendChild(summaryRow);
 
     // ── Meta row: entity links + timestamp ──
     const metaRow = h('div', { class: 'activity-view-meta' });

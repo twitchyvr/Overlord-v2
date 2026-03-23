@@ -1617,6 +1617,17 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
       if (ack) ack({ ok: true, data: rates });
     });
 
+    // Building activity log — loads historical events on page mount (#1035)
+    socket.on('building:activity-log', (data: unknown, ack?: (res: unknown) => void) => {
+      const parsed = data as { buildingId?: string; limit?: number; offset?: number } | undefined;
+      if (!parsed?.buildingId) { if (ack) ack({ ok: false, error: { code: 'MISSING_BUILDING_ID', message: 'buildingId required' } }); return; }
+      const entries = getBuildingActivityLog(parsed.buildingId, {
+        limit: parsed.limit || 100,
+        offset: parsed.offset || 0,
+      });
+      if (ack) ack({ ok: true, data: entries });
+    });
+
     // Room/Floor activity (#980)
     handle(socket, 'room:activity-log', RoomActivityLogSchema, (parsed, ack) => {
       const entries = getRoomActivityLog(parsed.roomId, {
