@@ -379,31 +379,41 @@ export class Card {
   /** @private — v2: RAID entry card */
   static _buildRaid(card, data) {
     const typeColors = {
-      risk: 'var(--raid-risk)',
-      assumption: 'var(--raid-assumption)',
-      issue: 'var(--raid-issue)',
-      dependency: 'var(--raid-dependency)',
-      decision: 'var(--raid-decision)'
+      risk: 'var(--raid-risk, #e74c3c)',
+      assumption: 'var(--raid-assumption, #f39c12)',
+      issue: 'var(--raid-issue, #e67e22)',
+      dependency: 'var(--raid-dependency, #3498db)',
+      decision: 'var(--raid-decision, #27ae60)'
     };
-    const header = h('div', { class: 'card-header' },
-      h('span', {
-        class: 'raid-type-dot',
-        style: { background: typeColors[data.type] || 'var(--text-muted)' }
-      }),
-      h('span', null, data.title || data.description || 'RAID Entry'),
-      data.severity ? h('span', { class: `raid-severity raid-severity-${data.severity}` }, data.severity) : null
+    const typeIcons = {
+      risk: '\u{1F534}',
+      assumption: '\u{1F7E1}',
+      issue: '\u{1F7E0}',
+      dependency: '\u{1F535}',
+      decision: '\u{1F7E2}'
+    };
+
+    // Header with type icon + badge + severity
+    const header = h('div', { class: 'card-header', style: 'display:flex; align-items:center; gap:var(--sp-1);' },
+      h('span', { style: 'font-size:1rem;' }, typeIcons[data.type] || '\u2022'),
+      h('span', { class: `badge badge-${data.type}`, style: `background:${typeColors[data.type]}; color:white; padding:2px 8px; border-radius:4px; font-size:0.7rem; text-transform:capitalize;` }, data.type || 'entry'),
+      h('span', { style: 'margin-left:auto; font-size:0.7rem; color:var(--text-muted);' }, data.status || 'active')
     );
     card.appendChild(header);
 
-    if (data.description && data.title) {
-      card.appendChild(h('div', { class: 'card-body' }, data.description));
+    // Title / Summary
+    const title = data.title || data.description || 'RAID Entry';
+    card.appendChild(h('div', { class: 'card-body', style: 'font-weight:500; margin:var(--sp-1) 0;' }, title));
+
+    // Rationale / Description (if different from title)
+    if (data.description && data.title && data.description !== data.title) {
+      card.appendChild(h('div', { style: 'font-size:0.8rem; color:var(--text-muted); margin-bottom:var(--sp-1);' }, data.description));
     }
 
-    const footer = h('div', { class: 'card-footer' });
-    if (data.type) footer.appendChild(h('span', { class: `badge badge-${data.type}` }, data.type));
-    if (data.status) footer.appendChild(h('span', { class: 'raid-status' }, data.status));
-    if (data.owner) footer.appendChild(h('span', { class: 'raid-owner' }, data.owner));
-    card.appendChild(footer);
+    // Footer with owner
+    if (data.owner) {
+      card.appendChild(h('div', { class: 'card-footer', style: 'font-size:0.75rem; color:var(--text-muted); text-align:right;' }, data.owner));
+    }
   }
 
   /** @private */
