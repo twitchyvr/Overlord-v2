@@ -272,7 +272,7 @@ export class McpServerConnection {
     await this.send('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: { tools: {} },
-      clientInfo: { name: 'overlord-v2', version: '0.1.0' },
+      clientInfo: { name: 'overlord-v2', version: '1.0.0-rc.2' },
     });
 
     this.notify('notifications/initialized', {});
