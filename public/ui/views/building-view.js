@@ -1375,8 +1375,27 @@ export class BuildingView extends Component {
   }
 
   _renderEmptyState() {
+    const store = OverlordUI.getStore();
+    const buildings = store?.get('building.list') || [];
+
+    // Returning users (have buildings) — show summary, not getting started guide (#1016)
+    if (buildings.length > 0) {
+      const totalAgents = buildings.reduce((sum, b) => sum + (b.agent_count || b.agentCount || 0), 0);
+      const container = h('div', { class: 'empty-state building-empty-state' },
+        h('div', { class: 'empty-state-icon' }, '\u{1F3D7}\uFE0F'),
+        h('h3', { class: 'empty-state-title' }, 'No Building Selected'),
+        h('p', { class: 'empty-state-text' }, 'Click a project on the Dashboard to view its structure.'),
+        h('div', { style: 'margin-top:var(--sp-3); display:flex; flex-direction:column; gap:var(--sp-1); font-size:0.85rem; color:var(--text-muted);' },
+          h('div', null, `\u{1F4CA} ${buildings.length} projects`),
+          h('div', null, `\u{1F916} ${totalAgents} agents across all projects`),
+        )
+      );
+      return container;
+    }
+
+    // New users (no buildings) — show getting started guide
     const container = h('div', { class: 'empty-state building-empty-state' },
-      h('div', { class: 'empty-state-icon' }, '\u{1F3D7}'),
+      h('div', { class: 'empty-state-icon' }, '\u{1F3D7}\uFE0F'),
       h('h3', { class: 'empty-state-title' }, 'No Building Selected'),
       h('p', { class: 'empty-state-text' }, 'Create a project or select a building to see its structure.'),
       h('div', { class: 'empty-state-guide' },
