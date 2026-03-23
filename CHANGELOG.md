@@ -10,6 +10,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 - **31 CodeQL code scanning alerts resolved** — XSS sanitization (setTrustedContent strips scripts/iframes/event handlers + blocks javascript:/data:/vbscript: URIs), TOCTOU file system races fixed with atomic operations, insecure temp file permissions restricted to 0o700, unpredictable temp file names with crypto.randomUUID
 - **Telemetry window 1h→24h** — dashboard now shows 24-hour data instead of zeros when events are older than 1 hour
+- **Global search works without building** — search across all projects when no building is selected (#1112)
+- **Version strings updated** — settings, health endpoint, MCP client all show 1.0.0-rc.2
 - **Top Tools chart populated** — JSON path fixed from $.toolName to $.tool matching actual event_data format
 - **jsdom 29 merged** — major dependency update, all tests pass
 
