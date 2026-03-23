@@ -4304,9 +4304,30 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
         }
       }
 
-      // Auto-create a pending phase gate when exit doc is submitted
+      // Auto-create a pending phase gate with criteria from exit doc (#1013)
       if (buildingId && phase) {
-        const gateResult = createGate({ buildingId, phase });
+        // Derive gate criteria from the exit doc's successCriteria or projectGoals
+        const exitDoc = document as Record<string, unknown>;
+        let gateCriteria: string[] = [];
+        if (Array.isArray(exitDoc.successCriteria) && exitDoc.successCriteria.length > 0) {
+          gateCriteria = (exitDoc.successCriteria as string[]).slice(0, 8);
+        } else if (Array.isArray(exitDoc.projectGoals) && exitDoc.projectGoals.length > 0) {
+          gateCriteria = (exitDoc.projectGoals as string[]).slice(0, 8);
+        }
+        // Add standard criteria for this phase
+        const PHASE_CRITERIA: Record<string, string[]> = {
+          strategy: ['Codebase analyzed', 'Goals defined', 'Risks identified', 'Blueprint created'],
+          discovery: ['Requirements documented', 'Unknowns identified', 'Gap analysis complete'],
+          architecture: ['Technical approach designed', 'Dependencies mapped', 'Task breakdown created'],
+          execution: ['Core features implemented', 'Tests passing', 'Code reviewed'],
+          review: ['Quality verified', 'No critical bugs', 'Documentation updated'],
+          deploy: ['Release prepared', 'Health checks passing', 'Deployment confirmed'],
+        };
+        const phaseCriteria = PHASE_CRITERIA[phase] || [];
+        // Merge: exit doc criteria + phase defaults (deduplicated)
+        const allCriteria = [...new Set([...gateCriteria, ...phaseCriteria])];
+
+        const gateResult = createGate({ buildingId, phase, criteria: allCriteria });
         if (gateResult.ok) {
           const gateData = gateResult.data as { id: string; phase: string; status: string };
           const exitDocId = exitDocData.id as string | undefined;
