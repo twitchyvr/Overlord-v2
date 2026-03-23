@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1419"/>
+      <stop offset="100%" style="stop-color:#1a1f2e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7B68EE"/>
+      <stop offset="100%" style="stop-color:#4A90D9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="640" fill="url(#bg)"/>
+
+  <!-- Accent bar -->
+  <rect x="0" y="0" width="1280" height="4" fill="url(#accent)"/>
+
+  <!-- Building icon -->
+  <text x="120" y="280" font-size="120" fill="#7B68EE" font-family="sans-serif">&#x1F3E2;</text>
+
+  <!-- Title -->
+  <text x="280" y="240" font-size="72" fill="white" font-family="system-ui, -apple-system, sans-serif" font-weight="700">Overlord v2</text>
+
+  <!-- Subtitle -->
+  <text x="280" y="300" font-size="28" fill="#8899aa" font-family="system-ui, sans-serif">AI-Powered Project Orchestrator</text>
+
+  <!-- Description -->
+  <text x="280" y="360" font-size="22" fill="#667788" font-family="system-ui, sans-serif">Autonomous agent teams that analyze, plan, build, test, and deploy software</text>
+
+  <!-- Feature pills -->
+  <rect x="120" y="420" rx="16" ry="16" width="180" height="36" fill="#7B68EE" opacity="0.2"/>
+  <text x="210" y="444" font-size="16" fill="#7B68EE" font-family="system-ui, sans-serif" text-anchor="middle">16 Room Types</text>
+
+  <rect x="320" y="420" rx="16" ry="16" width="160" height="36" fill="#4A90D9" opacity="0.2"/>
+  <text x="400" y="444" font-size="16" fill="#4A90D9" font-family="system-ui, sans-serif" text-anchor="middle">4 AI Providers</text>
+
+  <rect x="500" y="420" rx="16" ry="16" width="150" height="36" fill="#27AE60" opacity="0.2"/>
+  <text x="575" y="444" font-size="16" fill="#27AE60" font-family="system-ui, sans-serif" text-anchor="middle">29 Plugins</text>
+
+  <rect x="670" y="420" rx="16" ry="16" width="180" height="36" fill="#E67E22" opacity="0.2"/>
+  <text x="760" y="444" font-size="16" fill="#E67E22" font-family="system-ui, sans-serif" text-anchor="middle">Phase Gates</text>
+
+  <rect x="870" y="420" rx="16" ry="16" width="160" height="36" fill="#E74C3C" opacity="0.2"/>
+  <text x="950" y="444" font-size="16" fill="#E74C3C" font-family="system-ui, sans-serif" text-anchor="middle">TypeScript</text>
+
+  <!-- Phase flow -->
+  <text x="120" y="530" font-size="18" fill="#556677" font-family="monospace">Strategy &#x2192; Discovery &#x2192; Architecture &#x2192; Execution &#x2192; Review &#x2192; Deploy</text>
+
+  <!-- Footer -->
+  <text x="120" y="590" font-size="16" fill="#445566" font-family="system-ui, sans-serif">github.com/twitchyvr/Overlord-v2</text>
+  <text x="1160" y="590" font-size="16" fill="#445566" font-family="system-ui, sans-serif" text-anchor="end">MIT License</text>
+</svg>

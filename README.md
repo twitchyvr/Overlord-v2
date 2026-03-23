@@ -5,6 +5,7 @@
 ### AI Agent Orchestration Framework
 
 [![CI](https://github.com/twitchyvr/Overlord-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/twitchyvr/Overlord-v2/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/twitchyvr/Overlord-v2?include_prereleases&style=for-the-badge&color=7B68EE)](https://github.com/twitchyvr/Overlord-v2/releases)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101?style=for-the-badge&logo=socket.io&logoColor=white)](https://socket.io/)
