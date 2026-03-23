@@ -267,17 +267,17 @@ export interface TelemetryRates {
  */
 export function getTelemetryRates(buildingId?: string): TelemetryRates {
   const db = getDb();
-  const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+  const twentyFourHoursAgo = new Date(Date.now() - 86400000).toISOString();
   const whereBuilding = buildingId ? ' AND building_id = ?' : '';
   const buildingParams = buildingId ? [buildingId] : [];
 
-  // Rates: count events in last hour
+  // Rates: count events in last 24 hours
   const hourCounts = db.prepare(`
     SELECT event_type, COUNT(*) as cnt
     FROM agent_activity_log
     WHERE created_at >= ?${whereBuilding}
     GROUP BY event_type
-  `).all(oneHourAgo, ...buildingParams) as Array<{ event_type: string; cnt: number }>;
+  `).all(twentyFourHoursAgo, ...buildingParams) as Array<{ event_type: string; cnt: number }>;
 
   const hourMap = new Map(hourCounts.map(r => [r.event_type, r.cnt]));
 
@@ -293,13 +293,13 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
   const tokenResult = db.prepare(tokenQuery).get(...buildingParams) as { total: number };
   const totalTokens = tokenResult?.total || 0;
 
-  // Tokens in last hour (from activity log event_data)
-  const tokenHourResult = db.prepare(`
+  // Tokens in last 24h (from activity log event_data)
+  const tokenDayResult = db.prepare(`
     SELECT COUNT(*) as cnt FROM agent_activity_log
     WHERE (event_type = 'ai:request' OR event_type = 'ai_request')
     AND created_at >= ?${whereBuilding}
-  `).get(oneHourAgo, ...buildingParams) as { cnt: number };
-  const totalTokensLastHour = tokenHourResult?.cnt || 0;
+  `).get(twentyFourHoursAgo, ...buildingParams) as { cnt: number };
+  const totalTokensLast24h = tokenDayResult?.cnt || 0;
 
   // All-time totals
   const totalsQuery = buildingId
@@ -321,16 +321,15 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
 
   // Top tools (all time, top 8)
   const topToolsQuery = db.prepare(`
-    SELECT json_extract(event_data, '$.toolName') as name, COUNT(*) as cnt
+    SELECT COALESCE(json_extract(event_data, '$.tool'), json_extract(event_data, '$.toolName')) as name, COUNT(*) as cnt
     FROM agent_activity_log
     WHERE (event_type = 'tool:executed' OR event_type = 'tool_executed')
     ${buildingId ? 'AND building_id = ?' : ''}
-    AND json_extract(event_data, '$.toolName') IS NOT NULL
+    AND COALESCE(json_extract(event_data, '$.tool'), json_extract(event_data, '$.toolName')) IS NOT NULL
     GROUP BY name ORDER BY cnt DESC LIMIT 8
   `).all(...buildingParams) as Array<{ name: string; cnt: number }>;
 
   // Top agents by activity (last 24h)
-  const twentyFourHoursAgo = new Date(Date.now() - 86400000).toISOString();
   const topAgentsQuery = db.prepare(`
     SELECT a.agent_id as id, ag.display_name as name, COUNT(*) as events
     FROM agent_activity_log a
@@ -354,7 +353,7 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
     agentChatRate,
     aiRequestRate,
     totalTokens,
-    totalTokensLastHour,
+    totalTokensLastHour: totalTokensLast24h,
     totalToolCalls,
     totalMessages,
     totalSessions,

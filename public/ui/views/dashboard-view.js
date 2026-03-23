@@ -470,10 +470,10 @@ export class DashboardView extends Component {
     const rateRow = h('div', { class: 'telemetry-rate-row' });
     this._rateCards = {};
     const rates = [
-      { key: 'executionRate', label: 'Executions', unit: '/hr', icon: '\u26A1', color: '#22d3ee' },
-      { key: 'toolUseRate', label: 'Tool Calls', unit: '/hr', icon: '\u{1F527}', color: '#4ade80' },
-      { key: 'agentChatRate', label: 'Messages', unit: '/hr', icon: '\u{1F4AC}', color: '#8b5cf6' },
-      { key: 'aiRequestRate', label: 'AI Requests', unit: '/hr', icon: '\u{1F916}', color: '#f59e0b' },
+      { key: 'executionRate', label: 'Executions', unit: '/24h', icon: '\u26A1', color: '#22d3ee' },
+      { key: 'toolUseRate', label: 'Tool Calls', unit: '/24h', icon: '\u{1F527}', color: '#4ade80' },
+      { key: 'agentChatRate', label: 'Messages', unit: '/24h', icon: '\u{1F4AC}', color: '#8b5cf6' },
+      { key: 'aiRequestRate', label: 'AI Requests', unit: '/24h', icon: '\u{1F916}', color: '#f59e0b' },
       { key: 'activeAgents', label: 'Active', unit: '', icon: '\u{1F7E2}', color: '#4ade80' },
       { key: 'totalTokens', label: 'Tokens', unit: ' total', icon: '\u{1F4B0}', color: '#ec4899' },
     ];
