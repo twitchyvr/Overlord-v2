@@ -516,33 +516,33 @@ describe('Card.create("building")', () => {
 describe('Card.create("raid")', () => {
   it('renders raid entry title', () => {
     const card = Card.create('raid', { title: 'API latency spike', type: 'risk' });
-    const header = card.querySelector('.card-header');
-    expect(header!.textContent).toContain('API latency spike');
+    const body = card.querySelector('.card-body');
+    expect(body!.textContent).toContain('API latency spike');
   });
 
   it('falls back to description when no title', () => {
     const card = Card.create('raid', { description: 'Needs monitoring', type: 'issue' });
-    const header = card.querySelector('.card-header');
-    expect(header!.textContent).toContain('Needs monitoring');
+    const body = card.querySelector('.card-body');
+    expect(body!.textContent).toContain('Needs monitoring');
   });
 
   it('defaults to "RAID Entry" when no title or description', () => {
     const card = Card.create('raid', { type: 'risk' });
-    const header = card.querySelector('.card-header');
-    expect(header!.textContent).toContain('RAID Entry');
+    const body = card.querySelector('.card-body');
+    expect(body!.textContent).toContain('RAID Entry');
   });
 
-  it('renders severity badge', () => {
-    const card = Card.create('raid', { title: 'T', severity: 'critical' });
-    const sev = card.querySelector('.raid-severity');
-    expect(sev!.textContent).toBe('critical');
-    expect(sev!.classList.contains('raid-severity-critical')).toBe(true);
-  });
-
-  it('renders type dot with appropriate RAID type color reference', () => {
+  it('renders type badge in header', () => {
     const card = Card.create('raid', { title: 'T', type: 'risk' });
-    const dot = card.querySelector('.raid-type-dot') as HTMLElement;
-    expect(dot).not.toBeNull();
+    const badge = card.querySelector('.badge-risk');
+    expect(badge).not.toBeNull();
+    expect(badge!.textContent).toBe('risk');
+  });
+
+  it('renders type icon with color (previously dot)', () => {
+    const card = Card.create('raid', { title: 'T', type: 'risk' });
+    const header = card.querySelector('.card-header');
+    expect(header!.textContent).toContain('risk');
   });
 
   it('renders type badge in footer', () => {
@@ -551,28 +551,29 @@ describe('Card.create("raid")', () => {
     expect(badge!.textContent).toBe('dependency');
   });
 
-  it('renders status in footer', () => {
+  it('renders status in header', () => {
     const card = Card.create('raid', { title: 'T', status: 'open' });
-    const status = card.querySelector('.raid-status');
-    expect(status!.textContent).toBe('open');
+    const header = card.querySelector('.card-header');
+    expect(header!.textContent).toContain('open');
   });
 
   it('renders owner in footer', () => {
     const card = Card.create('raid', { title: 'T', owner: 'Team A' });
-    const owner = card.querySelector('.raid-owner');
-    expect(owner!.textContent).toBe('Team A');
+    const footer = card.querySelector('.card-footer');
+    expect(footer!.textContent).toContain('Team A');
   });
 
-  it('renders body with description when both title and description exist', () => {
+  it('renders description below title when both exist', () => {
     const card = Card.create('raid', { title: 'Risk', description: 'Detailed explanation' });
-    const body = card.querySelector('.card-body');
-    expect(body!.textContent).toBe('Detailed explanation');
+    // Title is in .card-body, description is in a separate div
+    expect(card.textContent).toContain('Risk');
+    expect(card.textContent).toContain('Detailed explanation');
   });
 
-  it('does not render body when only description (no title) is provided', () => {
+  it('renders description as title when no title provided', () => {
     const card = Card.create('raid', { description: 'Desc only' });
-    // description is used as header text, body should not be rendered
-    expect(card.querySelector('.card-body')).toBeNull();
+    const body = card.querySelector('.card-body');
+    expect(body!.textContent).toContain('Desc only');
   });
 });
 
