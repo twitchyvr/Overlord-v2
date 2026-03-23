@@ -8,6 +8,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Multi-phase Agent Orchestration (Epic #1019)** — Press Play and watch the entire AI team work automatically:
+  - Strategist auto-creates tasks, milestones, and RAID entries from codebase analysis (#1015, #1017)
+  - Strategist auto-submits exit document, phase gate auto-signs (EASY mode), phase advances (#1020, #1024)
+  - Phase advancement auto-dispatches next room's agent with phase-specific prompts (#1021, #1025)
+  - `update_task` tool lets agents mark tasks in_progress/done with live UI updates (#1022, #1026)
+  - Task completion allowed for non-code tasks (analysis/architecture) without pipeline evidence (#1023, #1038)
+  - Tasks linked to milestones via `milestone_id` parameter on `create_task` (#1017)
+- **Agent Transparency & Observability (Epic #1027)** — 6 sub-issues filed for live agent work detail, task queues, RAID provenance, floor descriptions, meeting visibility, idle wait reasons (#1028-#1036)
+- **Universal Inline Editing** — issue filed for click-to-edit on every task, milestone, RAID entry, room, agent detail (#1037)
+- **Entity Activity Panels** — room, floor, and building detail drawers with activity feeds (#980, #990)
+- **Building card selection** — click card body to preview in sidebar without navigating; Open button navigates to Chat (#1006, #1010)
+- **Clickable agent names** — chat header agent names open detail drawer with profile, stats, tokens, activity (#979, #987)
+- **Documentation Specialist agents** — doc validation tool, documentation room type, added to 7 quick-start templates (#815, #977)
+- **AI-friendly documentation indexing** — FTS5 full-text search, TOC extraction, manifest generation, smart context injection (#814, #974)
+- **Community standards complete (8/8)** — CODE_OF_CONDUCT.md, CONTRIBUTING.md, SECURITY.md, repo description (#1041, #1054)
+- **GitHub security configuration** — Dependabot alerts + updates, CodeQL scanning, secret scanning, private vulnerability reporting (#1045)
+- **Branch protection on main** — requires PR review, 6 CI status checks, no force push, conversation resolution (#1046)
+- **GitHub Discussions seeded** — welcome announcement, AI provider poll, building metaphor Q&A, roadmap discussion (#1048)
+- **Repo discoverability** — 19 topics added (ai, ai-agents, orchestration, typescript, etc.), CI badge, PRs Welcome badge (#1073)
+
+### Fixed
+- **CI pipeline green** — fixed server.test.ts with proper mocks for all 7 server dependencies; 146/146 test files pass, 4,685 tests, 0 failures; ended 874 consecutive CI failures (#1040, #1049)
+- **Play button triggers real work** — was cosmetic-only, now activates strategist and starts conversation loop (#1007, #1008)
+- **Selective agent activation** — only strategist activates on Play (not all agents); pause deactivates; consistent lifecycle (#1009)
+- **Stale execution state reset** — buildings no longer persist 'running' across server restarts (#1004, #1005)
+- **Email visibility** — emails include buildingId so they appear in Mail view (#988, #989)
+- **Dashboard declutter** — removed redundant phase bar, KPI cards, project switcher pills (#1001, #1002)
+- **Agent status on room entry** — enterRoom no longer force-sets status to 'active' (#998, #999)
+- **Tool selector keyword collisions** — narrowed keywords to avoid false positives between tool categories (#1018)
+- **Entity link tooltip overlap** — removed redundant browser title attribute, custom tooltip handles hover (#1001)
+- **Building drawer consistency** — fetches activity via socket instead of stale store (#991, #992)
+- **Truncated text tooltips** — title attributes on truncated elements for accessibility (#994, #995)
+- **Blueprint room hydration** — rooms created by codebase analysis are properly hydrated on startup (#975, #981)
+- **Incomplete building detection** — detects buildings with <=1 room, not just empty ones (#978)
+- **Lua sandbox safe os** — exposes safe os subset (clock, time, date, difftime) unblocking 9 plugins (#982, #984)
+- **Activity feed lifecycle events** — building start/stop/pause captured in activity feed (#983, #985)
+
+### Changed
+- **README updated** — fresh screenshots, CI badge, current stats (146 tests, 30 tables, 59 indexes), corrected contributing workflow (#1072, #1074)
+- **Tool-selector groups** — work-item tools (create_task, update_task, create_raid_entry, create_milestone) travel together (#1015)
+- **Room tool access expanded** — discovery, architecture, code-lab, review rooms now have create_task, update_task, create_raid_entry (#1022)
+
+---
+
 - **Building Agent Control & Observability (Epic #969)** — building-level play/pause/stop controls with execution state machine (stopped/running/paused), conversation loop interrupt via cooperative ConversationSignal checkpoints, AI-layer execution guard blocking API calls for non-running buildings, live building cards with active agent count and token usage display, real-time WebSocket state broadcasts (#965, #966, #967, #968)
 - **Multi-repo support (Epic #605)** — Link multiple GitHub repositories as building blocks during project creation:
   - **Phase 1: Data model + socket events** — `project_repos` and `repo_file_origins` tables with 5 relationship types (main, dependency, fork, reference, submodule); `repo:add`, `repo:remove`, `repo:list`, `repo:update` socket events with Zod validation (#638, PR #639)
