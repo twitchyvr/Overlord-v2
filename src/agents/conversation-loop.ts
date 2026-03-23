@@ -317,6 +317,7 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   const thinkingLog: string[] = [];
   const totalTokens = { input: 0, output: 0 };
   const allTextParts: string[] = []; // Accumulate text from ALL iterations (#532)
+  let lastEndTurnText = ''; // Track the final end_turn text separately (#1014)
 
   // Create agent session for this conversation
   const session = new AgentSession({
@@ -609,6 +610,10 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
 
     // Check if we're done (no tool use)
     if (response.stop_reason !== 'tool_use') {
+      // #1014 — Capture the final end_turn text separately from intermediate thinking
+      if (assistantText) {
+        lastEndTurnText = assistantText;
+      }
       log.info(
         { iterations: iteration, stopReason: response.stop_reason, totalTokens },
         'Conversation loop complete',
@@ -880,9 +885,11 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     // to avoid double-sending messages to the frontend
   }
 
-  // Use accumulated text from ALL iterations so intermediate text
-  // (e.g. explanation before tool calls) isn't lost (#532)
-  let finalText = allTextParts.join('\n\n');
+  // #1014 — Prefer the final end_turn text over concatenated intermediate thinking.
+  // If the AI produces a final summary after tool calls, show THAT, not all the
+  // intermediate "I'll analyze..." fragments between tool calls.
+  // Fall back to accumulated text if no distinct end_turn text exists.
+  let finalText = lastEndTurnText || allTextParts.join('\n\n');
   if (!finalText) {
     // Fallback: extract from last assistant message
     const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
