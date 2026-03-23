@@ -1077,11 +1077,12 @@ describe('SearchGlobalSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects missing buildingId', () => {
+  it('accepts missing buildingId (searches all projects #1112)', () => {
     const result = SearchGlobalSchema.safeParse({
       query: 'test',
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.buildingId).toBe('');
   });
 
   it('rejects limit over 50', () => {

@@ -971,7 +971,7 @@ export const SessionNoteClearSchema = z.object({
 // ─── Global Search Schema ───
 
 export const SearchGlobalSchema = z.object({
-  buildingId: id(),
+  buildingId: z.string().max(100).optional().default(''),  // Optional — empty = search all (#1112)
   query: z.string().min(1).max(MAX_NAME),
   filters: z.array(z.string().max(50)).max(10).optional().default([]),
   limit: z.number().int().min(1).max(50).optional().default(10),
