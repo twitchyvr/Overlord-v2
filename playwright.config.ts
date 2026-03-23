@@ -13,20 +13,20 @@ export default defineConfig({
   testDir: './tests/e2e',
   testMatch: '**/*.spec.ts',
 
-  /* Maximum time one test can run (generous for socket-based UI) */
-  timeout: 60_000,
+  /* Maximum time one test can run */
+  timeout: 30_000,
 
   /* Maximum time expect() calls can wait */
   expect: {
-    timeout: 15_000,
+    timeout: 10_000,
   },
 
-  /* Run tests sequentially — they share a single server + database */
+  /* Tests share a single server — limit parallelism to avoid socket conflicts */
   fullyParallel: false,
-  workers: 1,
+  workers: process.env.CI ? 1 : 2,  // Sequential in CI (shared server), 2 locally
 
   /* Retry flaky tests once */
-  retries: 1,
+  retries: process.env.CI ? 1 : 0,
 
   /* Reporter configuration */
   reporter: [
