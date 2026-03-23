@@ -137,6 +137,7 @@ export class AgentsView extends Component {
     this._mounted = true;
     const store = OverlordUI.getStore();
     if (!store) return;
+    this._store = store;  // #1036 — store ref for wait reason lookups
 
     // Subscribe to agent list updates
     this.subscribe(store, 'agents.list', (agents) => {
@@ -237,6 +238,56 @@ export class AgentsView extends Component {
   _resolveRoomId(agent) {
     const position = this._agentPositions[agent.id];
     return agent.current_room_id || position?.roomId || null;
+  }
+
+  /**
+   * Get a contextual wait reason for idle agents (#1036).
+   * Instead of just "Idle", shows why the agent isn't working.
+   */
+  _getWaitReason(agent, roomId) {
+    const store = this._store;
+
+    // No room assignment — always show this regardless of building state
+    if (!roomId) return 'Unassigned';
+
+    // Check building execution state
+    const buildingId = store?.get('building.active');
+    if (buildingId) {
+      const buildings = store?.get('building.list') || [];
+      const building = buildings.find(b => b.id === buildingId);
+      const execState = building?.executionState || building?.execution_state || 'stopped';
+
+      if (execState === 'stopped') return 'Ready';
+      if (execState === 'paused') return 'Paused';
+    }
+
+    // Check if agent has pending tasks
+    const tasks = store?.get('tasks.list') || [];
+    const agentTasks = tasks.filter(t => t.assignee_id === agent.id && t.status === 'pending');
+    if (agentTasks.length > 0) return `${agentTasks.length} tasks queued`;
+
+    // Check agent's room phase vs building active phase
+    const rooms = store?.get('rooms.list') || [];
+    const room = rooms.find(r => r.id === roomId);
+    if (room) {
+      const buildings = store?.get('building.list') || [];
+      const building = buildings.find(b => b.id === store?.get('building.active'));
+      const activePhase = building?.activePhase || building?.active_phase;
+      const PHASE_TO_ROOM = {
+        strategy: ['strategist'],
+        discovery: ['discovery', 'research'],
+        architecture: ['architecture'],
+        execution: ['code-lab', 'testing-lab', 'documentation'],
+        review: ['review', 'security-review'],
+        deploy: ['deploy', 'monitoring'],
+      };
+      const activeRoomTypes = PHASE_TO_ROOM[activePhase] || [];
+      if (activePhase && !activeRoomTypes.includes(room.type)) {
+        return `Waiting for ${activePhase}`;
+      }
+    }
+
+    return 'Idle';
   }
 
   /** Build a room name lookup map. */
@@ -719,10 +770,12 @@ export class AgentsView extends Component {
     );
     cardHeader.appendChild(nameGroup);
 
-    // Status label
+    // Status label — idle agents show contextual "Waiting for..." reason (#1036)
+    const statusText = status === 'idle' ? this._getWaitReason(agent, roomId) : statusCfg.label;
     const statusLabel = h('span', {
-      class: `agents-view-status-label agents-view-status-label-${status}`
-    }, statusCfg.label);
+      class: `agents-view-status-label agents-view-status-label-${status}`,
+      title: status === 'idle' ? statusText : '',
+    }, statusText);
     cardHeader.appendChild(statusLabel);
 
     // Activity badge (#802) — shows what the agent is currently doing
