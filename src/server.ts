@@ -170,7 +170,7 @@ async function start(): Promise<void> {
 
   // 5. Health check + system status
   app.get('/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', version: '0.1.0', uptime: process.uptime() });
+    res.json({ status: 'ok', version: '1.0.0-rc.1', uptime: process.uptime() });
   });
 
   // Returning-user check: if buildings exist → dashboard, else → Strategist
