@@ -17,6 +17,7 @@ import type { SecurityBadge } from './security-badge.js';
 import { generateAgentProfilePhoto } from '../ai/profile-generator.js';
 import { isImageGenerationAvailable } from '../ai/minimax-image.js';
 import { writeAgentPhoto } from '../ai/agent-photo-store.js';
+import { generateDiceBearAvatar } from '../ai/dicebear-avatar.js';
 
 const log = logger.child({ module: 'agent-registry' });
 
@@ -183,12 +184,28 @@ export function registerAgent({
 
   log.info({ id, name, role, buildingId, roomAccess, hasBadge: !!badgeStr }, 'Agent registered');
 
-  // Auto-generate profile photo if MiniMax API is configured and no photo was provided.
-  // Runs asynchronously — does not block registration.
-  // Skip in test/CI mode to avoid burning API quota (#1082).
+  // Auto-generate avatar (#1012):
+  // 1. DiceBear (free, instant, no API) — always available as default
+  // 2. MiniMax image API — only if configured and not in test mode (rate-limited, costs tokens)
   const isTestMode = process.env.NODE_ENV === 'test' || process.env.CI === 'true';
-  if (!photoUrl && isImageGenerationAvailable() && !isTestMode) {
-    scheduleProfilePhotoGeneration(id, name, role, specialization ?? undefined, gender);
+  if (!photoUrl) {
+    // Always generate a DiceBear avatar as the instant default
+    try {
+      const avatarResult = generateDiceBearAvatar(displayName || name);
+      if (avatarResult.ok) {
+        const svgData = (avatarResult.data as { svg: string }).svg;
+        // Store as data URI in photo_url
+        const dataUri = `data:image/svg+xml;base64,${Buffer.from(svgData).toString('base64')}`;
+        db.prepare('UPDATE agents SET photo_url = ? WHERE id = ?').run(dataUri, id);
+      }
+    } catch {
+      // DiceBear not available — continue without avatar
+    }
+
+    // Optionally upgrade to MiniMax photo (if configured, not test, rate-limited)
+    if (isImageGenerationAvailable() && !isTestMode) {
+      scheduleProfilePhotoGeneration(id, name, role, specialization ?? undefined, gender);
+    }
   }
 
   return ok({ id, name, role });
