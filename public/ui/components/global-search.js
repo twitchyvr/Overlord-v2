@@ -228,13 +228,14 @@ export class GlobalSearch extends Component {
 
     const store = OverlordUI.getStore();
     const buildingId = store?.get('building.active');
-    if (!buildingId || !window.overlordSocket) {
-      this._renderError('Select a project first to search.');
+    if (!window.overlordSocket) {
+      this._renderError('Not connected to server.');
       return;
     }
 
+    // Search within active building, or across all if none selected (#1112)
     const filters = [...(this._activeFilters || [])];
-    const res = await window.overlordSocket.globalSearch(buildingId, query, filters, 10);
+    const res = await window.overlordSocket.globalSearch(buildingId || '', query, filters, 10);
 
     if (res && res.ok) {
       this._results = res.data;

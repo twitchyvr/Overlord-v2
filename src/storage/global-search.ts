@@ -45,6 +45,9 @@ export function globalSearch(params: SearchParams): Result {
   const pattern = `%${query}%`;
   const groups: SearchResultGroup[] = [];
   let totalHits = 0;
+  // When no buildingId, search across all projects (#1112)
+  const buildingFilter = buildingId ? 'AND building_id = ?' : '';
+  const buildingParams = buildingId ? [buildingId] : [];
 
   const shouldSearch = (type: string) => filters.length === 0 || filters.includes(type);
 
@@ -55,10 +58,10 @@ export function globalSearch(params: SearchParams): Result {
              a.display_name AS assignee_name
       FROM tasks t
       LEFT JOIN agents a ON t.assignee_id = a.id
-      WHERE t.building_id = ? AND (t.title LIKE ? OR t.description LIKE ?)
+      WHERE 1=1 ${buildingId ? 'AND t.building_id = ?' : ''} AND (t.title LIKE ? OR t.description LIKE ?)
       ORDER BY t.updated_at DESC
       LIMIT ?
-    `).all(buildingId, pattern, pattern, limit + 1) as Record<string, unknown>[];
+    `).all(...buildingParams, pattern, pattern, limit + 1) as Record<string, unknown>[];
 
     const total = rows.length > limit ? rows.length : rows.length;
     const items = rows.slice(0, limit);
@@ -93,10 +96,10 @@ export function globalSearch(params: SearchParams): Result {
              r.name AS room_name
       FROM raid_entries re
       LEFT JOIN rooms r ON re.room_id = r.id
-      WHERE re.building_id = ? AND (re.summary LIKE ? OR re.rationale LIKE ?)
+      WHERE 1=1 ${buildingId ? 'AND re.building_id = ?' : ''} AND (re.summary LIKE ? OR re.rationale LIKE ?)
       ORDER BY re.created_at DESC
       LIMIT ?
-    `).all(buildingId, pattern, pattern, limit + 1) as Record<string, unknown>[];
+    `).all(...buildingParams, pattern, pattern, limit + 1) as Record<string, unknown>[];
 
     const total = rows.length > limit ? rows.length : rows.length;
     const items = rows.slice(0, limit);
@@ -112,10 +115,10 @@ export function globalSearch(params: SearchParams): Result {
       SELECT r.id, r.name, r.type, r.status, f.name AS floor_name
       FROM rooms r
       JOIN floors f ON r.floor_id = f.id
-      WHERE f.building_id = ? AND (r.name LIKE ? OR r.type LIKE ?)
+      WHERE 1=1 ${buildingId ? 'AND f.building_id = ?' : ''} AND (r.name LIKE ? OR r.type LIKE ?)
       ORDER BY r.created_at DESC
       LIMIT ?
-    `).all(buildingId, pattern, pattern, limit + 1) as Record<string, unknown>[];
+    `).all(...buildingParams, pattern, pattern, limit + 1) as Record<string, unknown>[];
 
     const total = rows.length > limit ? rows.length : rows.length;
     const items = rows.slice(0, limit);
@@ -130,10 +133,10 @@ export function globalSearch(params: SearchParams): Result {
     const rows = db.prepare(`
       SELECT id, title, description, status, due_date, phase
       FROM milestones
-      WHERE building_id = ? AND (title LIKE ? OR description LIKE ?)
+      WHERE 1=1 ${buildingFilter} AND (title LIKE ? OR description LIKE ?)
       ORDER BY ordinal ASC
       LIMIT ?
-    `).all(buildingId, pattern, pattern, limit + 1) as Record<string, unknown>[];
+    `).all(...buildingParams, pattern, pattern, limit + 1) as Record<string, unknown>[];
 
     const total = rows.length > limit ? rows.length : rows.length;
     const items = rows.slice(0, limit);
@@ -152,10 +155,10 @@ export function globalSearch(params: SearchParams): Result {
       LEFT JOIN agents a ON m.agent_id = a.id
       LEFT JOIN rooms r ON m.room_id = r.id
       LEFT JOIN floors f ON r.floor_id = f.id
-      WHERE f.building_id = ? AND m.content LIKE ?
+      WHERE 1=1 ${buildingId ? 'AND f.building_id = ?' : ''} AND m.content LIKE ?
       ORDER BY m.created_at DESC
       LIMIT ?
-    `).all(buildingId, pattern, limit + 1) as Record<string, unknown>[];
+    `).all(...buildingParams, pattern, limit + 1) as Record<string, unknown>[];
 
     const total = rows.length > limit ? rows.length : rows.length;
     const items = rows.slice(0, limit);
