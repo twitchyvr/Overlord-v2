@@ -1253,6 +1253,20 @@ export function initSocketBridge(socket, store, engine) {
       return res;
     },
 
+    // ── Building Execution Controls (#1125) ──
+
+    async startBuilding(buildingId) {
+      return _emitWithFeedback('building:start', { buildingId });
+    },
+
+    async pauseBuilding(buildingId) {
+      return _emitWithFeedback('building:pause', { buildingId });
+    },
+
+    async stopBuilding(buildingId) {
+      return _emitWithFeedback('building:stop', { buildingId });
+    },
+
     // ── Table methods ──
 
     async createTable(roomId, type, chairs = 1, description) {

@@ -115,13 +115,56 @@ export class BuildingView extends Component {
     // ── Building header ──
     const header = h('div', { class: 'building-header' });
 
-    const headerTop = h('div', { class: 'building-header-top' },
+    // Execution controls (#1125) — Play/Pause/Stop always visible in sidebar
+    const execState = this._buildingData.execution_state || 'stopped';
+    const buildingId = this._buildingData.id;
+    const execControls = h('div', { class: 'building-exec-controls', style: 'display:flex; gap:4px; margin-left:auto;' });
+
+    if (execState === 'stopped' || execState === 'paused') {
+      const playBtn = h('button', {
+        class: 'btn btn-ghost btn-xs',
+        title: 'Start agents',
+        style: 'color:var(--status-active); font-size:1.1rem; padding:2px 6px;',
+      }, '\u25B6');
+      playBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.overlordSocket) window.overlordSocket.startBuilding(buildingId);
+      });
+      execControls.appendChild(playBtn);
+    }
+    if (execState === 'running') {
+      const pauseBtn = h('button', {
+        class: 'btn btn-ghost btn-xs',
+        title: 'Pause agents',
+        style: 'color:var(--status-busy); font-size:1.1rem; padding:2px 6px;',
+      }, '\u23F8');
+      pauseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.overlordSocket) window.overlordSocket.pauseBuilding(buildingId);
+      });
+      execControls.appendChild(pauseBtn);
+    }
+    if (execState === 'running' || execState === 'paused') {
+      const stopBtn = h('button', {
+        class: 'btn btn-ghost btn-xs',
+        title: 'Stop agents',
+        style: 'color:var(--status-error); font-size:1.1rem; padding:2px 6px;',
+      }, '\u23F9');
+      stopBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.overlordSocket) window.overlordSocket.stopBuilding(buildingId);
+      });
+      execControls.appendChild(stopBtn);
+    }
+
+    const headerTop = h('div', { class: 'building-header-top', style: 'display:flex; align-items:center;' },
       h('div', { class: 'building-name', title: this._buildingData.name || 'Building' }, this._buildingData.name || 'Building'),
       h('div', { class: 'building-phase' },
         h('span', { class: `phase-badge phase-${this._buildingData.active_phase || 'strategy'}` },
           this._buildingData.active_phase || 'strategy'
         )
-      )
+      ),
+      execControls
     );
     header.appendChild(headerTop);
 
