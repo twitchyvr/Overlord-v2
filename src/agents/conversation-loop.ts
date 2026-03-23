@@ -777,6 +777,15 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       // Room-level observation: onAfterToolCall can trigger escalation
       room.onAfterToolCall(toolName, agentId, toolResult);
 
+      // #1011 — Emit tool:executed for persistent telemetry recording
+      bus.emit('tool:executed', {
+        toolName,
+        roomId: room.id,
+        agentId,
+        buildingId: (params.options?.buildingId as string) || '',
+        success: toolResult.ok,
+      });
+
       // Lua security hook: onPostToolUse — inspect result, log, warn (#873)
       if (params.queryHook) {
         try {
