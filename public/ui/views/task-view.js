@@ -28,6 +28,7 @@ import { Modal } from '../components/modal.js';
 import { Drawer } from '../components/drawer.js';
 import { Toast } from '../components/toast.js';
 import { EntityLink, resolveAgentName } from '../engine/entity-nav.js';
+import { InlineEdit } from '../components/inline-edit.js';
 
 
 const STATUS_ORDER = ['pending', 'in-progress', 'done', 'blocked'];
@@ -522,8 +523,22 @@ export class TaskView extends Component {
 
     const content = this._buildDetailContent(task);
 
+    // Make drawer title editable (#1037)
+    const titleEl = h('span', null, task.title || 'Task Detail');
+    InlineEdit.text(titleEl, {
+      value: task.title || '',
+      placeholder: 'Task title...',
+      onSave: (v) => {
+        if (window.overlordSocket) {
+          window.overlordSocket.updateTask({ id: task.id, title: v }).then((res) => {
+            if (res?.ok) { Toast.success('Title saved'); Drawer.updateTitle(v); }
+          });
+        }
+      },
+    });
+
     Drawer.open(`task-detail-${taskId}`, {
-      title: task.title || 'Task Detail',
+      title: titleEl,
       content,
       width: '460px',
       onClose: () => {
@@ -539,17 +554,41 @@ export class TaskView extends Component {
     // Status progression bar
     container.appendChild(this._buildStatusProgression(task.status));
 
-    // Status and priority row
+    // Helper to save task field updates (#1037)
+    const saveField = (field, value) => {
+      if (window.overlordSocket) {
+        window.overlordSocket.updateTask({ id: task.id, [field]: value }).then((res) => {
+          if (res?.ok) Toast.success('Saved');
+          else Toast.error(res?.error?.message || 'Failed to save');
+        });
+      }
+    };
+
+    // Status and priority row — EDITABLE (#1037)
+    const statusEl = h('span', { class: `task-status-badge status-${task.status || 'pending'}` },
+      STATUS_LABELS[task.status] || task.status || 'Pending');
+    InlineEdit.select(statusEl, {
+      value: task.status || 'pending',
+      options: ['pending', 'in_progress', 'done', 'blocked'],
+      onSave: (v) => saveField('status', v),
+    });
+
+    const priorityEl = h('span', { class: `task-priority priority-${task.priority || 'normal'}` },
+      task.priority || 'normal');
+    InlineEdit.select(priorityEl, {
+      value: task.priority || 'normal',
+      options: ['low', 'normal', 'high', 'critical'],
+      onSave: (v) => saveField('priority', v),
+    });
+
     const metaRow = h('div', { class: 'task-detail-meta' },
       h('div', { class: 'task-detail-meta-item' },
         h('span', { class: 'task-detail-label' }, 'Status'),
-        h('span', { class: `task-status-badge status-${task.status || 'pending'}` },
-          STATUS_LABELS[task.status] || task.status || 'Pending')
+        statusEl
       ),
       h('div', { class: 'task-detail-meta-item' },
         h('span', { class: 'task-detail-label' }, 'Priority'),
-        h('span', { class: `task-priority priority-${task.priority || 'normal'}` },
-          task.priority || 'normal')
+        priorityEl
       )
     );
     container.appendChild(metaRow);
@@ -560,13 +599,18 @@ export class TaskView extends Component {
     // Milestone / phase info
     container.appendChild(this._buildMilestoneSection(task));
 
-    // Description
-    if (task.description) {
-      container.appendChild(h('div', { class: 'task-detail-section' },
-        h('h4', null, 'Description'),
-        h('p', { class: 'task-detail-description' }, task.description)
-      ));
-    }
+    // Description — EDITABLE (#1037)
+    const descSection = h('div', { class: 'task-detail-section' });
+    descSection.appendChild(h('h4', null, 'Description'));
+    const descEl = h('p', { class: 'task-detail-description' }, task.description || 'No description — click to add');
+    InlineEdit.text(descEl, {
+      value: task.description || '',
+      type: 'textarea',
+      placeholder: 'Add a description...',
+      onSave: (v) => saveField('description', v),
+    });
+    descSection.appendChild(descEl);
+    container.appendChild(descSection);
 
     // Metadata
     const infoSection = h('div', { class: 'task-detail-section task-detail-info' });
