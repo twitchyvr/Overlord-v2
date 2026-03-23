@@ -422,17 +422,18 @@ export async function clickEditBuilding(page: Page): Promise<void> {
 }
 
 /**
- * Expand a floor bar in the building view to show its rooms.
+ * Expand a floor section in the building view to show its rooms.
  */
 export async function expandFloor(page: Page, floorName: string): Promise<void> {
-  const floorBar = page.locator('.floor-bar').filter({
-    has: page.locator('.floor-bar-name', { hasText: floorName }),
+  const floorBar = page.locator('.floor-section').filter({
+    has: page.locator('.floor-section-name', { hasText: floorName }),
   });
 
-  // Only click if not already expanded
+  // Only click the header if not already expanded
   const isExpanded = await floorBar.evaluate(el => el.classList.contains('expanded'));
   if (!isExpanded) {
-    await floorBar.click();
+    const header = floorBar.locator('.floor-section-header');
+    await header.click();
     await page.waitForTimeout(UI_SETTLE_MS);
   }
 }
@@ -445,10 +446,10 @@ export async function clickAddRoomOnFloor(page: Page, floorName: string): Promis
   await expandFloor(page, floorName);
 
   // Click the Add Room button within the expanded floor content
-  const floorBar = page.locator('.floor-bar.expanded').filter({
-    has: page.locator('.floor-bar-name', { hasText: floorName }),
+  const floorBar = page.locator('.floor-section.expanded').filter({
+    has: page.locator('.floor-section-name', { hasText: floorName }),
   });
-  const addRoomBtn = floorBar.locator('.btn-primary').filter({ hasText: /add room/i });
+  const addRoomBtn = floorBar.locator('.floor-add-room-btn, .btn-ghost').filter({ hasText: /room/i });
   await addRoomBtn.click();
 
   // Wait for modal

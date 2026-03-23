@@ -276,20 +276,14 @@ export class DashboardView extends Component {
         }
       };
 
-      // Archive / Restore button (#515)
-      if (isArchived) {
-        cardActions['Restore'] = async () => {
-          if (!window.overlordSocket) return;
-          const newName = building.name.replace(/\s*\(Archived\)/, '');
-          await window.overlordSocket.updateBuilding(building.id, { name: newName });
-        };
-      } else {
-        cardActions['Archive'] = async () => {
-          if (!window.overlordSocket) return;
-          const newName = `${building.name} (Archived)`;
-          await window.overlordSocket.updateBuilding(building.id, { name: newName });
-        };
-      }
+      // Remove button with confirmation
+      cardActions['Remove'] = async () => {
+        if (!window.overlordSocket) return;
+        const confirmed = confirm(`Remove "${building.name}" from Overlord?\n\nThis removes the project from the dashboard. Your git repository is NOT deleted.`);
+        if (!confirmed) return;
+        await window.overlordSocket.deleteBuilding(building.id);
+        this.render();
+      };
 
       const card = Card.create('building', {
         id: building.id,

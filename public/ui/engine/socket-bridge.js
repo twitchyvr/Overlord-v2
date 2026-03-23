@@ -1241,6 +1241,17 @@ export function initSocketBridge(socket, store, engine) {
       return res;
     },
 
+    async deleteBuilding(buildingId) {
+      const res = await _emitWithFeedback('building:delete', { buildingId });
+      if (res && res.ok) {
+        store.update('building.list', (list) => (list || []).filter((b) => b.id !== buildingId));
+        if (store.get('building.active') === buildingId) {
+          store.set('building.active', null);
+        }
+      }
+      return res;
+    },
+
     // ── Table methods ──
 
     async createTable(roomId, type, chairs = 1, description) {

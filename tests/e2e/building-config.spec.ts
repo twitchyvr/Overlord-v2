@@ -81,17 +81,13 @@ test.describe('Epic 2: Building Configuration UI', () => {
 
     const buildingPanel = page.locator('#building-panel');
 
-    // Stats section should exist
-    const stats = buildingPanel.locator('.building-stats');
+    // Stats are shown inline at the bottom
+    const stats = buildingPanel.locator('.building-stats-inline');
     await expect(stats).toBeVisible();
 
-    // Should show "1" floors (or more if building has auto-provisioned floors)
-    const floorStat = stats.locator('.building-stat').filter({ hasText: /floor/i });
-    await expect(floorStat).toBeVisible();
-
-    // Should show at least "1" rooms
-    const roomStat = stats.locator('.building-stat').filter({ hasText: /room/i });
-    await expect(roomStat).toBeVisible();
+    // Should contain floor and room counts
+    await expect(stats).toContainText(/floor/i);
+    await expect(stats).toContainText(/room/i);
   });
 
   // ────────────────────────────────────────────────────────────
@@ -106,7 +102,7 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await expect(modal).toBeVisible();
 
     // Modal title should contain building name
-    const modalTitle = modal.locator('.modal-header-title, .modal-title');
+    const modalTitle = modal.locator('.modal-title');
     await expect(modalTitle).toContainText(/edit building/i);
 
     // Name input should have current name
@@ -166,8 +162,8 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await page.waitForTimeout(2000);
 
     // Verify the floor appears in the building cross-section
-    const floorBar = page.locator('#building-panel .floor-bar').filter({
-      has: page.locator('.floor-bar-name', { hasText: 'My Execution Floor' }),
+    const floorBar = page.locator('#building-panel .floor-section').filter({
+      has: page.locator('.floor-section-name', { hasText: 'My Execution Floor' }),
     });
     await expect(floorBar).toBeVisible({ timeout: 10_000 });
   });
@@ -176,32 +172,28 @@ test.describe('Epic 2: Building Configuration UI', () => {
   // Test 5: Floor bar shows type and room count
   // ────────────────────────────────────────────────────────────
 
-  test('floor bar displays type label and room count', async ({ page }) => {
+  test('floor section displays room count pill', async ({ page }) => {
     const floorId = await createFloorDirect(page, buildingId, 'collaboration', 'Collab Floor');
     await createRoomDirect(page, floorId, 'discovery', 'Discovery Room');
     await createRoomDirect(page, floorId, 'architecture', 'Architecture Room');
 
     await page.waitForTimeout(1000);
 
-    const floorBar = page.locator('#building-panel .floor-bar').filter({
-      has: page.locator('.floor-bar-name', { hasText: 'Collab Floor' }),
+    const floorSection = page.locator('#building-panel .floor-section').filter({
+      has: page.locator('.floor-section-name', { hasText: 'Collab Floor' }),
     });
-    await expect(floorBar).toBeVisible({ timeout: 10_000 });
+    await expect(floorSection).toBeVisible({ timeout: 10_000 });
 
-    // Floor type should be shown
-    const floorType = floorBar.locator('.floor-bar-type');
-    await expect(floorType).toContainText('collaboration');
-
-    // Room count should show "2 rm"
-    const roomCount = floorBar.locator('.floor-bar-rooms');
-    await expect(roomCount).toContainText('2 rm');
+    // Room count pill should show "2"
+    const roomCount = floorSection.locator('.floor-section-count');
+    await expect(roomCount).toContainText('2');
   });
 
   // ────────────────────────────────────────────────────────────
   // Test 6: Expand floor to see room cards
   // ────────────────────────────────────────────────────────────
 
-  test('clicking a floor expands it to show room cards', async ({ page }) => {
+  test('clicking a floor expands it to show room items', async ({ page }) => {
     const floorId = await createFloorDirect(page, buildingId, 'execution', 'Expand Test Floor');
     await createRoomDirect(page, floorId, 'code-lab', 'Code Lab Alpha');
     await createRoomDirect(page, floorId, 'testing-lab', 'QA Lab');
@@ -212,23 +204,23 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await expandFloor(page, 'Expand Test Floor');
 
     // Floor should now have the "expanded" class
-    const expandedFloor = page.locator('#building-panel .floor-bar.expanded').filter({
-      has: page.locator('.floor-bar-name', { hasText: 'Expand Test Floor' }),
+    const expandedFloor = page.locator('#building-panel .floor-section.expanded').filter({
+      has: page.locator('.floor-section-name', { hasText: 'Expand Test Floor' }),
     });
     await expect(expandedFloor).toBeVisible();
 
     // Room cards should be visible in the expanded content
-    const roomCards = expandedFloor.locator('.room-card');
+    const roomCards = expandedFloor.locator('.room-item');
     await expect(roomCards).toHaveCount(2, { timeout: 5000 });
 
     // Verify room names
-    const codeLabCard = expandedFloor.locator('.room-card').filter({
-      has: page.locator('.room-card-name', { hasText: 'Code Lab Alpha' }),
+    const codeLabCard = expandedFloor.locator('.room-item').filter({
+      has: page.locator('.room-item-name', { hasText: 'Code Lab Alpha' }),
     });
     await expect(codeLabCard).toBeVisible();
 
-    const qaLabCard = expandedFloor.locator('.room-card').filter({
-      has: page.locator('.room-card-name', { hasText: 'QA Lab' }),
+    const qaLabCard = expandedFloor.locator('.room-item').filter({
+      has: page.locator('.room-item-name', { hasText: 'QA Lab' }),
     });
     await expect(qaLabCard).toBeVisible();
   });
@@ -246,10 +238,10 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await expandFloor(page, 'Governance Floor');
 
     // Click "Edit Floor" button in the expanded floor actions
-    const expandedFloor = page.locator('#building-panel .floor-bar.expanded').filter({
-      has: page.locator('.floor-bar-name', { hasText: 'Governance Floor' }),
+    const expandedFloor = page.locator('#building-panel .floor-section.expanded').filter({
+      has: page.locator('.floor-section-name', { hasText: 'Governance Floor' }),
     });
-    const editFloorBtn = expandedFloor.locator('.btn-ghost').filter({ hasText: /edit floor/i });
+    const editFloorBtn = expandedFloor.locator('.btn-ghost').filter({ hasText: /^edit$/i });
     await editFloorBtn.click();
 
     // Modal should open
@@ -257,7 +249,7 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await expect(modal).toBeVisible({ timeout: 5000 });
 
     // Verify modal title
-    const modalTitle = modal.locator('.modal-header-title, .modal-title');
+    const modalTitle = modal.locator('.modal-title');
     await expect(modalTitle).toContainText(/edit floor/i);
 
     // Change floor name
@@ -280,8 +272,8 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await page.waitForTimeout(2000);
 
     // Verify floor name was updated
-    const updatedFloor = page.locator('#building-panel .floor-bar').filter({
-      has: page.locator('.floor-bar-name', { hasText: 'Renamed Governance Floor' }),
+    const updatedFloor = page.locator('#building-panel .floor-section').filter({
+      has: page.locator('.floor-section-name', { hasText: 'Renamed Governance Floor' }),
     });
     await expect(updatedFloor).toBeVisible({ timeout: 10_000 });
   });
@@ -331,9 +323,9 @@ test.describe('Epic 2: Building Configuration UI', () => {
     // Expand the floor and verify room appears
     await expandFloor(page, 'Room Test Floor');
 
-    const expandedFloor = page.locator('#building-panel .floor-bar.expanded');
-    const roomCard = expandedFloor.locator('.room-card').filter({
-      has: page.locator('.room-card-name', { hasText: 'Frontend Lab' }),
+    const expandedFloor = page.locator('#building-panel .floor-section.expanded');
+    const roomCard = expandedFloor.locator('.room-item').filter({
+      has: page.locator('.room-item-name', { hasText: 'Frontend Lab' }),
     });
     await expect(roomCard).toBeVisible({ timeout: 10_000 });
   });
@@ -352,13 +344,13 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await expandFloor(page, 'Edit Room Floor');
 
     // Find the room card and click its edit button
-    const expandedFloor = page.locator('#building-panel .floor-bar.expanded');
-    const roomCard = expandedFloor.locator('.room-card').filter({
-      has: page.locator('.room-card-name', { hasText: 'Original Lab' }),
+    const expandedFloor = page.locator('#building-panel .floor-section.expanded');
+    const roomCard = expandedFloor.locator('.room-item').filter({
+      has: page.locator('.room-item-name', { hasText: 'Original Lab' }),
     });
 
     // The edit button appears on hover — use force click
-    const editBtn = roomCard.locator('.room-action-btn').first();
+    const editBtn = roomCard.locator('.room-item-action-btn').first();
     await editBtn.click({ force: true });
 
     // Wait for edit room modal
@@ -366,7 +358,7 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await expect(modal).toBeVisible({ timeout: 5000 });
 
     // Modal title should reference the room
-    const modalTitle = modal.locator('.modal-header-title, .modal-title');
+    const modalTitle = modal.locator('.modal-title');
     await expect(modalTitle).toContainText(/edit room/i);
 
     // Change room name
@@ -400,8 +392,8 @@ test.describe('Epic 2: Building Configuration UI', () => {
 
     // Verify room name updated (re-expand floor to refresh)
     await page.waitForTimeout(500);
-    const updatedRoom = page.locator('#building-panel .room-card').filter({
-      has: page.locator('.room-card-name', { hasText: 'Renamed Lab' }),
+    const updatedRoom = page.locator('#building-panel .room-item').filter({
+      has: page.locator('.room-item-name', { hasText: 'Renamed Lab' }),
     });
     await expect(updatedRoom).toBeVisible({ timeout: 10_000 });
   });
@@ -420,14 +412,14 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await expandFloor(page, 'Delete Room Floor');
 
     // Verify room exists
-    const expandedFloor = page.locator('#building-panel .floor-bar.expanded');
-    const roomCard = expandedFloor.locator('.room-card').filter({
-      has: page.locator('.room-card-name', { hasText: 'Doomed Lab' }),
+    const expandedFloor = page.locator('#building-panel .floor-section.expanded');
+    const roomCard = expandedFloor.locator('.room-item').filter({
+      has: page.locator('.room-item-name', { hasText: 'Doomed Lab' }),
     });
     await expect(roomCard).toBeVisible();
 
     // Click the delete button (second action button, has danger class)
-    const deleteBtn = roomCard.locator('.room-action-btn.room-action-danger, .room-action-btn').last();
+    const deleteBtn = roomCard.locator('.room-item-action-danger, .room-item-action-btn').last();
     await deleteBtn.click({ force: true });
 
     // Confirmation modal should appear
@@ -446,8 +438,8 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await page.waitForTimeout(2000);
 
     // Room should no longer be visible
-    const deletedRoom = page.locator('#building-panel .room-card').filter({
-      has: page.locator('.room-card-name', { hasText: 'Doomed Lab' }),
+    const deletedRoom = page.locator('#building-panel .room-item').filter({
+      has: page.locator('.room-item-name', { hasText: 'Doomed Lab' }),
     });
     await expect(deletedRoom).toHaveCount(0, { timeout: 10_000 });
   });
@@ -466,7 +458,7 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await expandFloor(page, 'Protected Floor');
 
     // Click Delete button in floor actions
-    const expandedFloor = page.locator('#building-panel .floor-bar.expanded');
+    const expandedFloor = page.locator('#building-panel .floor-section.expanded');
     const deleteBtn = expandedFloor.locator('.btn-danger-ghost, .btn-ghost').filter({ hasText: /delete/i });
     await deleteBtn.click();
 
@@ -498,7 +490,7 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await expandFloor(page, 'Empty Floor');
 
     // Click Delete button
-    const expandedFloor = page.locator('#building-panel .floor-bar.expanded');
+    const expandedFloor = page.locator('#building-panel .floor-section.expanded');
     const deleteBtn = expandedFloor.locator('.btn-danger-ghost, .btn-ghost').filter({ hasText: /delete/i });
     await deleteBtn.click();
 
@@ -513,8 +505,8 @@ test.describe('Epic 2: Building Configuration UI', () => {
     await page.waitForTimeout(2000);
 
     // Floor should be gone
-    const deletedFloor = page.locator('#building-panel .floor-bar').filter({
-      has: page.locator('.floor-bar-name', { hasText: 'Empty Floor' }),
+    const deletedFloor = page.locator('#building-panel .floor-section').filter({
+      has: page.locator('.floor-section-name', { hasText: 'Empty Floor' }),
     });
     await expect(deletedFloor).toHaveCount(0, { timeout: 10_000 });
   });
@@ -523,7 +515,7 @@ test.describe('Epic 2: Building Configuration UI', () => {
   // Test 13: Room card shows room type and status
   // ────────────────────────────────────────────────────────────
 
-  test('room card shows room type tag and idle status', async ({ page }) => {
+  test('room item shows status dot for idle room', async ({ page }) => {
     const floorId = await createFloorDirect(page, buildingId, 'execution', 'Status Floor');
     await createRoomDirect(page, floorId, 'testing-lab', 'QA Lab');
 
@@ -531,20 +523,16 @@ test.describe('Epic 2: Building Configuration UI', () => {
 
     await expandFloor(page, 'Status Floor');
 
-    const expandedFloor = page.locator('#building-panel .floor-bar.expanded');
-    const roomCard = expandedFloor.locator('.room-card').first();
+    const expandedFloor = page.locator('#building-panel .floor-section.expanded');
+    const roomItem = expandedFloor.locator('.room-item').first();
 
-    // Room type tag should be visible
-    const typeTag = roomCard.locator('.room-card-type-tag');
-    await expect(typeTag).toContainText('testing-lab');
+    // Room item should have a status dot
+    const statusDot = roomItem.locator('.room-item-dot');
+    await expect(statusDot).toBeVisible();
 
-    // Status badge should show idle (no agents)
-    const statusBadge = roomCard.locator('.room-status-badge');
-    await expect(statusBadge).toContainText('idle');
-
-    // Agent count should show "0 agents"
-    const agentCount = roomCard.locator('.room-card-agent-count');
-    await expect(agentCount).toContainText('0 agent');
+    // Room name should be visible
+    const roomName = roomItem.locator('.room-item-name');
+    await expect(roomName).toContainText('QA Lab');
   });
 
   // ────────────────────────────────────────────────────────────
@@ -627,10 +615,10 @@ test.describe('Epic 2: Building Configuration UI', () => {
   // Test 15: Foundation element is always visible
   // ────────────────────────────────────────────────────────────
 
-  test('building cross-section always shows foundation', async ({ page }) => {
-    const foundation = page.locator('#building-panel .building-foundation');
-    await expect(foundation).toBeVisible();
-    await expect(foundation).toContainText('Foundation');
+  test('building sidebar shows inline stats', async ({ page }) => {
+    const stats = page.locator('#building-panel .building-stats-inline');
+    await expect(stats).toBeVisible();
+    await expect(stats).toContainText(/floor/i);
   });
 
   // ────────────────────────────────────────────────────────────
@@ -642,35 +630,31 @@ test.describe('Epic 2: Building Configuration UI', () => {
 
     await page.waitForTimeout(1000);
 
-    const floorBar = page.locator('#building-panel .floor-bar').filter({
-      has: page.locator('.floor-bar-name', { hasText: 'Toggle Floor' }),
+    const floorSection = page.locator('#building-panel .floor-section').filter({
+      has: page.locator('.floor-section-name', { hasText: 'Toggle Floor' }),
     });
 
     // Initially not expanded
-    await expect(floorBar).not.toHaveClass(/expanded/);
+    await expect(floorSection).not.toHaveClass(/expanded/);
 
-    // Expand icon should show right arrow
-    const expandIcon = floorBar.locator('.floor-expand-icon');
-    await expect(expandIcon).toBeVisible();
+    // Chevron should be visible
+    const chevron = floorSection.locator('.floor-chevron');
+    await expect(chevron).toBeVisible();
 
-    // Click to expand
-    await floorBar.click();
-    await page.waitForTimeout(300);
-    await expect(floorBar).toHaveClass(/expanded/);
+    // Click header to expand
+    const header = floorSection.locator('.floor-section-header');
+    await header.click();
+    await page.waitForTimeout(500);
+    await expect(floorSection).toHaveClass(/expanded/);
 
-    // Click again to collapse
-    // Need to click the info row (not the expanded content)
-    const infoRow = floorBar.locator('.floor-bar-info');
-    await infoRow.click();
-    await page.waitForTimeout(300);
+    // Click header again to collapse
+    await header.click();
+    await page.waitForTimeout(500);
 
-    // After collapse, the floorbar should re-render without expanded
-    // (the component re-renders, so we check for the non-expanded version)
-    const collapsedFloor = page.locator('#building-panel .floor-bar').filter({
-      has: page.locator('.floor-bar-name', { hasText: 'Toggle Floor' }),
+    // After collapse, verify the floor is still visible
+    const collapsedFloor = page.locator('#building-panel .floor-section').filter({
+      has: page.locator('.floor-section-name', { hasText: 'Toggle Floor' }),
     });
-    // After clicking twice, it should be collapsed again
-    // Note: the component fully re-renders, so we just verify it exists
     await expect(collapsedFloor).toBeVisible();
   });
 
@@ -710,10 +694,10 @@ test.describe('Epic 2: Building Configuration UI', () => {
 
     await expandFloor(page, 'Empty Guidance Floor');
 
-    const expandedFloor = page.locator('#building-panel .floor-bar.expanded');
+    const expandedFloor = page.locator('#building-panel .floor-section.expanded');
 
     // Should show empty floor guidance
-    const guidance = expandedFloor.locator('.floor-empty-guidance');
+    const guidance = expandedFloor.locator('.floor-empty');
     await expect(guidance).toBeVisible();
     await expect(guidance).toContainText(/no rooms/i);
   });

@@ -30,6 +30,7 @@ import { initDevLoopEnforcer } from './rooms/dev-loop-enforcer.js';
 import { initEmailOrchestrator } from './rooms/email-orchestrator.js';
 import { initBudgetTracker } from './agents/budget-tracker.js';
 import { listBuildings } from './rooms/building-manager.js';
+import { recordActivity } from './agents/agent-stats.js';
 import { initCommands } from './commands/index.js';
 import { initPlugins } from './plugins/index.js';
 import type { InitPluginsParams } from './plugins/index.js';
@@ -107,6 +108,28 @@ async function start(): Promise<void> {
   // Budget tracker — per-agent token usage and limits (#680)
   initBudgetTracker(bus);
   log.info('Budget tracker initialized');
+
+  // #1011 — Record tool calls and AI requests to activity log for persistent telemetry
+  bus.on('tool:executed', (data: Record<string, unknown>) => {
+    const agentId = (data.agentId || data.agent_id || '__system__') as string;
+    const buildingId = data.buildingId as string | undefined;
+    const roomId = data.roomId as string | undefined;
+    recordActivity(agentId, 'tool_executed', {
+      tool: data.toolName || data.name,
+      success: data.success !== false,
+    }, buildingId, roomId);
+  });
+  bus.on('ai:request', (data: Record<string, unknown>) => {
+    const agentId = (data.agentId || '__system__') as string;
+    const buildingId = data.buildingId as string | undefined;
+    const roomId = data.roomId as string | undefined;
+    recordActivity(agentId, 'ai_request', {
+      provider: data.provider,
+      model: data.model,
+      inputTokens: data.inputTokens,
+      outputTokens: data.outputTokens,
+    }, buildingId, roomId);
+  });
 
   // 2b. Init commands + plugins (after rooms/agents/tools, before transport)
   initCommands({ bus, rooms, agents, tools });
