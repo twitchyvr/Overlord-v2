@@ -320,7 +320,8 @@ export function initSocketBridge(socket, store, engine) {
       const idx = list.findIndex((t) => t.id === data.id);
       if (idx >= 0) {
         const next = [...list];
-        next[idx] = data;
+        // Merge update with existing task — don't replace with partial data (#1123)
+        next[idx] = { ...list[idx], ...data };
         return next;
       }
       return [data, ...list];
@@ -1445,10 +1446,11 @@ export function initSocketBridge(socket, store, engine) {
       if (res && res.ok) {
         store.update('tasks.list', (tasks) => {
           const list = tasks || [];
-          const idx = list.findIndex((t) => t.id === res.data.id);
+          const idx = list.findIndex((t) => t.id === (res.data.id || params.id));
           if (idx >= 0) {
             const next = [...list];
-            next[idx] = res.data;
+            // Merge response with existing task (#1123) — don't replace with partial data
+            next[idx] = { ...list[idx], ...res.data };
             return next;
           }
           return list;
