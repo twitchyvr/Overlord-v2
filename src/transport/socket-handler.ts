@@ -3724,7 +3724,7 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
             luaScripting: process.env.ENABLE_LUA_SCRIPTING === 'true',
           },
           server: {
-            version: '0.1.0',
+            version: '1.0.0-rc.2',
             environment: process.env.NODE_ENV || 'development',
             uptime: process.uptime(),
           },
@@ -3964,7 +3964,7 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
     // ─── System Events ───
 
     handle(socket, 'system:health', EmptyPayloadSchema, (_data, ack) => {
-      if (ack) ack({ ok: true, data: { uptime: process.uptime(), version: '0.1.0' } });
+      if (ack) ack({ ok: true, data: { uptime: process.uptime(), version: '1.0.0-rc.2' } });
     });
 
     // ─── Security Events (#890) ───

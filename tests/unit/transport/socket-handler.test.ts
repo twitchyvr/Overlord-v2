@@ -371,7 +371,7 @@ describe('Socket Handler (Transport Layer)', () => {
       expect(ack).toHaveBeenCalledWith(expect.objectContaining({
         ok: true,
         data: expect.objectContaining({
-          version: '0.1.0',
+          version: '1.0.0-rc.2',
         }),
       }));
     });
