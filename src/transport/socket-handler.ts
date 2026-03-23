@@ -1610,6 +1610,13 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
       if (ack) ack({ ok: true, data: entries });
     });
 
+    // #1011 — Telemetry rates from DB (persistent, not session-only)
+    socket.on('telemetry:rates', (data: unknown, ack?: (res: unknown) => void) => {
+      const parsed = data as { buildingId?: string } | undefined;
+      const rates = getTelemetryRates(parsed?.buildingId);
+      if (ack) ack({ ok: true, data: rates });
+    });
+
     // Room/Floor activity (#980)
     handle(socket, 'room:activity-log', RoomActivityLogSchema, (parsed, ack) => {
       const entries = getRoomActivityLog(parsed.roomId, {

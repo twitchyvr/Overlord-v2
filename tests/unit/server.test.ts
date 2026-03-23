@@ -77,6 +77,25 @@ vi.mock('../../src/tools/tool-registry.js', () => ({
   }),
 }));
 
+vi.mock('../../src/agents/agent-stats.js', () => ({
+  recordActivity: vi.fn(),
+  getStatsSummary: vi.fn(() => ({})),
+  getActivityLog: vi.fn(() => []),
+  getBuildingActivityLog: vi.fn(() => []),
+  getRoomActivityLog: vi.fn(() => []),
+  getFloorActivityLog: vi.fn(() => []),
+  getLeaderboard: vi.fn(() => []),
+  getTelemetryRates: vi.fn(() => ({})),
+  onRoomJoin: vi.fn(),
+  onRoomLeave: vi.fn(),
+  onStatusChange: vi.fn(),
+  onTaskComplete: vi.fn(),
+  onTaskAssign: vi.fn(),
+  onMessageSent: vi.fn(),
+  onSessionStart: vi.fn(),
+  onSessionEnd: vi.fn(),
+}));
+
 vi.mock('../../src/agents/agent-registry.js', () => ({
   initAgents: vi.fn(() => {
     initOrder.push('agents');
