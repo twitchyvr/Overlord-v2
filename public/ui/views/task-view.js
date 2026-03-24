@@ -483,14 +483,16 @@ export class TaskView extends Component {
 
     const total = this._tasks.length;
     const done = this._countByStatus('done');
+    const wip = this._countByStatus('in_progress');
 
     if (total === 0) return;
 
     const pct = Math.round((done / total) * 100);
+    const wipText = wip > 0 ? `, ${wip} in progress` : '';
 
     const bar = h('div', { class: 'task-progress-bar' },
       h('div', { class: 'task-progress-bar-label' },
-        `${pct}% complete (${done}/${total} tasks done)`
+        `${pct}% complete (${done}/${total} done${wipText})`
       ),
       h('div', { class: 'task-progress-bar-track' },
         h('div', {
