@@ -99,6 +99,20 @@ export class BuildingView extends Component {
     this._agentPositions = store.get('building.agentPositions') || {};
     this._floors = store.get('building.floors') || [];
 
+    // #1132 — Re-render when building execution state changes (play/pause/stop)
+    store.subscribe('building.list', (list) => {
+      if (!this._buildingData) return;
+      const updated = (list || []).find(b => b.id === this._buildingData.id);
+      if (updated) {
+        const newState = updated.execution_state || updated.executionState || 'stopped';
+        const oldState = this._buildingData.execution_state || 'stopped';
+        if (newState !== oldState) {
+          this._buildingData = { ...this._buildingData, execution_state: newState };
+          this.render();
+        }
+      }
+    });
+
     this.render();
   }
 
