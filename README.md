@@ -694,6 +694,10 @@ GNAP provides a decentralized, git-native coordination protocol for AI agents an
 
 Thank you to the Farol Labs team for creating GNAP and for [collaborating with us](https://github.com/twitchyvr/Overlord-v2/issues/277) on its integration into Overlord.
 
+### Community Contributors
+
+- [**@m13v**](https://github.com/m13v) — File locking patterns, PID liveness checks with start time comparison, hostname disambiguation for multi-machine locks, browser lock design from [browser-lock](https://github.com/m13v/browser-lock). Extensive collaboration on [parallel agent concurrency](https://github.com/twitchyvr/Overlord-v2/issues/806).
+
 ---
 
 ## 📄 License
