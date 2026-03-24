@@ -615,15 +615,37 @@ function getDefaultTable(roomType: string): Record<string, boolean> {
  * Each phase's agent gets instructions relevant to their role.
  */
 function _getPhasePrompt(phase: string, buildingId: string): string {
-  // Fetch pending tasks (with IDs) so agents can call update_task (#1022)
+  // Fetch ALL tasks for this building so agents know the full picture (#1141)
   const db = getDb();
   const tasks = db.prepare(
-    "SELECT id, title FROM tasks WHERE building_id = ? AND (phase = ? OR phase IS NULL) AND status = 'pending' LIMIT 10"
-  ).all(buildingId, phase) as { id: string; title: string }[];
+    "SELECT id, title, status, priority FROM tasks WHERE building_id = ? ORDER BY CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 15"
+  ).all(buildingId) as { id: string; title: string; status: string; priority: string }[];
 
-  const taskList = tasks.length > 0
-    ? `\n\nPending tasks (use update_task with the task_id to mark progress):\n${tasks.map((t, i) => `${i + 1}. "${t.title}" (task_id: ${t.id})`).join('\n')}\n\nFor each task: call update_task with status "in_progress" when you start, then "done" when finished.`
-    : '';
+  const pendingTasks = tasks.filter(t => t.status === 'pending');
+  const wipTasks = tasks.filter(t => t.status === 'in_progress');
+  const doneTasks = tasks.filter(t => t.status === 'done');
+
+  let taskList = '';
+  if (tasks.length > 0) {
+    taskList = '\n\n## YOUR TASK QUEUE\n';
+    taskList += `Progress: ${doneTasks.length}/${tasks.length} done, ${wipTasks.length} in progress, ${pendingTasks.length} pending\n\n`;
+
+    if (pendingTasks.length > 0) {
+      taskList += 'PENDING (start these by calling update_task with status "in_progress"):\n';
+      taskList += pendingTasks.map((t, i) => `${i + 1}. [${t.priority}] "${t.title}" → update_task(task_id: "${t.id}", status: "in_progress")`).join('\n');
+      taskList += '\n\n';
+    }
+    if (wipTasks.length > 0) {
+      taskList += 'IN PROGRESS (finish these by calling update_task with status "done"):\n';
+      taskList += wipTasks.map(t => `- "${t.title}" → update_task(task_id: "${t.id}", status: "done")`).join('\n');
+      taskList += '\n\n';
+    }
+    if (doneTasks.length > 0) {
+      taskList += `COMPLETED: ${doneTasks.length} tasks done\n\n`;
+    }
+
+    taskList += 'WORKFLOW: For each task, call update_task FIRST to set "in_progress", do the work, then call update_task again to set "done". This is how the project tracks your progress.';
+  }
 
   const prompts: Record<string, string> = {
     discovery: `The project has advanced to the Discovery phase. Your role is to deeply research requirements, gather information, and identify unknowns.
