@@ -19,6 +19,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Room Config modal no longer auto-opens** on phase advancement — was covering chat while agents worked (#1129)
 - **Play/Pause/Stop in sidebar header** — always visible when inside a building (#1125)
 - **Task store merge** — progress bar updates after inline status change (#1123)
+- **Deduplication for tasks, milestones, RAID** — agents no longer create duplicates across phases (#1134)
+- **Sidebar Play/Pause/Stop updates in real time** — controls reflect execution state changes (#1132)
 
 ### Added
 - **Universal inline editing** — click-to-edit on task title, status, priority, description in detail drawer (#1037)
