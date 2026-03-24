@@ -23,6 +23,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Sidebar Play/Pause/Stop updates in real time** — controls reflect execution state changes (#1132)
 - **Phases no longer advance too fast** — exit doc gated on task progress + iteration count; prompts require thorough analysis (#1135)
 - **Agents actually update tasks** — phase prompts now show full task queue with exact update_task call syntax; agents mark tasks in_progress/done (#1141)
+- **Chat tool calls collapsed** — 30+ individual badges replaced with single summary line; analysis text now visible (#1146)
+- **Telemetry tokens accurate** — shows actual 911k token sum from event_data, not just request count
+- **Task progress shows in-progress count** — "0/5 done, 5 in progress" instead of misleading "0/5 done"
 
 ### Added
 - **Universal inline editing** — click-to-edit on task title, status, priority, description in detail drawer (#1037)
