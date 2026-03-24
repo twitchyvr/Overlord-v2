@@ -246,6 +246,20 @@ export class Card {
     );
     card.appendChild(header);
 
+    // Project info subtitle (#1127) — description + task progress
+    const subtitle = [];
+    if (data.description) subtitle.push(data.description.slice(0, 80));
+    if (data.taskCount > 0) {
+      const active = data.activeTaskCount || 0;
+      subtitle.push(`${data.taskCount} tasks${active ? ` (${active} active)` : ''}`);
+    }
+    if (subtitle.length > 0) {
+      card.appendChild(h('div', {
+        class: 'card-subtitle',
+        style: 'font-size:0.75rem; color:var(--text-muted); padding:0 var(--sp-2); margin-bottom:var(--sp-1); line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;',
+      }, subtitle.join(' \u2022 ')));
+    }
+
     // ── Execution Controls (#965, #969) ──
     if (!isArchived) {
       const controls = h('div', { class: 'exec-controls' });
