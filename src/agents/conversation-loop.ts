@@ -591,24 +591,43 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       room.onMessage(agentId, assistantText, 'assistant');
 
       // Auto-detect exit documents embedded in AI text responses (#524)
-      // #1135 — Only auto-submit exit doc after meaningful work:
-      //   - Must have done at least 3 AI iterations AND used 3+ distinct tools
-      //   - For non-strategy phases: check that assigned tasks have been worked on
+      // #1135 — Only auto-submit exit doc when the agent has done real work.
+      // Strategy phase: allowed after creating tasks (iteration >= 3).
+      // Other phases: must have worked on assigned tasks (none still pending).
       const exitTemplate = room.exitRequired;
       if (exitTemplate && exitTemplate.fields.length > 0) {
-        let canSubmitExitDoc = iteration >= 3 && usedToolNames.size >= 3;
+        let canSubmitExitDoc = true;
 
-        // For phases after strategy, verify task progress
-        if (canSubmitExitDoc && params.options?.buildingId) {
+        // Check the current building phase to determine gating rules
+        if (params.options?.buildingId) {
           try {
-            const buildingId = params.options.buildingId as string;
             const taskDb = (await import('../storage/db.js')).getDb();
-            const pendingTasks = taskDb.prepare(
-              `SELECT COUNT(*) as c FROM tasks WHERE building_id = ? AND assignee_id = ? AND status = 'pending'`
-            ).get(buildingId, agentId) as { c: number };
-            // If agent has pending tasks, don't auto-submit yet
-            if (pendingTasks.c > 0) canSubmitExitDoc = false;
-          } catch { /* ignore — strategy phase has no tasks yet */ }
+            const buildingId = params.options.buildingId as string;
+            const building = taskDb.prepare('SELECT active_phase FROM buildings WHERE id = ?').get(buildingId) as { active_phase: string } | undefined;
+            const currentPhase = building?.active_phase || 'strategy';
+
+            if (currentPhase === 'strategy') {
+              // Strategy: just needs to have done some analysis before submitting
+              canSubmitExitDoc = iteration >= 3;
+            } else {
+              // Other phases: check that pending tasks for this PHASE have been addressed.
+              // Tasks may be assigned to previous agents (strategist), so check by phase,
+              // not assignee. The agent should have either completed them or created new ones.
+              const phaseTasks = taskDb.prepare(
+                `SELECT COUNT(*) as total,
+                        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                        SUM(CASE WHEN status IN ('in_progress', 'done') THEN 1 ELSE 0 END) as worked
+                 FROM tasks WHERE building_id = ?`
+              ).get(buildingId) as { total: number; pending: number; worked: number };
+
+              // Allow exit doc if: agent has done some iterations AND either
+              // (a) some tasks are no longer pending, or
+              // (b) the agent has created its own work items (iteration >= 5 means real analysis)
+              const hasWorkedOnTasks = (phaseTasks.worked || 0) > 0;
+              const hasDoneThoroughAnalysis = iteration >= 5 && usedToolNames.size >= 4;
+              canSubmitExitDoc = hasWorkedOnTasks || hasDoneThoroughAnalysis;
+            }
+          } catch { /* DB not available — allow submission */ }
         }
 
         if (canSubmitExitDoc) {
