@@ -626,33 +626,66 @@ function _getPhasePrompt(phase: string, buildingId: string): string {
     : '';
 
   const prompts: Record<string, string> = {
-    discovery: `The project has advanced to the Discovery phase. Your role is to research requirements, gather information, and identify unknowns.
+    discovery: `The project has advanced to the Discovery phase. Your role is to deeply research requirements, gather information, and identify unknowns.
 
-Review the strategist's findings, explore the codebase in more detail, and document what you discover. Work through the pending tasks below — mark each one as done when complete.${taskList}
+IMPORTANT: Do thorough work before concluding. You must:
+1. Read at least 10-15 source files to understand the codebase deeply
+2. Identify specific gaps, unknowns, and risks not already documented
+3. Work through ALL pending tasks below — mark each as in_progress then done
+4. Only after completing ALL tasks should you consider the phase done
 
-Focus on understanding what the project needs to succeed. Use plain language.`,
+Do NOT rush to submit an exit document. Take time to read files, understand patterns, and document findings.${taskList}
 
-    architecture: `The project has advanced to the Architecture phase. Your role is to design the technical approach.
+Focus on discovering what the strategist missed. Read implementation details, not just top-level files.`,
 
-Review prior findings, analyze the code structure, and propose architectural improvements or confirm the current approach is sound. Work through pending tasks.${taskList}
+    architecture: `The project has advanced to the Architecture phase. Your role is to design the technical approach based on discovery findings.
 
-Focus on practical, actionable architecture decisions. Use plain language.`,
+IMPORTANT: Do thorough work before concluding. You must:
+1. Read the actual implementation code (not just directory listings)
+2. Analyze at least 5-10 key source files in detail
+3. Identify architectural patterns, anti-patterns, and improvement opportunities
+4. Work through ALL pending tasks below — mark each as in_progress then done
+5. Only after completing ALL tasks should you consider the phase done
+
+Do NOT rush to submit an exit document. Provide specific, actionable architecture recommendations based on actual code analysis.${taskList}
+
+Focus on practical decisions backed by evidence from the codebase.`,
 
     execution: `The project has advanced to the Execution phase. Your role is to implement changes.
 
-Work through the tasks below. Use your tools to read, write, and modify code as needed. Mark each task done when complete.${taskList}
+IMPORTANT: Do thorough work before concluding. You must:
+1. Read the relevant source files for each task before modifying
+2. Make changes incrementally — read, plan, write, verify
+3. Work through ALL pending tasks — mark each in_progress then done
+4. Only after ALL tasks are complete should you consider the phase done
 
-Focus on making progress on the most important tasks first.`,
+Do NOT rush. Quality matters more than speed.${taskList}
+
+Focus on the highest priority tasks first.`,
 
     review: `The project has advanced to the Review phase. Your role is to verify quality.
 
-Review the work done in previous phases. Check for issues, verify test coverage, and ensure quality standards are met. Work through review tasks below.${taskList}
+IMPORTANT: Do thorough work before concluding. You must:
+1. Read the actual source code that was modified in execution
+2. Check for bugs, security issues, and edge cases
+3. Verify tests exist and cover the changes
+4. Work through ALL review tasks — mark each in_progress then done
+5. Only after ALL tasks are complete should you consider the phase done
+
+Do NOT rubber-stamp. Find real issues.${taskList}
 
 Focus on catching problems before they reach production.`,
 
     deploy: `The project has advanced to the Deploy phase. Your role is to prepare for release.
 
-Review project readiness and prepare deployment documentation. Complete the deployment checklist tasks below.${taskList}
+IMPORTANT: Do thorough work before concluding. You must:
+1. Verify the project builds and tests pass
+2. Check that documentation is current
+3. Prepare deployment artifacts and configuration
+4. Work through ALL deployment tasks — mark each in_progress then done
+5. Only after ALL tasks are complete should you consider the phase done
+
+Do NOT rush the release. Verify everything.${taskList}
 
 Focus on ensuring a smooth, safe deployment.`,
   };

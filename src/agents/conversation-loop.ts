@@ -591,10 +591,29 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
       room.onMessage(agentId, assistantText, 'assistant');
 
       // Auto-detect exit documents embedded in AI text responses (#524)
-      // The AI sometimes generates exit doc JSON in prose instead of calling the tool
+      // #1135 — Only auto-submit exit doc after meaningful work:
+      //   - Must have done at least 3 AI iterations AND used 3+ distinct tools
+      //   - For non-strategy phases: check that assigned tasks have been worked on
       const exitTemplate = room.exitRequired;
       if (exitTemplate && exitTemplate.fields.length > 0) {
-        detectAndSubmitExitDoc(assistantText, room.id, agentId, bus, exitTemplate);
+        let canSubmitExitDoc = iteration >= 3 && usedToolNames.size >= 3;
+
+        // For phases after strategy, verify task progress
+        if (canSubmitExitDoc && params.options?.buildingId) {
+          try {
+            const buildingId = params.options.buildingId as string;
+            const taskDb = (await import('../storage/db.js')).getDb();
+            const pendingTasks = taskDb.prepare(
+              `SELECT COUNT(*) as c FROM tasks WHERE building_id = ? AND assignee_id = ? AND status = 'pending'`
+            ).get(buildingId, agentId) as { c: number };
+            // If agent has pending tasks, don't auto-submit yet
+            if (pendingTasks.c > 0) canSubmitExitDoc = false;
+          } catch { /* ignore — strategy phase has no tasks yet */ }
+        }
+
+        if (canSubmitExitDoc) {
+          detectAndSubmitExitDoc(assistantText, room.id, agentId, bus, exitTemplate);
+        }
       }
     }
 
