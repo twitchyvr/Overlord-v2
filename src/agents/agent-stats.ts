@@ -250,7 +250,6 @@ export interface TelemetryRates {
   agentChatRate: number;      // chat messages per hour
   aiRequestRate: number;      // AI API calls per hour
   totalTokens: number;        // total tokens consumed (all time)
-  totalTokensLastHour: number;
   totalToolCalls: number;     // all time
   totalMessages: number;      // all time
   totalSessions: number;      // all time
@@ -281,9 +280,9 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
 
   const hourMap = new Map(hourCounts.map(r => [r.event_type, r.cnt]));
 
-  const executionRate = (hourMap.get('session_end') || 0) + (hourMap.get('agent:activity') || 0);
-  const toolUseRate = (hourMap.get('tool_executed') || 0) + (hourMap.get('tool:executed') || 0) + (hourMap.get('tool:executing') || 0);
-  const agentChatRate = (hourMap.get('message_sent') || 0) + (hourMap.get('chat:message') || 0);
+  const executionRate = (hourMap.get('building_started') || 0) + (hourMap.get('building_stopped') || 0) + (hourMap.get('session_end') || 0);
+  const toolUseRate = (hourMap.get('tool_executed') || 0) + (hourMap.get('tool:executed') || 0);
+  const agentChatRate = (hourMap.get('message_sent') || 0) + (hourMap.get('chat:message') || 0) + (hourMap.get('status_change') || 0);
   const aiRequestRate = (hourMap.get('ai:request') || 0) + (hourMap.get('ai_request') || 0);
 
   // Token totals from agent_stats
@@ -293,13 +292,16 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
   const tokenResult = db.prepare(tokenQuery).get(...buildingParams) as { total: number };
   const totalTokens = tokenResult?.total || 0;
 
-  // Tokens in last 24h (from activity log event_data)
-  const tokenDayResult = db.prepare(`
-    SELECT COUNT(*) as cnt FROM agent_activity_log
-    WHERE (event_type = 'ai:request' OR event_type = 'ai_request')
-    AND created_at >= ?${whereBuilding}
-  `).get(twentyFourHoursAgo, ...buildingParams) as { cnt: number };
-  const totalTokensLast24h = tokenDayResult?.cnt || 0;
+  // Tokens — sum actual input+output tokens from event_data (#1141)
+  const tokenSumResult = db.prepare(`
+    SELECT COALESCE(SUM(
+      CAST(COALESCE(json_extract(event_data, '$.inputTokens'), 0) AS INTEGER) +
+      CAST(COALESCE(json_extract(event_data, '$.outputTokens'), 0) AS INTEGER)
+    ), 0) as total_tokens
+    FROM agent_activity_log
+    WHERE (event_type = 'ai:request' OR event_type = 'ai_request')${whereBuilding}
+  `).get(...buildingParams) as { total_tokens: number };
+  const totalTokensSum = tokenSumResult?.total_tokens || 0;
 
   // All-time totals
   const totalsQuery = buildingId
@@ -352,8 +354,7 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
     toolUseRate,
     agentChatRate,
     aiRequestRate,
-    totalTokens,
-    totalTokensLastHour: totalTokensLast24h,
+    totalTokens: totalTokensSum,
     totalToolCalls,
     totalMessages,
     totalSessions,
