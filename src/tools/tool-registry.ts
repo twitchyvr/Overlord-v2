@@ -1308,13 +1308,34 @@ function registerBuiltinTools(): void {
       if (!buildingId) return { output: 'Error: no active building', error: true };
 
       const db = getDb();
-      const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const title = p.title as string;
       const description = (p.description as string) || '';
       const priority = (p.priority as string) || 'normal';
       const phase = (p.phase as string) || null;
       const milestoneId = (p.milestone_id as string) || null;
 
+      // #1134 — Dedup check: skip if a task with very similar title already exists
+      const existing = db.prepare(
+        `SELECT id, title FROM tasks WHERE building_id = ? AND LOWER(title) = LOWER(?)`
+      ).get(buildingId, title) as { id: string; title: string } | undefined;
+      if (existing) {
+        return {
+          output: `Task already exists: "${existing.title}" (id: ${existing.id}) — skipped duplicate`,
+          taskId: existing.id,
+        };
+      }
+      // Also check for fuzzy match (title contains or is contained by existing)
+      const fuzzy = db.prepare(
+        `SELECT id, title FROM tasks WHERE building_id = ? AND (LOWER(title) LIKE '%' || LOWER(?) || '%' OR LOWER(?) LIKE '%' || LOWER(title) || '%') LIMIT 1`
+      ).get(buildingId, title.slice(0, 40), title.slice(0, 40)) as { id: string; title: string } | undefined;
+      if (fuzzy) {
+        return {
+          output: `Similar task exists: "${fuzzy.title}" (id: ${fuzzy.id}) — skipped to avoid duplicate`,
+          taskId: fuzzy.id,
+        };
+      }
+
+      const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       db.prepare(`
         INSERT INTO tasks (id, building_id, title, description, priority, phase, status, assignee_id, milestone_id)
         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
@@ -1393,12 +1414,24 @@ function registerBuiltinTools(): void {
       if (!buildingId) return { output: 'Error: no active building', error: true };
 
       const db = getDb();
-      const id = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const type = p.type as string;
       const summary = p.summary as string;
       const rationale = (p.rationale as string) || '';
       const affectedAreas = Array.isArray(p.affectedAreas) ? p.affectedAreas : [];
 
+      // #1134 — Dedup: skip if a RAID entry of the same type with similar summary exists
+      const existing = db.prepare(
+        `SELECT id, summary FROM raid_entries WHERE building_id = ? AND type = ? AND (LOWER(summary) = LOWER(?) OR LOWER(summary) LIKE '%' || LOWER(?) || '%')`
+      ).get(buildingId, type, summary, summary.slice(0, 30)) as { id: string; summary: string } | undefined;
+      if (existing) {
+        const typeLabel = { risk: 'Risk', assumption: 'Assumption', issue: 'Issue', decision: 'Decision' }[type] || type;
+        return {
+          output: `${typeLabel} already exists: "${existing.summary}" (id: ${existing.id}) — skipped duplicate`,
+          entryId: existing.id,
+        };
+      }
+
+      const id = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       db.prepare(`
         INSERT INTO raid_entries (id, building_id, type, phase, summary, rationale, decided_by, affected_areas, status)
         VALUES (?, ?, ?, (SELECT active_phase FROM buildings WHERE id = ?), ?, ?, ?, ?, 'active')
@@ -1430,11 +1463,22 @@ function registerBuiltinTools(): void {
       if (!buildingId) return { output: 'Error: no active building', error: true };
 
       const db = getDb();
-      const id = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const title = p.title as string;
       const description = (p.description as string) || '';
       const targetDate = (p.targetDate as string) || null;
 
+      // #1134 — Dedup: skip if milestone with similar title exists
+      const existing = db.prepare(
+        `SELECT id, title FROM milestones WHERE building_id = ? AND (LOWER(title) = LOWER(?) OR LOWER(title) LIKE '%' || LOWER(?) || '%')`
+      ).get(buildingId, title, title.slice(0, 30)) as { id: string; title: string } | undefined;
+      if (existing) {
+        return {
+          output: `Milestone already exists: "${existing.title}" (id: ${existing.id}) — skipped duplicate`,
+          milestoneId: existing.id,
+        };
+      }
+
+      const id = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       db.prepare(`
         INSERT INTO milestones (id, building_id, title, description, due_date, status)
         VALUES (?, ?, ?, ?, ?, 'active')
