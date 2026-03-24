@@ -282,8 +282,15 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
 
   const executionRate = (hourMap.get('building_started') || 0) + (hourMap.get('building_stopped') || 0) + (hourMap.get('session_end') || 0);
   const toolUseRate = (hourMap.get('tool_executed') || 0) + (hourMap.get('tool:executed') || 0);
-  const agentChatRate = (hourMap.get('message_sent') || 0) + (hourMap.get('chat:message') || 0) + (hourMap.get('status_change') || 0);
   const aiRequestRate = (hourMap.get('ai:request') || 0) + (hourMap.get('ai_request') || 0);
+
+  // Messages from the messages table (not activity log)
+  const msgQuery = buildingId
+    ? `SELECT COUNT(*) as cnt FROM messages WHERE room_id IN (SELECT r.id FROM rooms r JOIN floors f ON r.floor_id = f.id WHERE f.building_id = ?) AND created_at >= ?`
+    : `SELECT COUNT(*) as cnt FROM messages WHERE created_at >= ?`;
+  const msgParams = buildingId ? [buildingId, twentyFourHoursAgo] : [twentyFourHoursAgo];
+  const msgResult = db.prepare(msgQuery).get(...msgParams) as { cnt: number };
+  const agentChatRate = msgResult?.cnt || 0;
 
   // Token totals from agent_stats
   const tokenQuery = buildingId
