@@ -21,7 +21,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Task store merge** — progress bar updates after inline status change (#1123)
 - **Deduplication for tasks, milestones, RAID** — agents no longer create duplicates across phases (#1134)
 - **Sidebar Play/Pause/Stop updates in real time** — controls reflect execution state changes (#1132)
-- **Phases no longer advance too fast** — agents must use 5+ tools before exit doc auto-submits; prompts require thorough analysis before concluding (#1135)
+- **Phases no longer advance too fast** — exit doc gated on task progress + iteration count; prompts require thorough analysis (#1135)
+- **Agents actually update tasks** — phase prompts now show full task queue with exact update_task call syntax; agents mark tasks in_progress/done (#1141)
 
 ### Added
 - **Universal inline editing** — click-to-edit on task title, status, priority, description in detail drawer (#1037)
