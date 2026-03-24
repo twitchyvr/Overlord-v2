@@ -26,6 +26,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Chat tool calls collapsed** — 30+ individual badges replaced with single summary line; analysis text now visible (#1146)
 - **Telemetry tokens accurate** — shows actual 911k token sum from event_data, not just request count
 - **Task progress shows in-progress count** — "0/5 done, 5 in progress" instead of misleading "0/5 done"
+- **Building cards show task count subtitle** — differentiate projects at a glance (#1127)
 
 ### Added
 - **Universal inline editing** — click-to-edit on task title, status, priority, description in detail drawer (#1037)
