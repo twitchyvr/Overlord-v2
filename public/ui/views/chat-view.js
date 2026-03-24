@@ -533,11 +533,49 @@ export class ChatView extends Component {
       contentWrap.appendChild(thinkingEl);
     }
 
-    // Tool calls (if present)
+    // Tool calls — collapse when >3 to avoid wall of badges (#1146)
     if (msg.toolCalls && msg.toolCalls.length > 0) {
       const toolsEl = h('div', { class: 'chat-tool-calls' });
-      for (const tc of msg.toolCalls) {
-        toolsEl.appendChild(this._buildToolChip(tc));
+      const MAX_VISIBLE = 3;
+
+      if (msg.toolCalls.length <= MAX_VISIBLE) {
+        for (const tc of msg.toolCalls) toolsEl.appendChild(this._buildToolChip(tc));
+      } else {
+        // Show first 2 + summary chip + expandable rest
+        for (const tc of msg.toolCalls.slice(0, 2)) toolsEl.appendChild(this._buildToolChip(tc));
+
+        // Count by tool type for summary
+        const counts = {};
+        for (const tc of msg.toolCalls) {
+          const name = tc.name || tc.function?.name || 'tool';
+          counts[name] = (counts[name] || 0) + 1;
+        }
+        const summary = Object.entries(counts).map(([k, v]) => {
+          const label = { list_dir: 'browsed', read_file: 'read', create_task: 'created tasks', update_task: 'updated tasks', create_raid_entry: 'logged RAID' }[k] || k;
+          return `${v} ${label}`;
+        }).join(', ');
+
+        const summaryChip = h('button', {
+          class: 'chat-tool-chip chat-tool-summary',
+          style: 'cursor:pointer; opacity:0.7; border:1px dashed var(--border-subtle); font-size:0.75rem;',
+          title: 'Click to expand all tool calls',
+        }, `${msg.toolCalls.length} tool calls (${summary})`);
+
+        const hiddenTools = h('div', { style: 'display:none;' });
+        for (const tc of msg.toolCalls.slice(2)) hiddenTools.appendChild(this._buildToolChip(tc));
+
+        summaryChip.addEventListener('click', () => {
+          if (hiddenTools.style.display === 'none') {
+            hiddenTools.style.display = '';
+            summaryChip.textContent = 'Collapse tool calls';
+          } else {
+            hiddenTools.style.display = 'none';
+            summaryChip.textContent = `${msg.toolCalls.length} tool calls (${summary})`;
+          }
+        });
+
+        toolsEl.appendChild(summaryChip);
+        toolsEl.appendChild(hiddenTools);
       }
       contentWrap.appendChild(toolsEl);
     }
