@@ -28,6 +28,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Task progress shows in-progress count** — "0/5 done, 5 in progress" instead of misleading "0/5 done"
 - **Building cards show task count subtitle** — differentiate projects at a glance (#1127)
 - **Service worker cache bust** — JS files now network-first; all code updates visible immediately; bumped cache v1→v2 to invalidate stale caches
+- **24h telemetry rates fixed** — SQLite datetime format mismatch caused all rates to show 0; now uses datetime() function directly (#1159)
+- **Voice input** — mic button (🎙️) in chat for speech-to-text using Web Speech API; click to speak, text fills input (#1156)
 - **Messages telemetry** — counter queries actual messages table instead of non-existent activity log events
 - **Aborted conversation text cleaned** — filters "Using list_dir..." placeholder fragments (#1152)
 
