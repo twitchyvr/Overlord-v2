@@ -304,12 +304,78 @@ export class ChatView extends Component {
     });
     inputRow.appendChild(this._fileInput);
 
+    // Voice input button (#1156) — Web Speech API (free, local, no API calls)
+    const micBtn = h('button', {
+      class: 'chat-mic-btn',
+      title: 'Voice input (click to speak)',
+      style: 'font-size:1.2rem; padding:4px 8px; cursor:pointer; background:none; border:none; opacity:0.6; transition:opacity 0.2s;',
+    }, '\u{1F3A4}');
+
+    let recognition = null;
+    let isListening = false;
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (this._tokenInput?.input) {
+          this._tokenInput.input.value = transcript;
+          this._tokenInput.input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      };
+
+      recognition.onend = () => {
+        isListening = false;
+        micBtn.style.opacity = '0.6';
+        micBtn.style.color = '';
+        micBtn.title = 'Voice input (click to speak)';
+      };
+
+      recognition.onerror = () => {
+        isListening = false;
+        micBtn.style.opacity = '0.6';
+        micBtn.style.color = '';
+      };
+
+      micBtn.addEventListener('click', () => {
+        if (isListening) {
+          recognition.stop();
+          isListening = false;
+          micBtn.style.opacity = '0.6';
+          micBtn.style.color = '';
+          micBtn.title = 'Voice input (click to speak)';
+        } else {
+          recognition.start();
+          isListening = true;
+          micBtn.style.opacity = '1';
+          micBtn.style.color = 'var(--status-error, red)';
+          micBtn.title = 'Listening... (click to stop)';
+        }
+      });
+    } else {
+      micBtn.style.display = 'none'; // Hide if browser doesn't support Speech API
+    }
+    this._micBtn = micBtn; // Store ref for post-mount insertion
+
     this._tokenInput = new TokenInput(inputRow, {
       placeholder: 'Message Overlord... (/ for commands, @ to mention)',
       onSubmit: (text, tokens) => this._sendMessage(text, tokens),
       onTokenTrigger: (type, query) => this._handleTokenTrigger(type, query)
     });
     this._tokenInput.mount();
+    // Insert mic button next to the send button inside the token input wrapper
+    const sendBtn = inputRow.querySelector('.token-input-send');
+    if (sendBtn && this._micBtn) {
+      sendBtn.parentNode.insertBefore(this._micBtn, sendBtn);
+    }
     inputContainer.appendChild(inputRow);
     this.el.appendChild(inputContainer);
 
