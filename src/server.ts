@@ -61,6 +61,31 @@ async function start(): Promise<void> {
     log.info({ buildings: resetBuildings.changes, agents: resetAgents.changes }, 'Reset stale execution state from previous session');
   }
 
+  // Clean orphaned data from previously deleted buildings (#1198)
+  const orphanTables = [
+    'tasks', 'todos', 'milestones', 'raid_entries', 'phase_gates', 'plans',
+    'agent_activity_log', 'agent_sessions', 'agent_stats', 'agent_emails',
+    'visual_tests', 'pipeline_evidence', 'merge_queue', 'repo_file_origins',
+  ];
+  let totalOrphaned = 0;
+  for (const table of orphanTables) {
+    try {
+      const r = resetDb.prepare(`DELETE FROM ${table} WHERE building_id IS NOT NULL AND building_id NOT IN (SELECT id FROM buildings)`).run();
+      totalOrphaned += r.changes;
+    } catch { /* table may not have building_id column */ }
+  }
+  // Also clean agent-scoped orphans
+  try {
+    const agentOrphans = resetDb.prepare(`DELETE FROM agent_email_recipients WHERE agent_id NOT IN (SELECT id FROM agents)`).run();
+    totalOrphaned += agentOrphans.changes;
+  } catch { /* ignore */ }
+  if (totalOrphaned > 0) {
+    log.info({ rows: totalOrphaned }, 'Cleaned orphaned data from deleted buildings');
+  }
+
+  // Null out any hallucinated due dates on milestones (#1195)
+  resetDb.prepare("UPDATE milestones SET due_date = NULL WHERE due_date IS NOT NULL").run();
+
   const ai = initAI(config, bus);
   log.info('AI layer initialized');
 
