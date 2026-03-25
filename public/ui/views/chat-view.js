@@ -828,12 +828,24 @@ export class ChatView extends Component {
   _buildThinkingBubble(thinking) {
     const bubble = h('div', { class: 'thinking-bubble' });
 
-    // Determine if this is a structured thinking object or plain text
+    // #1176 — Parse thinking from various formats into clean text
     const isStructured = thinking && typeof thinking === 'object' && !Array.isArray(thinking);
-    const text = typeof thinking === 'string' ? thinking
-      : isStructured && thinking.text ? thinking.text
-      : typeof thinking === 'object' ? JSON.stringify(thinking, null, 2)
-      : String(thinking);
+    let text;
+    if (typeof thinking === 'string') {
+      text = thinking;
+    } else if (Array.isArray(thinking)) {
+      // Array of strings — join into paragraphs, strip quotes
+      text = thinking
+        .filter(t => typeof t === 'string' && t.trim())
+        .map(t => t.replace(/^["']|["']$/g, '').trim())
+        .join('\n\n');
+    } else if (isStructured && thinking.text) {
+      text = thinking.text;
+    } else {
+      text = String(thinking || '');
+    }
+    // Clean up escaped newlines
+    text = text.replace(/\\n/g, '\n').replace(/\\t/g, '  ');
 
     // Thread label (if structured)
     const threadLabel = isStructured && thinking.thread ? ` \u2014 ${thinking.thread}` : '';
@@ -857,11 +869,22 @@ export class ChatView extends Component {
       h('span', { class: 'thinking-bubble-chevron' }, '\u25B6')
     );
 
-    const body = h('div', { class: 'thinking-bubble-body', style: { display: 'none' } });
-    // Render as preformatted text for readability
-    const pre = h('pre', { class: 'thinking-bubble-text' });
-    pre.textContent = text;
-    body.appendChild(pre);
+    const body = h('div', { class: 'thinking-bubble-body', style: { display: 'none', padding: 'var(--sp-2)', fontSize: '0.85rem', lineHeight: '1.5', color: 'var(--text-secondary)', maxHeight: '300px', overflowY: 'auto' } });
+    // Render as formatted paragraphs, not raw pre (#1176)
+    const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
+    for (const para of paragraphs) {
+      const p = h('p', { style: 'margin: 0 0 var(--sp-2) 0;' });
+      // Basic inline markdown: **bold**, `code`, *italic*, line breaks
+      // Sanitized via setTrustedContent which strips dangerous elements
+      let formatted = para.trim()
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code style="background:var(--surface-2);padding:1px 4px;border-radius:3px;font-size:0.85em;">$1</code>')
+        .replace(/\n/g, '<br>');
+      setTrustedContent(p, formatted);
+      body.appendChild(p);
+    }
 
     toggle.addEventListener('click', () => {
       const isOpen = body.style.display !== 'none';
