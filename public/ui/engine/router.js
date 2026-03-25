@@ -98,10 +98,9 @@ export function initRouter({ centerPanel, buildingPanel }) {
     });
   }
 
-  // Listen for building selection to show chat
-  OverlordUI.subscribe('building:selected', () => {
-    navigateTo('chat');
-  });
+  // building:selected no longer auto-navigates to chat (#1207 audit)
+  // The "Open" button on dashboard explicitly dispatches navigate:chat.
+  // Auto-navigation was hijacking users from Tasks/RAID/other views.
 }
 
 /**
