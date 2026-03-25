@@ -101,6 +101,11 @@ export class DashboardView extends Component {
       window.overlordSocket.fetchSecurityStats();
     }
 
+    // Load recent activity from DB so dashboard isn't empty on page load (#1201)
+    if (window.overlordSocket && this._activityItems.length === 0) {
+      this._loadRecentActivity();
+    }
+
     this.render();
   }
 
@@ -656,6 +661,45 @@ export class DashboardView extends Component {
     }
   }
 
+  // Load recent activity from DB across all buildings (#1201)
+  async _loadRecentActivity() {
+    if (!window.overlordSocket) return;
+    const buildings = this._buildings || [];
+    // Fetch last 10 events from each building, merge, sort by timestamp
+    const allEvents = [];
+    for (const b of buildings.slice(0, 5)) { // Limit to 5 buildings to avoid flooding
+      try {
+        const res = await window.overlordSocket.fetchActivityHistory(b.id, { limit: 10 });
+        if (res && res.ok && res.data) {
+          allEvents.push(...res.data);
+        }
+      } catch { /* skip failed buildings */ }
+    }
+    if (allEvents.length > 0) {
+      // Sort by timestamp descending and take top 10
+      allEvents.sort((a, b) => {
+        const ta = a.ts || a.created_at || '';
+        const tb = b.ts || b.created_at || '';
+        return tb.localeCompare(ta);
+      });
+      const store = OverlordUI.getStore();
+      const existing = store?.get('activity.items') || [];
+      // Merge DB events with any real-time events, dedup by event+timestamp
+      const merged = [...existing];
+      for (const ev of allEvents.slice(0, 20)) {
+        if (!merged.some(m => m.event === ev.event && m.ts === ev.ts && m.agentId === ev.agentId)) {
+          merged.push(ev);
+        }
+      }
+      merged.sort((a, b) => {
+        const ta = a.ts || a.timestamp || '';
+        const tb = b.ts || b.timestamp || '';
+        return String(tb).localeCompare(String(ta));
+      });
+      store?.set('activity.items', merged.slice(0, 100));
+    }
+  }
+
   // ─── Recent Activity Mini-Feed (#661) ───
 
   _buildRecentActivity() {
@@ -664,7 +708,7 @@ export class DashboardView extends Component {
 
     const recent = this._activityItems.slice(0, 6);
     if (recent.length === 0) {
-      section.appendChild(h('p', { class: 'dashboard-empty' }, 'No activity yet.'));
+      section.appendChild(h('p', { class: 'dashboard-empty' }, 'No activity yet. Start a project to see agent activity here.'));
       return section;
     }
 
