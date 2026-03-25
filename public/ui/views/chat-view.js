@@ -308,8 +308,9 @@ export class ChatView extends Component {
     const micBtn = h('button', {
       class: 'chat-mic-btn',
       title: 'Voice input (click to speak)',
-      style: 'font-size:1.2rem; padding:4px 8px; cursor:pointer; background:none; border:none; opacity:0.6; transition:opacity 0.2s;',
-    }, '\u{1F3A4}');
+      'aria-label': 'Voice input',
+      style: 'font-size:1.4rem; padding:6px 10px; cursor:pointer; background:none; border:none; border-radius:50%; opacity:0.5; transition:all 0.2s; min-width:36px; min-height:36px; display:flex; align-items:center; justify-content:center;',
+    }, '\u{1F399}\uFE0F');
 
     let recognition = null;
     let isListening = false;
