@@ -133,8 +133,9 @@ export function initSocketBridge(socket, store, engine) {
     }
     store.set('ui.processing', false);
     store.set('ui.streaming', false);
-    // Only add to messages for non-error final responses
-    if (data.type !== 'error') {
+    // Only add to messages for non-error, non-mention final responses (#1173)
+    // Mention notifications are system messages, not chat messages
+    if (data.type !== 'error' && data.type !== 'mention') {
       store.update('chat.messages', (msgs) => [...(msgs || []), {
         id: data.sessionId || Date.now().toString(),
         role: 'assistant',
