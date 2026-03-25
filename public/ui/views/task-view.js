@@ -683,6 +683,31 @@ export class TaskView extends Component {
 
     container.appendChild(actions);
 
+    // Delete button (audit finding: no way to delete from detail view)
+    const deleteRow = h('div', { style: 'margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border-subtle);' });
+    const deleteBtn = Button.create('Delete Task', {
+      variant: 'danger',
+      size: 'sm',
+      onClick: async () => {
+        if (!window.overlordSocket) return;
+        const confirmed = confirm(`Delete "${task.title}"?\n\nThis cannot be undone.`);
+        if (!confirmed) return;
+        try {
+          const res = await window.overlordSocket.deleteTask(task.id);
+          if (res?.ok) {
+            Drawer.close();
+            Toast.success('Task deleted');
+          } else {
+            Toast.error(res?.error?.message || 'Failed to delete task');
+          }
+        } catch {
+          Toast.error('Failed to delete task');
+        }
+      }
+    });
+    deleteRow.appendChild(deleteBtn);
+    container.appendChild(deleteRow);
+
     return container;
   }
 
