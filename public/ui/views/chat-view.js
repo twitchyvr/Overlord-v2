@@ -1389,11 +1389,24 @@ export class ChatView extends Component {
         const allAgents = store?.get('agents.list') || [];
         const roomAgents = allAgents.filter(a => a.current_room_id === activeRoomId);
         if (roomAgents.length > 0) {
-          // Agent names are clickable — open detail panel (#979)
+          // Agent names are clickable with activity badges (#979, #1176)
           agentsEl.textContent = '';
+          const activities = store?.get('agents.activities') || {};
           roomAgents.forEach((a, i) => {
-            if (i > 0) agentsEl.appendChild(document.createTextNode(', '));
-            agentsEl.appendChild(EntityLink.agent(a.id, a.display_name || a.name || 'Agent'));
+            if (i > 0) agentsEl.appendChild(document.createTextNode(' '));
+            const nameEl = EntityLink.agent(a.id, a.display_name || a.name || 'Agent');
+            agentsEl.appendChild(nameEl);
+            // Show activity badge if agent is actively working
+            const activity = activities[a.id];
+            if (activity && (Date.now() - activity.timestamp) < 60000) {
+              const BADGES = { thinking: '\u{1F9E0}', coding: '\u{1F4BB}', reading: '\u{1F4D6}', running: '\u26A1', searching: '\u{1F50D}', testing: '\u{1F9EA}', planning: '\u{1F4CB}', working: '\u2699\uFE0F' };
+              const emoji = BADGES[activity.activity] || '\u2699\uFE0F';
+              const badge = h('span', {
+                class: 'agent-activity-indicator',
+                title: `${activity.activity}${activity.toolName ? ': ' + activity.toolName : ''}`,
+              }, h('span', { class: 'activity-emoji' }, emoji));
+              agentsEl.appendChild(badge);
+            }
           });
           agentsEl.title = `Agents in this room: ${roomAgents.map(a => a.display_name || a.name).join(', ')}`;
           agentsEl.hidden = false;
