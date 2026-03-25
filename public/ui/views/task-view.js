@@ -483,7 +483,7 @@ export class TaskView extends Component {
 
     const total = this._tasks.length;
     const done = this._countByStatus('done');
-    const wip = this._countByStatus('in_progress');
+    const wip = this._countByStatus('in-progress');
 
     if (total === 0) return;
 
@@ -571,7 +571,7 @@ export class TaskView extends Component {
       STATUS_LABELS[task.status] || task.status || 'Pending');
     InlineEdit.select(statusEl, {
       value: task.status || 'pending',
-      options: ['pending', 'in_progress', 'done', 'blocked'],
+      options: ['pending', 'in-progress', 'done', 'blocked'],
       onSave: (v) => saveField('status', v),
     });
 
@@ -691,7 +691,7 @@ export class TaskView extends Component {
     const steps = [
       { key: 'pending', label: 'Not Started' },
       { key: 'in-progress', label: 'In Progress' },
-      { key: 'blocked', label: 'Review' },
+      { key: 'blocked', label: 'Blocked' },
       { key: 'done', label: 'Done' },
     ];
     const currentIdx = steps.findIndex(s => s.key === currentStatus);
@@ -1107,9 +1107,13 @@ export class TaskView extends Component {
     const task = this._tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    const currentIdx = STATUS_ORDER.indexOf(task.status || 'pending');
-    const nextIdx = (currentIdx + 1) % STATUS_ORDER.length;
-    const nextStatus = STATUS_ORDER[nextIdx];
+    // Cycle: pending -> in-progress -> done (stop). Blocked is not part of the cycle.
+    const CYCLE = ['pending', 'in-progress', 'done'];
+    const currentIdx = CYCLE.indexOf(task.status || 'pending');
+    if (currentIdx === -1) return; // blocked or unknown — don't cycle
+    const nextIdx = Math.min(currentIdx + 1, CYCLE.length - 1);
+    if (nextIdx === currentIdx) return; // already done
+    const nextStatus = CYCLE[nextIdx];
 
     this._updateTaskStatus(taskId, nextStatus);
   }

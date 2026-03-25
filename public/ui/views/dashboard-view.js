@@ -109,6 +109,15 @@ export class DashboardView extends Component {
     this.render();
   }
 
+  destroy() {
+    // Clear telemetry refresh interval to prevent memory leak (#1205)
+    if (this._telemetryInterval) {
+      clearInterval(this._telemetryInterval);
+      this._telemetryInterval = null;
+    }
+    super.destroy();
+  }
+
   render() {
     this.el.textContent = '';
     this.el.className = 'dashboard-view';
@@ -518,10 +527,10 @@ export class DashboardView extends Component {
     // Auto-refresh every 30s
     this._telemetryInterval = setInterval(() => this._fetchTelemetryRates(), 30000);
 
-    // Also refresh on live socket events
+    // Also refresh on live socket events (use this.subscribe for proper cleanup #1205)
     const store = OverlordUI.getStore();
     if (store) {
-      store.subscribe('activity.items', () => this._fetchTelemetryRates());
+      this.subscribe(store, 'activity.items', () => this._fetchTelemetryRates());
     }
 
     return panel;
