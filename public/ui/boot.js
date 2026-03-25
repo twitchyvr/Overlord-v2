@@ -230,16 +230,22 @@ if (socket) {
       const total = (usage.total?.input || 0) + (usage.total?.output || 0);
       const calls = usage.total?.calls || 0;
       const formatted = total >= 1000000 ? `${(total / 1000000).toFixed(1)}M` :
-                        total >= 1000 ? `${(total / 1000).toFixed(1)}K` :
+                        total >= 1000 ? `${(total / 1000).toFixed(1)}k` :
                         String(total);
       tokenDisplayEl.textContent = `${formatted} tokens (${calls} calls)`;
-      tokenCounterEl.title = `Session: ${total.toLocaleString()} tokens across ${calls} API calls\nInput: ${(usage.total?.input || 0).toLocaleString()} | Output: ${(usage.total?.output || 0).toLocaleString()}`;
+      tokenCounterEl.title = `This session: ${total.toLocaleString()} tokens, ${calls} API calls\nInput: ${(usage.total?.input || 0).toLocaleString()} | Output: ${(usage.total?.output || 0).toLocaleString()}\n\nClick to view details. Right-click to reset.`;
       tokenCounterEl.classList.remove('warning', 'danger');
       if (total > 500000) tokenCounterEl.classList.add('danger');
       else if (total > 100000) tokenCounterEl.classList.add('warning');
     });
+    // Click navigates to activity view
     tokenCounterEl.addEventListener('click', () => {
       window.dispatchEvent(new CustomEvent('overlord:navigate', { detail: { view: 'activity' } }));
+    });
+    // Right-click resets the counter (#1158)
+    tokenCounterEl.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      store.set('ai.usage', { total: { input: 0, output: 0, calls: 0 } });
     });
   }
 
