@@ -158,12 +158,14 @@ export class TokenInput extends Component {
     const cursorPos = this._textareaEl.selectionStart;
 
     // Look backward from cursor for a trigger character
+    // @ mentions allow spaces (multi-word names like "Omar Kim")
+    // / commands and # references break on spaces
     let triggerFound = false;
     for (let i = cursorPos - 1; i >= 0; i--) {
       const ch = text[i];
 
-      // Stop at whitespace or start of line
-      if (ch === ' ' || ch === '\n') break;
+      // Stop at newline (always)
+      if (ch === '\n') break;
 
       if (this._triggerChars[ch]) {
         // Check that trigger is at start of word (preceded by space, newline, or start of string)
@@ -183,6 +185,25 @@ export class TokenInput extends Component {
           }
           break;
         }
+      }
+
+      // For / and # triggers, stop at spaces (single-word tokens)
+      // For @ mentions, allow spaces to support multi-word names (#1172)
+      if (ch === ' ') {
+        // Check if there's a @ trigger earlier in this "word group"
+        let foundAtTrigger = false;
+        for (let j = i - 1; j >= 0; j--) {
+          if (text[j] === '\n') break;
+          if (text[j] === '@') {
+            if (j === 0 || text[j - 1] === ' ' || text[j - 1] === '\n') {
+              foundAtTrigger = true;
+            }
+            break;
+          }
+          if (text[j] === '/' || text[j] === '#') break; // Different trigger — stop
+        }
+        if (!foundAtTrigger) break; // No @ trigger — stop at space
+        // Otherwise continue scanning past the space for the @ trigger
       }
     }
 
