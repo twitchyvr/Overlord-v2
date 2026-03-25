@@ -34,6 +34,24 @@ export type SpeechModel = 'speech-2.8-hd' | 'speech-2.8-turbo';
 export type SpeechEmotion = 'happy' | 'sad' | 'angry' | 'fearful' | 'disgusted' | 'surprised' | 'calm' | 'fluent' | 'whisper';
 export type AudioFormat = 'mp3' | 'pcm' | 'flac' | 'wav';
 
+export type SoundEffect = 'spacious_echo' | 'auditorium_echo' | 'lofi_telephone' | 'robotic';
+
+export interface VoiceModify {
+  /** Pitch shift -100 to 100 */
+  pitch?: number;
+  /** Intensity -100 to 100 */
+  intensity?: number;
+  /** Timbre shift -100 to 100 */
+  timbre?: number;
+}
+
+export interface TimbreWeight {
+  /** Voice ID to blend */
+  voiceId: string;
+  /** Weight 1-100 */
+  weight: number;
+}
+
 export interface SpeechOptions {
   /** Voice ID — system voice or cloned voice (default: 'male-qn-qingse') */
   voiceId?: string;
@@ -55,6 +73,16 @@ export interface SpeechOptions {
   bitrate?: number;
   /** Language boost for non-Chinese text (e.g., 'English', 'Japanese') */
   languageBoost?: string;
+  /** Sound effect applied to voice output (#1222) */
+  soundEffect?: SoundEffect;
+  /** Fine-tune voice pitch/intensity/timbre (#1222) */
+  voiceModify?: VoiceModify;
+  /** Blend up to 4 voices with weights (#1222) */
+  timbreWeights?: TimbreWeight[];
+  /** Generate subtitles alongside audio (#1222) */
+  subtitleEnable?: boolean;
+  /** Custom pronunciation rules for project jargon (#1222) */
+  pronunciationTones?: Array<{ text: string; pronunciation: string }>;
 }
 
 export interface SpeechResult {
@@ -122,17 +150,30 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function buildRequestBody(text: string, opts: SpeechOptions = {}): Record<string, unknown> {
+  // Voice setting — single voice or timbre blend (#1222)
+  const voiceSetting: Record<string, unknown> = opts.timbreWeights && opts.timbreWeights.length > 0
+    ? {
+        // Timbre mixing: blend up to 4 voices
+        timbre_weights: opts.timbreWeights.map(tw => ({
+          voice_id: tw.voiceId,
+          weight: clamp(tw.weight, 1, 100),
+        })),
+      }
+    : {
+        voice_id: opts.voiceId || 'male-qn-qingse',
+      };
+
+  // Common voice settings
+  if (opts.speed !== undefined) voiceSetting.speed = clamp(opts.speed, 0.5, 2.0);
+  if (opts.vol !== undefined) voiceSetting.vol = clamp(opts.vol, 0, 10);
+  if (opts.pitch !== undefined) voiceSetting.pitch = clamp(opts.pitch, -12, 12);
+  if (opts.emotion) voiceSetting.emotion = opts.emotion;
+
   const body: Record<string, unknown> = {
     model: opts.model || 'speech-2.8-hd',
     text,
     stream: false,
-    voice_setting: {
-      voice_id: opts.voiceId || 'male-qn-qingse',
-      ...(opts.speed !== undefined ? { speed: clamp(opts.speed, 0.5, 2.0) } : {}),
-      ...(opts.vol !== undefined ? { vol: clamp(opts.vol, 0, 10) } : {}),
-      ...(opts.pitch !== undefined ? { pitch: clamp(opts.pitch, -12, 12) } : {}),
-      ...(opts.emotion ? { emotion: opts.emotion } : {}),
-    },
+    voice_setting: voiceSetting,
     audio_setting: {
       format: opts.format || 'mp3',
       sample_rate: opts.sampleRate || 32000,
@@ -143,6 +184,26 @@ function buildRequestBody(text: string, opts: SpeechOptions = {}): Record<string
 
   if (opts.languageBoost) {
     body.language_boost = opts.languageBoost;
+  }
+
+  // Voice personality features (#1222)
+  if (opts.soundEffect) {
+    body.sound_effect = opts.soundEffect;
+  }
+  if (opts.voiceModify) {
+    body.voice_modify = {
+      ...(opts.voiceModify.pitch !== undefined ? { pitch: clamp(opts.voiceModify.pitch, -100, 100) } : {}),
+      ...(opts.voiceModify.intensity !== undefined ? { intensity: clamp(opts.voiceModify.intensity, -100, 100) } : {}),
+      ...(opts.voiceModify.timbre !== undefined ? { timbre: clamp(opts.voiceModify.timbre, -100, 100) } : {}),
+    };
+  }
+  if (opts.subtitleEnable) {
+    body.subtitle_enable = true;
+  }
+  if (opts.pronunciationTones && opts.pronunciationTones.length > 0) {
+    body.pronunciation_dict = {
+      tone: opts.pronunciationTones,
+    };
   }
 
   return body;
