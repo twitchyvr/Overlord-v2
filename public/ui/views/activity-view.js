@@ -1061,9 +1061,7 @@ export class ActivityView extends Component {
     if (item.status === 'success' || item.status === 'ok') {
       return h('span', { class: 'activity-view-badge activity-view-badge--success' }, 'OK');
     }
-    if (item.tier) {
-      return h('span', { class: 'activity-view-badge activity-view-badge--tier' }, `T${item.tier}`);
-    }
+    // Tier badges removed — v1 pattern eliminated in v2 (#1206)
     return null;
   }
 

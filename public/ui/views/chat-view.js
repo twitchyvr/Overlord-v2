@@ -679,8 +679,9 @@ export class ChatView extends Component {
     }
 
     // Inline action buttons for agent suggestions (#792)
-    if (msg.role === 'assistant' && msg.text) {
-      const inlineActions = this._detectInlineActions(msg.text);
+    const msgText = msg.content || msg.text || '';
+    if (msg.role === 'assistant' && msgText) {
+      const inlineActions = this._detectInlineActions(typeof msgText === 'string' ? msgText : '');
       if (inlineActions.length > 0) {
         const actionsBar = h('div', { class: 'chat-inline-actions' });
         for (const ia of inlineActions) {
