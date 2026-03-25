@@ -296,6 +296,8 @@ export class DashboardView extends Component {
         const confirmed = confirm(`Remove "${building.name}" from Overlord?\n\nThis removes the project from the dashboard. Your git repository is NOT deleted.`);
         if (!confirmed) return;
         await window.overlordSocket.deleteBuilding(building.id);
+        // Remove from local array before re-render to prevent flash-back
+        this._buildings = this._buildings.filter(b => b.id !== building.id);
         this.render();
       };
 
