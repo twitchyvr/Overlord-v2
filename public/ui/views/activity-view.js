@@ -254,7 +254,8 @@ export class ActivityView extends Component {
       { id: 'rooms', label: 'Rooms' },
       { id: 'agents', label: 'Agents' },
       { id: 'tools', label: 'Tools' },
-      { id: 'phases', label: 'Phase Gates' }
+      { id: 'tasks', label: 'Tasks' },
+      { id: 'phases', label: 'Phases' }
     ];
     for (const def of pillDefs) {
       const pill = h('button', {
@@ -272,28 +273,7 @@ export class ActivityView extends Component {
     }
     this.el.appendChild(pillsContainer);
 
-    // ── Filter tabs ──
-    const tabWrapper = h('div', { class: 'activity-view-tabs' });
-    const tabContainer = h('div');
-    tabWrapper.appendChild(tabContainer);
-
-    this._tabs = new Tabs(tabContainer, {
-      items: [
-        { id: 'all',    label: 'All',    badge: String(this._items.length) },
-        { id: 'tools',  label: 'Tools',  badge: String(this._countByFilter('tools')) },
-        { id: 'phases', label: 'Phases', badge: String(this._countByFilter('phases')) },
-        { id: 'agents', label: 'Agents', badge: String(this._countByFilter('agents')) }
-      ],
-      activeId: this._filter,
-      style: 'pills',
-      onChange: (id) => {
-        this._filter = id;
-        this._renderTimeline(this._getFilteredItems());
-        this._updateTabBadges();
-      }
-    });
-    this._tabs.mount();
-    this.el.appendChild(tabWrapper);
+    // Duplicate tab filter removed (#1206) — pills are the single filter system
 
     // ── Timeline container ──
     this._timelineEl = h('div', { class: 'activity-view-timeline' });
@@ -837,7 +817,6 @@ export class ActivityView extends Component {
     }
 
     // Update counts
-    this._updateTabBadges();
     if (this._countEl) {
       const total = this._items.length;
       this._countEl.textContent = `${total} event${total !== 1 ? 's' : ''}`;
