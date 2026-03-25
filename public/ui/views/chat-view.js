@@ -308,7 +308,10 @@ export class ChatView extends Component {
     });
     inputRow.appendChild(this._fileInput);
 
-    // Voice input button (#1156) — Web Speech API (free, local, no API calls)
+    // Voice input (#1156) — uses browser's built-in speech recognition
+    // Safari: Apple Siri engine (private, on-device/Apple servers)
+    // Chrome/Edge: requires HTTPS (uses browser's speech service)
+    // Firefox: not supported
     const micBtn = h('button', {
       class: 'chat-mic-btn',
       title: 'Voice input (click to speak)',
@@ -318,17 +321,17 @@ export class ChatView extends Component {
 
     let recognition = null;
     let isListening = false;
-    let textBeforeVoice = ''; // Text in input before voice started
+    let textBeforeVoice = '';
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognition = new SpeechRecognition();
-      recognition.continuous = false; // Single utterance — stops after silence
+      recognition.continuous = false;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
       recognition.onresult = (event) => {
-        // Build transcript from only final results to avoid duplication
         let finalTranscript = '';
         let interimTranscript = '';
         for (let i = 0; i < event.results.length; i++) {
@@ -340,7 +343,6 @@ export class ChatView extends Component {
         }
         const transcript = finalTranscript || interimTranscript;
         if (this._tokenInput?._textareaEl && transcript) {
-          // Set text = what was there before + new transcript
           const separator = textBeforeVoice && !textBeforeVoice.endsWith(' ') ? ' ' : '';
           this._tokenInput._textareaEl.value = textBeforeVoice + separator + transcript;
           this._tokenInput._autoResize();
@@ -353,7 +355,6 @@ export class ChatView extends Component {
         micBtn.style.color = '';
         micBtn.style.background = '';
         micBtn.title = 'Voice input (click to speak)';
-        // Trigger input event so token detection runs on final text
         if (this._tokenInput?._textareaEl) {
           this._tokenInput._textareaEl.dispatchEvent(new Event('input', { bubbles: true }));
         }
@@ -365,19 +366,20 @@ export class ChatView extends Component {
         micBtn.style.color = '';
         micBtn.style.background = '';
         if (event.error === 'not-allowed') {
-          Toast.error('Microphone blocked — check browser permissions');
-          micBtn.title = 'Microphone blocked — check browser permissions';
+          Toast.error('Microphone access denied — check browser settings');
         } else if (event.error === 'network') {
-          Toast.error('Voice requires HTTPS or a network connection to Google\'s speech service');
-          micBtn.title = 'Voice unavailable — requires HTTPS';
+          // Chrome sends audio to its own servers and needs HTTPS
+          Toast.error(isSafari
+            ? 'Speech recognition unavailable — check your internet connection'
+            : 'Voice input requires HTTPS. Try Safari for on-device speech recognition.');
         } else if (event.error === 'no-speech') {
           Toast.info('No speech detected — try again');
-          micBtn.title = 'No speech detected — click to try again';
         } else if (event.error === 'aborted') {
           // User stopped — not an error
+        } else if (event.error === 'service-not-allowed') {
+          Toast.error('Speech recognition not available in this browser');
         } else {
-          Toast.error('Voice input error: ' + event.error);
-          micBtn.title = 'Voice input (click to speak)';
+          Toast.error('Voice error: ' + event.error);
         }
       };
 
@@ -393,9 +395,9 @@ export class ChatView extends Component {
             micBtn.style.color = '#ff4444';
             micBtn.style.background = 'rgba(255,68,68,0.15)';
             micBtn.title = 'Listening... (click to stop)';
-            Toast.info('Listening... speak now');
+            Toast.info(isSafari ? 'Listening...' : 'Listening... speak now');
           } catch (e) {
-            Toast.error('Voice input unavailable');
+            Toast.error('Voice input unavailable in this browser');
           }
         }
       });
