@@ -632,7 +632,14 @@ export class PhaseView extends Component {
 
   _renderPhaseHistory() {
     const currentIdx = PHASE_ORDER.indexOf(this._currentPhase);
-    const completedPhases = PHASE_ORDER.slice(0, currentIdx);
+    // Only show phases as completed if they have at least one GO-signed gate (#1193)
+    const priorPhases = PHASE_ORDER.slice(0, currentIdx);
+    const completedPhases = priorPhases.filter(phase => {
+      const phaseGates = this._gates.filter(g => g.phase === phase);
+      return phaseGates.some(g => g.status === 'go');
+    });
+    // Phases that were skipped/bypassed (prior but no GO gate)
+    const skippedPhases = priorPhases.filter(phase => !completedPhases.includes(phase));
 
     const section = h('div', { class: 'phase-view-history-section' });
 
@@ -642,7 +649,7 @@ export class PhaseView extends Component {
       h('span', { class: 'phase-view-history-toggle-icon' },
         this._historyExpanded ? '\u25BC' : '\u25B6'
       ),
-      h('span', null, `Completed Phases (${completedPhases.length})`),
+      h('span', null, `Completed Phases (${completedPhases.length})${skippedPhases.length > 0 ? ` \u00B7 ${skippedPhases.length} skipped` : ''}`),
     );
     toggleBtn.addEventListener('click', () => {
       this._historyExpanded = !this._historyExpanded;
@@ -651,7 +658,7 @@ export class PhaseView extends Component {
     toggle.appendChild(toggleBtn);
     section.appendChild(toggle);
 
-    if (completedPhases.length === 0) {
+    if (completedPhases.length === 0 && skippedPhases.length === 0) {
       section.appendChild(
         h('div', { class: 'phase-view-history-empty' },
           'No completed phases yet. This is the first phase.'
@@ -664,6 +671,23 @@ export class PhaseView extends Component {
     if (this._historyExpanded) {
       const historyBody = h('div', { class: 'phase-view-history-body' });
 
+      // Show skipped phases first (with warning)
+      for (const phase of skippedPhases) {
+        const phaseGates = this._gates.filter(g => g.phase === phase);
+        const phaseBlock = h('div', { class: 'phase-view-history-phase phase-view-history-skipped' });
+        phaseBlock.appendChild(
+          h('div', { class: 'phase-view-history-phase-header' },
+            h('span', { class: 'phase-view-history-phase-icon', style: 'color: var(--status-busy)' }, '\u26A0'),
+            h('h4', null, this._capitalize(phase)),
+            h('span', { class: 'phase-view-history-gate-count', style: 'color: var(--status-busy)' },
+              'No sign-off — advanced without gate review'
+            )
+          )
+        );
+        historyBody.appendChild(phaseBlock);
+      }
+
+      // Then completed phases (with green checkmark)
       for (const phase of completedPhases) {
         const phaseGates = this._gates.filter(g => g.phase === phase);
 
@@ -671,7 +695,7 @@ export class PhaseView extends Component {
 
         phaseBlock.appendChild(
           h('div', { class: 'phase-view-history-phase-header' },
-            h('span', { class: 'phase-view-history-phase-icon' }, '\u2713'),
+            h('span', { class: 'phase-view-history-phase-icon' }, '\u2705'),
             h('h4', null, this._capitalize(phase)),
             h('span', { class: 'phase-view-history-gate-count' },
               `${phaseGates.length} gate${phaseGates.length !== 1 ? 's' : ''}`
