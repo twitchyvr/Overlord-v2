@@ -621,6 +621,31 @@ export class RaidLogView extends Component {
   _openEditForm(entry) {
     const form = h('div', { class: 'raid-create-form' });
 
+    // Type (was missing from edit form — audit #14)
+    const typeSelect = h('select', { class: 'form-input', id: 'raid-edit-type' });
+    for (const t of RAID_TYPES) {
+      const opt = h('option', { value: t }, RAID_TYPE_LABELS[t] || t);
+      if (t === entry.type) opt.selected = true;
+      typeSelect.appendChild(opt);
+    }
+    form.appendChild(h('div', { class: 'form-group' },
+      h('label', { class: 'form-label' }, 'Type'),
+      typeSelect
+    ));
+
+    // Phase (was missing from edit form — audit #15)
+    const phaseSelect = h('select', { class: 'form-input', id: 'raid-edit-phase' });
+    phaseSelect.appendChild(h('option', { value: '' }, '(none)'));
+    for (const p of ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy']) {
+      const opt = h('option', { value: p }, p.charAt(0).toUpperCase() + p.slice(1));
+      if (p === entry.phase) opt.selected = true;
+      phaseSelect.appendChild(opt);
+    }
+    form.appendChild(h('div', { class: 'form-group' },
+      h('label', { class: 'form-label' }, 'Phase'),
+      phaseSelect
+    ));
+
     // Summary
     form.appendChild(h('div', { class: 'form-group' },
       h('label', { class: 'form-label' }, 'Summary'),
@@ -707,6 +732,8 @@ export class RaidLogView extends Component {
     }
     if (summaryInput) summaryInput.classList.remove('input-error');
 
+    const type = document.getElementById('raid-edit-type')?.value || '';
+    const phase = document.getElementById('raid-edit-phase')?.value || '';
     const rationale = document.getElementById('raid-edit-rationale')?.value?.trim() || '';
     const decidedBy = document.getElementById('raid-edit-decided-by')?.value?.trim() || '';
     const areasRaw = document.getElementById('raid-edit-areas')?.value?.trim() || '';
@@ -718,6 +745,8 @@ export class RaidLogView extends Component {
       const result = await window.overlordSocket.editRaidEntry({
         id: entryId,
         summary,
+        type: type || undefined,
+        phase: phase || undefined,
         rationale,
         decidedBy,
         affectedAreas

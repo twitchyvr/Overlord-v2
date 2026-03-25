@@ -469,6 +469,8 @@ export const RaidEditSchema = z.object({
   rationale: optionalDescription(),
   decidedBy: optionalName(),
   affectedAreas: z.array(z.string().max(MAX_NAME)).max(MAX_ARRAY_ITEMS).optional(),
+  type: z.enum(['risk', 'assumption', 'issue', 'decision']).optional(),
+  phase: optionalName(),
 });
 
 // ─── Task Schemas ───
