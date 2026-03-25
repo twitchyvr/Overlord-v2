@@ -67,6 +67,10 @@ function fuzzyFilter(items, query, labelKey = 'label') {
   const scored = [];
   for (const item of items) {
     let best = fuzzyScore(query, item[labelKey] || '');
+    // Also check _searchText for agents (#1171 — match by display name, role, specialization)
+    if (best < 0 && item._searchText) {
+      best = fuzzyScore(query, item._searchText);
+    }
     // Also check aliases (commands) or description as fallback
     if (best < 0 && item.aliases) {
       for (const alias of item.aliases) {
@@ -1184,12 +1188,20 @@ export class ChatView extends Component {
       // ── Fetch + cache agents ────────────────────────────
       if (!this._agentCache) {
         const agents = store.get('agents.list') || [];
-        this._agentCache = agents.map(a => ({
-          id: a.id,
-          label: a.name || a.id,
-          description: a.role || a.specialization || '',
-          icon: this._agentIcon(a)
-        }));
+        this._agentCache = agents.map(a => {
+          // Show display name (Omar Kim) as primary, role name (Discovery Lead) as secondary (#1171)
+          const displayName = a.display_name || a.name || a.id;
+          const roleName = a.name || '';
+          const label = displayName !== roleName ? `${displayName} (${roleName})` : displayName;
+          return {
+            id: a.id,
+            label: displayName,
+            description: roleName !== displayName ? `${roleName} · ${a.role || ''}` : (a.role || a.specialization || ''),
+            // Include both names for fuzzy search
+            _searchText: `${displayName} ${roleName} ${a.role || ''} ${a.specialization || ''}`.toLowerCase(),
+            icon: this._agentIcon(a)
+          };
+        });
         // If store was empty, try to trigger a fetch for next time
         if (this._agentCache.length === 0 && window.overlordSocket && window.overlordSocket.fetchAgents) {
           window.overlordSocket.fetchAgents();
