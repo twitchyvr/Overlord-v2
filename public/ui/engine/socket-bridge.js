@@ -1678,6 +1678,14 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithFeedback('raid:edit', params);
     },
 
+    async deleteRaidEntry(id) {
+      const res = await _emitWithTimeout('raid:delete', { id });
+      if (res && res.ok) {
+        store.update('raid.entries', (entries) => (entries || []).filter(e => e.id !== id));
+      }
+      return res;
+    },
+
     // ── Phase Gate methods ──
 
     createGate(buildingId, phase, criteria) {

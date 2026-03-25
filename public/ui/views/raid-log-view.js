@@ -447,6 +447,30 @@ export class RaidLogView extends Component {
 
     container.appendChild(actions);
 
+    // Delete button
+    const deleteRow = h('div', { style: 'margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border-subtle);' });
+    deleteRow.appendChild(Button.create('Delete Entry', {
+      variant: 'danger',
+      size: 'sm',
+      onClick: async () => {
+        if (!window.overlordSocket) return;
+        const confirmed = confirm(`Delete this ${entry.type} entry?\n\n"${(entry.summary || '').substring(0, 80)}"\n\nThis cannot be undone.`);
+        if (!confirmed) return;
+        try {
+          const res = await window.overlordSocket.deleteRaidEntry(entry.id);
+          if (res?.ok) {
+            Drawer.close();
+            Toast.success('RAID entry deleted');
+          } else {
+            Toast.error(res?.error?.message || 'Failed to delete');
+          }
+        } catch {
+          Toast.error('Failed to delete RAID entry');
+        }
+      }
+    }));
+    container.appendChild(deleteRow);
+
     return container;
   }
 
