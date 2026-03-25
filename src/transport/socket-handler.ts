@@ -341,57 +341,56 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         return;
       }
 
-      // Cascading delete — order matters for FK constraints
+      // Cascading delete — complete FK-safe order for ALL tables.
       // Only removes from DB. Does NOT delete any files on disk.
       const txn = db.transaction(() => {
-        // 1. Leaf tables first (no other tables reference these)
-        db.prepare('DELETE FROM doc_entries WHERE library_id IN (SELECT id FROM doc_libraries WHERE building_id = ?)').run(buildingId);
-        db.prepare('DELETE FROM doc_libraries WHERE building_id = ?').run(buildingId);
-        db.prepare('DELETE FROM agent_email_recipients WHERE email_id IN (SELECT id FROM agent_emails WHERE building_id = ?)').run(buildingId);
-        db.prepare('DELETE FROM agent_stats WHERE agent_id IN (SELECT id FROM agents WHERE building_id = ?)').run(buildingId);
-        db.prepare('DELETE FROM agent_activity_log WHERE building_id = ?').run(buildingId);
-        db.prepare('DELETE FROM agent_activity_log WHERE agent_id IN (SELECT id FROM agents WHERE building_id = ?)').run(buildingId);
-        db.prepare('DELETE FROM pipeline_evidence WHERE building_id = ?').run(buildingId);
-        db.prepare('DELETE FROM visual_tests WHERE building_id = ?').run(buildingId);
-        db.prepare('DELETE FROM merge_queue WHERE building_id = ?').run(buildingId);
-        db.prepare('DELETE FROM repo_file_origins WHERE building_id = ?').run(buildingId);
+        const aq = `SELECT id FROM agents WHERE building_id = ?`;
+        const rq = `SELECT r.id FROM rooms r JOIN floors f ON r.floor_id = f.id WHERE f.building_id = ?`;
+        const tq = `SELECT id FROM tasks WHERE building_id = ?`;
+        const fq = `SELECT id FROM floors WHERE building_id = ?`;
 
-        // 2. Plans (references agents, must go before agents)
-        db.prepare('DELETE FROM plans WHERE building_id = ?').run(buildingId);
+        // ── Phase 1: Null out all cross-references to break FK cycles ──
+        db.prepare(`UPDATE agents SET current_room_id = NULL, current_table_id = NULL WHERE building_id = ?`).run(buildingId);
+        db.prepare(`UPDATE tasks SET assignee_id = NULL, table_id = NULL, parent_id = NULL WHERE building_id = ?`).run(buildingId);
+        db.prepare(`UPDATE todos SET locked_by = NULL WHERE task_id IN (${tq})`).run(buildingId);
 
-        // 3. Emails (from_id references agents)
-        db.prepare('DELETE FROM agent_emails WHERE building_id = ?').run(buildingId);
-        // Also clean emails from agents in this building
-        db.prepare('DELETE FROM agent_emails WHERE from_id IN (SELECT id FROM agents WHERE building_id = ?)').run(buildingId);
+        // ── Phase 2: Delete leaf tables (nothing references these) ──
+        db.prepare(`DELETE FROM doc_entries WHERE library_id IN (SELECT id FROM doc_libraries WHERE building_id = ?)`).run(buildingId);
+        db.prepare(`DELETE FROM doc_libraries WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM agent_email_recipients WHERE email_id IN (SELECT id FROM agent_emails WHERE building_id = ?)`).run(buildingId);
+        db.prepare(`DELETE FROM agent_email_recipients WHERE agent_id IN (${aq})`).run(buildingId);
+        db.prepare(`DELETE FROM agent_stats WHERE agent_id IN (${aq})`).run(buildingId);
+        db.prepare(`DELETE FROM agent_sessions WHERE agent_id IN (${aq})`).run(buildingId);
+        db.prepare(`DELETE FROM agent_activity_log WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM agent_activity_log WHERE agent_id IN (${aq})`).run(buildingId);
+        db.prepare(`DELETE FROM pipeline_evidence WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM visual_tests WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM merge_queue WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM repo_file_origins WHERE building_id = ?`).run(buildingId);
 
-        // 4. Todos then tasks
-        db.prepare('DELETE FROM todos WHERE task_id IN (SELECT id FROM tasks WHERE building_id = ?)').run(buildingId);
-        db.prepare('DELETE FROM tasks WHERE building_id = ?').run(buildingId);
+        // ── Phase 3: Tables that reference agents/rooms/tasks ──
+        db.prepare(`DELETE FROM plans WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM agent_emails WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM todos WHERE task_id IN (${tq})`).run(buildingId);
+        db.prepare(`DELETE FROM todos WHERE agent_id IN (${aq})`).run(buildingId);
+        db.prepare(`DELETE FROM todos WHERE room_id IN (${rq})`).run(buildingId);
+        db.prepare(`DELETE FROM tasks WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM milestones WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM raid_entries WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM phase_gates WHERE building_id = ?`).run(buildingId);
 
-        // 5. Milestones, RAID, phase gates
-        db.prepare('DELETE FROM milestones WHERE building_id = ?').run(buildingId);
-        db.prepare('DELETE FROM raid_entries WHERE building_id = ?').run(buildingId);
-        db.prepare('DELETE FROM phase_gates WHERE building_id = ?').run(buildingId);
+        // ── Phase 4: Room children ──
+        db.prepare(`DELETE FROM exit_documents WHERE room_id IN (${rq})`).run(buildingId);
+        db.prepare(`DELETE FROM messages WHERE room_id IN (${rq})`).run(buildingId);
+        db.prepare(`DELETE FROM notes WHERE room_id IN (${rq})`).run(buildingId);
+        db.prepare(`DELETE FROM citations WHERE source_room_id IN (${rq}) OR target_room_id IN (${rq})`).run(buildingId, buildingId);
+        db.prepare(`DELETE FROM tables_v2 WHERE room_id IN (${rq})`).run(buildingId);
 
-        // 6. Room children (exit docs, messages, notes, citations, tables)
-        const roomIds = db.prepare('SELECT id FROM rooms WHERE floor_id IN (SELECT id FROM floors WHERE building_id = ?)').all(buildingId) as Array<{ id: string }>;
-        for (const r of roomIds) {
-          db.prepare('DELETE FROM exit_documents WHERE room_id = ?').run(r.id);
-          db.prepare('DELETE FROM messages WHERE room_id = ?').run(r.id);
-          db.prepare('DELETE FROM notes WHERE room_id = ?').run(r.id);
-          db.prepare('DELETE FROM citations WHERE source_room_id = ? OR target_room_id = ?').run(r.id, r.id);
-          db.prepare('DELETE FROM tables_v2 WHERE room_id = ?').run(r.id);
-        }
-
-        // 7. Agents (after everything that references them)
-        db.prepare('DELETE FROM agents WHERE building_id = ?').run(buildingId);
-
-        // 8. Rooms, floors, repos
-        db.prepare('DELETE FROM rooms WHERE floor_id IN (SELECT id FROM floors WHERE building_id = ?)').run(buildingId);
-        db.prepare('DELETE FROM floors WHERE building_id = ?').run(buildingId);
-        db.prepare('DELETE FROM project_repos WHERE building_id = ?').run(buildingId);
-
-        // 9. Building itself (last)
+        // ── Phase 5: Agents, rooms, floors, building ──
+        db.prepare(`DELETE FROM agents WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM rooms WHERE floor_id IN (${fq})`).run(buildingId);
+        db.prepare(`DELETE FROM floors WHERE building_id = ?`).run(buildingId);
+        db.prepare(`DELETE FROM project_repos WHERE building_id = ?`).run(buildingId);
         db.prepare('DELETE FROM buildings WHERE id = ?').run(buildingId);
       });
 
