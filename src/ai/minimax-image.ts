@@ -79,6 +79,7 @@ function buildRequestBody(
     prompt,
     aspect_ratio: opts.aspectRatio || '1:1',
     response_format: 'base64',
+    prompt_optimizer: true, // Auto-enhance prompts for better results (#1225)
   };
 
   if (opts.subjectReference) {
