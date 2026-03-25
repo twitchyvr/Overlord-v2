@@ -355,7 +355,11 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         db.prepare(`UPDATE todos SET locked_by = NULL WHERE task_id IN (${tq})`).run(buildingId);
 
         // ── Phase 2: Delete leaf tables (nothing references these) ──
-        db.prepare(`DELETE FROM doc_entries WHERE library_id IN (SELECT id FROM doc_libraries WHERE building_id = ?)`).run(buildingId);
+        const docLibSubquery = `SELECT id FROM doc_libraries WHERE building_id = ?`;
+        const docEntrySubquery = `SELECT id FROM doc_entries WHERE library_id IN (${docLibSubquery})`;
+        db.prepare(`DELETE FROM doc_toc WHERE entry_id IN (${docEntrySubquery})`).run(buildingId);
+        db.prepare(`DELETE FROM doc_entries_fts WHERE rowid IN (SELECT rowid FROM doc_entries WHERE library_id IN (${docLibSubquery}))`).run(buildingId);
+        db.prepare(`DELETE FROM doc_entries WHERE library_id IN (${docLibSubquery})`).run(buildingId);
         db.prepare(`DELETE FROM doc_libraries WHERE building_id = ?`).run(buildingId);
         db.prepare(`DELETE FROM agent_email_recipients WHERE email_id IN (SELECT id FROM agent_emails WHERE building_id = ?)`).run(buildingId);
         db.prepare(`DELETE FROM agent_email_recipients WHERE agent_id IN (${aq})`).run(buildingId);
@@ -383,6 +387,7 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         db.prepare(`DELETE FROM exit_documents WHERE room_id IN (${rq})`).run(buildingId);
         db.prepare(`DELETE FROM messages WHERE room_id IN (${rq})`).run(buildingId);
         db.prepare(`DELETE FROM notes WHERE room_id IN (${rq})`).run(buildingId);
+        db.prepare(`DELETE FROM notes WHERE agent_id IN (${aq})`).run(buildingId);
         db.prepare(`DELETE FROM citations WHERE source_room_id IN (${rq}) OR target_room_id IN (${rq})`).run(buildingId, buildingId);
         db.prepare(`DELETE FROM tables_v2 WHERE room_id IN (${rq})`).run(buildingId);
 
