@@ -32,6 +32,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Voice input** — mic button (🎙️) in chat for speech-to-text using Web Speech API; click to speak, text fills input (#1156)
 - **Messages telemetry** — counter queries actual messages table instead of non-existent activity log events
 - **Aborted conversation text cleaned** — filters "Using list_dir..." placeholder fragments (#1152)
+- **Slash commands show responses** — /status, /raid, /agents, /phase now render text in chat (#1165)
+- **Token chips clear after send** — no more stale /command chips persisting in input (#1167)
+- **Remove building FK cascade fixed** — proper deletion order for all 20+ tables (#1169)
+- **Autocomplete click-through prevented** — @ mention dropdown no longer triggers buttons behind it (#1169)
 
 ### Added
 - **Universal inline editing** — click-to-edit on task title, status, priority, description in detail drawer (#1037)
