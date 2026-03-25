@@ -339,10 +339,18 @@ export class ChatView extends Component {
         micBtn.title = 'Voice input (click to speak)';
       };
 
-      recognition.onerror = () => {
+      recognition.onerror = (event) => {
         isListening = false;
         micBtn.style.opacity = '0.6';
         micBtn.style.color = '';
+        if (event.error === 'not-allowed') {
+          micBtn.title = 'Microphone blocked — check browser permissions';
+          micBtn.style.color = 'var(--text-muted)';
+        } else if (event.error === 'no-speech') {
+          micBtn.title = 'No speech detected — click to try again';
+        } else {
+          micBtn.title = 'Voice input (click to speak)';
+        }
       };
 
       micBtn.addEventListener('click', () => {
@@ -353,11 +361,16 @@ export class ChatView extends Component {
           micBtn.style.color = '';
           micBtn.title = 'Voice input (click to speak)';
         } else {
-          recognition.start();
-          isListening = true;
-          micBtn.style.opacity = '1';
-          micBtn.style.color = 'var(--status-error, red)';
-          micBtn.title = 'Listening... (click to stop)';
+          try {
+            recognition.start();
+            isListening = true;
+            micBtn.style.opacity = '1';
+            micBtn.style.color = 'var(--status-error, red)';
+            micBtn.title = 'Listening... (click to stop)';
+          } catch (e) {
+            // Already started or permission issue
+            micBtn.title = 'Voice input unavailable';
+          }
         }
       });
     } else {
