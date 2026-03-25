@@ -224,6 +224,16 @@ export class AgentActivityTracker extends Component {
     }
     this._agentStates.delete(agentId);
     this._removeAllClasses(agentId);
+
+    // Clear store entry so agents-view doesn't show stale activity (#1181)
+    try {
+      const store = OverlordUI.getStore();
+      if (store) {
+        const activityStates = { ...(store.get('agents.activityStates') || {}) };
+        delete activityStates[agentId];
+        store.set('agents.activityStates', activityStates);
+      }
+    } catch { /* store not ready */ }
   }
 
   /**

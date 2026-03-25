@@ -159,8 +159,15 @@ export class AgentsView extends Component {
     });
 
     // Subscribe to real-time activity states (#1181 — sync status with activity badge)
+    // Debounced via rAF to coalesce rapid state changes from multiple agents
     this.subscribe(store, 'agents.activityStates', () => {
-      this._render();
+      if (!this._activityRafPending) {
+        this._activityRafPending = true;
+        requestAnimationFrame(() => {
+          this._activityRafPending = false;
+          this._render();
+        });
+      }
     });
 
     // Subscribe to room list (for room name resolution and quick-assign)
@@ -236,10 +243,11 @@ export class AgentsView extends Component {
 
   /** Get resolved status for an agent (merges positions overlay + real-time activity). */
   _resolveStatus(agent) {
-    // Check real-time activity state first (#1181) — overrides DB status when agent is active
+    // Check real-time activity state first (#1181) — overrides DB status when agent is busy.
+    // 'idle' and 'waiting' fall through to DB status; active states take priority.
     const activityStates = this._store?.get('agents.activityStates') || {};
     const activityState = activityStates[agent.id];
-    if (activityState === 'thinking' || activityState === 'working' || activityState === 'chatting') {
+    if (activityState === 'thinking' || activityState === 'working' || activityState === 'chatting' || activityState === 'error') {
       return activityState === 'chatting' ? 'active' : activityState;
     }
 
