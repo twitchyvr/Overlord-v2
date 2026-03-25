@@ -138,9 +138,9 @@ export function initSocketBridge(socket, store, engine) {
       store.update('chat.messages', (msgs) => [...(msgs || []), {
         id: data.sessionId || Date.now().toString(),
         role: 'assistant',
-        content: data.content,
+        content: data.content || data.response || '',  // Commands use 'response', chat uses 'content'
         agentId: data.agentId,
-        agentName: data.agentName || data.agentId,
+        agentName: data.agentName || (data.type === 'command' ? 'Overlord' : data.agentId),
         thinking: data.thinking,
         toolCalls: data.toolCalls,
         type: 'response',
