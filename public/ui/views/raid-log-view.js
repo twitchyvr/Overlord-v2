@@ -375,17 +375,24 @@ export class RaidLogView extends Component {
       ));
     }
     if (entry.decided_by) {
-      const decidedAgent = resolveAgent(entry.decided_by);
+      // decided_by may be an agent ID or a free-text name — handle both gracefully
+      const resolved = resolveAgent(entry.decided_by);
+      const displayEl = resolved
+        ? EntityLink.agent(entry.decided_by, resolveAgentName(entry.decided_by))
+        : h('span', null, entry.decided_by); // Show as plain text if not an agent ID
       infoSection.appendChild(h('div', { class: 'raid-detail-info-row' },
         h('span', { class: 'raid-detail-label' }, 'Decided By'),
-        EntityLink.agent(entry.decided_by, resolveAgentName(entry.decided_by))
+        displayEl
       ));
     }
     if (entry.approved_by) {
-      const approvedAgent = resolveAgent(entry.approved_by);
+      const resolved = resolveAgent(entry.approved_by);
+      const displayEl = resolved
+        ? EntityLink.agent(entry.approved_by, resolveAgentName(entry.approved_by))
+        : h('span', null, entry.approved_by);
       infoSection.appendChild(h('div', { class: 'raid-detail-info-row' },
         h('span', { class: 'raid-detail-label' }, 'Approved By'),
-        EntityLink.agent(entry.approved_by, resolveAgentName(entry.approved_by))
+        displayEl
       ));
     }
     if (entry.created_at) {

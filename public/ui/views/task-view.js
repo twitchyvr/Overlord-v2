@@ -1084,20 +1084,23 @@ export class TaskView extends Component {
 
     if (!window.overlordSocket || !this._buildingId) return;
 
-    const result = await window.overlordSocket.createTask({
-      buildingId: this._buildingId,
-      title,
-      description,
-      priority,
-      assigneeId
-    });
+    try {
+      const result = await window.overlordSocket.createTask({
+        buildingId: this._buildingId,
+        title,
+        description,
+        priority,
+        assigneeId
+      });
 
-    if (result && result.ok) {
-      Toast.success('Task created');
-      Modal.close('task-create');
-    } else {
-      Toast.error(result?.error?.message || 'Failed to create task');
-      // Keep modal open so user can fix and retry
+      if (result && result.ok) {
+        Toast.success('Task created');
+        Modal.close('task-create');
+      } else {
+        Toast.error(result?.error?.message || 'Failed to create task');
+      }
+    } catch {
+      Toast.error('Failed to create task — check your connection');
     }
   }
 
@@ -1118,10 +1121,19 @@ export class TaskView extends Component {
     this._updateTaskStatus(taskId, nextStatus);
   }
 
-  _updateTaskStatus(taskId, status) {
+  async _updateTaskStatus(taskId, status) {
     if (!window.overlordSocket) return;
 
-    window.overlordSocket.updateTask({ id: taskId, status });
+    try {
+      const res = await window.overlordSocket.updateTask({ id: taskId, status });
+      if (!res || !res.ok) {
+        Toast.error(res?.error?.message || 'Failed to update task status');
+        return;
+      }
+    } catch {
+      Toast.error('Failed to update task status');
+      return;
+    }
 
     // Close detail drawer if open
     Drawer.close();
