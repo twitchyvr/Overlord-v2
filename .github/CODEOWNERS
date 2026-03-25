@@ -1,0 +1,14 @@
+# Default owner for everything
+* @twitchyvr
+
+# Layer-specific ownership
+/src/core/          @twitchyvr
+/src/storage/       @twitchyvr
+/src/ai/            @twitchyvr
+/src/tools/         @twitchyvr
+/src/agents/        @twitchyvr
+/src/rooms/         @twitchyvr
+/src/transport/     @twitchyvr
+/public/            @twitchyvr
+/tests/             @twitchyvr
+/.github/           @twitchyvr

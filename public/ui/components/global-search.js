@@ -379,7 +379,7 @@ export class GlobalSearch extends Component {
         content.appendChild(h('div', { class: 'global-search-item-title' }, item.title));
         const meta = h('div', { class: 'global-search-item-meta' });
         if (item.status) meta.appendChild(h('span', { class: 'search-badge' }, item.status));
-        if (item.due_date) meta.appendChild(h('span', null, item.due_date));
+        // due_date removed (#1195)
         content.appendChild(meta);
         break;
       }
