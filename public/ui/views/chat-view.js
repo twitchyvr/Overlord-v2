@@ -1309,16 +1309,23 @@ export class ChatView extends Component {
   _sendMessage(text, tokens) {
     if (!text.trim() && tokens.length === 0 && this._pendingAttachments.length === 0) return;
 
+    const store = OverlordUI.getStore();
+    const buildingId = store?.get('building.active');
+
+    // Guard: don't send if no building is selected (#1204)
+    if (!buildingId) {
+      Toast.info('Select a project from the Dashboard first.');
+      return;
+    }
+
     if (window.overlordSocket) {
-      const store = OverlordUI.getStore();
       window.overlordSocket.sendMessage({
         text,
         tokens,
         attachments: this._pendingAttachments,
-        buildingId: store?.get('building.active'),
+        buildingId,
         roomId: store?.get('rooms.active'),
       });
-      // Show typing indicator only when message was actually sent (#793)
       this._showTypingIndicator();
     }
     // Clear pending attachments
@@ -1342,9 +1349,16 @@ export class ChatView extends Component {
     );
     this._messagesEl.appendChild(this._typingIndicator);
     if (this._scrollLocked) this._scrollToBottom();
+
+    // Auto-clear after 60s to prevent stuck indicator (#1204)
+    this._typingTimeout = setTimeout(() => this._hideTypingIndicator(), 60000);
   }
 
   _hideTypingIndicator() {
+    if (this._typingTimeout) {
+      clearTimeout(this._typingTimeout);
+      this._typingTimeout = null;
+    }
     if (!this._typingIndicator) return;
     this._typingIndicator.remove();
     this._typingIndicator = null;
