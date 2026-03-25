@@ -1482,6 +1482,14 @@ export function initSocketBridge(socket, store, engine) {
       return _emitWithTimeout('task:get', { id: taskId });
     },
 
+    async deleteTask(taskId) {
+      const res = await _emitWithTimeout('task:delete', { id: taskId });
+      if (res && res.ok) {
+        store.update('tasks.list', (tasks) => (tasks || []).filter(t => t.id !== taskId));
+      }
+      return res;
+    },
+
     // ── Milestone methods ──
 
     fetchMilestones(buildingId, filters = {}) {

@@ -3153,6 +3153,33 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
       if (ack) ack({ ok: true, data: task });
     });
 
+    // ── Task delete ──
+    socket.on('task:delete', (data: unknown, ack?: (res: unknown) => void) => {
+      try {
+        const { id } = data as { id: string };
+        if (!id) { if (ack) ack({ ok: false, error: { message: 'Task ID required' } }); return; }
+        const db = getDb();
+        // Delete associated todos first
+        db.prepare('DELETE FROM todos WHERE task_id = ?').run(id);
+        // Delete visual tests and pipeline evidence
+        db.prepare('DELETE FROM visual_tests WHERE task_id = ?').run(id);
+        db.prepare('DELETE FROM pipeline_evidence WHERE task_id = ?').run(id);
+        // Null out parent_id references
+        db.prepare('UPDATE tasks SET parent_id = NULL WHERE parent_id = ?').run(id);
+        // Delete the task
+        const result = db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+        if (result.changes === 0) {
+          if (ack) ack({ ok: false, error: { message: 'Task not found' } });
+          return;
+        }
+        bus.emit('task:deleted', { id });
+        if (ack) ack({ ok: true });
+      } catch (err) {
+        log.error({ err }, 'task:delete failed');
+        if (ack) ack({ ok: false, error: { message: String(err) } });
+      }
+    });
+
     handle(socket, 'task:list', TaskListSchema, (parsed, ack) => {
       const db = getDb();
       let sql = `SELECT t.*,
