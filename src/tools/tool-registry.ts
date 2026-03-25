@@ -1311,7 +1311,12 @@ function registerBuiltinTools(): void {
       const title = p.title as string;
       const description = (p.description as string) || '';
       const priority = (p.priority as string) || 'normal';
-      const phase = (p.phase as string) || null;
+      // Default phase to current building phase if not specified (#1199)
+      let phase = (p.phase as string) || null;
+      if (!phase) {
+        const building = db.prepare('SELECT active_phase FROM buildings WHERE id = ?').get(buildingId) as { active_phase: string } | undefined;
+        phase = building?.active_phase || null;
+      }
       const milestoneId = (p.milestone_id as string) || null;
 
       // #1134 — Dedup check: skip if a task with very similar title already exists
@@ -1351,13 +1356,13 @@ function registerBuiltinTools(): void {
   // ── Update Task Status (#1022) ──
   registerTool({
     name: 'update_task',
-    description: 'Update a task status. Use this to mark tasks as in_progress when you start working on them, or done when you finish.',
+    description: 'Update a task status. Use this to mark tasks as in-progress when you start working on them, or done when you finish.',
     category: 'project',
     inputSchema: {
       type: 'object',
       properties: {
         task_id: { type: 'string', description: 'The task ID to update (from create_task response or task listing)' },
-        status: { type: 'string', enum: ['in_progress', 'done', 'blocked'], description: 'New status for the task' },
+        status: { type: 'string', enum: ['in-progress', 'done', 'blocked'], description: 'New status for the task' },
         note: { type: 'string', description: 'Optional completion note describing what was done' },
       },
       required: ['task_id', 'status'],
@@ -1368,7 +1373,9 @@ function registerBuiltinTools(): void {
 
       const db = getDb();
       const taskId = p.task_id as string;
-      const status = p.status as string;
+      // Normalize status: accept both in_progress and in-progress (#1203)
+      let status = p.status as string;
+      if (status === 'in_progress') status = 'in-progress';
       const note = (p.note as string) || '';
 
       // Verify task exists and belongs to this building
