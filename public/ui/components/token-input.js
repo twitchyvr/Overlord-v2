@@ -88,6 +88,10 @@ export class TokenInput extends Component {
       this._textareaEl.value = '';
       this._autoResize();
     }
+    // Clear chip DOM elements (#1167)
+    if (this._chipArea) {
+      this._chipArea.textContent = '';
+    }
     this._closeAutocomplete();
   }
 
