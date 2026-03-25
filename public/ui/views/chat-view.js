@@ -331,9 +331,11 @@ export class ChatView extends Component {
         for (let i = event.resultIndex; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
-        if (this._tokenInput?.input) {
-          this._tokenInput.input.value = transcript;
-          this._tokenInput.input.dispatchEvent(new Event('input', { bubbles: true }));
+        if (this._tokenInput?._textareaEl) {
+          // Append transcript to existing text instead of replacing
+          const existing = this._tokenInput._textareaEl.value;
+          this._tokenInput._textareaEl.value = existing + (existing ? ' ' : '') + transcript;
+          this._tokenInput._textareaEl.dispatchEvent(new Event('input', { bubbles: true }));
         }
       };
 
@@ -1567,7 +1569,8 @@ export class ChatView extends Component {
   }
 
   _looksLikeMarkdown(text) {
-    return /[*_`#\[\]|>-]/.test(text) || text.includes('\n');
+    // Check for actual markdown patterns, not just characters that appear in plain text
+    return /(\*\*|__|``|^#{1,6}\s|^\s*[-*+]\s|^\s*\d+\.\s|^\s*>\s|\[.*\]\(.*\)|\|.*\|)/m.test(text);
   }
 
   /**
