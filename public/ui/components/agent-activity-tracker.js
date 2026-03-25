@@ -205,6 +205,16 @@ export class AgentActivityTracker extends Component {
 
     this._agentStates.set(agentId, { state, timer });
     this._applyClasses(agentId, state);
+
+    // Publish to store so other views (agents-view) can read real-time activity state (#1181)
+    try {
+      const store = OverlordUI.getStore();
+      if (store) {
+        const activityStates = { ...(store.get('agents.activityStates') || {}) };
+        activityStates[agentId] = state;
+        store.set('agents.activityStates', activityStates);
+      }
+    } catch { /* store not ready */ }
   }
 
   _clearState(agentId) {

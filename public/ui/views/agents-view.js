@@ -107,11 +107,12 @@ const ROOM_TYPES = [
 ];
 
 const STATUS_CONFIG = {
-  active:  { color: 'var(--status-active)',  label: 'Active',  dot: 'agents-view-status-active'  },
-  working: { color: 'var(--status-active)',  label: 'Working', dot: 'agents-view-status-active'  },
-  paused:  { color: 'var(--status-busy)',    label: 'Paused',  dot: 'agents-view-status-paused'  },
-  idle:    { color: 'var(--status-idle)',     label: 'Idle',    dot: 'agents-view-status-idle'    },
-  error:   { color: 'var(--status-error)',    label: 'Error',   dot: 'agents-view-status-error'   },
+  active:   { color: 'var(--status-active)',  label: 'Active',   dot: 'agents-view-status-active'  },
+  thinking: { color: 'var(--status-active)',  label: 'Thinking', dot: 'agents-view-status-active'  },
+  working:  { color: 'var(--status-active)',  label: 'Working',  dot: 'agents-view-status-active'  },
+  paused:   { color: 'var(--status-busy)',    label: 'Paused',   dot: 'agents-view-status-paused'  },
+  idle:     { color: 'var(--status-idle)',     label: 'Idle',    dot: 'agents-view-status-idle'    },
+  error:    { color: 'var(--status-error)',    label: 'Error',   dot: 'agents-view-status-error'   },
 };
 
 
@@ -154,6 +155,11 @@ export class AgentsView extends Component {
     // Subscribe to agent activity badges (#802)
     this.subscribe(store, 'agents.activities', (activities) => {
       this._activities = activities || {};
+      this._render();
+    });
+
+    // Subscribe to real-time activity states (#1181 — sync status with activity badge)
+    this.subscribe(store, 'agents.activityStates', () => {
       this._render();
     });
 
@@ -228,8 +234,15 @@ export class AgentsView extends Component {
     });
   }
 
-  /** Get resolved status for an agent (merges positions overlay). */
+  /** Get resolved status for an agent (merges positions overlay + real-time activity). */
   _resolveStatus(agent) {
+    // Check real-time activity state first (#1181) — overrides DB status when agent is active
+    const activityStates = this._store?.get('agents.activityStates') || {};
+    const activityState = activityStates[agent.id];
+    if (activityState === 'thinking' || activityState === 'working' || activityState === 'chatting') {
+      return activityState === 'chatting' ? 'active' : activityState;
+    }
+
     const position = this._agentPositions[agent.id];
     return position?.status || agent.status || 'idle';
   }
