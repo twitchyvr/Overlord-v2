@@ -3041,6 +3041,25 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
       if (ack) ack(result);
     });
 
+    // ── RAID delete ──
+    socket.on('raid:delete', (data: unknown, ack?: (res: unknown) => void) => {
+      try {
+        const { id } = data as { id: string };
+        if (!id) { if (ack) ack({ ok: false, error: { message: 'RAID entry ID required' } }); return; }
+        const db = getDb();
+        const result = db.prepare('DELETE FROM raid_entries WHERE id = ?').run(id);
+        if (result.changes === 0) {
+          if (ack) ack({ ok: false, error: { message: 'RAID entry not found' } });
+          return;
+        }
+        bus.emit('raid:entry:deleted', { id });
+        if (ack) ack({ ok: true });
+      } catch (e) {
+        log.error({ err: e }, 'raid:delete failed');
+        if (ack) ack({ ok: false, error: { message: String(e) } });
+      }
+    });
+
     // ─── Task Events ───
 
     handle(socket, 'task:create', TaskCreateSchema, (parsed, ack) => {
