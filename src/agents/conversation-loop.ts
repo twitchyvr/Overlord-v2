@@ -928,10 +928,18 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
   }
 
   // #1014 — Prefer the final end_turn text over concatenated intermediate thinking.
-  // If the AI produces a final summary after tool calls, show THAT, not all the
-  // intermediate "I'll analyze..." fragments between tool calls.
-  // Fall back to accumulated text if no distinct end_turn text exists.
-  let finalText = lastEndTurnText || allTextParts.join('\n\n');
+  // #1152 — For aborted conversations, filter out tool-use placeholder lines.
+  let finalText = lastEndTurnText;
+  if (!finalText) {
+    // Filter out intermediate tool-use fragments ("Using list_dir...", "Using read_file...")
+    const cleaned = allTextParts.filter(part => {
+      const trimmed = part.trim();
+      // Skip lines that are just tool invocation placeholders
+      if (/^using\s+\w+/i.test(trimmed) && trimmed.length < 80) return false;
+      return true;
+    });
+    finalText = cleaned.join('\n\n');
+  }
   if (!finalText) {
     // Fallback: extract from last assistant message
     const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
