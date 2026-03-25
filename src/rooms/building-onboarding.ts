@@ -17,7 +17,7 @@
 import { getDb } from '../storage/db.js';
 import { logger } from '../core/logger.js';
 import { analyzeCodebase } from '../ai/codebase-analysis-service.js';
-import { applyBlueprint } from './building-manager.js';
+import { applyBlueprint, generateAgentIdentity } from './building-manager.js';
 import { QUICK_START_TEMPLATES } from './room-types/strategist.js';
 import type { Bus, BusEventData } from '../core/bus.js';
 import type {
@@ -472,6 +472,34 @@ function provisionPhaseRoom({
 
   const agentId = (agentResult.data as { id: string }).id;
 
+  // 4b. Generate a human profile (display name, bio, avatar seed) for the agent (#1200)
+  try {
+    const usedNames = new Set<string>();
+    // Collect existing agent names to avoid duplicates
+    const db = getDb();
+    const existingAgents = db.prepare('SELECT config FROM agents WHERE building_id = ?').all(buildingId) as Array<{ config: string }>;
+    for (const a of existingAgents) {
+      try {
+        const cfg = JSON.parse(a.config || '{}');
+        if (cfg.displayName) usedNames.add(cfg.displayName);
+      } catch { /* ignore */ }
+    }
+    const profile = generateAgentIdentity(mapping.agentName, mapping.agentRole, usedNames);
+    agents.updateAgentProfile(agentId, {
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      displayName: profile.displayName,
+      bio: profile.bio,
+      gender: profile.gender,
+      specialization: profile.specialization,
+    });
+    // Update the agent name to the display name for UI consistency
+    db.prepare('UPDATE agents SET name = ? WHERE id = ?').run(profile.displayName, agentId);
+    log.info({ agentId, displayName: profile.displayName }, 'Generated agent profile during onboarding');
+  } catch (profileErr) {
+    log.warn({ agentId, err: profileErr }, 'Failed to generate agent profile (non-blocking)');
+  }
+
   // 5. Enter the agent into the room
   const enterResult = rooms.enterRoom({
     roomId,
@@ -530,6 +558,13 @@ function provisionAgentTeam({
   let created = 0;
   const agentsToEnter: Array<{ agentId: string; roomType: string; name: string }> = [];
 
+  // Collect existing display names to avoid duplicates (#1200)
+  const usedNames = new Set<string>();
+  for (const a of existingAgents) {
+    const cfg = typeof a.config === 'string' ? JSON.parse(a.config || '{}') : (a.config || {});
+    if (cfg.displayName) usedNames.add(cfg.displayName);
+  }
+
   for (const teamRole of TEAM_ROLES) {
     // Skip if this role already has enough agents
     const existingCount = existingRoles.get(teamRole.role) || 0;
@@ -553,6 +588,24 @@ function provisionAgentTeam({
         existingRoles.set(teamRole.role, (existingRoles.get(teamRole.role) || 0) + 1);
         const agentData = result.data as { id: string };
         agentsToEnter.push({ agentId: agentData.id, roomType: teamRole.roomAccess[0], name: teamRole.name });
+
+        // Generate human profile (display name, bio) for the agent (#1200)
+        try {
+          const profile = generateAgentIdentity(teamRole.name, teamRole.role, usedNames);
+          usedNames.add(profile.displayName);
+          agents.updateAgentProfile(agentData.id, {
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            displayName: profile.displayName,
+            bio: profile.bio,
+            gender: profile.gender,
+            specialization: profile.specialization,
+          });
+          const tdb = getDb();
+          tdb.prepare('UPDATE agents SET name = ? WHERE id = ?').run(profile.displayName, agentData.id);
+          agentsToEnter[agentsToEnter.length - 1].name = profile.displayName;
+        } catch { /* non-blocking */ }
+
         log.info({ buildingId, role: teamRole.role, name: teamRole.name }, 'Team agent provisioned');
       } else {
         log.warn({ buildingId, role: teamRole.role, error: result.error }, 'Failed to provision team agent');

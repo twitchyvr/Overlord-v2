@@ -48,7 +48,7 @@ const ROLE_SPECIALIZATIONS: Record<string, string[]> = {
   researcher: ['Requirements gathering', 'User research', 'Competitive analysis', 'Domain exploration'],
 };
 
-function generateAgentIdentity(archetype: string, role: string, usedNames: Set<string>): AgentIdentity {
+export function generateAgentIdentity(archetype: string, role: string, usedNames: Set<string>): AgentIdentity {
   const gender = Math.random() < 0.5 ? 'female' : 'male';
   const firstNames = gender === 'female' ? FIRST_NAMES_F : FIRST_NAMES_M;
 
