@@ -8,6 +8,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- **Building delete FK cascade rewritten** — 5-phase deletion: null cross-refs first, then clean leaf→building; handles doc_toc, FTS, agent notes (#1169, PR #1182)
+- **Agent status/activity sync** — status text now matches activity badge; "Thinking" not "Idle" when agent works (#1181, PR #1183)
+- **Phase gate sign-off integrity** — phases only show "Completed" when gate has GO verdict; skipped phases show warning (#1193, PR #1197)
+- **Due dates removed** — AI agents cannot estimate time; removed from milestones, tools, forms, schemas (#1195, PR #1196)
+- **Dashboard Recent Activity loads from DB** — no longer shows "No activity yet" on page load (#1201, PR #1202)
+- **Task status mismatch fixed** — `in_progress` vs `in-progress` string inconsistency; progress bar now counts correctly (#1203, PR #1207)
+- **"Blocked" no longer mislabeled as "Review"** — task progression bar shows correct status label (#1203)
+- **Task status cycle stops at Done** — no longer wraps from blocked back to pending (#1203)
+- **Chat inline action buttons work** — detects `msg.content` not `msg.text`; Create Tasks/Milestones buttons now appear (#1204, PR #1207)
+- **Dashboard telemetry interval leak fixed** — clearInterval on destroy; store subscription properly cleaned (#1205, PR #1207)
+- **V1 tier badges removed** — "T1"/"T2"/"T3" no longer shown in activity view (#1206, PR #1207)
+- **Chat no-building guard** — sends toast "Select a project first" instead of silently failing (#1208)
+- **Typing indicator timeout** — auto-clears after 60s to prevent stuck dots (#1208)
+- **Task error handling** — status updates and creation show Toast on failure instead of silent fail (#1209)
+- **RAID decided-by resolution** — handles both agent IDs and free-text names gracefully (#1209)
+- **Startup orphan cleanup** — server boot sweeps stale data from deleted buildings (#1198, PR #1210)
+- **Task phase defaults to current building phase** — prevents agents creating tasks for wrong phases (#1199, PR #1211)
+- **Task status normalization** — `in_progress` input auto-corrected to `in-progress` (#1199)
+- **Activity view unified filters** — removed conflicting dual filter system; single pill-based filter with "Tasks" option (#1206, PR #1212)
+- **Router navigation hijack fixed** — building:selected no longer yanks users from Tasks/RAID to Chat (#1213)
+- **Voice input rewritten** — Safari uses Apple Siri (no Google); better error messages; no text duplication (#1156, PR #1218-1220)
+- **Markdown over-detection fixed** — plain text no longer mangled by markdown parser; checks for actual patterns (#1214)
+- **Building Remove flicker fixed** — deleted card removed from local array before re-render (#1215)
+- **@ mentions support multi-word names** — "@Omar Kim" keeps autocomplete open through spaces (#1172, PR #1217)
+
+### Added
+- **Agent profiles generated during onboarding** — human display names, bios, specializations for all agents (#1200, PR #1216)
+- **GitHub repo link in sidebar** — detects git remote, shows clickable link + branch name (#1192, PR #1228)
+- **MiniMax image prompt optimizer** — `prompt_optimizer: true` for better agent photos (#1225, PR #1226)
+- **MiniMax voice personality** — sound effects, voice modify, timbre mixing, subtitles, pronunciation dict (#1222, PR #1227)
+- **8 open-source dogfood projects** — kaneo, maplibre-gl-js, clack, grist-core, racing-game, noisecraft, bemuse, battle-city (#1184-1191)
+
+### Previously Fixed
 - **31 CodeQL code scanning alerts resolved** — XSS sanitization (setTrustedContent strips scripts/iframes/event handlers + blocks javascript:/data:/vbscript: URIs), TOCTOU file system races fixed with atomic operations, insecure temp file permissions restricted to 0o700, unpredictable temp file names with crypto.randomUUID
 - **Telemetry window 1h→24h** — dashboard now shows 24-hour data instead of zeros when events are older than 1 hour
 - **Global search works without building** — search across all projects when no building is selected (#1112)
