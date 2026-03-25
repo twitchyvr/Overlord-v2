@@ -3034,6 +3034,8 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
         rationale: parsed.rationale,
         decidedBy: parsed.decidedBy,
         affectedAreas: parsed.affectedAreas,
+        type: parsed.type,
+        phase: parsed.phase,
       });
       if (result.ok) {
         bus.emit('raid:entry:updated', { id: parsed.id, ...(result.data as Record<string, unknown>) });

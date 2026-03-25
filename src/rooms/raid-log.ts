@@ -107,12 +107,14 @@ interface UpdateRaidEntryParams {
   rationale?: string;
   decidedBy?: string;
   affectedAreas?: string[];
+  type?: string;
+  phase?: string;
 }
 
 /**
  * Update RAID entry fields (summary, rationale, decided_by, affected_areas)
  */
-export function updateRaidEntry({ id, summary, rationale, decidedBy, affectedAreas }: UpdateRaidEntryParams): Result {
+export function updateRaidEntry({ id, summary, rationale, decidedBy, affectedAreas, type, phase }: UpdateRaidEntryParams): Result {
   const db = getDb();
   const existing = db.prepare('SELECT * FROM raid_entries WHERE id = ?').get(id) as RaidEntryRow | undefined;
   if (!existing) return err('RAID_NOT_FOUND', 'This entry no longer exists. It may have been deleted.');
@@ -124,6 +126,8 @@ export function updateRaidEntry({ id, summary, rationale, decidedBy, affectedAre
   if (rationale !== undefined) { updates.push('rationale = ?'); params.push(rationale); }
   if (decidedBy !== undefined) { updates.push('decided_by = ?'); params.push(decidedBy); }
   if (affectedAreas !== undefined) { updates.push('affected_areas = ?'); params.push(JSON.stringify(affectedAreas)); }
+  if (type !== undefined) { updates.push('type = ?'); params.push(type); }
+  if (phase !== undefined) { updates.push('phase = ?'); params.push(phase); }
 
   if (updates.length === 0) return err('NO_CHANGES', 'No changes were made. Edit a field and try again.');
 
