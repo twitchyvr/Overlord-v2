@@ -36,6 +36,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Token chips clear after send** — no more stale /command chips persisting in input (#1167)
 - **Remove building FK cascade fixed** — proper deletion order for all 20+ tables (#1169)
 - **Autocomplete click-through prevented** — @ mention dropdown no longer triggers buttons behind it (#1169)
+- **Thinking blocks formatted** — shows clean paragraphs instead of raw JSON array; basic markdown rendering (#1176)
+- **Agent activity badges in chat** — emoji indicators (🧠💻📖⚡) next to agent names when working (#1176)
+- **Aurora glow effect** — subtle purple→blue→green pulse on active agent indicators (#1176)
+- **@ mentions show display names** — search by Omar Kim (display name) or Discovery Lead (role name) (#1171)
 
 ### Added
 - **Universal inline editing** — click-to-edit on task title, status, priority, description in detail drawer (#1037)
