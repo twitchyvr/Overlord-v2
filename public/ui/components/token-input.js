@@ -143,7 +143,10 @@ export class TokenInput extends Component {
     this.el.appendChild(inputWrapper);
 
     // Autocomplete dropdown (hidden by default)
-    this._autocompleteEl = h('div', { class: 'token-autocomplete', style: { display: 'none' } });
+    this._autocompleteEl = h('div', { class: 'token-autocomplete', style: { display: 'none', position: 'relative', zIndex: '9999' } });
+    // #1169 — prevent ALL clicks on autocomplete from bubbling to elements behind
+    this._autocompleteEl.addEventListener('mousedown', (e) => e.stopPropagation());
+    this._autocompleteEl.addEventListener('click', (e) => e.stopPropagation());
     this.el.appendChild(this._autocompleteEl);
   }
 
@@ -379,6 +382,7 @@ export class TokenInput extends Component {
       });
       item.addEventListener('click', (e) => {
         e.preventDefault();
+        e.stopPropagation();  // #1169 — prevent click from reaching elements behind dropdown
         this._selectSuggestion(sug);
       });
 
