@@ -266,17 +266,17 @@ export interface TelemetryRates {
  */
 export function getTelemetryRates(buildingId?: string): TelemetryRates {
   const db = getDb();
-  const twentyFourHoursAgo = new Date(Date.now() - 86400000).toISOString();
   const whereBuilding = buildingId ? ' AND building_id = ?' : '';
   const buildingParams = buildingId ? [buildingId] : [];
 
   // Rates: count events in last 24 hours
+  // Use SQLite datetime() to avoid JS ISO format mismatch (T vs space, Z suffix)
   const hourCounts = db.prepare(`
     SELECT event_type, COUNT(*) as cnt
     FROM agent_activity_log
-    WHERE created_at >= ?${whereBuilding}
+    WHERE created_at >= datetime('now', '-24 hours')${whereBuilding}
     GROUP BY event_type
-  `).all(twentyFourHoursAgo, ...buildingParams) as Array<{ event_type: string; cnt: number }>;
+  `).all(...buildingParams) as Array<{ event_type: string; cnt: number }>;
 
   const hourMap = new Map(hourCounts.map(r => [r.event_type, r.cnt]));
 
@@ -286,9 +286,9 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
 
   // Messages from the messages table (not activity log)
   const msgQuery = buildingId
-    ? `SELECT COUNT(*) as cnt FROM messages WHERE room_id IN (SELECT r.id FROM rooms r JOIN floors f ON r.floor_id = f.id WHERE f.building_id = ?) AND created_at >= ?`
-    : `SELECT COUNT(*) as cnt FROM messages WHERE created_at >= ?`;
-  const msgParams = buildingId ? [buildingId, twentyFourHoursAgo] : [twentyFourHoursAgo];
+    ? `SELECT COUNT(*) as cnt FROM messages WHERE room_id IN (SELECT r.id FROM rooms r JOIN floors f ON r.floor_id = f.id WHERE f.building_id = ?) AND created_at >= datetime('now', '-24 hours')`
+    : `SELECT COUNT(*) as cnt FROM messages WHERE created_at >= datetime('now', '-24 hours')`;
+  const msgParams = buildingId ? [buildingId] : [];
   const msgResult = db.prepare(msgQuery).get(...msgParams) as { cnt: number };
   const agentChatRate = msgResult?.cnt || 0;
 
@@ -343,9 +343,9 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
     SELECT a.agent_id as id, ag.display_name as name, COUNT(*) as events
     FROM agent_activity_log a
     LEFT JOIN agents ag ON a.agent_id = ag.id
-    WHERE a.created_at >= ?${whereBuilding.replace('building_id', 'a.building_id')}
+    WHERE a.created_at >= datetime('now', '-24 hours')${whereBuilding.replace('building_id', 'a.building_id')}
     GROUP BY a.agent_id ORDER BY events DESC LIMIT 5
-  `).all(twentyFourHoursAgo, ...buildingParams) as Array<{ id: string; name: string; events: number }>;
+  `).all(...buildingParams) as Array<{ id: string; name: string; events: number }>;
 
   // Recent activity (last 20 entries)
   const recentQuery = buildingId
