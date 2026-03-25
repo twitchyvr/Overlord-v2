@@ -55,6 +55,7 @@ export class BuildingView extends Component {
     this._floors = [];
     this._expandedFloors = new Set(); // allow multiple floors expanded
     this._agentPositions = {};
+    this._gitInfo = null; // Cached git repo info (#1192)
     this._collapsed = localStorage.getItem('overlord:sidebar-collapsed') === 'true';
   }
 
@@ -65,6 +66,8 @@ export class BuildingView extends Component {
 
     // Subscribe to building data updates
     this.subscribe(store, 'building.data', (data) => {
+      // Clear cached git info when building changes (#1192)
+      if (data?.id !== this._buildingData?.id) this._gitInfo = null;
       this._buildingData = data;
       this.render();
     });
@@ -220,17 +223,52 @@ export class BuildingView extends Component {
       warningRow.appendChild(setBtn);
       projectInfo.appendChild(warningRow);
     }
-    if (this._buildingData.repo_url) {
+    // Show repo link from building config OR detected git remote (#1192)
+    const repoUrl = this._buildingData.repo_url || this._gitInfo?.remoteUrl || null;
+    if (repoUrl) {
+      // Convert git@ URLs to https for clickable links
+      let displayUrl = repoUrl;
+      let clickUrl = repoUrl;
+      if (repoUrl.startsWith('git@')) {
+        clickUrl = repoUrl.replace('git@github.com:', 'https://github.com/').replace(/\.git$/, '');
+        displayUrl = clickUrl;
+      }
+      if (repoUrl.startsWith('https://')) {
+        displayUrl = repoUrl.replace('https://github.com/', '').replace(/\.git$/, '');
+      }
+
+      const repoRow = h('div', { class: 'building-repo-links', style: 'display:flex; flex-direction:column; gap:2px; margin-top:4px;' });
+
       const repoLink = h('a', {
         class: 'building-project-repo mono',
-        href: this._buildingData.repo_url,
+        href: clickUrl,
         target: '_blank',
         rel: 'noopener',
+        title: clickUrl,
       },
-        h('span', { class: 'building-project-icon' }, '\u{1F517}'),
-        this._buildingData.repo_url.replace('https://github.com/', '')
+        h('span', { class: 'building-project-icon' }, '\u{1F4E6}'),
+        displayUrl
       );
-      projectInfo.appendChild(repoLink);
+      repoRow.appendChild(repoLink);
+
+      // Show git branch if available
+      if (this._gitInfo?.branch) {
+        repoRow.appendChild(h('div', { class: 'building-project-branch mono', style: 'font-size:0.75rem; color:var(--text-muted); padding-left:1.4rem;' },
+          '\u{1F33F} ' + this._gitInfo.branch
+        ));
+      }
+
+      projectInfo.appendChild(repoRow);
+    }
+
+    // Fetch git info if not yet loaded (#1192)
+    if (!this._gitInfo && this._buildingData.working_directory && window.overlordSocket) {
+      window.overlordSocket.emit('git:detect', { dirPath: this._buildingData.working_directory }, (res) => {
+        if (res && res.ok && res.data?.isRepo) {
+          this._gitInfo = res.data;
+          this.render();
+        }
+      });
     }
     header.appendChild(projectInfo);
 
