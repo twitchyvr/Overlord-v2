@@ -249,14 +249,7 @@ export class MilestoneView extends Component {
     if (milestone.phase) {
       metaRow.appendChild(h('span', { class: 'milestone-phase-badge' }, milestone.phase));
     }
-    if (milestone.due_date) {
-      const dueDate = new Date(milestone.due_date);
-      const now = new Date();
-      const isOverdue = milestone.status === 'active' && dueDate < now;
-      metaRow.appendChild(h('span', {
-        class: `milestone-due-date${isOverdue ? ' overdue' : ''}`
-      }, `Due: ${dueDate.toLocaleDateString()}`));
-    }
+    // Due dates removed (#1195) — AI agents cannot reliably estimate time
     metaRow.appendChild(h('span', { class: 'milestone-task-count' }, `${tasksDone}/${taskCount} tasks`));
     titleGroup.appendChild(metaRow);
     cardHeader.appendChild(titleGroup);
@@ -386,7 +379,7 @@ export class MilestoneView extends Component {
     detailsSection.appendChild(h('h4', null, 'Details'));
     const detailRows = [];
     if (milestone.phase) detailRows.push(['Phase', milestone.phase]);
-    if (milestone.due_date) detailRows.push(['Due Date', new Date(milestone.due_date).toLocaleDateString()]);
+    // Due date removed (#1195)
     detailRows.push(['Order', `#${milestone.ordinal || 0}`]);
     detailRows.push(['Created', formatTime(milestone.created_at)]);
     detailRows.push(['Updated', formatTime(milestone.updated_at)]);
@@ -490,7 +483,6 @@ export class MilestoneView extends Component {
     for (const p of PHASE_OPTIONS) {
       phaseSelect.appendChild(h('option', { value: p }, p.charAt(0).toUpperCase() + p.slice(1)));
     }
-    const dueDateInput = h('input', { type: 'date', class: 'input', id: 'ms-due' });
     const ordinalInput = h('input', { type: 'number', class: 'input', min: '0', value: String(this._milestones.length), id: 'ms-ordinal' });
 
     form.appendChild(h('label', { class: 'form-label' }, 'Title'));
@@ -499,8 +491,6 @@ export class MilestoneView extends Component {
     form.appendChild(descInput);
     form.appendChild(h('label', { class: 'form-label' }, 'Phase'));
     form.appendChild(phaseSelect);
-    form.appendChild(h('label', { class: 'form-label' }, 'Due Date'));
-    form.appendChild(dueDateInput);
     form.appendChild(h('label', { class: 'form-label' }, 'Order'));
     form.appendChild(ordinalInput);
 
@@ -517,7 +507,6 @@ export class MilestoneView extends Component {
           title,
           description: descInput.value.trim() || undefined,
           phase: phaseSelect.value || undefined,
-          dueDate: dueDateInput.value || undefined,
           ordinal: parseInt(ordinalInput.value, 10) || 0,
         };
         const res = await window.overlordSocket.createMilestone(params);
@@ -566,7 +555,6 @@ export class MilestoneView extends Component {
       if (milestone.status === s) opt.selected = true;
       statusSelect.appendChild(opt);
     }
-    const dueDateInput = h('input', { type: 'date', class: 'input', value: milestone.due_date ? milestone.due_date.slice(0, 10) : '', id: 'ms-edit-due' });
     const ordinalInput = h('input', { type: 'number', class: 'input', min: '0', value: String(milestone.ordinal || 0), id: 'ms-edit-ordinal' });
 
     form.appendChild(h('label', { class: 'form-label' }, 'Title'));
@@ -577,8 +565,6 @@ export class MilestoneView extends Component {
     form.appendChild(statusSelect);
     form.appendChild(h('label', { class: 'form-label' }, 'Phase'));
     form.appendChild(phaseSelect);
-    form.appendChild(h('label', { class: 'form-label' }, 'Due Date'));
-    form.appendChild(dueDateInput);
     form.appendChild(h('label', { class: 'form-label' }, 'Order'));
     form.appendChild(ordinalInput);
 
@@ -596,7 +582,6 @@ export class MilestoneView extends Component {
           description: descInput.value.trim() || undefined,
           status: statusSelect.value,
           phase: phaseSelect.value || undefined,
-          dueDate: dueDateInput.value || undefined,
           ordinal: parseInt(ordinalInput.value, 10) || 0,
         };
         const res = await window.overlordSocket.updateMilestone(params);

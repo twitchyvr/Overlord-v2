@@ -3251,11 +3251,11 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
       const now = new Date().toISOString();
 
       db.prepare(`
-        INSERT INTO milestones (id, building_id, title, description, status, due_date, phase, ordinal, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime(?), datetime(?))
+        INSERT INTO milestones (id, building_id, title, description, status, phase, ordinal, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, datetime(?), datetime(?))
       `).run(
         msId, parsed.buildingId, parsed.title, parsed.description || null,
-        parsed.status, parsed.dueDate || null, parsed.phase || null,
+        parsed.status, parsed.phase || null,
         parsed.ordinal, now, now,
       );
 
@@ -3278,7 +3278,7 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
       const values: unknown[] = [];
       const columnMap: Record<string, string> = {
         title: 'title', description: 'description', status: 'status',
-        dueDate: 'due_date', phase: 'phase', ordinal: 'ordinal',
+        phase: 'phase', ordinal: 'ordinal',
       };
 
       for (const key of Object.keys(columnMap)) {

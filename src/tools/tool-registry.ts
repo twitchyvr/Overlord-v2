@@ -1447,14 +1447,13 @@ function registerBuiltinTools(): void {
 
   registerTool({
     name: 'create_milestone',
-    description: 'Create a project milestone with a target date. Use this to define key delivery points.',
+    description: 'Create a project milestone. Use this to define key delivery points.',
     category: 'project',
     inputSchema: {
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Milestone name (e.g., "v0.1 — Core Simulation Running")' },
         description: { type: 'string', description: 'What this milestone represents' },
-        targetDate: { type: 'string', description: 'Target date in YYYY-MM-DD format' },
       },
       required: ['title'],
     },
@@ -1465,7 +1464,6 @@ function registerBuiltinTools(): void {
       const db = getDb();
       const title = p.title as string;
       const description = (p.description as string) || '';
-      const targetDate = (p.targetDate as string) || null;
 
       // #1134 — Dedup: skip if milestone with similar title exists
       const existing = db.prepare(
@@ -1480,12 +1478,12 @@ function registerBuiltinTools(): void {
 
       const id = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       db.prepare(`
-        INSERT INTO milestones (id, building_id, title, description, due_date, status)
-        VALUES (?, ?, ?, ?, ?, 'active')
-      `).run(id, buildingId, title, description, targetDate);
+        INSERT INTO milestones (id, building_id, title, description, status)
+        VALUES (?, ?, ?, ?, 'active')
+      `).run(id, buildingId, title, description);
 
       return {
-        output: `Milestone created: "${title}"${targetDate ? ` (target: ${targetDate})` : ''}`,
+        output: `Milestone created: "${title}"`,
         milestoneId: id,
       };
     },

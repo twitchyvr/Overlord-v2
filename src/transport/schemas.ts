@@ -530,7 +530,7 @@ export const MilestoneCreateSchema = z.object({
   title: name(),
   description: optionalDescription(),
   status: z.enum(['active', 'completed', 'cancelled']).optional().default('active'),
-  dueDate: z.string().max(64).optional(),
+  // dueDate removed (#1195) — AI agents cannot estimate time
   phase: optionalName(),
   ordinal: z.number().int().min(0).optional().default(0),
 });
@@ -540,7 +540,7 @@ export const MilestoneUpdateSchema = z.object({
   title: optionalName(),
   description: optionalDescription(),
   status: z.enum(['active', 'completed', 'cancelled']).optional(),
-  dueDate: z.string().max(64).optional(),
+  // dueDate removed (#1195) — AI agents cannot estimate time
   phase: optionalName(),
   ordinal: z.number().int().min(0).optional(),
 });
