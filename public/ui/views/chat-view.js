@@ -367,6 +367,9 @@ export class ChatView extends Component {
         if (event.error === 'not-allowed') {
           Toast.error('Microphone blocked — check browser permissions');
           micBtn.title = 'Microphone blocked — check browser permissions';
+        } else if (event.error === 'network') {
+          Toast.error('Voice requires HTTPS or a network connection to Google\'s speech service');
+          micBtn.title = 'Voice unavailable — requires HTTPS';
         } else if (event.error === 'no-speech') {
           Toast.info('No speech detected — try again');
           micBtn.title = 'No speech detected — click to try again';
