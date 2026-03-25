@@ -313,49 +313,67 @@ export class ChatView extends Component {
       class: 'chat-mic-btn',
       title: 'Voice input (click to speak)',
       'aria-label': 'Voice input',
-      style: 'font-size:1.4rem; padding:6px 10px; cursor:pointer; background:none; border:none; border-radius:50%; opacity:0.5; transition:all 0.2s; min-width:36px; min-height:36px; display:flex; align-items:center; justify-content:center;',
-    }, '\u{1F399}\uFE0F');
+      style: 'font-size:1.3rem; padding:6px 10px; cursor:pointer; background:none; border:none; border-radius:50%; opacity:0.7; transition:all 0.2s; min-width:36px; min-height:36px; display:flex; align-items:center; justify-content:center;',
+    }, '\u{1F3A4}');
 
     let recognition = null;
     let isListening = false;
+    let textBeforeVoice = ''; // Text in input before voice started
 
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognition = new SpeechRecognition();
-      recognition.continuous = true;
+      recognition.continuous = false; // Single utterance — stops after silence
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
       recognition.onresult = (event) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        // Build transcript from only final results to avoid duplication
+        let finalTranscript = '';
+        let interimTranscript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
         }
-        if (this._tokenInput?._textareaEl) {
-          // Append transcript to existing text instead of replacing
-          const existing = this._tokenInput._textareaEl.value;
-          this._tokenInput._textareaEl.value = existing + (existing ? ' ' : '') + transcript;
-          this._tokenInput._textareaEl.dispatchEvent(new Event('input', { bubbles: true }));
+        const transcript = finalTranscript || interimTranscript;
+        if (this._tokenInput?._textareaEl && transcript) {
+          // Set text = what was there before + new transcript
+          const separator = textBeforeVoice && !textBeforeVoice.endsWith(' ') ? ' ' : '';
+          this._tokenInput._textareaEl.value = textBeforeVoice + separator + transcript;
+          this._tokenInput._autoResize();
         }
       };
 
       recognition.onend = () => {
         isListening = false;
-        micBtn.style.opacity = '0.6';
+        micBtn.style.opacity = '0.7';
         micBtn.style.color = '';
+        micBtn.style.background = '';
         micBtn.title = 'Voice input (click to speak)';
+        // Trigger input event so token detection runs on final text
+        if (this._tokenInput?._textareaEl) {
+          this._tokenInput._textareaEl.dispatchEvent(new Event('input', { bubbles: true }));
+        }
       };
 
       recognition.onerror = (event) => {
         isListening = false;
-        micBtn.style.opacity = '0.6';
+        micBtn.style.opacity = '0.7';
         micBtn.style.color = '';
+        micBtn.style.background = '';
         if (event.error === 'not-allowed') {
+          Toast.error('Microphone blocked — check browser permissions');
           micBtn.title = 'Microphone blocked — check browser permissions';
-          micBtn.style.color = 'var(--text-muted)';
         } else if (event.error === 'no-speech') {
+          Toast.info('No speech detected — try again');
           micBtn.title = 'No speech detected — click to try again';
+        } else if (event.error === 'aborted') {
+          // User stopped — not an error
         } else {
+          Toast.error('Voice input error: ' + event.error);
           micBtn.title = 'Voice input (click to speak)';
         }
       };
@@ -363,20 +381,18 @@ export class ChatView extends Component {
       micBtn.addEventListener('click', () => {
         if (isListening) {
           recognition.stop();
-          isListening = false;
-          micBtn.style.opacity = '0.6';
-          micBtn.style.color = '';
-          micBtn.title = 'Voice input (click to speak)';
         } else {
           try {
+            textBeforeVoice = this._tokenInput?._textareaEl?.value || '';
             recognition.start();
             isListening = true;
             micBtn.style.opacity = '1';
-            micBtn.style.color = 'var(--status-error, red)';
+            micBtn.style.color = '#ff4444';
+            micBtn.style.background = 'rgba(255,68,68,0.15)';
             micBtn.title = 'Listening... (click to stop)';
+            Toast.info('Listening... speak now');
           } catch (e) {
-            // Already started or permission issue
-            micBtn.title = 'Voice input unavailable';
+            Toast.error('Voice input unavailable');
           }
         }
       });
