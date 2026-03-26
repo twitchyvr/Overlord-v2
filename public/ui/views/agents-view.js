@@ -53,10 +53,12 @@ const ROLE_LABELS = {
   'agent': 'Agent',
 };
 
-/** Format a raw role string into a human-readable label. */
+/** Format a raw role string into a human-readable label (#1289). */
 function formatRole(role) {
   if (!role) return 'Agent';
-  return ROLE_LABELS[role] || role.charAt(0).toUpperCase() + role.slice(1).replace(/-/g, ' ');
+  if (ROLE_LABELS[role]) return ROLE_LABELS[role];
+  // Title-case and replace underscores/hyphens with spaces
+  return role.replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 /** Map activity type to emoji badge (#802) */
@@ -783,7 +785,7 @@ export class AgentsView extends Component {
         ? h('div', { class: 'agents-view-card-nickname' }, `"${agent.nickname}"`)
         : null,
       agent.specialization
-        ? h('div', { class: 'agents-view-card-specialization' }, agent.specialization)
+        ? h('div', { class: 'agents-view-card-specialization' }, formatRole(agent.specialization))
         : null,
       h('div', { class: 'agents-view-card-role' },
         h('span', { class: 'agents-view-role-badge' }, formatRole(agent.role))
@@ -919,7 +921,7 @@ export class AgentsView extends Component {
     // ── Card footer with role + token usage + last activity ──
     const footerLabel = agent.specialization || agent.role || agent.type || '';
     const footer = h('div', { class: 'agents-view-card-footer' },
-      footerLabel ? h('span', { class: 'agents-view-card-id' }, footerLabel) : null
+      footerLabel ? h('span', { class: 'agents-view-card-id' }, formatRole(footerLabel)) : null
     );
 
     // #930 — Token usage badge on card
