@@ -157,6 +157,11 @@ export class DashboardView extends Component {
     );
     this.el.appendChild(header);
 
+    // Plain language health summary (#1237) — only when a project is selected
+    if (this._activeBuilding) {
+      this.el.appendChild(this._buildHealthSummary());
+    }
+
     // Live Telemetry (#804) — most important, show first
     this.el.appendChild(this._buildTelemetryPanel());
 
@@ -165,6 +170,84 @@ export class DashboardView extends Component {
 
     // Building List
     this.el.appendChild(this._buildBuildingList());
+  }
+
+  // ─── Plain Language Health Summary (#1237) ───
+
+  _buildHealthSummary() {
+    const b = this._buildings.find(b => b.id === this._activeBuilding);
+    if (!b) return h('div');
+
+    const phase = b.activePhase || b.active_phase || 'strategy';
+    const taskTotal = b.taskCount ?? 0;
+    const taskActive = b.activeTaskCount ?? 0;
+    const taskDone = taskTotal - taskActive;
+    const agentTotal = b.totalAgentCount ?? b.agentCount ?? 0;
+    const activeAgents = b.activeAgentCount ?? 0;
+    const health = b.healthScore?.total ?? null;
+    const state = b.executionState || b.execution_state || 'stopped';
+    const risks = this._raidEntries.filter(r => r.type === 'risk' && r.status === 'active').length;
+    const issues = this._raidEntries.filter(r => r.type === 'issue' && r.status === 'active').length;
+
+    // Determine status color
+    let statusColor = 'var(--accent-green)';
+    let statusEmoji = '\u{1F7E2}';
+    let statusLabel = 'On Track';
+    if (issues > 0 || (health !== null && health < 25)) {
+      statusColor = 'var(--accent-red, #ef4444)';
+      statusEmoji = '\u{1F534}';
+      statusLabel = 'Needs Attention';
+    } else if (risks > 2 || (health !== null && health < 50)) {
+      statusColor = 'var(--accent-yellow)';
+      statusEmoji = '\u{1F7E1}';
+      statusLabel = 'Watch Closely';
+    }
+
+    // Build summary sentences
+    const sentences = [];
+    const PHASE_NAMES = { strategy: 'Strategy', discovery: 'Discovery', architecture: 'Architecture', execution: 'Execution', review: 'Review', deploy: 'Deploy' };
+    sentences.push(`**${b.name}** is in the **${PHASE_NAMES[phase] || phase}** phase.`);
+
+    if (taskTotal > 0) {
+      const pct = Math.round((taskDone / taskTotal) * 100);
+      sentences.push(`${taskDone} of ${taskTotal} tasks completed (${pct}%).`);
+    } else {
+      sentences.push('No tasks created yet.');
+    }
+
+    if (state === 'running' && activeAgents > 0) {
+      sentences.push(`Team is active \u2014 ${activeAgents} of ${agentTotal} agents working.`);
+    } else if (agentTotal > 0) {
+      sentences.push(`${agentTotal} agents on the team, none currently active.`);
+    }
+
+    if (risks > 0) sentences.push(`${risks} active ${risks === 1 ? 'risk' : 'risks'} identified.`);
+    if (issues > 0) sentences.push(`${issues} open ${issues === 1 ? 'issue' : 'issues'} to resolve.`);
+
+    if (risks === 0 && issues === 0 && taskTotal > 0) {
+      sentences.push('No blockers \u2014 everything is on track.');
+    }
+
+    const card = h('div', { class: 'health-summary-card glass-card' },
+      h('div', { class: 'health-summary-status', style: { color: statusColor } },
+        h('span', null, statusEmoji),
+        h('span', { class: 'health-summary-status-label' }, statusLabel),
+      ),
+      (() => {
+        const textEl = h('div', { class: 'health-summary-text' });
+        // Render **bold** as <strong>
+        const raw = sentences.join(' ');
+        const parts = raw.split(/\*\*(.*?)\*\*/g);
+        for (let i = 0; i < parts.length; i++) {
+          textEl.appendChild(i % 2 === 0
+            ? document.createTextNode(parts[i])
+            : h('strong', null, parts[i]));
+        }
+        return textEl;
+      })(),
+    );
+
+    return card;
   }
 
   // Project switcher pills removed per user feedback (#1006)
