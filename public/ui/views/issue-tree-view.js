@@ -2,10 +2,15 @@
  * Overlord v2 — Issue Tree View (Rewrite)
  *
  * Zoomable, fractal-like tree visualization of the project's issue/task
- * hierarchy. Clicking a node with children "zooms in" to show that node
+ * hierarchy. Three view modes:
+ *
+ *   1. Graph (default) — SVG tree graph with curved connectors, pan/zoom
+ *   2. Cards — clickable card grid with drill-down to ANY depth
+ *   3. Text  — full ASCII text tree with copy support
+ *
+ * Clicking a node with children "zooms in" to show that node
  * as the new root with its children rendered as polished cards. A
- * breadcrumb trail tracks the zoom path. Includes a full ASCII text mode
- * with copy support.
+ * breadcrumb trail tracks the zoom path.
  *
  * Store keys: tasks.list, milestones.list, building.active, building.data
  */
@@ -13,6 +18,7 @@
 import { Component } from '../engine/component.js';
 import { OverlordUI } from '../engine/engine.js';
 import { h } from '../engine/helpers.js';
+import { TreeGraph } from '../components/tree-graph.js';
 
 /* ═══════════════════════════════════════════════════════════
    Constants
@@ -41,6 +47,9 @@ const TYPE_ICONS = {
   chore:   '\u{1F9F9}',
 };
 
+/** View modes: graph is the default */
+const VIEW_MODES = ['graph', 'cards', 'text'];
+
 /* ═══════════════════════════════════════════════════════════
    Component
    ═══════════════════════════════════════════════════════════ */
@@ -51,12 +60,18 @@ export class IssueTreeView extends Component {
     super(el, opts);
     this._tasks = [];
     this._milestones = [];
-    this._textMode = false;
+    this._viewMode = 'graph';   // 'graph' | 'cards' | 'text'
 
     // Zoom state: path of node references from root to current focus
     // Each entry: { id, title } — the first is always the synthetic root
     this._zoomPath = [];   // breadcrumb trail
     this._zoomNode = null; // current zoomed-in tree node (null = show all roots)
+
+    // Tree graph instance (for graph mode)
+    this._treeGraph = null;
+
+    // Max drill depth (configurable, default practically unlimited)
+    this._maxDepth = opts.maxDepth || 1000;
   }
 
   /* ── Lifecycle ── */
@@ -98,9 +113,17 @@ export class IssueTreeView extends Component {
     this._fullRender();
   }
 
+  destroy() {
+    this._destroyTreeGraph();
+    super.destroy();
+  }
+
   /* ── Full render (clears and rebuilds entire view) ── */
 
   _fullRender() {
+    // Destroy existing tree graph before clearing DOM
+    this._destroyTreeGraph();
+
     this.el.textContent = '';
     this.el.className = 'issue-tree-view';
 
@@ -127,27 +150,41 @@ export class IssueTreeView extends Component {
     // Stats bar
     this.el.appendChild(this._renderStatsBar());
 
-    // Breadcrumb trail
-    this.el.appendChild(this._renderBreadcrumbs());
+    // Breadcrumb trail (not shown in graph mode)
+    if (this._viewMode !== 'graph') {
+      this.el.appendChild(this._renderBreadcrumbs());
+    }
 
     // Main content area
     this._containerEl = h('div', { class: 'issue-tree-container' });
+
+    // Graph mode needs full height
+    if (this._viewMode === 'graph') {
+      this._containerEl.style.cssText = 'flex:1;min-height:0;position:relative;';
+    }
+
     this.el.appendChild(this._containerEl);
 
     this._renderContent();
   }
 
-  /* ── Content render (just the card grid / text, no header rebuild) ── */
+  /* ── Content render (just the card grid / text / graph, no header rebuild) ── */
 
   _renderContent() {
     if (!this._containerEl) return;
     this._containerEl.textContent = '';
 
-    if (this._textMode) {
+    if (this._viewMode === 'text') {
       this._containerEl.appendChild(this._renderTextMode());
       return;
     }
 
+    if (this._viewMode === 'graph') {
+      this._renderGraphMode();
+      return;
+    }
+
+    // Cards mode
     const currentChildren = this._getZoomedChildren();
 
     if (currentChildren.length === 0) {
@@ -176,11 +213,53 @@ export class IssueTreeView extends Component {
   }
 
   /* ═══════════════════════════════════════════════════════════
+     Graph Mode
+     ═══════════════════════════════════════════════════════════ */
+
+  _renderGraphMode() {
+    if (!this._containerEl) return;
+
+    // Create a graph container that fills available space
+    const graphEl = h('div', {
+      class: 'issue-tree-graph-container',
+      style: { width: '100%', height: 'calc(100vh - 220px)', minHeight: '400px' },
+    });
+    this._containerEl.appendChild(graphEl);
+
+    // Create TreeGraph instance
+    this._treeGraph = new TreeGraph(graphEl, {
+      onNodeClick: (nodeData) => this._onGraphNodeClick(nodeData),
+      maxDepth: this._maxDepth,
+    });
+
+    // Pass the tree data to the graph
+    const treeData = this._tree || [];
+    this._treeGraph.render(treeData);
+  }
+
+  _onGraphNodeClick(nodeData) {
+    if (!nodeData || !this._treeGraph) return;
+    // Center the graph on the clicked node
+    this._treeGraph.centerOnNode(nodeData.id);
+  }
+
+  _destroyTreeGraph() {
+    if (this._treeGraph) {
+      this._treeGraph.destroy();
+      this._treeGraph = null;
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════
      Tree Data Construction
      ═══════════════════════════════════════════════════════════ */
 
   _buildTree() {
-    // Build child lookup
+    // Build child lookup from parent_id relationships.
+    // This is the key fix: every task with parent_id gets attached
+    // to its parent as a child, regardless of whether the parent
+    // is a milestone or another task. This enables drill-down to
+    // ANY depth, not just milestones.
     const childMap = new Map();
     for (const t of this._tasks) {
       if (t.parent_id) {
@@ -216,21 +295,30 @@ export class IssueTreeView extends Component {
         type: 'epic',
         status: ms.status === 'completed' ? 'done' : 'pending',
         priority: 'high',
-        children: tasks.map(t => this._taskToNode(t)),
+        children: tasks.map(t => this._taskToNode(t, 0)),
         assignee: null,
       });
     }
 
-    // Orphan tasks
+    // Orphan tasks (recursively built with children from parent_id)
     for (const t of orphans) {
-      nodes.push(this._taskToNode(t));
+      nodes.push(this._taskToNode(t, 0));
     }
 
     return nodes;
   }
 
-  _taskToNode(task) {
-    const children = (this._childMap?.get(task.id) || []).map(c => this._taskToNode(c));
+  /**
+   * Recursively convert a task to a tree node, attaching children
+   * found via parent_id. Depth-limited by this._maxDepth to prevent
+   * infinite recursion on malformed data.
+   */
+  _taskToNode(task, depth) {
+    const childTasks = this._childMap?.get(task.id) || [];
+    const children = depth < this._maxDepth
+      ? childTasks.map(c => this._taskToNode(c, depth + 1))
+      : [];
+
     return {
       id: task.id,
       title: task.title,
@@ -402,20 +490,31 @@ export class IssueTreeView extends Component {
   }
 
   _renderHeader() {
-    const modeLabel = this._textMode ? '\u{1F3AF} Visual' : '\u{1F4C4} Text';
+    // View mode toggle buttons (Graph | Cards | Text)
+    const modeButtons = h('div', { class: 'issue-tree-mode-toggle' });
 
-    const toggleBtn = h('button', {
-      class: 'btn btn-ghost btn-sm',
-      title: this._textMode ? 'Switch to visual card view' : 'Switch to ASCII text tree',
-    }, modeLabel);
-    toggleBtn.addEventListener('click', () => {
-      this._textMode = !this._textMode;
-      this._fullRender();
-    });
+    const modes = [
+      { key: 'graph', label: '\u{1F578}\uFE0F Graph',  title: 'SVG tree graph view' },
+      { key: 'cards', label: '\u{1F3AF} Cards', title: 'Drill-down card view' },
+      { key: 'text',  label: '\u{1F4C4} Text',  title: 'ASCII text tree view' },
+    ];
 
-    const actions = [toggleBtn];
+    for (const mode of modes) {
+      const btn = h('button', {
+        class: `btn btn-ghost btn-sm issue-tree-mode-btn ${this._viewMode === mode.key ? 'issue-tree-mode-btn--active' : ''}`,
+        title: mode.title,
+      }, mode.label);
+      btn.addEventListener('click', () => {
+        if (this._viewMode === mode.key) return;
+        this._viewMode = mode.key;
+        this._fullRender();
+      });
+      modeButtons.appendChild(btn);
+    }
 
-    if (this._zoomPath.length > 0) {
+    const actions = [modeButtons];
+
+    if (this._viewMode !== 'graph' && this._zoomPath.length > 0) {
       const zoomOutBtn = h('button', {
         class: 'btn btn-ghost btn-sm',
         title: 'Zoom out one level',
@@ -521,6 +620,10 @@ export class IssueTreeView extends Component {
     const statusCfg = STATUS_CONFIG[node.status] || STATUS_CONFIG.pending;
     const typeIcon = TYPE_ICONS[node.type] || TYPE_ICONS.task;
     const priorityCfg = PRIORITY_CONFIG[node.priority] || PRIORITY_CONFIG.normal;
+
+    // FIX: Check for children from parent_id relationships, not just
+    // milestone-level. The children array is already populated recursively
+    // by _taskToNode, so ANY node with children gets the drill-down chevron.
     const hasChildren = node.children && node.children.length > 0;
     const progress = hasChildren ? this._computeProgress(node) : null;
 
@@ -539,11 +642,13 @@ export class IssueTreeView extends Component {
     topRow.appendChild(h('span', { class: 'issue-tree-card-title' },
       this._truncate(node.title, 50)));
 
+    // FIX: Chevron shown for ALL nodes with children, not just milestones.
+    // This enables drilling into tasks that have sub-tasks via parent_id.
     if (hasChildren) {
       const chevron = h('button', {
         class: 'issue-tree-card-chevron',
         'aria-label': `Zoom into ${node.title}`,
-        title: 'Zoom in',
+        title: `Zoom in (${node.children.length} children)`,
       }, '\u203A');
       chevron.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -650,9 +755,10 @@ export class IssueTreeView extends Component {
         h('span', { class: 'issue-tree-card-preview-icon' }, childTypeIcon),
         h('span', { class: 'issue-tree-card-preview-title' },
           this._truncate(child.title, 35)),
-        childProgress
+        // Show child count indicator for grandchildren
+        childHasKids
           ? h('span', { class: 'issue-tree-card-preview-progress' },
-              `${childProgress.percent}%`)
+              childProgress ? `${childProgress.percent}% (${child.children.length})` : `(${child.children.length})`)
           : null
       );
       preview.appendChild(row);
@@ -742,6 +848,41 @@ export class IssueTreeView extends Component {
 
   _buildStyles() {
     const css = `
+/* ── Issue Tree: Layout ── */
+.issue-tree-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ── Issue Tree: Mode Toggle ── */
+.issue-tree-mode-toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: 2px;
+}
+.issue-tree-mode-btn {
+  font-size: var(--text-xs) !important;
+  padding: var(--sp-1) var(--sp-2) !important;
+  border-radius: var(--radius-sm) !important;
+  white-space: nowrap;
+  transition: all var(--duration-fast);
+}
+.issue-tree-mode-btn--active {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Issue Tree: Graph container ── */
+.issue-tree-graph-container {
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
 /* ── Issue Tree: Breadcrumbs ── */
 .issue-tree-breadcrumbs {
   display: flex;
