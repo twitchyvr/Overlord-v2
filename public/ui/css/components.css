@@ -5272,7 +5272,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 120px;
+  max-width: 160px;
 }
 .project-switcher-caret {
   font-size: 0.6rem;
@@ -5282,9 +5282,9 @@
 .project-switcher-dropdown {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
-  min-width: 260px;
-  max-height: 400px;
+  left: 0;
+  min-width: 280px;
+  max-height: min(400px, calc(100vh - 80px));
   overflow-y: auto;
   background: var(--bg-elevated);
   border: 1px solid var(--border-primary);
