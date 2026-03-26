@@ -38,6 +38,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **GitHub repo link in sidebar** — detects git remote, shows clickable link + branch name (#1192, PR #1228)
 - **MiniMax image prompt optimizer** — `prompt_optimizer: true` for better agent photos (#1225, PR #1226)
 - **MiniMax voice personality** — sound effects, voice modify, timbre mixing, subtitles, pronunciation dict (#1222, PR #1227)
+- **GitHub repo link in sidebar** — clickable repo URL + branch name for each project (#1192, PR #1228)
+- **Token counter session label + reset** — shows "this session", right-click to reset (#1158, PR #1230)
+- **Task delete** — detail drawer button + socket endpoint with FK-safe cascade (PR #1231)
+- **RAID entry delete** — detail drawer button + socket endpoint (PR #1232)
+- **RAID edit form type + phase** — can now re-categorize and re-phase entries (PR #1233)
+- **CI deprecation fix** — `deny-licenses` → `deny-packages-with-licenses` (PR #1235)
 - **8 open-source dogfood projects** — kaneo, maplibre-gl-js, clack, grist-core, racing-game, noisecraft, bemuse, battle-city (#1184-1191)
 
 ### Previously Fixed
