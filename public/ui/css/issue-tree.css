@@ -1,0 +1,1185 @@
+/* ═══════════════════════════════════════════════════
+   OVERLORD v2 — Issue Tree View (Zoomable)
+   Standalone CSS for the hierarchical issue tree with
+   drill-down navigation, glassmorphism cards, and
+   animated transitions.
+   ═══════════════════════════════════════════════════ */
+
+
+/* ── Keyframes (scoped to issue-tree) ── */
+
+@keyframes issue-tree-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes issue-tree-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes issue-tree-zoom-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes issue-tree-zoom-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(1.03); }
+}
+
+@keyframes issue-tree-progress-fill {
+  from { width: 0; }
+}
+
+@keyframes issue-tree-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes issue-tree-pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-blue-glow); }
+  50%      { box-shadow: 0 0 12px 2px var(--accent-blue-glow); }
+}
+
+
+/* ═══════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-view {
+  padding: var(--sp-6);
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+  animation: issue-tree-fade-in var(--duration-normal) var(--ease-default);
+  min-height: 100%;
+}
+
+
+/* ── Header ── */
+
+.issue-tree-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--sp-4);
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.issue-tree-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  flex: 1;
+}
+
+.issue-tree-header h2,
+.issue-tree-header-title {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin: 0;
+  line-height: var(--leading-tight);
+}
+
+.issue-tree-header-subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.issue-tree-header-actions {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  flex-shrink: 0;
+}
+
+
+/* ── Breadcrumb ── */
+
+.issue-tree-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--sp-4);
+  font-size: var(--text-sm);
+  min-height: 36px;
+  overflow: hidden;
+}
+
+.issue-tree-breadcrumb-item {
+  color: var(--accent-blue);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-default);
+  white-space: nowrap;
+  text-decoration: none;
+  font-weight: var(--font-medium);
+  padding: var(--sp-1) 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.issue-tree-breadcrumb-item:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.issue-tree-breadcrumb-item:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.issue-tree-breadcrumb-separator {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  user-select: none;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.issue-tree-breadcrumb-current {
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  cursor: default;
+  white-space: nowrap;
+  padding: var(--sp-1) 0;
+}
+
+
+/* ── Stats bar ── */
+
+.issue-tree-stats {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--sp-4);
+  font-size: var(--text-sm);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.issue-tree-stats::-webkit-scrollbar {
+  height: 3px;
+}
+
+.issue-tree-stats::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.issue-tree-stats::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-full);
+}
+
+.issue-tree-stats-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+
+.issue-tree-stats-pill::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.issue-tree-stats-pill:hover {
+  background: var(--bg-hover);
+}
+
+.issue-tree-stats-pill.done {
+  color: var(--accent-green);
+  background: var(--accent-green-bg);
+}
+
+.issue-tree-stats-pill.progress {
+  color: var(--accent-blue);
+  background: var(--accent-blue-bg);
+}
+
+.issue-tree-stats-pill.pending {
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+}
+
+.issue-tree-stats-pill.blocked {
+  color: var(--accent-red);
+  background: var(--accent-red-bg);
+}
+
+
+/* ── Main container ── */
+
+.issue-tree-container {
+  position: relative;
+  min-height: 200px;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   CURRENT NODE SUMMARY (zoomed-in view)
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-current {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: var(--sp-6);
+  margin-bottom: var(--sp-6);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  animation: issue-tree-zoom-in var(--duration-normal) var(--ease-default);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle gradient accent at top edge */
+.issue-tree-current::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--accent-blue) 0%,
+    var(--accent-purple) 50%,
+    var(--accent-cyan) 100%
+  );
+  opacity: 0.6;
+}
+
+.issue-tree-current-title {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin: 0 0 var(--sp-3);
+  line-height: var(--leading-tight);
+}
+
+.issue-tree-current-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.issue-tree-current-meta-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.issue-tree-current-description {
+  margin-top: var(--sp-4);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+}
+
+.issue-tree-current-progress {
+  margin-top: var(--sp-4);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.issue-tree-current-progress-label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--accent-green);
+  flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   NODE CARDS
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--sp-4);
+}
+
+.issue-tree-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid var(--text-muted);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  transition:
+    transform var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  position: relative;
+  outline: none;
+  min-width: 0;
+  animation: issue-tree-slide-up var(--duration-normal) var(--ease-default) both;
+}
+
+/* Stagger card entrance animation */
+.issue-tree-card:nth-child(1)  { animation-delay: 0ms; }
+.issue-tree-card:nth-child(2)  { animation-delay: 40ms; }
+.issue-tree-card:nth-child(3)  { animation-delay: 80ms; }
+.issue-tree-card:nth-child(4)  { animation-delay: 120ms; }
+.issue-tree-card:nth-child(5)  { animation-delay: 160ms; }
+.issue-tree-card:nth-child(6)  { animation-delay: 200ms; }
+.issue-tree-card:nth-child(7)  { animation-delay: 240ms; }
+.issue-tree-card:nth-child(8)  { animation-delay: 280ms; }
+.issue-tree-card:nth-child(9)  { animation-delay: 320ms; }
+.issue-tree-card:nth-child(10) { animation-delay: 360ms; }
+.issue-tree-card:nth-child(n+11) { animation-delay: 400ms; }
+
+.issue-tree-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--shadow-md),
+    0 0 20px var(--overlay-dark-sm);
+  border-color: var(--border-accent);
+}
+
+.issue-tree-card:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-blue);
+}
+
+
+/* ── Status-colored left borders ── */
+
+.issue-tree-card.status-done,
+.issue-tree-card[data-status="done"] {
+  border-left-color: var(--accent-green);
+}
+
+.issue-tree-card.status-progress,
+.issue-tree-card[data-status="progress"],
+.issue-tree-card[data-status="in-progress"] {
+  border-left-color: var(--accent-blue);
+}
+
+.issue-tree-card.status-pending,
+.issue-tree-card[data-status="pending"] {
+  border-left-color: var(--text-muted);
+}
+
+.issue-tree-card.status-blocked,
+.issue-tree-card[data-status="blocked"] {
+  border-left-color: var(--accent-red);
+}
+
+
+/* ── Drillable cards (has children) ── */
+
+.issue-tree-card.drillable {
+  cursor: pointer;
+}
+
+.issue-tree-card.drillable:hover {
+  box-shadow:
+    var(--shadow-md),
+    0 0 24px var(--accent-blue-glow);
+}
+
+.issue-tree-card.drillable::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: var(--sp-4);
+  transform: translateY(-50%) rotate(-45deg);
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transition:
+    border-color var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
+}
+
+.issue-tree-card.drillable:hover::after {
+  border-color: var(--accent-blue);
+  transform: translateY(-50%) rotate(-45deg) translate(2px, 2px);
+}
+
+
+/* ── Done state ── */
+
+.issue-tree-card.done,
+.issue-tree-card[data-status="done"] {
+  opacity: 0.55;
+}
+
+.issue-tree-card.done .issue-tree-card-title,
+.issue-tree-card[data-status="done"] .issue-tree-card-title {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-muted);
+  color: var(--text-muted);
+}
+
+
+/* ── Card header ── */
+
+.issue-tree-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.issue-tree-card-title {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  line-height: var(--leading-tight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.issue-tree-card-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  transition: color var(--duration-fast) var(--ease-default);
+}
+
+.issue-tree-card:hover .issue-tree-card-chevron {
+  color: var(--accent-blue);
+}
+
+
+/* ── Card body ── */
+
+.issue-tree-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.issue-tree-card-description {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.issue-tree-card-assignee {
+  font-size: var(--text-xs);
+  color: var(--accent-blue);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.issue-tree-card-assignee::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  background: var(--accent-blue-bg-md);
+  border: 1px solid var(--accent-blue-border);
+  flex-shrink: 0;
+}
+
+
+/* ── Card footer ── */
+
+.issue-tree-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: auto;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border-secondary);
+}
+
+.issue-tree-card-footer-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.issue-tree-card-footer-stat {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   PROGRESS BARS
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-progress {
+  width: 100%;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.issue-tree-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    90deg,
+    var(--accent-green) 0%,
+    var(--accent-cyan) 100%
+  );
+  transition: width 0.4s var(--ease-default);
+  animation: issue-tree-progress-fill 0.6s var(--ease-default);
+  min-width: 0;
+}
+
+/* Larger progress bar variant for the current-node summary */
+.issue-tree-current .issue-tree-progress {
+  height: 6px;
+}
+
+/* Progress states */
+.issue-tree-progress-fill.complete {
+  background: var(--accent-green);
+}
+
+.issue-tree-progress-fill.warning {
+  background: linear-gradient(
+    90deg,
+    var(--accent-yellow) 0%,
+    var(--accent-orange) 100%
+  );
+}
+
+.issue-tree-progress-fill.blocked {
+  background: var(--accent-red);
+}
+
+.issue-tree-progress-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  min-width: 32px;
+  text-align: right;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   BADGES / PILLS
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+
+.issue-tree-badge-done {
+  color: var(--accent-green);
+  background: var(--accent-green-bg);
+  border-color: var(--accent-green-border);
+}
+
+.issue-tree-badge-progress {
+  color: var(--accent-blue);
+  background: var(--accent-blue-bg);
+  border-color: var(--accent-blue-border);
+}
+
+.issue-tree-badge-pending {
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+  border-color: var(--border-primary);
+}
+
+.issue-tree-badge-blocked {
+  color: var(--accent-red);
+  background: var(--accent-red-bg);
+  border-color: var(--accent-red-border);
+}
+
+
+/* ── Priority badges ── */
+
+.issue-tree-priority-critical {
+  color: var(--accent-red);
+  background: var(--accent-red-bg);
+  border-color: var(--accent-red-border);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.issue-tree-priority-high {
+  color: var(--accent-orange);
+  background: var(--accent-red-bg);
+  border-color: var(--accent-red-border);
+  font-weight: var(--font-semibold);
+}
+
+.issue-tree-priority-medium {
+  color: var(--accent-yellow);
+  background: var(--accent-yellow-bg);
+  border-color: var(--accent-yellow-border);
+}
+
+.issue-tree-priority-low {
+  color: var(--accent-green);
+  background: var(--accent-green-bg);
+  border-color: var(--accent-green-border);
+}
+
+
+/* ── Type icon ── */
+
+.issue-tree-type-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: var(--text-base);
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   TREE CONNECTORS (hierarchy lines)
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-depth-1 { padding-left: var(--sp-6); }
+.issue-tree-depth-2 { padding-left: var(--sp-12); }
+.issue-tree-depth-3 { padding-left: calc(var(--sp-12) + var(--sp-6)); }
+.issue-tree-depth-4 { padding-left: var(--sp-16); }
+.issue-tree-depth-5 { padding-left: calc(var(--sp-16) + var(--sp-6)); }
+
+.issue-tree-connector {
+  position: relative;
+}
+
+.issue-tree-connector::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--sp-4) - 1px);
+  width: 1px;
+  background: var(--border-primary);
+}
+
+/* Horizontal arm from connector to card */
+.issue-tree-connector::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: calc(var(--sp-4) - 1px);
+  width: var(--sp-3);
+  height: 1px;
+  background: var(--border-primary);
+}
+
+/* Last child connector: stop vertical line at midpoint */
+.issue-tree-connector.last::before {
+  bottom: 50%;
+}
+
+/* Nested depth offsets for connectors */
+.issue-tree-connector.depth-2::before,
+.issue-tree-connector.depth-2::after {
+  left: calc(var(--sp-10) - 1px);
+}
+
+.issue-tree-connector.depth-3::before,
+.issue-tree-connector.depth-3::after {
+  left: calc(var(--sp-16) - 1px);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   TEXT MODE (ASCII tree for AI)
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-text-container {
+  position: relative;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-6);
+  overflow: hidden;
+}
+
+.issue-tree-text-pre {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre;
+  overflow-x: auto;
+  tab-size: 2;
+  margin: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.issue-tree-text-pre::-webkit-scrollbar {
+  height: 6px;
+}
+
+.issue-tree-text-pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.issue-tree-text-pre::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-full);
+}
+
+.issue-tree-text-pre::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+.issue-tree-copy-btn {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+  z-index: var(--z-above);
+}
+
+.issue-tree-copy-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-accent);
+}
+
+.issue-tree-copy-btn:active {
+  background: var(--bg-active);
+}
+
+.issue-tree-copy-btn.copied {
+  color: var(--accent-green);
+  border-color: var(--accent-green-border);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   ZOOM TRANSITION WRAPPER
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-level {
+  animation: issue-tree-zoom-in var(--duration-normal) var(--ease-default);
+}
+
+.issue-tree-level-exit {
+  animation: issue-tree-zoom-out var(--duration-fast) var(--ease-default) forwards;
+}
+
+.issue-tree-level-enter {
+  animation: issue-tree-zoom-in var(--duration-normal) var(--ease-default);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   EMPTY STATE
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-16) var(--sp-8);
+  text-align: center;
+  animation: issue-tree-fade-in var(--duration-slow) var(--ease-default);
+}
+
+.issue-tree-empty-icon {
+  font-size: var(--text-4xl);
+  margin-bottom: var(--sp-4);
+  opacity: 0.4;
+  line-height: 1;
+}
+
+.issue-tree-empty-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  margin: 0 0 var(--sp-2);
+}
+
+.issue-tree-empty-text {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  max-width: 360px;
+  line-height: var(--leading-normal);
+  margin: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   LOADING / SKELETON STATE
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 25%,
+    var(--bg-elevated) 50%,
+    var(--bg-tertiary) 75%
+  );
+  background-size: 200% 100%;
+  animation: issue-tree-shimmer 1.5s infinite ease-in-out;
+  border-radius: var(--radius-md);
+}
+
+.issue-tree-skeleton-card {
+  height: 120px;
+  border-radius: var(--radius-lg);
+}
+
+.issue-tree-skeleton-line {
+  height: 12px;
+  margin-bottom: var(--sp-2);
+}
+
+.issue-tree-skeleton-line.short {
+  width: 60%;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   CARD STATUS GLOW EFFECTS
+   ═══════════════════════════════════════════════════ */
+
+/* Active / in-progress glow on hover */
+.issue-tree-card.status-progress:hover,
+.issue-tree-card[data-status="progress"]:hover,
+.issue-tree-card[data-status="in-progress"]:hover {
+  box-shadow:
+    var(--shadow-md),
+    0 0 20px var(--accent-blue-glow);
+}
+
+.issue-tree-card.status-done:hover,
+.issue-tree-card[data-status="done"]:hover {
+  box-shadow:
+    var(--shadow-md),
+    0 0 16px var(--accent-green-glow);
+  opacity: 0.75;
+}
+
+.issue-tree-card.status-blocked:hover,
+.issue-tree-card[data-status="blocked"]:hover {
+  box-shadow:
+    var(--shadow-md),
+    0 0 20px var(--accent-red-glow);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   LIST LAYOUT VARIANT
+   (cards as rows instead of grid)
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.issue-tree-card-list .issue-tree-card {
+  flex-direction: row;
+  align-items: center;
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.issue-tree-card-list .issue-tree-card-header {
+  flex: 1;
+}
+
+.issue-tree-card-list .issue-tree-card-body {
+  display: none;
+}
+
+.issue-tree-card-list .issue-tree-card-footer {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+  flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   BACK NAVIGATION
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-4);
+  background: none;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default),
+    background var(--duration-fast) var(--ease-default);
+}
+
+.issue-tree-back:hover {
+  color: var(--text-primary);
+  border-color: var(--border-accent);
+  background: var(--bg-hover);
+}
+
+.issue-tree-back:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-blue);
+}
+
+.issue-tree-back-arrow {
+  font-size: var(--text-base);
+  transition: transform var(--duration-fast) var(--ease-default);
+}
+
+.issue-tree-back:hover .issue-tree-back-arrow {
+  transform: translateX(-2px);
+}
+
+
+/* ═══════════════════════════════════════════════════
+   CHILDREN COUNT INDICATOR
+   ═══════════════════════════════════════════════════ */
+
+.issue-tree-children-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--sp-1);
+  border-radius: var(--radius-full);
+  background: var(--accent-blue-bg);
+  color: var(--accent-blue);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE (max-width: 768px)
+   ═══════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+  .issue-tree-view {
+    padding: var(--sp-3) var(--sp-4);
+  }
+
+  .issue-tree-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-3);
+  }
+
+  .issue-tree-header-actions {
+    justify-content: flex-end;
+  }
+
+  /* Breadcrumb wraps */
+  .issue-tree-breadcrumb {
+    flex-wrap: wrap;
+    gap: var(--sp-1);
+  }
+
+  /* Stats bar scrolls horizontally */
+  .issue-tree-stats {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: var(--sp-2);
+    gap: var(--sp-2);
+  }
+
+  /* Cards go full width */
+  .issue-tree-card-grid {
+    grid-template-columns: 1fr;
+    gap: var(--sp-3);
+  }
+
+  /* Current node summary tightens */
+  .issue-tree-current {
+    padding: var(--sp-4);
+  }
+
+  .issue-tree-current-title {
+    font-size: var(--text-2xl);
+  }
+
+  .issue-tree-current-meta {
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+
+  /* Text mode tightens */
+  .issue-tree-text-container {
+    padding: var(--sp-3);
+  }
+
+  .issue-tree-text-pre {
+    font-size: var(--text-xs);
+  }
+
+  /* Reduce depth indentation on mobile */
+  .issue-tree-depth-1 { padding-left: var(--sp-4); }
+  .issue-tree-depth-2 { padding-left: var(--sp-8); }
+  .issue-tree-depth-3 { padding-left: var(--sp-12); }
+  .issue-tree-depth-4 { padding-left: var(--sp-16); }
+  .issue-tree-depth-5 { padding-left: calc(var(--sp-16) + var(--sp-4)); }
+
+  /* Empty state tightens */
+  .issue-tree-empty {
+    padding: var(--sp-8) var(--sp-4);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE (max-width: 480px)
+   ═══════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+
+  .issue-tree-view {
+    padding: var(--sp-2) var(--sp-3);
+  }
+
+  .issue-tree-header h2,
+  .issue-tree-header-title {
+    font-size: var(--text-xl);
+  }
+
+  .issue-tree-card {
+    padding: var(--sp-3);
+  }
+
+  .issue-tree-card-title {
+    font-size: var(--text-sm);
+  }
+
+  .issue-tree-current-title {
+    font-size: var(--text-xl);
+  }
+
+  .issue-tree-stats-pill {
+    padding: var(--sp-1) var(--sp-2);
+    font-size: var(--text-xs);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════
+   REDUCED MOTION
+   ═══════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .issue-tree-view,
+  .issue-tree-card,
+  .issue-tree-current,
+  .issue-tree-level,
+  .issue-tree-level-enter,
+  .issue-tree-empty {
+    animation: none;
+  }
+
+  .issue-tree-level-exit {
+    animation: none;
+  }
+
+  .issue-tree-card:hover {
+    transform: none;
+  }
+
+  .issue-tree-progress-fill {
+    transition: none;
+    animation: none;
+  }
+
+  .issue-tree-back:hover .issue-tree-back-arrow {
+    transform: none;
+  }
+
+  .issue-tree-skeleton {
+    animation: none;
+  }
+}
