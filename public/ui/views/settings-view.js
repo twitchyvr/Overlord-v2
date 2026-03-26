@@ -249,7 +249,7 @@ export class SettingsView extends Component {
       control: () => {
         const server = this._serverConfig?.server || {};
         const env = server.environment || 'development';
-        const version = server.version || '0.1.0';
+        const version = server.version || '—';
         const uptime = server.uptime ? `${Math.round(server.uptime / 60)}m` : '—';
         return h('div', { class: 'settings-server-info' },
           h('span', { class: 'settings-info-badge' }, env),
