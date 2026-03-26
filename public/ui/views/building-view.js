@@ -261,14 +261,16 @@ export class BuildingView extends Component {
       projectInfo.appendChild(repoRow);
     }
 
-    // Fetch git info if not yet loaded (#1192)
+    // Fetch git info if not yet loaded (#1192) — silent, no error toast
     if (!this._gitInfo && this._buildingData.working_directory && window.overlordSocket) {
-      window.overlordSocket.emit('git:detect', { dirPath: this._buildingData.working_directory }, (res) => {
-        if (res && res.ok && res.data?.isRepo) {
-          this._gitInfo = res.data;
-          this.render();
-        }
-      });
+      window.overlordSocket.emitWithAck('git:detect', { path: this._buildingData.working_directory })
+        .then((res) => {
+          if (res && res.ok && res.data?.isRepo) {
+            this._gitInfo = res.data;
+            this.render();
+          }
+        })
+        .catch(() => { /* silent — git info is optional enhancement */ });
     }
     header.appendChild(projectInfo);
 
