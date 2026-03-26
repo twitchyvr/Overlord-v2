@@ -227,7 +227,8 @@ async function _loadViewModules() {
     { EmailView },
     { ScriptsView },
     { ScriptEditorView },
-    { SecurityView }
+    { SecurityView },
+    { IssueTreeView }
   ] = await Promise.all([
     import('../views/dashboard-view.js'),
     import('../views/strategist-view.js'),
@@ -243,7 +244,8 @@ async function _loadViewModules() {
     import('../views/email-view.js'),
     import('../views/scripts-view.js'),
     import('../views/script-editor-view.js'),
-    import('../views/security-view.js')
+    import('../views/security-view.js'),
+    import('../views/issue-tree-view.js')
   ]);
 
   return {
@@ -261,7 +263,8 @@ async function _loadViewModules() {
     email:      EmailView,
     scripts:    ScriptsView,
     'script-editor': ScriptEditorView,
-    security:   SecurityView
+    security:   SecurityView,
+    'issue-tree': IssueTreeView
   };
 }
 
