@@ -123,19 +123,19 @@ describe('Prompt Cache', () => {
   });
 
   describe('buildCachedSystemPrompt', () => {
-    it('returns array with cache_control for Anthropic on second call', () => {
+    it('always returns array with cache_control for Anthropic (#1272)', () => {
       const prompt = 'You are a helpful assistant.';
 
-      // First call — not yet cached, no cache_control
+      // First call — cache_control always sent so provider can cache it
       const result1 = buildCachedSystemPrompt(prompt, 'anthropic');
       expect(Array.isArray(result1)).toBe(true);
       const arr1 = result1 as Array<{ type: string; text: string; cache_control?: unknown }>;
       expect(arr1).toHaveLength(1);
       expect(arr1[0].type).toBe('text');
       expect(arr1[0].text).toBe(prompt);
-      expect(arr1[0].cache_control).toBeUndefined();
+      expect(arr1[0].cache_control).toEqual({ type: 'ephemeral' });
 
-      // Second call — now cached, should include cache_control
+      // Second call — still has cache_control
       const result2 = buildCachedSystemPrompt(prompt, 'anthropic');
       const arr2 = result2 as Array<{ type: string; text: string; cache_control?: { type: string } }>;
       expect(arr2[0].cache_control).toEqual({ type: 'ephemeral' });

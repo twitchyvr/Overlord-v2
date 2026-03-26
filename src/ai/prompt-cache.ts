@@ -104,13 +104,16 @@ export function buildCachedSystemPrompt(
   // Always store/refresh the prompt in the cache
   cachePrompt(hash, systemPrompt);
 
-  // Only Anthropic and MiniMax (Anthropic-compatible) support cache_control
+  // Anthropic and MiniMax (Anthropic-compatible) support cache_control.
+  // Always send cache_control — the provider decides whether to use cached content.
+  // Previously only sent when isCached=true, which meant the FIRST call never
+  // triggered caching on the provider side (#1272).
   if (provider === 'anthropic' || provider === 'minimax') {
     return [
       {
         type: 'text' as const,
         text: systemPrompt,
-        ...(isCached ? { cache_control: { type: 'ephemeral' as const } } : {}),
+        cache_control: { type: 'ephemeral' as const },
       },
     ];
   }
