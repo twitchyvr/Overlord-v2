@@ -192,6 +192,7 @@ export function initBuildingOnboarding({ bus, rooms, agents }: OnboardingDeps): 
           agentId: result.agentId,
           buildingId,
           text: phasePrompt,
+          isSystemPrompt: true, // Hide from user in chat UI (#1246)
         });
 
         log.info(

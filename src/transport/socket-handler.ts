@@ -499,6 +499,7 @@ Your tasks:
 \`\`\`
 
 Focus on being helpful to a non-technical project owner. Use plain language.`,
+              isSystemPrompt: true, // Hide from user in chat UI (#1246)
             });
             log.info({ buildingId: parsed.buildingId, roomId: stratRoom.id, agentId: stratAgent.id }, 'Play button triggered strategist conversation loop');
           } else {
