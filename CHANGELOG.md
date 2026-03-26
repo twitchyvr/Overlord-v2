@@ -48,6 +48,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Git detect param fix** — `dirPath` → `path`, silent errors via emitWithAck (PR #1245)
 - **GitHub repo URL resolved via gh API** — correct casing, auto-populates building.repo_url, blank if unconfirmed (#1249, PR #1250)
 - **Human-readable activity labels** — "AI request" not "ai_request", agent names resolved via DB JOIN (#1247, PR #1251)
+- **System prompts hidden from chat** — raw task IDs and internal commands collapsed into "📋 Phase instructions sent to agent" (#1246, PR #1253)
 - **8 open-source dogfood projects** — kaneo, maplibre-gl-js, clack, grist-core, racing-game, noisecraft, bemuse, battle-city (#1184-1191)
 
 ### Previously Fixed
