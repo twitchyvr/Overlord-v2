@@ -1858,7 +1858,7 @@ export function initSocketBridge(socket, store, engine) {
         const items = res.data.map(entry => ({
           event: entry.event_type,
           agentId: entry.agent_id,
-          agentName: entry.agent_name || entry.agent_id,
+          agentName: entry.agent_display_name || entry.agent_name || entry.agent_id,
           roomId: entry.room_id,
           buildingId: entry.building_id,
           timestamp: new Date(entry.created_at).getTime(),
