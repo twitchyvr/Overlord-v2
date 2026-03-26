@@ -135,15 +135,20 @@ export function getBuildingActivityLog(
   const limit = opts.limit ?? 100;
   const offset = opts.offset ?? 0;
 
-  let sql = 'SELECT * FROM agent_activity_log WHERE building_id = ?';
+  // JOIN agents to resolve display names (#1247)
+  let sql = `SELECT agent_activity_log.*,
+    COALESCE(agents.display_name, agents.name) AS agent_display_name
+    FROM agent_activity_log
+    LEFT JOIN agents ON agent_activity_log.agent_id = agents.id
+    WHERE agent_activity_log.building_id = ?`;
   const params: unknown[] = [buildingId];
 
   if (opts.eventType) {
-    sql += ' AND event_type = ?';
+    sql += ' AND agent_activity_log.event_type = ?';
     params.push(opts.eventType);
   }
 
-  sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  sql += ' ORDER BY agent_activity_log.created_at DESC LIMIT ? OFFSET ?';
   params.push(limit, offset);
 
   const rows = db.prepare(sql).all(...params) as Array<{
@@ -154,6 +159,7 @@ export function getBuildingActivityLog(
     building_id: string | null;
     room_id: string | null;
     created_at: string;
+    agent_display_name: string | null;
   }>;
 
   return rows.map((row) => ({
