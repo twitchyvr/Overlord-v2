@@ -50,6 +50,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Human-readable activity labels** — "AI request" not "ai_request", agent names resolved via DB JOIN (#1247, PR #1251)
 - **System prompts hidden from chat** — raw task IDs and internal commands collapsed into "📋 Phase instructions sent to agent" (#1246, PR #1253)
 - **Execution state persists across restarts** — Play button no longer reappears after refresh (#1257, PR #1259)
+- **[Epic #1255] Table-scoped chat — DB schema** — table_id on messages, table_presence table, 3 indexes (PR #1269)
+- **[Epic #1255] Table-scoped chat — transport schemas** — tableId on ChatMessage/History, new Presence/ChatList schemas (PR #1271)
+- **[Epic #1255] Table-scoped chat — persistence** — messages store table_id, history queries by table, thread scoping (PR #1274)
 - **8 open-source dogfood projects** — kaneo, maplibre-gl-js, clack, grist-core, racing-game, noisecraft, bemuse, battle-city (#1184-1191)
 
 ### Previously Fixed
