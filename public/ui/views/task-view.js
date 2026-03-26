@@ -284,9 +284,10 @@ export class TaskView extends Component {
       if (taskId) this._openTaskDetail(taskId);
     });
 
-    // Delegated click for status checkbox
+    // Delegated click for status checkbox — prevent default toggle, use cycle instead
     this.on('click', '.task-checkbox', (e, target) => {
       e.stopPropagation();
+      e.preventDefault();
       const taskId = target.dataset.taskId;
       if (taskId) this._cycleTaskStatus(taskId);
     });
