@@ -198,19 +198,19 @@
   border: 1px solid var(--border-primary);
 }
 .chat-message-user .chat-message-avatar {
-  background: rgba(56, 189, 248, 0.15);
+  background: var(--accent-blue-bg-md);
   color: var(--accent-blue);
-  border-color: rgba(56, 189, 248, 0.3);
+  border-color: var(--accent-blue-glow);
 }
 .chat-message-assistant .chat-message-avatar {
-  background: rgba(74, 222, 128, 0.15);
+  background: var(--accent-green-bg-md);
   color: var(--accent-green);
-  border-color: rgba(74, 222, 128, 0.3);
+  border-color: var(--accent-green-glow);
 }
 .chat-message-agent .chat-message-avatar {
-  background: rgba(168, 85, 247, 0.15);
+  background: var(--accent-purple-bg-md);
   color: var(--accent-purple);
-  border-color: rgba(168, 85, 247, 0.3);
+  border-color: var(--accent-purple-glow);
 }
 
 /* ── Message content ── */
@@ -290,7 +290,7 @@
 /* ── User messages — right-aligned feel ── */
 .chat-message-user .chat-message-content {
   background: rgba(56, 189, 248, 0.06);
-  border: 1px solid rgba(56, 189, 248, 0.1);
+  border: 1px solid var(--accent-blue-bg);
   border-radius: var(--radius-lg);
   padding: var(--sp-3);
 }
@@ -404,16 +404,16 @@
   border-radius: var(--radius-sm);
 }
 .tool-chip-success {
-  background: rgba(74, 222, 128, 0.15);
+  background: var(--accent-green-bg-md);
   color: var(--accent-green);
 }
 .tool-chip-error,
 .tool-chip-failed {
-  background: rgba(248, 113, 113, 0.15);
+  background: var(--accent-red-bg-md);
   color: var(--accent-red);
 }
 .tool-chip-running {
-  background: rgba(56, 189, 248, 0.15);
+  background: var(--accent-blue-bg-md);
   color: var(--accent-blue);
 }
 .tool-chip-params {
@@ -502,23 +502,23 @@
   padding: 2px var(--sp-2);
   font-size: var(--text-xs);
   border-radius: var(--radius-full);
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.2);
+  background: var(--accent-blue-bg);
+  border: 1px solid var(--accent-blue-border);
   color: var(--accent-blue);
 }
 .token-chip-command {
-  background: rgba(168, 85, 247, 0.1);
-  border-color: rgba(168, 85, 247, 0.2);
+  background: var(--accent-purple-bg);
+  border-color: var(--accent-purple-border);
   color: var(--accent-purple);
 }
 .token-chip-agent {
-  background: rgba(74, 222, 128, 0.1);
-  border-color: rgba(74, 222, 128, 0.2);
+  background: var(--accent-green-bg);
+  border-color: var(--accent-green-border);
   color: var(--accent-green);
 }
 .token-chip-reference {
-  background: rgba(251, 191, 36, 0.1);
-  border-color: rgba(251, 191, 36, 0.2);
+  background: var(--accent-yellow-bg);
+  border-color: var(--accent-yellow-border);
   color: var(--accent-yellow);
 }
 .token-chip-remove {
@@ -631,7 +631,7 @@
   opacity: 1;
 }
 .chat-conv-delete:hover {
-  background: rgba(248, 113, 113, 0.15);
+  background: var(--accent-red-bg-md);
   color: var(--accent-red);
 }
 

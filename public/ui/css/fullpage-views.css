@@ -113,7 +113,7 @@
   font-weight: var(--font-medium);
   padding: 2px var(--sp-2);
   border-radius: var(--radius-full);
-  background: rgba(56, 189, 248, 0.1);
+  background: var(--accent-blue-bg);
   color: var(--accent-blue);
   white-space: nowrap;
 }
@@ -225,7 +225,7 @@
   font-weight: var(--font-medium);
   padding: 2px var(--sp-2);
   border-radius: var(--radius-full);
-  background: rgba(56, 189, 248, 0.1);
+  background: var(--accent-blue-bg);
   color: var(--accent-blue);
   white-space: nowrap;
 }
@@ -499,11 +499,11 @@
   flex-shrink: 0;
 }
 .activity-view-badge.badge-ok {
-  background: rgba(74, 222, 128, 0.15);
+  background: var(--accent-green-bg-md);
   color: var(--accent-green);
 }
 .activity-view-badge.badge-err {
-  background: rgba(248, 113, 113, 0.15);
+  background: var(--accent-red-bg-md);
   color: var(--accent-red);
 }
 .activity-view-meta {
@@ -562,7 +562,7 @@
   background: var(--accent-blue);
   border-color: var(--accent-blue);
   color: var(--bg-primary);
-  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.2);
+  box-shadow: 0 0 0 4px var(--accent-blue-border);
   animation: pulse 2s infinite;
 }
 .phase-view-step-label {
@@ -653,9 +653,9 @@
   border-radius: var(--radius-full);
   text-transform: uppercase;
 }
-.phase-view-gate-status.go         { background: rgba(74, 222, 128, 0.15); color: var(--gate-go); }
-.phase-view-gate-status.no-go      { background: rgba(248, 113, 113, 0.15); color: var(--gate-nogo); }
-.phase-view-gate-status.conditional { background: rgba(251, 191, 36, 0.15); color: var(--gate-conditional); }
+.phase-view-gate-status.go         { background: var(--accent-green-bg-md); color: var(--gate-go); }
+.phase-view-gate-status.no-go      { background: var(--accent-red-bg-md); color: var(--gate-nogo); }
+.phase-view-gate-status.conditional { background: var(--accent-yellow-bg-md); color: var(--gate-conditional); }
 .phase-view-gate-status.pending    { background: rgba(100, 116, 139, 0.15); color: var(--gate-pending); }
 
 /* Gate criteria */
@@ -1357,11 +1357,11 @@
 .agents-view-status-label-active,
 .agents-view-status-label-working {
   color: var(--status-active);
-  background: rgba(74, 222, 128, 0.1);
+  background: var(--accent-green-bg);
 }
 .agents-view-status-label-paused {
   color: var(--status-busy);
-  background: rgba(251, 191, 36, 0.1);
+  background: var(--accent-yellow-bg);
 }
 .agents-view-status-label-idle {
   color: var(--status-idle);
@@ -1369,7 +1369,7 @@
 }
 .agents-view-status-label-error {
   color: var(--status-error);
-  background: rgba(248, 113, 113, 0.1);
+  background: var(--accent-red-bg);
 }
 
 /* ── Room Assignment Row ── */
@@ -1396,7 +1396,7 @@
 }
 .agents-view-card-room-unassigned {
   background: rgba(248, 113, 113, 0.06);
-  border: 1px dashed rgba(248, 113, 113, 0.3);
+  border: 1px dashed var(--accent-red-glow);
 }
 .agents-view-unassigned-icon {
   color: var(--accent-yellow);
@@ -1648,7 +1648,7 @@
   font-style: italic;
   padding: var(--sp-2);
   background: rgba(248, 113, 113, 0.06);
-  border: 1px dashed rgba(248, 113, 113, 0.3);
+  border: 1px dashed var(--accent-red-glow);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
 }
@@ -1787,14 +1787,14 @@
   font-size: var(--text-sm);
 }
 .phase-view-badge-strategy {
-  background: rgba(168, 85, 247, 0.15);
+  background: var(--accent-purple-bg-md);
   color: var(--accent-purple);
-  border: 1px solid rgba(168, 85, 247, 0.3);
+  border: 1px solid var(--accent-purple-glow);
 }
 .phase-view-badge-discovery {
-  background: rgba(56, 189, 248, 0.15);
+  background: var(--accent-blue-bg-md);
   color: var(--accent-blue);
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  border: 1px solid var(--accent-blue-glow);
 }
 .phase-view-badge-architecture {
   background: rgba(34, 211, 238, 0.15);
@@ -1802,19 +1802,19 @@
   border: 1px solid rgba(34, 211, 238, 0.3);
 }
 .phase-view-badge-execution {
-  background: rgba(74, 222, 128, 0.15);
+  background: var(--accent-green-bg-md);
   color: var(--accent-green);
-  border: 1px solid rgba(74, 222, 128, 0.3);
+  border: 1px solid var(--accent-green-glow);
 }
 .phase-view-badge-review {
-  background: rgba(251, 191, 36, 0.15);
+  background: var(--accent-yellow-bg-md);
   color: var(--accent-yellow);
   border: 1px solid rgba(251, 191, 36, 0.3);
 }
 .phase-view-badge-deploy {
-  background: rgba(248, 113, 113, 0.15);
+  background: var(--accent-red-bg-md);
   color: var(--accent-red);
-  border: 1px solid rgba(248, 113, 113, 0.3);
+  border: 1px solid var(--accent-red-glow);
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1890,7 +1890,7 @@
 
 /* Step states */
 .phase-view-step-complete .phase-view-step-circle {
-  background: rgba(74, 222, 128, 0.15);
+  background: var(--accent-green-bg-md);
   border-color: var(--accent-green);
 }
 .phase-view-step-complete .phase-view-step-icon {
@@ -1901,9 +1901,9 @@
 }
 
 .phase-view-step-current .phase-view-step-circle {
-  background: rgba(56, 189, 248, 0.15);
+  background: var(--accent-blue-bg-md);
   border-color: var(--accent-blue);
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+  box-shadow: 0 0 12px var(--accent-blue-glow);
   animation: phase-view-pulse 2s ease-in-out infinite;
 }
 .phase-view-step-current .phase-view-step-icon {
@@ -1926,7 +1926,7 @@
 }
 
 @keyframes phase-view-pulse {
-  0%, 100% { box-shadow: 0 0 12px rgba(56, 189, 248, 0.3); }
+  0%, 100% { box-shadow: 0 0 12px var(--accent-blue-glow); }
   50%      { box-shadow: 0 0 20px rgba(56, 189, 248, 0.5); }
 }
 

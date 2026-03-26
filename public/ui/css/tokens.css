@@ -58,6 +58,34 @@
   --raid-decision:    #38bdf8;
   --raid-dependency:  #38bdf8;
 
+  /* ── Accent backgrounds (translucent, theme-aware) (#1243) ── */
+  --accent-blue-bg:     rgba(56, 189, 248, 0.1);
+  --accent-blue-bg-md:  rgba(56, 189, 248, 0.15);
+  --accent-blue-border: rgba(56, 189, 248, 0.2);
+  --accent-blue-glow:   rgba(56, 189, 248, 0.3);
+  --accent-green-bg:    rgba(74, 222, 128, 0.1);
+  --accent-green-bg-md: rgba(74, 222, 128, 0.15);
+  --accent-green-border: rgba(74, 222, 128, 0.2);
+  --accent-green-glow:  rgba(74, 222, 128, 0.3);
+  --accent-red-bg:      rgba(248, 113, 113, 0.1);
+  --accent-red-bg-md:   rgba(248, 113, 113, 0.15);
+  --accent-red-border:  rgba(248, 113, 113, 0.2);
+  --accent-red-glow:    rgba(248, 113, 113, 0.3);
+  --accent-yellow-bg:   rgba(251, 191, 36, 0.1);
+  --accent-yellow-bg-md: rgba(251, 191, 36, 0.15);
+  --accent-yellow-border: rgba(251, 191, 36, 0.2);
+  --accent-purple-bg:   rgba(168, 85, 247, 0.1);
+  --accent-purple-bg-md: rgba(168, 85, 247, 0.15);
+  --accent-purple-border: rgba(168, 85, 247, 0.2);
+  --accent-purple-glow: rgba(168, 85, 247, 0.3);
+  --overlay-dark-sm:    rgba(0, 0, 0, 0.2);
+  --overlay-dark-md:    rgba(0, 0, 0, 0.4);
+  --overlay-dark-lg:    rgba(0, 0, 0, 0.6);
+  --surface-subtle:     rgba(255, 255, 255, 0.02);
+  --surface-divider:    rgba(255, 255, 255, 0.06);
+  --scrollbar-thumb:    rgba(255, 255, 255, 0.12);
+  --scrollbar-hover:    rgba(255, 255, 255, 0.2);
+
   /* ── Building visualization ── */
   --building-bg:        #0a0e14;
   --floor-bg:           rgba(255, 255, 255, 0.02);
@@ -166,6 +194,34 @@
   --border-primary:   rgba(0, 0, 0, 0.1);
   --border-secondary: rgba(0, 0, 0, 0.05);
   --border-accent:    rgba(2, 132, 199, 0.3);
+
+  /* ── Accent backgrounds (light theme — darker base colors for contrast) ── */
+  --accent-blue-bg:     rgba(2, 132, 199, 0.08);
+  --accent-blue-bg-md:  rgba(2, 132, 199, 0.12);
+  --accent-blue-border: rgba(2, 132, 199, 0.2);
+  --accent-blue-glow:   rgba(2, 132, 199, 0.25);
+  --accent-green-bg:    rgba(22, 163, 74, 0.08);
+  --accent-green-bg-md: rgba(22, 163, 74, 0.12);
+  --accent-green-border: rgba(22, 163, 74, 0.2);
+  --accent-green-glow:  rgba(22, 163, 74, 0.25);
+  --accent-red-bg:      rgba(220, 38, 38, 0.08);
+  --accent-red-bg-md:   rgba(220, 38, 38, 0.12);
+  --accent-red-border:  rgba(220, 38, 38, 0.2);
+  --accent-red-glow:    rgba(220, 38, 38, 0.25);
+  --accent-yellow-bg:   rgba(202, 138, 4, 0.08);
+  --accent-yellow-bg-md: rgba(202, 138, 4, 0.12);
+  --accent-yellow-border: rgba(202, 138, 4, 0.2);
+  --accent-purple-bg:   rgba(147, 51, 234, 0.08);
+  --accent-purple-bg-md: rgba(147, 51, 234, 0.12);
+  --accent-purple-border: rgba(147, 51, 234, 0.2);
+  --accent-purple-glow: rgba(147, 51, 234, 0.25);
+  --overlay-dark-sm:    rgba(0, 0, 0, 0.1);
+  --overlay-dark-md:    rgba(0, 0, 0, 0.2);
+  --overlay-dark-lg:    rgba(0, 0, 0, 0.4);
+  --surface-subtle:     rgba(0, 0, 0, 0.02);
+  --surface-divider:    rgba(0, 0, 0, 0.06);
+  --scrollbar-thumb:    rgba(0, 0, 0, 0.15);
+  --scrollbar-hover:    rgba(0, 0, 0, 0.25);
 
   --building-bg:      #f1f5f9;
   --floor-bg:         rgba(0, 0, 0, 0.02);
