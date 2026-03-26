@@ -92,6 +92,11 @@ vi.mock('../../../public/ui/components/global-search.js', () => ({
   GlobalSearch: vi.fn().mockImplementation(() => mockGlobalSearchInstance),
 }));
 
+const mockProjectSwitcherInstance = { mount: vi.fn() };
+vi.mock('../../../public/ui/components/project-switcher.js', () => ({
+  ProjectSwitcher: vi.fn().mockImplementation(() => mockProjectSwitcherInstance),
+}));
+
 vi.mock('../../../public/ui/engine/logger.js', () => ({
   createLogger: vi.fn((tag: string) => ({
     debug: (...args: any[]) => console.debug(`[${tag}]`, ...args),

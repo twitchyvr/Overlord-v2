@@ -22,7 +22,7 @@ import { ExitDocForm } from './views/exit-doc-form.js';
 import { SettingsView } from './views/settings-view.js';
 import { initEntityNav } from './engine/entity-nav.js';
 import { GlobalSearch } from './components/global-search.js';
-
+import { ProjectSwitcher } from './components/project-switcher.js';
 
 import { NotificationCenter } from './components/notification-center.js';
 import { AgentActivityTracker } from './components/agent-activity-tracker.js';
@@ -127,7 +127,13 @@ if (socket) {
   const globalSearch = new GlobalSearch(searchContainer);
   globalSearch.mount();
 
-
+  // ── Mount project switcher (#1258) ──
+  const switcherContainer = document.createElement('div');
+  if (toolbarRight) {
+    toolbarRight.insertBefore(switcherContainer, toolbarRight.firstChild);
+  }
+  const projectSwitcher = new ProjectSwitcher(switcherContainer);
+  projectSwitcher.mount();
 
   // ── Mount Notification Center (bell icon in toolbar) ──
   const bellEl = document.getElementById('notification-bell');
