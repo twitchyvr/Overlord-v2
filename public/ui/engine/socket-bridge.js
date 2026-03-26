@@ -777,9 +777,13 @@ export function initSocketBridge(socket, store, engine) {
   });
 
   socket.on('table:work-divided', (data) => {
-    store.update('activity.items', (items) => [{ event: 'table:work-divided', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    pushActivity('table:work-divided', data);
     engine.dispatch('table:work-divided', data);
-    engine.dispatch('activity:new', { event: 'table:work-divided', ...data });
+  });
+
+  socket.on('table:summary-generated', (data) => {
+    pushActivity('table:summary-generated', data);
+    engine.dispatch('table:summary-generated', data);
   });
 
   // ── Table presence events (#1255) ──

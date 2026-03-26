@@ -4346,6 +4346,7 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
   forward('table:deleted');
   forward('table:context-updated');
   forward('table:work-divided');
+  forward('table:summary-generated'); // #1268
   forward('floor:created');
   forward('floor:updated');
   forward('floor:deleted');
