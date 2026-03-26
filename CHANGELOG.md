@@ -78,6 +78,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Plain language health summary** — "DigitalEcosystem is in the Discovery phase. 5 of 18 tasks completed (28%)." Color-coded status card on dashboard (#1237, PR #1311)
 - **Project switcher polish** — wider label (160px), left-aligned dropdown, viewport-capped height (PR #1312)
 - **Prompt caching fix** — cache_control always sent on system prompts, not just on second call. Enables MiniMax caching from first request (#1272, PR #1313)
+- **Lock hostname** — os.hostname() recorded in resource locks for multi-machine disambiguation (#1137, PR #1315)
+- **[Epic #1255 complete] Conversation summaries** — auto-generated after 2min table silence; stored as session notes + activity events (#1268, PR #1316)
 - **Task/milestone dedup improved** — suffix stemming, description overlap check, catches "Verify Build" × 4 variants (#1290, #1291, PR #1293)
 - **Centralized pushActivity()** — all real-time socket events enriched with agent display names (#1286)
 - **8 open-source dogfood projects** — kaneo, maplibre-gl-js, clack, grist-core, racing-game, noisecraft, bemuse, battle-city (#1184-1191)
