@@ -223,6 +223,20 @@ export class ChatView extends Component {
     if (activeRoomId && window.overlordSocket?.fetchChatHistory) {
       window.overlordSocket.fetchChatHistory(activeRoomId);
     }
+
+    // ── Table chat sidebar subscriptions (#1255) ──
+    this.subscribe(store, 'tables.chatList', () => this._renderTableList());
+    this.subscribe(store, 'tables.activeChat', () => this._renderTableList());
+    this.subscribe(store, 'building.active', (newBuildingId) => {
+      if (newBuildingId && window.overlordSocket?.fetchTableChatList) {
+        window.overlordSocket.fetchTableChatList(newBuildingId);
+      }
+    });
+    // Initial fetch
+    const activeBuildingId = store.get('building.active');
+    if (activeBuildingId && window.overlordSocket?.fetchTableChatList) {
+      window.overlordSocket.fetchTableChatList(activeBuildingId);
+    }
   }
 
   _render() {
@@ -240,20 +254,10 @@ export class ChatView extends Component {
     sidebar.appendChild(tableList);
     this.el.appendChild(sidebar);
 
-    // Load table list for active building
-    const buildingId = OverlordUI.getStore()?.get('building.active');
-    if (buildingId && window.overlordSocket?.fetchTableChatList) {
-      window.overlordSocket.fetchTableChatList(buildingId).then(() => {
-        this._renderTableList();
-      });
-    }
-
-    // Subscribe to table list changes
-    const store = OverlordUI.getStore();
-    if (store) {
-      this.subscribe(store, 'tables.chatList', () => this._renderTableList());
-      this.subscribe(store, 'tables.activeChat', () => this._renderTableList());
-    }
+    // Table list subscriptions and initial load happen in mount() —
+    // this avoids timing issues when _render() is called multiple times.
+    // Just trigger a render of whatever's in the store.
+    this._renderTableList();
 
     // ── Main chat content ──
     const mainContent = h('div', { class: 'chat-main-content' });
