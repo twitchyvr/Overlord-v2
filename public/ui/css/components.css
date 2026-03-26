@@ -263,16 +263,28 @@
 /* Health score badge on building cards */
 .health-badge {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
+  min-width: 36px;
+  padding: 4px 6px;
+  border-radius: var(--radius-md, 8px);
   font-weight: var(--font-bold);
   color: var(--bg-primary);
   cursor: default;
   flex-shrink: 0;
+  gap: 1px;
+}
+.health-badge-score {
+  font-size: var(--text-sm, 0.85rem);
+  line-height: 1;
+}
+.health-badge-label {
+  font-size: 0.55rem;
+  font-weight: 500;
+  opacity: 0.9;
+  white-space: nowrap;
+  line-height: 1;
 }
 .health-badge-green { background: var(--accent-green); }
 .health-badge-yellow { background: var(--accent-amber); }
