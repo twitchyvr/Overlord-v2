@@ -1330,30 +1330,50 @@ function registerBuiltinTools(): void {
         };
       }
 
-      // Word-overlap dedup (#1248): extract significant words (4+ chars), compare Jaccard similarity
-      const stopWords = new Set(['the', 'and', 'for', 'with', 'are', 'this', 'that', 'from', 'should', 'must', 'will', 'each', 'ensure', 'without', 'errors', 'using', 'based', 'make', 'sure']);
+      // Word-overlap dedup (#1248, #1290): extract stemmed words, compare Jaccard similarity
+      const stopWords = new Set(['the', 'and', 'for', 'with', 'are', 'this', 'that', 'from', 'should', 'must', 'will', 'each', 'ensure', 'without', 'using', 'based', 'make', 'sure', 'also', 'into', 'have', 'been', 'when', 'them', 'their', 'they', 'then', 'than', 'more', 'does', 'able']);
+      // Simple stemming: strip common suffixes to catch verify/verification, compile/compiles, etc.
+      const stem = (w: string) => w.replace(/(ing|tion|ment|ness|ence|ance|ible|able|ies|ous|ive|ful|ity|ise|ize|ify|ate|ure|ual|ory|ary|ery|ling|ship|dom|ist|ers|ors|ity|ure|age|ics|ism|ent|ant|est|ous|ial|ion|ble)$/i, '').replace(/(ed|ly|es|er|al|en|ic)$/i, '').replace(/s$/, '');
       const extractWords = (t: string) => new Set(
-        t.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w))
+        t.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w)).map(stem).filter(w => w.length > 2)
       );
       const newWords = extractWords(title);
 
       if (newWords.size >= 2) {
         const allTasks = db.prepare(
-          `SELECT id, title FROM tasks WHERE building_id = ?`
-        ).all(buildingId) as Array<{ id: string; title: string }>;
+          `SELECT id, title, description FROM tasks WHERE building_id = ?`
+        ).all(buildingId) as Array<{ id: string; title: string; description?: string }>;
 
         for (const task of allTasks) {
           const existingWords = extractWords(task.title);
           if (existingWords.size < 2) continue;
           const intersection = new Set([...newWords].filter(w => existingWords.has(w)));
           const union = new Set([...newWords, ...existingWords]);
-          const similarity = intersection.size / union.size;
-          // 25%+ word overlap with at least 2 shared words = likely duplicate
-          if (similarity >= 0.25 && intersection.size >= 2) {
+          const titleSim = intersection.size / union.size;
+
+          // Primary check: title-only similarity at 30%+ with 2+ shared stems
+          if (titleSim >= 0.30 && intersection.size >= 2) {
             return {
-              output: `Similar task exists: "${task.title}" (id: ${task.id}) — ${Math.round(similarity * 100)}% overlap (${intersection.size} shared words), skipped`,
+              output: `Similar task exists: "${task.title}" (id: ${task.id}) — ${Math.round(titleSim * 100)}% overlap (${intersection.size} shared stems), skipped`,
               taskId: task.id,
             };
+          }
+
+          // Secondary check: if title has 1+ shared stem AND description overlap is high
+          if (intersection.size >= 1 && description && task.description) {
+            const descNewWords = extractWords(description);
+            const descExistingWords = extractWords(task.description);
+            if (descNewWords.size >= 3 && descExistingWords.size >= 3) {
+              const descIntersection = new Set([...descNewWords].filter(w => descExistingWords.has(w)));
+              const descUnion = new Set([...descNewWords, ...descExistingWords]);
+              const descSim = descIntersection.size / descUnion.size;
+              if (descSim >= 0.35 && descIntersection.size >= 3) {
+                return {
+                  output: `Similar task exists: "${task.title}" (id: ${task.id}) — title: ${Math.round(titleSim * 100)}%, description: ${Math.round(descSim * 100)}% overlap, skipped`,
+                  taskId: task.id,
+                };
+              }
+            }
           }
         }
       }
@@ -1490,7 +1510,7 @@ function registerBuiltinTools(): void {
       const title = p.title as string;
       const description = (p.description as string) || '';
 
-      // #1134 — Dedup: skip if milestone with similar title exists
+      // #1134, #1291 — Dedup: exact match, substring match, AND word-overlap match
       const existing = db.prepare(
         `SELECT id, title FROM milestones WHERE building_id = ? AND (LOWER(title) = LOWER(?) OR LOWER(title) LIKE '%' || LOWER(?) || '%')`
       ).get(buildingId, title, title.slice(0, 30)) as { id: string; title: string } | undefined;
@@ -1499,6 +1519,32 @@ function registerBuiltinTools(): void {
           output: `Milestone already exists: "${existing.title}" (id: ${existing.id}) — skipped duplicate`,
           milestoneId: existing.id,
         };
+      }
+
+      // Word-overlap dedup for milestones (#1291)
+      const msStopWords = new Set(['the', 'and', 'for', 'with', 'are', 'this', 'that', 'from']);
+      const msStem = (w: string) => w.replace(/(ing|tion|ment|ness|ence|ance|ible|able|ies|ous|ive|ful|ity|ise|ize|ify|ate|ure|ual|ory|ary|ery)$/i, '').replace(/(ed|ly|es|er|al|en|ic)$/i, '').replace(/s$/, '');
+      const msExtractWords = (t: string) => new Set(
+        t.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2 && !msStopWords.has(w)).map(msStem).filter(w => w.length > 2)
+      );
+      const msNewWords = msExtractWords(title);
+      if (msNewWords.size >= 2) {
+        const allMilestones = db.prepare(
+          `SELECT id, title FROM milestones WHERE building_id = ?`
+        ).all(buildingId) as Array<{ id: string; title: string }>;
+        for (const ms of allMilestones) {
+          const msExistingWords = msExtractWords(ms.title);
+          if (msExistingWords.size < 2) continue;
+          const msIntersection = new Set([...msNewWords].filter(w => msExistingWords.has(w)));
+          const msUnion = new Set([...msNewWords, ...msExistingWords]);
+          const msSimilarity = msIntersection.size / msUnion.size;
+          if (msSimilarity >= 0.30 && msIntersection.size >= 2) {
+            return {
+              output: `Similar milestone exists: "${ms.title}" (id: ${ms.id}) — ${Math.round(msSimilarity * 100)}% overlap, skipped`,
+              milestoneId: ms.id,
+            };
+          }
+        }
       }
 
       const id = `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
