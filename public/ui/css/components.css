@@ -5243,3 +5243,107 @@
   font-size: 0.75rem;
   color: var(--text-secondary);
 }
+
+/* ── Project Switcher (#1258) ── */
+
+.project-switcher {
+  position: relative;
+}
+
+.project-switcher-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  max-width: 200px;
+  transition: border-color var(--duration-fast);
+}
+.project-switcher-btn:hover {
+  border-color: var(--accent-blue);
+}
+.project-switcher-icon { font-size: 1rem; }
+.project-switcher-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+.project-switcher-caret {
+  font-size: 0.6rem;
+  opacity: 0.6;
+}
+
+.project-switcher-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 260px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-dropdown);
+  padding: var(--sp-1) 0;
+}
+
+.project-switcher-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.project-switcher-item:hover {
+  background: var(--bg-hover);
+}
+.project-switcher-item.active {
+  background: var(--accent-blue-bg);
+  border-left: 3px solid var(--accent-blue);
+}
+.project-switcher-item:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: -2px;
+}
+
+.project-switcher-state {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--status-idle);
+}
+.project-switcher-state-running { background: var(--status-active); }
+.project-switcher-state-paused  { background: var(--accent-yellow); }
+.project-switcher-state-stopped { background: var(--status-idle); }
+
+.project-switcher-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+}
+
+.project-switcher-phase {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.project-switcher-empty {
+  padding: var(--sp-4);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
