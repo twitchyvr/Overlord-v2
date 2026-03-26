@@ -1319,7 +1319,7 @@ function registerBuiltinTools(): void {
       }
       const milestoneId = (p.milestone_id as string) || null;
 
-      // #1134 — Dedup check: skip if a task with very similar title already exists
+      // #1134, #1248 — Dedup: exact match, substring match, AND word-overlap match
       const existing = db.prepare(
         `SELECT id, title FROM tasks WHERE building_id = ? AND LOWER(title) = LOWER(?)`
       ).get(buildingId, title) as { id: string; title: string } | undefined;
@@ -1329,15 +1329,33 @@ function registerBuiltinTools(): void {
           taskId: existing.id,
         };
       }
-      // Also check for fuzzy match (title contains or is contained by existing)
-      const fuzzy = db.prepare(
-        `SELECT id, title FROM tasks WHERE building_id = ? AND (LOWER(title) LIKE '%' || LOWER(?) || '%' OR LOWER(?) LIKE '%' || LOWER(title) || '%') LIMIT 1`
-      ).get(buildingId, title.slice(0, 40), title.slice(0, 40)) as { id: string; title: string } | undefined;
-      if (fuzzy) {
-        return {
-          output: `Similar task exists: "${fuzzy.title}" (id: ${fuzzy.id}) — skipped to avoid duplicate`,
-          taskId: fuzzy.id,
-        };
+
+      // Word-overlap dedup (#1248): extract significant words (4+ chars), compare Jaccard similarity
+      const stopWords = new Set(['the', 'and', 'for', 'with', 'are', 'this', 'that', 'from', 'should', 'must', 'will', 'each', 'ensure', 'without', 'errors', 'using', 'based', 'make', 'sure']);
+      const extractWords = (t: string) => new Set(
+        t.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w))
+      );
+      const newWords = extractWords(title);
+
+      if (newWords.size >= 2) {
+        const allTasks = db.prepare(
+          `SELECT id, title FROM tasks WHERE building_id = ?`
+        ).all(buildingId) as Array<{ id: string; title: string }>;
+
+        for (const task of allTasks) {
+          const existingWords = extractWords(task.title);
+          if (existingWords.size < 2) continue;
+          const intersection = new Set([...newWords].filter(w => existingWords.has(w)));
+          const union = new Set([...newWords, ...existingWords]);
+          const similarity = intersection.size / union.size;
+          // 25%+ word overlap with at least 2 shared words = likely duplicate
+          if (similarity >= 0.25 && intersection.size >= 2) {
+            return {
+              output: `Similar task exists: "${task.title}" (id: ${task.id}) — ${Math.round(similarity * 100)}% overlap (${intersection.size} shared words), skipped`,
+              taskId: task.id,
+            };
+          }
+        }
       }
 
       const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
