@@ -104,6 +104,7 @@ const SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     room_id TEXT NOT NULL REFERENCES rooms(id),
+    table_id TEXT REFERENCES tables_v2(id),
     agent_id TEXT REFERENCES agents(id),
     role TEXT NOT NULL,
     content TEXT,
@@ -111,8 +112,22 @@ const SCHEMA_SQL = `
     attachments TEXT DEFAULT '[]',
     thread_id TEXT,
     parent_id TEXT REFERENCES messages(id),
+    recipients TEXT DEFAULT '[]',
+    message_mode TEXT DEFAULT 'broadcast',
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS table_presence (
+    id TEXT PRIMARY KEY,
+    table_id TEXT NOT NULL REFERENCES tables_v2(id),
+    user_type TEXT NOT NULL DEFAULT 'human',
+    user_id TEXT NOT NULL,
+    joined_at TEXT DEFAULT (datetime('now')),
+    left_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_messages_table ON messages(table_id);
+  CREATE INDEX IF NOT EXISTS idx_presence_table ON table_presence(table_id);
+  CREATE INDEX IF NOT EXISTS idx_presence_user ON table_presence(user_id);
 
   CREATE TABLE IF NOT EXISTS plans (
     id TEXT PRIMARY KEY,
@@ -521,6 +536,10 @@ const EXPECTED_COLUMNS: Array<[string, string, string]> = [
   ['todos', 'lock_expires_at', 'TEXT'],
   // Building execution control (#969)
   ['buildings', 'execution_state', "TEXT DEFAULT 'stopped'"],
+  // Table-scoped chat (#1255)
+  ['messages', 'table_id', 'TEXT REFERENCES tables_v2(id)'],
+  ['messages', 'recipients', "TEXT DEFAULT '[]'"],
+  ['messages', 'message_mode', "TEXT DEFAULT 'broadcast'"],
 ];
 
 /**
