@@ -75,6 +75,34 @@
   gap: var(--sp-2);
 }
 
+/* Health summary card (#1237) */
+.health-summary-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-4);
+  border-radius: var(--radius-lg);
+  line-height: var(--leading-normal);
+}
+.health-summary-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.health-summary-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.health-summary-text strong {
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+}
+
 /* KPI cards */
 .dashboard-kpi-section {
   margin-bottom: var(--sp-6);
