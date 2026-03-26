@@ -508,12 +508,12 @@ export class DashboardView extends Component {
     const rateRow = h('div', { class: 'telemetry-rate-row' });
     this._rateCards = {};
     const rates = [
-      { key: 'executionRate', label: 'Executions', unit: '/24h', icon: '\u26A1', color: '#22d3ee' },
-      { key: 'toolUseRate', label: 'Tool Calls', unit: '/24h', icon: '\u{1F527}', color: '#4ade80' },
-      { key: 'agentChatRate', label: 'Messages', unit: '/24h', icon: '\u{1F4AC}', color: '#8b5cf6' },
-      { key: 'aiRequestRate', label: 'AI Requests', unit: '/24h', icon: '\u{1F916}', color: '#f59e0b' },
+      { key: 'executionRate', label: 'Executions', unit: '/hr', icon: '\u26A1', color: '#22d3ee' },
+      { key: 'toolUseRate', label: 'Tool Calls', unit: '/hr', icon: '\u{1F527}', color: '#4ade80' },
+      { key: 'agentChatRate', label: 'Messages', unit: '/hr', icon: '\u{1F4AC}', color: '#8b5cf6' },
+      { key: 'aiRequestRate', label: 'AI Requests', unit: '/hr', icon: '\u{1F916}', color: '#f59e0b' },
+      { key: 'imageQuota', label: 'Images', unit: ' today', icon: '\u{1F5BC}', color: '#f472b6' },
       { key: 'activeAgents', label: 'Active', unit: '', icon: '\u{1F7E2}', color: '#4ade80' },
-      { key: 'totalTokens', label: 'Tokens', unit: ' total', icon: '\u{1F4B0}', color: '#ec4899' },
     ];
     for (const r of rates) {
       const card = h('div', { class: 'telem-rate-card' });
@@ -538,7 +538,7 @@ export class DashboardView extends Component {
     bottomRow.appendChild(this._topToolsEl);
 
     this._topAgentsEl = h('div', { class: 'telem-list-card glass-card' });
-    this._topAgentsEl.appendChild(h('div', { class: 'telemetry-card-header' }, 'Most Active Agents (24h)'));
+    this._topAgentsEl.appendChild(h('div', { class: 'telemetry-card-header' }, 'Most Active Agents (1h)'));
     this._topAgentsEl.appendChild(h('div', { class: 'telem-list-body' }, 'Loading...'));
     bottomRow.appendChild(this._topAgentsEl);
     panel.appendChild(bottomRow);
@@ -567,16 +567,22 @@ export class DashboardView extends Component {
       if (!res?.ok) return;
       const d = res.data;
 
-      // Update rate cards
+      // Update rate cards (#1270 — /hr rates + image quota)
       if (this._rateCards) {
         this._rateCards.executionRate.textContent = String(d.executionRate || 0);
         this._rateCards.toolUseRate.textContent = String(d.toolUseRate || 0);
         this._rateCards.agentChatRate.textContent = String(d.agentChatRate || 0);
         this._rateCards.aiRequestRate.textContent = String(d.aiRequestRate || 0);
         this._rateCards.activeAgents.textContent = String(d.activeAgents || 0);
-        this._rateCards.totalTokens.textContent = d.totalTokens > 1000
-          ? `${(d.totalTokens / 1000).toFixed(1)}k`
-          : String(d.totalTokens || 0);
+        // Image quota: X/100 with color coding
+        const imgUsed = d.imageRequestsToday || 0;
+        const imgLimit = d.imageDailyLimit || 100;
+        this._rateCards.imageQuota.textContent = `${imgUsed}/${imgLimit}`;
+        if (imgUsed >= imgLimit) {
+          this._rateCards.imageQuota.style.color = '#ef4444'; // red — limit reached
+        } else if (imgUsed >= imgLimit * 0.8) {
+          this._rateCards.imageQuota.style.color = '#f59e0b'; // amber — approaching
+        }
       }
 
       // Update top tools
