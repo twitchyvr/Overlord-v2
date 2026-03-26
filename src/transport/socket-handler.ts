@@ -2555,8 +2555,19 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
 
     handle(socket, 'chat:history', ChatHistorySchema, (parsed, ack) => {
       const db = getDb();
-      let sql = 'SELECT * FROM messages WHERE room_id = ?';
-      const params: unknown[] = [parsed.roomId];
+      // Table-scoped query takes priority over room-scoped (#1255)
+      let sql: string;
+      const params: unknown[] = [];
+      if (parsed.tableId) {
+        sql = 'SELECT * FROM messages WHERE table_id = ?';
+        params.push(parsed.tableId);
+      } else if (parsed.roomId) {
+        sql = 'SELECT * FROM messages WHERE room_id = ?';
+        params.push(parsed.roomId);
+      } else {
+        if (ack) ack({ ok: false, error: { code: 'MISSING_SCOPE', message: 'Either roomId or tableId required' } });
+        return;
+      }
 
       if (parsed.before) {
         sql += ' AND created_at < ?';
@@ -2572,11 +2583,14 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
       const messages = rows.reverse().map(row => ({
         id: row.id,
         roomId: row.room_id,
+        tableId: row.table_id || null,
         agentId: row.agent_id,
         role: row.role,
         content: row.content,
         toolCalls: row.tool_calls ? JSON.parse(row.tool_calls as string) : [],
         threadId: row.thread_id,
+        recipients: row.recipients ? JSON.parse(row.recipients as string) : [],
+        messageMode: row.message_mode || 'broadcast',
         createdAt: row.created_at,
       }));
 

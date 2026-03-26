@@ -49,17 +49,22 @@ function persistMessage(
   threadId: string,
   toolCalls?: Array<{ name: string; input: unknown }>,
   attachments?: Array<{ id: string; fileName: string; mimeType: string; size: number; url?: string | null }>,
+  tableId?: string,
+  recipients?: string[],
+  messageMode?: string,
 ): string {
   const db = getDb();
   const id = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   db.prepare(`
-    INSERT INTO messages (id, room_id, agent_id, role, content, tool_calls, attachments, thread_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    INSERT INTO messages (id, room_id, table_id, agent_id, role, content, tool_calls, attachments, thread_id, recipients, message_mode, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).run(
-    id, roomId, agentId, role, content,
+    id, roomId, tableId || null, agentId, role, content,
     toolCalls ? JSON.stringify(toolCalls) : null,
     attachments && attachments.length > 0 ? JSON.stringify(attachments) : '[]',
     threadId,
+    recipients && recipients.length > 0 ? JSON.stringify(recipients) : '[]',
+    messageMode || 'broadcast',
   );
   return id;
 }
@@ -117,9 +122,14 @@ async function handleChatMessage(
   const socketId = data.socketId as string;
   const text = (data.text as string || '').trim();
   const roomId = data.roomId as string || '';
+  const tableId = data.tableId as string || ''; // Table-scoped chat (#1255)
   const agentId = data.agentId as string || '';
   const buildingId = data.buildingId as string || '';
-  const threadId = (data.threadId as string) || `thread_${roomId || 'default'}_${socketId}`;
+  const recipients = (data.recipients as string[]) || [];
+  const messageMode = (data.messageMode as string) || 'broadcast';
+  const isSystemPrompt = data.isSystemPrompt as boolean || false;
+  // Thread ID incorporates table for table-scoped conversations (#1255)
+  const threadId = (data.threadId as string) || `thread_${tableId || roomId || 'default'}_${socketId}`;
   const attachments = (data.attachments as Array<{ id: string; fileName: string; mimeType: string; size: number; url?: string | null }>) || [];
 
   // Skip truly empty messages (no text AND no attachments)
@@ -355,7 +365,7 @@ async function handleChatMessage(
 
     // 9b. Persist user message (with attachments if any) and load conversation history
     try {
-      persistMessage(room.id, null, 'user', userContent, threadId, undefined, attachments);
+      persistMessage(room.id, null, 'user', userContent, threadId, undefined, attachments, tableId || undefined, recipients, messageMode);
     } catch (persistErr) {
       log.warn({ persistErr }, 'Failed to persist user message — continuing without history');
     }
@@ -435,6 +445,7 @@ async function handleChatMessage(
         persistMessage(
           room.id, resolvedAgentId, 'assistant', content, threadId,
           data.toolCalls.map((tc) => ({ name: tc.name, input: tc.input })),
+          undefined, tableId || undefined,
         );
       } catch (persistErr) {
         log.warn({ persistErr }, 'Failed to persist assistant message');
