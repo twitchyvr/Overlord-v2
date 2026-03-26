@@ -223,10 +223,14 @@ export class BuildingView extends Component {
       warningRow.appendChild(setBtn);
       projectInfo.appendChild(warningRow);
     }
-    // Show repo link from building config OR detected git remote (#1192)
-    const repoUrl = this._buildingData.repo_url || this._gitInfo?.remoteUrl || null;
+    // Show repo link from building config OR resolved git remote (#1192, #1249)
+    // Only show auto-detected URLs if they were resolved via gh API (no .git suffix).
+    // Raw git URLs that weren't resolved likely point to nonexistent repos.
+    const userSetUrl = this._buildingData.repo_url;
+    const detectedUrl = this._gitInfo?.remoteUrl || null;
+    // User-set URL always shown. Auto-detected only if it looks resolved (no .git suffix = gh API succeeded)
+    const repoUrl = userSetUrl || (detectedUrl && !detectedUrl.endsWith('.git') ? detectedUrl : null);
     if (repoUrl) {
-      // Convert git@ URLs to https for clickable links
       let displayUrl = repoUrl;
       let clickUrl = repoUrl;
       if (repoUrl.startsWith('git@')) {
@@ -267,6 +271,15 @@ export class BuildingView extends Component {
         .then((res) => {
           if (res && res.ok && res.data?.isRepo) {
             this._gitInfo = res.data;
+            // Auto-populate repo_url on building if resolved and not already set (#1249)
+            const resolved = res.data.remoteUrl;
+            if (resolved && !resolved.endsWith('.git') && !this._buildingData.repo_url) {
+              window.overlordSocket.emit('building:update', {
+                buildingId: this._buildingData.id,
+                repoUrl: resolved,
+              });
+              this._buildingData.repo_url = resolved;
+            }
             this.render();
           }
         })

@@ -7,7 +7,7 @@
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { logger } from '../core/logger.js';
 
 const log = logger.child({ module: 'tool:git-detector' });
@@ -71,6 +71,28 @@ export function getGitInfo(dirPath: string): {
     hasUncommitted = status.length > 0;
   } catch (err) {
     log.warn({ err, dirPath }, 'Failed to read git status');
+  }
+
+  // Resolve correct GitHub URL casing via gh API (#1249)
+  if (remoteUrl) {
+    try {
+      // Extract owner/repo from git remote URL (handles https and git@ formats)
+      const httpsMatch = remoteUrl.match(/github\.com[/:]([^/]+\/[^/.]+)/);
+      const ownerRepo = httpsMatch ? httpsMatch[1].replace(/\.git$/, '') : null;
+
+      if (ownerRepo) {
+        const resolved = execFileSync('gh', ['api', `repos/${ownerRepo}`, '--jq', '.html_url'], {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        }).trim();
+        if (resolved && resolved.startsWith('https://')) {
+          remoteUrl = resolved;
+        }
+      }
+    } catch {
+      // gh CLI not available or API failed — keep the raw remote URL
+    }
   }
 
   return { isRepo: true, branch, remoteUrl, hasUncommitted };
