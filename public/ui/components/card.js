@@ -339,19 +339,21 @@ export class Card {
     if (data.healthScore) {
       const score = data.healthScore.total;
       const color = score >= 75 ? 'green' : score >= 50 ? 'yellow' : score >= 25 ? 'orange' : 'red';
+      const advice = score >= 75 ? 'Great shape!' : score >= 50 ? 'Making progress' : score >= 25 ? 'Needs attention' : 'Just getting started';
       const badge = h('div', { class: `health-badge health-badge-${color}` },
         h('span', { class: 'health-badge-score' }, String(score)),
+        h('span', { class: 'health-badge-label' }, advice),
       );
 
-      // Tooltip with user-friendly breakdown
+      // Tooltip with breakdown (#1241 — badge needs context without hover)
       const breakdown = [
         `Project progress: ${data.healthScore.phaseProgress}/25`,
         `Tasks completed: ${data.healthScore.taskCompletion}/25`,
         `Risks tracked: ${data.healthScore.raidHealth}/25`,
         `Team activity: ${data.healthScore.agentActivity}/25`,
       ].join('\n');
-      const advice = score >= 75 ? 'Great shape!' : score >= 50 ? 'Making progress' : score >= 25 ? 'Needs attention' : 'Just getting started';
       badge.title = `Health Score: ${score}/100 — ${advice}\n\n${breakdown}\n\nClick the building card for details.`;
+      badge.setAttribute('aria-label', `Health score ${score} out of 100 — ${advice}`);
 
       header.appendChild(badge);
     }
