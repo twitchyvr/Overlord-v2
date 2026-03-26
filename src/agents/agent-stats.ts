@@ -255,6 +255,8 @@ export interface TelemetryRates {
   toolUseRate: number;        // tool calls per hour
   agentChatRate: number;      // chat messages per hour
   aiRequestRate: number;      // AI API calls per hour
+  imageRequestsToday: number; // image generation calls today (#1270)
+  imageDailyLimit: number;    // MiniMax daily image limit (#1270)
   totalTokens: number;        // total tokens consumed (all time)
   totalToolCalls: number;     // all time
   totalMessages: number;      // all time
@@ -275,12 +277,12 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
   const whereBuilding = buildingId ? ' AND building_id = ?' : '';
   const buildingParams = buildingId ? [buildingId] : [];
 
-  // Rates: count events in last 24 hours
+  // Rates: count events in last 1 hour (#1270 — /hr not /24h for actionable rates)
   // Use SQLite datetime() to avoid JS ISO format mismatch (T vs space, Z suffix)
   const hourCounts = db.prepare(`
     SELECT event_type, COUNT(*) as cnt
     FROM agent_activity_log
-    WHERE created_at >= datetime('now', '-24 hours')${whereBuilding}
+    WHERE created_at >= datetime('now', '-1 hours')${whereBuilding}
     GROUP BY event_type
   `).all(...buildingParams) as Array<{ event_type: string; cnt: number }>;
 
@@ -292,8 +294,8 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
 
   // Messages from the messages table (not activity log)
   const msgQuery = buildingId
-    ? `SELECT COUNT(*) as cnt FROM messages WHERE room_id IN (SELECT r.id FROM rooms r JOIN floors f ON r.floor_id = f.id WHERE f.building_id = ?) AND created_at >= datetime('now', '-24 hours')`
-    : `SELECT COUNT(*) as cnt FROM messages WHERE created_at >= datetime('now', '-24 hours')`;
+    ? `SELECT COUNT(*) as cnt FROM messages WHERE room_id IN (SELECT r.id FROM rooms r JOIN floors f ON r.floor_id = f.id WHERE f.building_id = ?) AND created_at >= datetime('now', '-1 hours')`
+    : `SELECT COUNT(*) as cnt FROM messages WHERE created_at >= datetime('now', '-1 hours')`;
   const msgParams = buildingId ? [buildingId] : [];
   const msgResult = db.prepare(msgQuery).get(...msgParams) as { cnt: number };
   const agentChatRate = msgResult?.cnt || 0;
@@ -344,14 +346,24 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
     GROUP BY name ORDER BY cnt DESC LIMIT 8
   `).all(...buildingParams) as Array<{ name: string; cnt: number }>;
 
-  // Top agents by activity (last 24h)
+  // Top agents by activity (last 1h — matches rate window)
   const topAgentsQuery = db.prepare(`
     SELECT a.agent_id as id, ag.display_name as name, COUNT(*) as events
     FROM agent_activity_log a
     LEFT JOIN agents ag ON a.agent_id = ag.id
-    WHERE a.created_at >= datetime('now', '-24 hours')${whereBuilding.replace('building_id', 'a.building_id')}
+    WHERE a.created_at >= datetime('now', '-1 hours')${whereBuilding.replace('building_id', 'a.building_id')}
     GROUP BY a.agent_id ORDER BY events DESC LIMIT 5
   `).all(...buildingParams) as Array<{ id: string; name: string; events: number }>;
+
+  // Image requests today — count image-generation tool calls since midnight UTC (#1270)
+  const imageCountQuery = db.prepare(`
+    SELECT COUNT(*) as cnt FROM agent_activity_log
+    WHERE (event_type = 'tool:executed' OR event_type = 'tool_executed')
+    AND (json_extract(event_data, '$.tool') = 'generate_image' OR json_extract(event_data, '$.toolName') = 'generate_image')
+    AND created_at >= date('now')${whereBuilding}
+  `).get(...buildingParams) as { cnt: number };
+  const imageRequestsToday = imageCountQuery?.cnt || 0;
+  const imageDailyLimit = 100; // MiniMax Token Plan default
 
   // Recent activity (last 20 entries)
   const recentQuery = buildingId
@@ -367,6 +379,8 @@ export function getTelemetryRates(buildingId?: string): TelemetryRates {
     toolUseRate,
     agentChatRate,
     aiRequestRate,
+    imageRequestsToday,
+    imageDailyLimit,
     totalTokens: totalTokensSum,
     totalToolCalls,
     totalMessages,
