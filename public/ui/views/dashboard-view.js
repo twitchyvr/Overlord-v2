@@ -745,25 +745,49 @@ export class DashboardView extends Component {
       const isError = item.status === 'error' || item.status === 'failed';
       const dotClass = isError ? 'error' : 'success';
 
-      // Build summary text
-      let summary = item.event;
-      if (item.event === 'tool:executed') {
-        summary = `${item.toolName || 'tool'} ${isError ? 'failed' : 'executed'}`;
+      // Build human-readable summary (#1247)
+      const EVENT_LABELS = {
+        'tool:executed': 'Used tool',
+        'tool_executed': 'Used tool',
+        'ai_request': 'AI request',
+        'ai:request': 'AI request',
+        'task:created': 'Task created',
+        'task:updated': 'Task updated',
+        'phase:advanced': 'Phase advanced',
+        'phase:gate:created': 'Gate created',
+        'phase:gate:signed-off': 'Gate signed off',
+        'room:agent:entered': 'Entered room',
+        'room:agent:exited': 'Left room',
+        'exit-doc:submitted': 'Exit doc submitted',
+        'dev-loop:stage-transition': 'Dev loop stage',
+        'raid:entry:added': 'RAID entry added',
+        'building:started': 'Project started',
+        'building:stopped': 'Project stopped',
+      };
+      let summary = EVENT_LABELS[item.event] || item.event?.replace(/[_:]/g, ' ') || 'Activity';
+      if ((item.event === 'tool:executed' || item.event === 'tool_executed') && item.toolName) {
+        summary = item.toolName.replace(/_/g, ' ');
       } else if (item.event === 'dev-loop:stage-transition') {
         summary = `${item.from || '?'} \u2192 ${item.to || '?'}`;
-      } else if (item.event === 'exit-doc:submitted') {
-        summary = `Exit doc submitted`;
-      } else if (item.event === 'phase:gate:signed-off') {
-        summary = `Gate: ${item.verdict || 'signed off'}`;
+      } else if (item.event === 'phase:gate:signed-off' && item.verdict) {
+        summary = `Gate: ${item.verdict}`;
       }
 
-      const ts = item.timestamp ? formatTime(item.timestamp) : '';
+      // Resolve agent name from ID (#1247)
+      let agentLabel = item.agentName || '';
+      if (!agentLabel && item.agentId) {
+        const agents = this._agents || [];
+        const agent = agents.find(a => a.id === item.agentId);
+        agentLabel = agent?.display_name || agent?.name || '';
+      }
+
+      const ts = item.timestamp || item.ts ? formatTime(item.timestamp || item.ts) : '';
 
       const row = h('div', { class: 'recent-activity-row' },
         h('div', { class: `recent-activity-dot recent-activity-dot--${dotClass}` }),
         h('span', { class: 'recent-activity-icon' }, icon),
         h('span', { class: 'recent-activity-summary' }, summary),
-        h('span', { class: 'recent-activity-agent' }, item.agentName || ''),
+        h('span', { class: 'recent-activity-agent' }, agentLabel),
         h('span', { class: 'recent-activity-time' }, ts),
       );
       feed.appendChild(row);

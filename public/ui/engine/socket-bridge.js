@@ -1075,6 +1075,7 @@ export function initSocketBridge(socket, store, engine) {
               event: item.event_type || item.event || eventData.event || '',
               type: item.event_type || item.type || '',
               agentId: item.agent_id || item.agentId || eventData.agentId || '',
+              agentName: item.agent_display_name || eventData.agentName || '',
               roomId: item.room_id || item.roomId || eventData.roomId || '',
               ts: item.created_at || item.ts || '',
               buildingId: item.building_id || item.buildingId || '',
