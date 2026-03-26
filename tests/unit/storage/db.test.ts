@@ -85,7 +85,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 30 tables', () => {
+  describe('schema — all 31 tables', () => {
     const expectedTables = [
       'buildings',
       'floors',
@@ -117,9 +117,10 @@ describe('Storage Layer', () => {
       'doc_entries_fts',
       'doc_toc',
       'merge_queue',
+      'table_presence',
     ];
 
-    it('creates all 29 tables (plus FTS5 shadow tables)', async () => {
+    it('creates all 30 tables (plus FTS5 shadow tables)', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -130,7 +131,7 @@ describe('Storage Layer', () => {
 
       const tableNames = tables.map((t) => t.name).sort();
       expect(tableNames).toEqual(expectedTables.sort());
-      expect(tableNames).toHaveLength(30);
+      expect(tableNames).toHaveLength(31);
     });
 
     it.each(expectedTables)('creates table: %s', async (tableName) => {
@@ -222,7 +223,7 @@ describe('Storage Layer', () => {
     });
   });
 
-  describe('schema — all 59 indexes', () => {
+  describe('schema — all 62 indexes', () => {
     const expectedIndexes = [
       'idx_rooms_floor',
       'idx_rooms_type',
@@ -283,9 +284,12 @@ describe('Storage Layer', () => {
       'idx_merge_queue_building',
       'idx_merge_queue_status',
       'idx_merge_queue_position',
+      'idx_messages_table',
+      'idx_presence_table',
+      'idx_presence_user',
     ];
 
-    it('creates all 59 custom indexes', async () => {
+    it('creates all 62 custom indexes', async () => {
       const cfg = createMockConfig(testDbPath);
       const db = await initStorage(cfg);
 
@@ -295,7 +299,7 @@ describe('Storage Layer', () => {
 
       const indexNames = indexes.map((i) => i.name).sort();
       expect(indexNames).toEqual(expectedIndexes.sort());
-      expect(indexNames).toHaveLength(59);
+      expect(indexNames).toHaveLength(62);
     });
 
     it.each(expectedIndexes)('creates index: %s', async (indexName) => {
@@ -339,7 +343,7 @@ describe('Storage Layer', () => {
         .get() as { cnt: number };
 
       // 29 regular tables + FTS5 shadow tables (doc_entries_fts + 5 shadow tables)
-      expect(tables.cnt).toBe(34);
+      expect(tables.cnt).toBe(35);
     });
   });
 
