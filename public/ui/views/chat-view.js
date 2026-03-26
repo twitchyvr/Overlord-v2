@@ -542,6 +542,47 @@ export class ChatView extends Component {
   /** Create a single message element. */
   _createMessageEl(msg) {
     const role = msg.role || 'system';
+
+    // Detect system prompts that shouldn't be shown to the user (#1246)
+    const promptText = typeof msg.content === 'string' ? msg.content : '';
+    const isSystemPrompt = msg.isSystemPrompt ||
+      (role === 'user' && (
+        promptText.includes('YOUR TASK QUEUE') ||
+        promptText.includes('update_task(task_id:') ||
+        promptText.includes('IMPORTANT: Do thorough work') ||
+        (promptText.includes('The project has been started') && promptText.includes('create_milestone'))
+      ));
+
+    if (isSystemPrompt) {
+      const el = h('div', {
+        class: 'chat-message chat-message-system chat-system-prompt',
+        'data-message-id': msg.id || '',
+        style: 'opacity:0.6; font-size:0.85rem; padding:8px 12px; cursor:pointer;',
+      });
+      const phase = promptText.includes('Discovery phase') ? 'Discovery' :
+                    promptText.includes('Architecture phase') ? 'Architecture' :
+                    promptText.includes('Execution phase') ? 'Execution' :
+                    promptText.includes('Review phase') ? 'Review' :
+                    promptText.includes('Deploy phase') ? 'Deploy' :
+                    promptText.includes('been started') ? 'Strategy' : 'Phase';
+      el.textContent = `\u{1F4CB} ${phase} phase instructions sent to agent`;
+      el.title = 'Click to expand';
+      el.addEventListener('click', () => {
+        if (el._expanded) {
+          el.textContent = `\u{1F4CB} ${phase} phase instructions sent to agent`;
+          el._expanded = false;
+        } else {
+          el.textContent = '';
+          el.appendChild(h('div', { style: 'font-weight:600; margin-bottom:4px;' }, `\u{1F4CB} ${phase} phase instructions`));
+          const pre = h('pre', { style: 'white-space:pre-wrap; font-size:0.75rem; max-height:200px; overflow:auto; opacity:0.7;' });
+          pre.textContent = promptText.substring(0, 500) + (promptText.length > 500 ? '...' : '');
+          el.appendChild(pre);
+          el._expanded = true;
+        }
+      });
+      return el;
+    }
+
     const el = h('div', {
       class: `chat-message chat-message-${role}`,
       'data-message-id': msg.id || ''
