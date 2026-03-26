@@ -229,6 +229,35 @@ export class ChatView extends Component {
     this.el.textContent = '';
     this.el.className = 'chat-view';
 
+    // ── Table chat sidebar (#1255) ──
+    const sidebar = h('div', { class: 'chat-table-sidebar', id: 'chat-table-sidebar' });
+    const sidebarHeader = h('div', { class: 'chat-sidebar-header' },
+      h('span', null, 'Conversations'),
+    );
+    sidebar.appendChild(sidebarHeader);
+    const tableList = h('div', { class: 'chat-table-list', id: 'chat-table-list' });
+    tableList.appendChild(h('div', { class: 'chat-table-loading' }, 'Loading...'));
+    sidebar.appendChild(tableList);
+    this.el.appendChild(sidebar);
+
+    // Load table list for active building
+    const buildingId = OverlordUI.getStore()?.get('building.active');
+    if (buildingId && window.overlordSocket?.fetchTableChatList) {
+      window.overlordSocket.fetchTableChatList(buildingId).then(() => {
+        this._renderTableList();
+      });
+    }
+
+    // Subscribe to table list changes
+    const store = OverlordUI.getStore();
+    if (store) {
+      this.subscribe(store, 'tables.chatList', () => this._renderTableList());
+      this.subscribe(store, 'tables.activeChat', () => this._renderTableList());
+    }
+
+    // ── Main chat content ──
+    const mainContent = h('div', { class: 'chat-main-content' });
+
     // Chat header
     const header = h('div', { class: 'chat-header' },
       h('div', { class: 'chat-header-left' },
@@ -254,19 +283,19 @@ export class ChatView extends Component {
         }, 'Clear')
       )
     );
-    this.el.appendChild(header);
+    mainContent.appendChild(header);
 
     // Initialize room indicator
     this._updateRoomIndicator();
 
     // Conversations sidebar (hidden by default)
     this._conversationsEl = h('div', { class: 'chat-conversations', hidden: true });
-    this.el.appendChild(this._conversationsEl);
+    mainContent.appendChild(this._conversationsEl);
 
     // Messages area
     this._messagesEl = h('div', { class: 'chat-messages' });
     this._messagesEl.addEventListener('scroll', () => this._checkScrollLock());
-    this.el.appendChild(this._messagesEl);
+    mainContent.appendChild(this._messagesEl);
 
     // Scroll-to-bottom button
     this._scrollBtn = h('button', {
@@ -274,11 +303,11 @@ export class ChatView extends Component {
       style: { display: 'none' },
       onClick: () => this._scrollToBottom()
     }, '\u25BC');
-    this.el.appendChild(this._scrollBtn);
+    mainContent.appendChild(this._scrollBtn);
 
     // Contextual suggestions bar (above input)
     this._suggestionsBarEl = this._buildSuggestionsBar();
-    this.el.appendChild(this._suggestionsBarEl);
+    mainContent.appendChild(this._suggestionsBarEl);
 
     // Token input with attachment support
     const inputContainer = h('div', { class: 'chat-input-container' });
@@ -418,7 +447,7 @@ export class ChatView extends Component {
       sendBtn.parentNode.insertBefore(this._micBtn, sendBtn);
     }
     inputContainer.appendChild(inputRow);
-    this.el.appendChild(inputContainer);
+    mainContent.appendChild(inputContainer);
 
     // Drag-and-drop on the messages area
     this._messagesEl.addEventListener('dragover', (e) => {
@@ -435,6 +464,91 @@ export class ChatView extends Component {
         this._addFiles(Array.from(e.dataTransfer.files));
       }
     });
+
+    this.el.appendChild(mainContent);
+  }
+
+  // ── Table Chat Sidebar (#1255) ──────────────────────────────
+
+  _renderTableList() {
+    const listEl = document.getElementById('chat-table-list');
+    if (!listEl) return;
+    listEl.textContent = '';
+
+    const store = OverlordUI.getStore();
+    const tables = store?.get('tables.chatList') || [];
+    const activeTableId = store?.get('tables.activeChat') || null;
+
+    if (tables.length === 0) {
+      listEl.appendChild(h('div', { class: 'chat-table-empty' }, 'No tables yet. Start a project to see conversations.'));
+      return;
+    }
+
+    for (const table of tables) {
+      const isActive = table.id === activeTableId;
+      const entry = h('div', {
+        class: `chat-table-entry${isActive ? ' active' : ''}`,
+        'data-table-id': table.id,
+      });
+
+      // Room + table type
+      const title = h('div', { class: 'chat-table-entry-title' },
+        `${table.room_name || table.room_type || 'Room'}`
+      );
+      entry.appendChild(title);
+
+      // Table type badge + agent count
+      const meta = h('div', { class: 'chat-table-entry-meta' },
+        h('span', { class: 'chat-table-type-badge' }, table.type || 'table'),
+        h('span', null, `${table.agent_count || 0} agent${table.agent_count !== 1 ? 's' : ''}`),
+      );
+      if (table.message_count > 0) {
+        meta.appendChild(h('span', null, `${table.message_count} msgs`));
+      }
+      entry.appendChild(meta);
+
+      // Last message preview
+      if (table.last_message) {
+        const preview = h('div', { class: 'chat-table-entry-preview' },
+          table.last_message_by ? `${table.last_message_by}: ` : '',
+          (table.last_message || '').substring(0, 60) + ((table.last_message || '').length > 60 ? '...' : '')
+        );
+        entry.appendChild(preview);
+      }
+
+      // Click to switch
+      entry.addEventListener('click', () => {
+        this._switchToTable(table.id);
+      });
+
+      listEl.appendChild(entry);
+    }
+  }
+
+  _switchToTable(tableId) {
+    const store = OverlordUI.getStore();
+    const currentTable = store?.get('tables.activeChat');
+
+    // Leave current table presence
+    if (currentTable && window.overlordSocket?.sendTablePresence) {
+      window.overlordSocket.sendTablePresence(currentTable, 'leave');
+    }
+
+    // Set new active table
+    store?.set('tables.activeChat', tableId);
+
+    // Join new table presence
+    if (window.overlordSocket?.sendTablePresence) {
+      window.overlordSocket.sendTablePresence(tableId, 'join');
+    }
+
+    // Clear current messages and load table history
+    store?.set('chat.messages', []);
+    if (window.overlordSocket?.fetchChatHistory) {
+      window.overlordSocket.fetchChatHistory('', { tableId });
+    }
+
+    this._renderTableList();
   }
 
   /**
