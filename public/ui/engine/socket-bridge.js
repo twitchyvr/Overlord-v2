@@ -99,6 +99,23 @@ export function initSocketBridge(socket, store, engine) {
     return data.buildingId === active;
   }
 
+  /** Resolve agentName from the agents list for any event with agentId (#1286) */
+  function enrichAgentName(data) {
+    if (data.agentName) return data;
+    if (!data.agentId) return data;
+    const agents = store.get('agents.list') || [];
+    const agent = agents.find((a) => a.id === data.agentId);
+    if (agent) return { ...data, agentName: agent.display_name || agent.name || data.agentId };
+    return data;
+  }
+
+  /** Push an enriched activity item to the store (#1286) */
+  function pushActivity(event, data) {
+    const enriched = enrichAgentName({ event, ...data, timestamp: data.timestamp || Date.now() });
+    store.update('activity.items', (items) => [enriched, ...(items || []).slice(0, 99)]);
+    engine.dispatch('activity:new', enriched);
+  }
+
   // ── Server → Client broadcasts ──
 
   socket.on('room:agent:entered', (data) => {
@@ -107,10 +124,9 @@ export function initSocketBridge(socket, store, engine) {
     store.update('building.agentPositions', (positions) => {
       return { ...(positions || {}), [data.agentId]: { roomId: data.roomId, roomType: data.roomType, tableType: data.tableType, status: 'active', name: data.agentName, agentId: data.agentId } };
     });
-    store.update('activity.items', (items) => [{ event: 'room:agent:entered', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    pushActivity('room:agent:entered', data);
     engine.dispatch('room:agent:entered', data);
     engine.dispatch('agent:moved', data); // #850 — notify agents-view of room changes
-    engine.dispatch('activity:new', { event: 'room:agent:entered', ...data });
   });
 
   socket.on('room:agent:exited', (data) => {
@@ -120,10 +136,9 @@ export function initSocketBridge(socket, store, engine) {
       delete next[data.agentId];
       return next;
     });
-    store.update('activity.items', (items) => [{ event: 'room:agent:exited', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    pushActivity('room:agent:exited', data);
     engine.dispatch('room:agent:exited', data);
     engine.dispatch('agent:moved', data); // #850 — notify agents-view of room changes
-    engine.dispatch('activity:new', { event: 'room:agent:exited', ...data });
   });
 
   socket.on('chat:response', (data) => {
@@ -233,9 +248,8 @@ export function initSocketBridge(socket, store, engine) {
   socket.on('phase:advanced', (data) => {
     const newPhase = data.to || data.nextPhase || data.phase;
     store.set('building.activePhase', newPhase);
-    store.update('activity.items', (items) => [{ event: 'phase:advanced', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    pushActivity('phase:advanced', data);
     engine.dispatch('phase:advanced', data);
-    engine.dispatch('activity:new', { event: 'phase:advanced', ...data });
 
     // Auto-switch chat to a room matching the new phase
     // #1129 — Don't auto-open room modal on phase advancement.
@@ -260,9 +274,8 @@ export function initSocketBridge(socket, store, engine) {
   socket.on('raid:entry:added', (data) => {
     if (!isActiveBuilding(data)) return;
     store.update('raid.entries', (entries) => [data, ...(entries || [])]);
-    store.update('activity.items', (items) => [{ event: 'raid:entry:added', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    pushActivity('raid:entry:added', data);
     engine.dispatch('raid:entry:added', data);
-    engine.dispatch('activity:new', { event: 'raid:entry:added', ...data });
   });
 
   socket.on('raid:entry:updated', (data) => {
@@ -300,9 +313,8 @@ export function initSocketBridge(socket, store, engine) {
 
   socket.on('exit-doc:submitted', (data) => {
     if (!isActiveBuilding(data)) return;
-    store.update('activity.items', (items) => [{ event: 'exit-doc:submitted', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    pushActivity('exit-doc:submitted', data);
     engine.dispatch('exit-doc:submitted', data);
-    engine.dispatch('activity:new', { event: 'exit-doc:submitted', ...data });
   });
 
   socket.on('task:created', (data) => {
@@ -313,9 +325,8 @@ export function initSocketBridge(socket, store, engine) {
       if (data.id && list.some((t) => t.id === data.id)) return list;
       return [data, ...list];
     });
-    store.update('activity.items', (items) => [{ event: 'task:created', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    pushActivity('task:created', data);
     engine.dispatch('task:created', data);
-    engine.dispatch('activity:new', { event: 'task:created', ...data });
   });
 
   socket.on('task:updated', (data) => {
@@ -331,9 +342,8 @@ export function initSocketBridge(socket, store, engine) {
       }
       return [data, ...list];
     });
-    store.update('activity.items', (items) => [{ event: 'task:updated', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    pushActivity('task:updated', data);
     engine.dispatch('task:updated', data);
-    engine.dispatch('activity:new', { event: 'task:updated', ...data });
   });
 
   socket.on('todo:created', (data) => {
@@ -502,9 +512,8 @@ export function initSocketBridge(socket, store, engine) {
       }
       return list;
     });
-    store.update('activity.items', (items) => [{ event: 'agent:status-changed', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    pushActivity('agent:status-changed', data);
     engine.dispatch('agent:status-changed', data);
-    engine.dispatch('activity:new', { event: 'agent:status-changed', ...data });
   });
 
   socket.on('building:updated', (data) => {
@@ -831,9 +840,8 @@ export function initSocketBridge(socket, store, engine) {
       }
       return list;
     });
-    store.update('activity.items', (items) => [{ event: 'task:assigned', ...data, timestamp: Date.now() }, ...(items || []).slice(0, 99)]);
+    pushActivity('task:assigned', data);
     engine.dispatch('task:assigned', data);
-    engine.dispatch('activity:new', { event: 'task:assigned', ...data });
   });
 
   socket.on('todo:assigned', (data) => {

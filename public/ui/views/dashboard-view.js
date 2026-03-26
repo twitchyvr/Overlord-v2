@@ -15,6 +15,28 @@ import { Button } from '../components/button.js';
 
 const PHASE_ORDER = ['strategy', 'discovery', 'architecture', 'execution', 'review', 'deploy'];
 
+/** Map internal tool names to human-readable labels (#1286) */
+const TOOL_LABELS = {
+  list_dir: 'Browse files',
+  read_file: 'Read file',
+  write_file: 'Write file',
+  create_task: 'Create task',
+  update_task: 'Update task',
+  create_raid_entry: 'Log risk/decision',
+  create_milestone: 'Create milestone',
+  update_milestone: 'Update milestone',
+  session_note: 'Take notes',
+  record_note: 'Save note',
+  search_files: 'Search files',
+  execute_command: 'Run command',
+  git_commit: 'Git commit',
+  git_status: 'Git status',
+};
+
+function _humanToolName(raw) {
+  return TOOL_LABELS[raw] || raw.replace(/_/g, ' ');
+}
+
 export class DashboardView extends Component {
 
   constructor(el, opts = {}) {
@@ -565,10 +587,12 @@ export class DashboardView extends Component {
           if (!d.topTools || d.topTools.length === 0) {
             body.textContent = 'No tool calls recorded';
           } else {
-            const maxCount = Math.max(...d.topTools.map(t => t.count), 1);
-            for (const tool of d.topTools) {
+            // Cap at top 6 tools to reduce chart clutter (#1286)
+            const capped = d.topTools.slice(0, 6);
+            const maxCount = Math.max(...capped.map(t => t.count), 1);
+            for (const tool of capped) {
               const row = h('div', { class: 'telem-bar-row' });
-              row.appendChild(h('span', { class: 'telem-bar-label' }, tool.name));
+              row.appendChild(h('span', { class: 'telem-bar-label' }, _humanToolName(tool.name)));
               const barOuter = h('div', { class: 'telem-bar-outer' });
               const barInner = h('div', { class: 'telem-bar-inner' });
               barInner.style.width = `${(tool.count / maxCount) * 100}%`;
@@ -589,10 +613,16 @@ export class DashboardView extends Component {
           if (!d.topAgents || d.topAgents.length === 0) {
             body.textContent = 'No agent activity recorded';
           } else {
-            for (const agent of d.topAgents) {
+            // Filter out pseudo-agents and unresolved names (#1286)
+            const realAgents = d.topAgents.filter(a =>
+              a.name && a.name !== '__user__' && a.name !== 'Agent' && !a.name.startsWith('agent_')
+            );
+            for (const agent of realAgents) {
               const row = h('div', { class: 'telem-agent-row' });
-              row.appendChild(h('span', { class: 'telem-agent-name' }, agent.name || 'Agent'));
-              row.appendChild(h('span', { class: 'telem-agent-events' }, `${agent.events} events`));
+              row.appendChild(h('span', { class: 'telem-agent-name' }, agent.name));
+              const evtCount = agent.events;
+              row.appendChild(h('span', { class: 'telem-agent-events' },
+                `${evtCount} ${evtCount === 1 ? 'event' : 'events'}`));
               body.appendChild(row);
             }
           }
