@@ -59,6 +59,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **[Epic #1255] Table-scoped chat — UI sidebar** — conversations panel with table switching, presence, click-to-switch (PR #1280)
 - **CI email spam fixed** — dependency review comments only on failure, not every PR (PR #1279)
 - **Execution state persists across restarts** — Play button no longer reappears after refresh (#1257, PR #1259)
+- **Table list timing fix** — sidebar loads tables after building data arrives (PR #1282)
+- **Task dedup word-overlap** — Jaccard similarity catches "genetics neural network" duplicates (PR #1283)
+- **Health score badge label** — shows advice text below number, no more mystery circle (#1241, PR #1284)
 - **8 open-source dogfood projects** — kaneo, maplibre-gl-js, clack, grist-core, racing-game, noisecraft, bemuse, battle-city (#1184-1191)
 
 ### Previously Fixed
