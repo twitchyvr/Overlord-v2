@@ -44,6 +44,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **RAID entry delete** — detail drawer button + socket endpoint (PR #1232)
 - **RAID edit form type + phase** — can now re-categorize and re-phase entries (PR #1233)
 - **CI deprecation fix** — `deny-licenses` → `deny-packages-with-licenses` (PR #1235)
+- **Mobile nav Scripts + distinct Activity icon** — Scripts added to mobile overflow menu, Activity icon changed from gear to timer (#1240, PR #1244)
+- **Git detect param fix** — `dirPath` → `path`, silent errors via emitWithAck (PR #1245)
+- **GitHub repo URL resolved via gh API** — correct casing, auto-populates building.repo_url, blank if unconfirmed (#1249, PR #1250)
+- **Human-readable activity labels** — "AI request" not "ai_request", agent names resolved via DB JOIN (#1247, PR #1251)
 - **8 open-source dogfood projects** — kaneo, maplibre-gl-js, clack, grist-core, racing-game, noisecraft, bemuse, battle-city (#1184-1191)
 
 ### Previously Fixed
