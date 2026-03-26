@@ -62,6 +62,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Table list timing fix** — sidebar loads tables after building data arrives (PR #1282)
 - **Task dedup word-overlap** — Jaccard similarity catches "genetics neural network" duplicates (PR #1283)
 - **Health score badge label** — shows advice text below number, no more mystery circle (#1241, PR #1284)
+- **Dashboard polish** — "1 event" singular, tool names human-readable, pseudo-agents filtered, top tools capped at 6 (#1286, PR #1287)
+- **Activity agent name resolution** — DB-loaded events now check agent_display_name from JOIN (#1247, PR #1288)
+- **Agent role formatting** — underscores replaced, title-cased: "documentation_specialist" → "Documentation Specialist" (#1289, PR #1292)
+- **Task/milestone dedup improved** — suffix stemming, description overlap check, catches "Verify Build" × 4 variants (#1290, #1291, PR #1293)
+- **Centralized pushActivity()** — all real-time socket events enriched with agent display names (#1286)
 - **8 open-source dogfood projects** — kaneo, maplibre-gl-js, clack, grist-core, racing-game, noisecraft, bemuse, battle-city (#1184-1191)
 
 ### Previously Fixed
