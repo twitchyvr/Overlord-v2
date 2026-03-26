@@ -280,6 +280,7 @@ export class StrategistOffice extends BaseRoom {
       'search_library',
       'get_document',
       'list_library',
+      'github_issues', // #756 — read issues, milestones, wiki
     ],
     fileScope: 'read-only',
     exitRequired: {

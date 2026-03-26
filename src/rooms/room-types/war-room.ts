@@ -35,6 +35,7 @@ export class WarRoom extends BaseRoom {
       'qa_run_tests',
       'qa_check_lint',
       'github',
+      'github_issues', // #756 — full GitHub access for incident response
       'session_note',
     ],
     fileScope: 'full',

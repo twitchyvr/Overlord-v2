@@ -25,6 +25,7 @@ export class DeployRoom extends BaseRoom {
       'list_dir',
       'bash',
       'github',
+      'github_issues', // #756 — full issue access for release management
       'qa_run_tests',
       'session_note',
     ],

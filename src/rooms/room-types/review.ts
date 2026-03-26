@@ -33,6 +33,8 @@ export class ReviewRoom extends BaseRoom {
       'session_note',
       'update_task',
       'create_raid_entry',
+      'github_issues', // #756 — read/close issues, review PRs
+      'github',        // #756 — PR review, merge decisions
     ],
     fileScope: 'read-only',
     exitRequired: {

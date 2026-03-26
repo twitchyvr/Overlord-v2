@@ -42,6 +42,7 @@ export class CodeLab extends BaseRoom {
       'create_task',
       'update_task',
       'create_raid_entry',
+      'github_issues', // #756 — read/comment on issues during implementation
     ],
     fileScope: 'assigned',
     exitRequired: {

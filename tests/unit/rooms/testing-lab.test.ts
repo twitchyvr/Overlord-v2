@@ -85,7 +85,7 @@ describe('TestingLab', () => {
     it('getAllowedTools returns all 12 QA tools', () => {
       const room = new TestingLab('room_1');
       const tools = room.getAllowedTools();
-      expect(tools).toHaveLength(12); // +e2e_test, +screenshot, +analyze_screenshot (#655, #657)
+      expect(tools).toHaveLength(13); // +e2e_test, +screenshot, +analyze_screenshot (#655, #657)
     });
 
     it('hasTool is true for QA tools and false for write tools', () => {
