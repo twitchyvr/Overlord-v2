@@ -516,14 +516,19 @@ export class ChatView extends Component {
       );
       entry.appendChild(title);
 
-      // Table type badge + agent count
-      const meta = h('div', { class: 'chat-table-entry-meta' },
-        h('span', { class: 'chat-table-type-badge' }, table.type || 'table'),
-        h('span', null, `${table.agent_count || 0} agent${table.agent_count !== 1 ? 's' : ''}`),
-      );
-      if (table.message_count > 0) {
-        meta.appendChild(h('span', null, `${table.message_count} msgs`));
+      // Table type badge + agent count + message count (#1296)
+      const agentCount = table.agent_count || 0;
+      const msgCount = table.message_count || 0;
+      const metaParts = [
+        table.type || 'table',
+        `${agentCount} ${agentCount === 1 ? 'agent' : 'agents'}`,
+      ];
+      if (msgCount > 0) {
+        metaParts.push(`${msgCount} ${msgCount === 1 ? 'message' : 'messages'}`);
       }
+      const meta = h('div', { class: 'chat-table-entry-meta' },
+        h('span', { class: 'chat-table-type-badge' }, metaParts.join(' · ')),
+      );
       entry.appendChild(meta);
 
       // Last message preview
