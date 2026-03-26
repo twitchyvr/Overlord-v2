@@ -392,6 +392,7 @@ async function handleChatMessage(
       ai,
       tools,
       bus,
+      tableId: tableId || undefined, // Table-scoped conversation (#1255)
       workingDirectory,
       allowedPaths,
       repoContext,
@@ -429,6 +430,7 @@ async function handleChatMessage(
         agentId: resolvedAgentId,
         agentName,
         roomId: room.id,
+        tableId: tableId || undefined, // Table-scoped routing (#1255)
         content,
         thinking: data.thinking,
         toolCalls: data.toolCalls.map((tc) => ({ name: tc.name, input: tc.input })),

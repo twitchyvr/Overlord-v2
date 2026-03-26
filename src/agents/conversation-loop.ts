@@ -267,6 +267,8 @@ interface ConversationParams {
   tools: ToolRegistryAPI;
   bus: Bus;
   options?: Record<string, unknown>;
+  /** Table ID for table-scoped conversations (#1255) */
+  tableId?: string;
   /** Building's project working directory — scopes file/shell tools */
   workingDirectory?: string;
   /** Additional paths the building has been granted access to */
@@ -379,7 +381,40 @@ export async function runConversationLoop(params: ConversationParams): Promise<R
     }
   } catch { /* agent lookup failed — use generic identity */ }
 
-  const baseSystemPrompt = agentIdentity + buildSystemPrompt(roomContext, room, params.repoContext);
+  // Inject table context: who's at this table, table purpose (#1255)
+  let tableContext = '';
+  if (params.tableId) {
+    try {
+      const db = (await import('../storage/db.js')).getDb();
+      const table = db.prepare('SELECT type, description FROM tables_v2 WHERE id = ?').get(params.tableId) as { type: string; description: string | null } | undefined;
+      if (table) {
+        const tableAgents = db.prepare(`
+          SELECT COALESCE(display_name, name) as name, role FROM agents
+          WHERE current_table_id = ? AND id != ?
+        `).all(params.tableId, agentId) as Array<{ name: string; role: string }>;
+        const presence = db.prepare(`
+          SELECT user_id, user_type FROM table_presence
+          WHERE table_id = ? AND left_at IS NULL
+        `).all(params.tableId) as Array<{ user_id: string; user_type: string }>;
+        const userPresent = presence.some(p => p.user_type === 'human');
+
+        const parts: string[] = [];
+        parts.push(`\n## Table Context`);
+        parts.push(`You are seated at the **${table.type}** table.${table.description ? ' ' + table.description : ''}`);
+        if (tableAgents.length > 0) {
+          parts.push(`Also at this table: ${tableAgents.map(a => `${a.name} (${a.role})`).join(', ')}.`);
+        }
+        if (userPresent) {
+          parts.push(`The project owner (user) is currently at this table and can see your conversation.`);
+        } else {
+          parts.push(`The project owner is not at this table right now.`);
+        }
+        tableContext = parts.join('\n') + '\n\n';
+      }
+    } catch { /* table context is optional enhancement */ }
+  }
+
+  const baseSystemPrompt = agentIdentity + tableContext + buildSystemPrompt(roomContext, room, params.repoContext);
   let scratchpad = '';
   try { scratchpad = buildScratchpadInjection(agentId); } catch { /* DB not ready yet — scratchpad is optional */ }
   const systemPrompt = scratchpad
