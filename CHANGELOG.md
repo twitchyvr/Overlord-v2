@@ -53,6 +53,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **[Epic #1255] Table-scoped chat — DB schema** — table_id on messages, table_presence table, 3 indexes (PR #1269)
 - **[Epic #1255] Table-scoped chat — transport schemas** — tableId on ChatMessage/History, new Presence/ChatList schemas (PR #1271)
 - **[Epic #1255] Table-scoped chat — persistence** — messages store table_id, history queries by table, thread scoping (PR #1274)
+- **[Epic #1255] Table-scoped chat — presence + chat list** — join/leave tracking, table list endpoint with metadata (PR #1276)
+- **[Epic #1255] Table-scoped chat — socket bridge** — tableId in messages, fetchTableChatList, sendTablePresence (PR #1277)
+- **[Epic #1255] Table-scoped chat — conversation loop** — agent table awareness, user presence in system prompt (PR #1278)
+- **[Epic #1255] Table-scoped chat — UI sidebar** — conversations panel with table switching, presence, click-to-switch (PR #1280)
+- **CI email spam fixed** — dependency review comments only on failure, not every PR (PR #1279)
+- **Execution state persists across restarts** — Play button no longer reappears after refresh (#1257, PR #1259)
 - **8 open-source dogfood projects** — kaneo, maplibre-gl-js, clack, grist-core, racing-game, noisecraft, bemuse, battle-city (#1184-1191)
 
 ### Previously Fixed
