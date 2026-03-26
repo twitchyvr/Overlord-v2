@@ -40,7 +40,7 @@ import {
   GitDetectSchema, GitInitSchema, GitCloneSchema,
   FloorListSchema, FloorGetSchema, FloorCreateSchema, FloorUpdateSchema, FloorDeleteSchema, FloorSortSchema,
   RoomCreateSchema, RoomGetSchema, RoomEnterSchema, RoomExitSchema, RoomUpdateSchema, RoomDeleteSchema,
-  TableCreateSchema, TableListSchema, TableUpdateSchema, TableDeleteSchema, AgentMoveSchema,
+  TableCreateSchema, TableListSchema, TableUpdateSchema, TableDeleteSchema, TablePresenceSchema, TableChatListSchema, AgentMoveSchema,
   AgentRegisterSchema, AgentGetSchema, AgentListSchema, AgentUpdateSchema, AgentUpdateProfileSchema,
   AgentGenerateProfileSchema,
   AgentGeneratePhotoSchema,
@@ -979,6 +979,68 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
         bus.emit('table:deleted', { tableId: parsed.tableId });
       }
       if (ack) ack(result);
+    });
+
+    // ─── Table Presence + Chat List (#1255) ───
+
+    handle(socket, 'table:presence', TablePresenceSchema, (parsed, ack) => {
+      const db = getDb();
+      const userId = '__user__'; // Human user
+      const now = new Date().toISOString();
+
+      if (parsed.action === 'join') {
+        // Close any open presence for this user at other tables
+        db.prepare("UPDATE table_presence SET left_at = datetime(?) WHERE user_id = ? AND left_at IS NULL").run(now, userId);
+        // Insert new presence
+        const id = `pres_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        db.prepare("INSERT INTO table_presence (id, table_id, user_type, user_id, joined_at) VALUES (?, ?, 'human', ?, datetime(?))").run(id, parsed.tableId, userId, now);
+      } else {
+        // Mark presence as left
+        db.prepare("UPDATE table_presence SET left_at = datetime(?) WHERE table_id = ? AND user_id = ? AND left_at IS NULL").run(now, parsed.tableId, userId);
+      }
+
+      // Get current occupants of this table
+      const occupants = db.prepare(`
+        SELECT tp.user_id, tp.user_type, COALESCE(a.display_name, a.name) as name
+        FROM table_presence tp
+        LEFT JOIN agents a ON tp.user_id = a.id
+        WHERE tp.table_id = ? AND tp.left_at IS NULL
+      `).all(parsed.tableId) as Array<{ user_id: string; user_type: string; name: string | null }>;
+
+      io.emit('table:presence-changed', {
+        tableId: parsed.tableId,
+        action: parsed.action,
+        userId,
+        occupants: occupants.map(o => ({
+          id: o.user_id,
+          type: o.user_type,
+          name: o.user_type === 'human' ? 'You' : (o.name || o.user_id),
+        })),
+      });
+
+      if (ack) ack({ ok: true, data: { tableId: parsed.tableId, occupants } });
+    });
+
+    handle(socket, 'table:chat-list', TableChatListSchema, (parsed, ack) => {
+      const db = getDb();
+      // Get all tables for this building's rooms, with last message and agent count
+      const tables = db.prepare(`
+        SELECT t.id, t.type, t.description, t.room_id,
+               r.name as room_name, r.type as room_type,
+               f.name as floor_name,
+               (SELECT COUNT(*) FROM agents WHERE current_table_id = t.id) as agent_count,
+               (SELECT COUNT(*) FROM messages WHERE table_id = t.id) as message_count,
+               (SELECT content FROM messages WHERE table_id = t.id ORDER BY created_at DESC LIMIT 1) as last_message,
+               (SELECT created_at FROM messages WHERE table_id = t.id ORDER BY created_at DESC LIMIT 1) as last_message_at,
+               (SELECT COALESCE(a.display_name, a.name) FROM messages m LEFT JOIN agents a ON m.agent_id = a.id WHERE m.table_id = t.id ORDER BY m.created_at DESC LIMIT 1) as last_message_by
+        FROM tables_v2 t
+        JOIN rooms r ON t.room_id = r.id
+        JOIN floors f ON r.floor_id = f.id
+        WHERE f.building_id = ?
+        ORDER BY last_message_at DESC NULLS LAST, t.created_at
+      `).all(parsed.buildingId) as Array<Record<string, unknown>>;
+
+      if (ack) ack({ ok: true, data: tables });
     });
 
     // ─── Table Context Events (Fleet Coordination) ───
