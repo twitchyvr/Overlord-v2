@@ -320,7 +320,8 @@ const AttachmentSchema = z.object({
 
 // Chat history retrieval (#764)
 export const ChatHistorySchema = z.object({
-  roomId: id(),
+  roomId: z.string().max(MAX_ID).optional().default(''),
+  tableId: z.string().max(MAX_ID).optional().default(''), // Table-scoped chat (#1255)
   limit: z.number().int().min(1).max(200).optional().default(50),
   before: z.string().max(100).optional(), // cursor: load messages before this timestamp
 });
@@ -337,12 +338,26 @@ export const ChatMessageSchema = z.object({
   attachments: z.array(AttachmentSchema).max(10).optional().default([]),
   buildingId: z.string().max(MAX_ID).optional().default(''),
   roomId: z.string().max(MAX_ID).optional().default(''),
+  tableId: z.string().max(MAX_ID).optional().default(''), // Table-scoped chat (#1255)
   agentId: z.string().max(MAX_ID).optional().default(''),
   threadId: z.string().max(MAX_ID).optional().default(''),
   // Directed messaging (#585): recipient agent IDs for multicast
   recipients: z.array(z.string().max(MAX_ID)).max(20).optional().default([]),
   messageMode: z.enum(['broadcast', 'multicast', 'direct']).optional().default('broadcast'),
 }).passthrough();
+
+// ─── Table Chat Schemas (#1255) ───
+
+/** table:presence — user joins or leaves a table chat */
+export const TablePresenceSchema = z.object({
+  tableId: id(),
+  action: z.enum(['join', 'leave']),
+});
+
+/** table:chat-list — list tables with chat activity for a building */
+export const TableChatListSchema = z.object({
+  buildingId: id(),
+});
 
 // ─── Conversation Schemas ───
 
