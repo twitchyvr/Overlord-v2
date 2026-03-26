@@ -1218,10 +1218,37 @@ export class ChatView extends Component {
   }
 
   _renderEmptyChat() {
+    const store = OverlordUI.getStore();
+    const activeTable = store?.get('tables.activeChat');
+    const building = store?.get('building.data');
+
+    // Table selected but no messages — table-specific prompt
+    if (activeTable) {
+      return h('div', { class: 'empty-state' },
+        h('div', { class: 'empty-state-icon' }, '\u{1F4AC}'),
+        h('p', { class: 'empty-state-title' }, 'Start a Conversation'),
+        h('p', { class: 'empty-state-text' }, 'Send a message to begin working with the agents at this table. Use @ to mention a specific agent.')
+      );
+    }
+
+    // Building selected but no table — show project context (#1256)
+    if (building) {
+      const phase = building.activePhase || building.active_phase || 'strategy';
+      const name = building.name || 'your project';
+      return h('div', { class: 'empty-state' },
+        h('div', { class: 'empty-state-icon' }, '\u{1F3E2}'),
+        h('p', { class: 'empty-state-title' }, name),
+        h('p', { class: 'empty-state-text' },
+          `Currently in the ${phase} phase. Select a conversation from the sidebar to chat with your agents, or type a message to start a new discussion.`)
+      );
+    }
+
+    // No building at all
     return h('div', { class: 'empty-state' },
       h('div', { class: 'empty-state-icon' }, '\u{1F4AC}'),
-      h('p', { class: 'empty-state-title' }, 'Start a Conversation'),
-      h('p', { class: 'empty-state-text' }, 'Send a message to begin working with your agents. Use / for commands, @ to mention agents.')
+      h('p', { class: 'empty-state-title' }, 'Select a Project'),
+      h('p', { class: 'empty-state-text' },
+        'Choose a project from the toolbar dropdown or Dashboard to start chatting with your AI team.')
     );
   }
 
