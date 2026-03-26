@@ -130,6 +130,7 @@ describe('validate()', () => {
       attachments: [],
       buildingId: '',
       roomId: '',
+      tableId: '',
       agentId: '',
       threadId: '',
       recipients: [],
