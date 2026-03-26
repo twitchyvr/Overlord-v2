@@ -52,13 +52,19 @@ async function start(): Promise<void> {
   await initStorage(config);
   log.info('Storage initialized');
 
-  // Reset stale execution state from previous session (#1004)
-  // Buildings should not persist 'running' across restarts
+  // Reset agent status but preserve building execution state (#1257)
+  // Agent conversation loops die with the process, so agents must be reset to idle.
+  // But building execution_state should persist so the UI shows the correct controls
+  // (Pause/Stop for running buildings, Play for stopped).
   const resetDb = (await import('./storage/db.js')).getDb();
-  const resetBuildings = resetDb.prepare("UPDATE buildings SET execution_state = 'stopped' WHERE execution_state != 'stopped'").run();
   const resetAgents = resetDb.prepare("UPDATE agents SET status = 'idle' WHERE status = 'active'").run();
-  if (resetBuildings.changes > 0 || resetAgents.changes > 0) {
-    log.info({ buildings: resetBuildings.changes, agents: resetAgents.changes }, 'Reset stale execution state from previous session');
+  if (resetAgents.changes > 0) {
+    log.info({ agents: resetAgents.changes }, 'Reset agent status from previous session');
+  }
+  // Log which buildings are still marked as running (user can resume via Play)
+  const runningBuildings = resetDb.prepare("SELECT id, name FROM buildings WHERE execution_state = 'running'").all() as Array<{ id: string; name: string }>;
+  if (runningBuildings.length > 0) {
+    log.info({ count: runningBuildings.length, names: runningBuildings.map(b => b.name) }, 'Buildings with persisted running state — agents idle, user can resume');
   }
 
   // Clean orphaned data from previously deleted buildings (#1198)
