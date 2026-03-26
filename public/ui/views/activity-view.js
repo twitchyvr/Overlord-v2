@@ -712,7 +712,11 @@ export class ActivityView extends Component {
     }
 
     // Default: use whatever text fields are available, format raw event name as readable
-    const readableEvent = event ? event.replace(/[_:]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '';
+    const readableEvent = event
+      ? event.replace(/[_:]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+          .replace(/\bAi\b/g, 'AI').replace(/\bUi\b/g, 'UI').replace(/\bApi\b/g, 'API')
+          .replace(/\bDb\b/g, 'DB').replace(/\bCi\b/g, 'CI').replace(/\bId\b/g, 'ID')
+      : '';
     return item.message || item.description || item.summary || readableEvent || 'Activity';
   }
 
