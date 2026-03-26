@@ -32,6 +32,7 @@ export class DiscoveryRoom extends BaseRoom {
       'create_task',
       'update_task',
       'create_raid_entry',
+      'github_issues', // #756 — read issues for requirement gathering
     ],
     fileScope: 'read-only',
     exitRequired: {

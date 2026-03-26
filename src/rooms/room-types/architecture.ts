@@ -31,6 +31,7 @@ export class ArchitectureRoom extends BaseRoom {
       'create_task',
       'update_task',
       'create_raid_entry',
+      'github_issues', // #756 — read/create issues for task breakdown
     ],
     fileScope: 'read-only',
     exitRequired: {

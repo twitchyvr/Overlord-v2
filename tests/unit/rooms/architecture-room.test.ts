@@ -69,9 +69,9 @@ describe('ArchitectureRoom', () => {
       expect(room.type).toBe('architecture');
     });
 
-    it('getAllowedTools returns all 10 research + project tools', () => {
+    it('getAllowedTools returns all 11 research + project tools', () => {
       const room = new ArchitectureRoom('room_1');
-      expect(room.getAllowedTools()).toHaveLength(10);
+      expect(room.getAllowedTools()).toHaveLength(11);
     });
 
     it('hasTool returns false for write tools', () => {
@@ -115,7 +115,7 @@ describe('ArchitectureRoom', () => {
       const ctx = room.buildContextInjection();
       expect(ctx.roomType).toBe('architecture');
       expect(ctx.fileScope).toBe('read-only');
-      expect((ctx.tools as string[]).length).toBe(10);
+      expect((ctx.tools as string[]).length).toBe(11);
     });
 
     it('validates complete exit document', () => {

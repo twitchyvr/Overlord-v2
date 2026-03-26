@@ -64,9 +64,9 @@ describe('WarRoom', () => {
       expect(room.type).toBe('war-room');
     });
 
-    it('getAllowedTools returns full set of 11 tools', () => {
+    it('getAllowedTools returns full set of 12 tools', () => {
       const room = new WarRoom('room_1');
-      expect(room.getAllowedTools()).toHaveLength(11);
+      expect(room.getAllowedTools()).toHaveLength(12);
     });
 
     it('getRules emphasizes incident response and root cause', () => {

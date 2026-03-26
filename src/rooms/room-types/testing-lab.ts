@@ -36,6 +36,7 @@ export class TestingLab extends BaseRoom {
       'screenshot',
       'analyze_screenshot',
       'session_note',
+      'github_issues', // #756 — read/comment on issues, report test results
     ],
     fileScope: 'read-only',
     exitRequired: {

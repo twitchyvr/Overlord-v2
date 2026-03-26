@@ -64,9 +64,9 @@ describe('DeployRoom', () => {
       expect(room.type).toBe('deploy');
     });
 
-    it('getAllowedTools returns 6 deployment tools', () => {
+    it('getAllowedTools returns 7 deployment tools', () => {
       const room = new DeployRoom('room_1');
-      expect(room.getAllowedTools()).toHaveLength(6);
+      expect(room.getAllowedTools()).toHaveLength(7);
     });
 
     it('getRules emphasizes health checks and rollback plan', () => {
