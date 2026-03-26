@@ -571,10 +571,10 @@ describe('ChatView', () => {
     const view = new ChatView(el);
     view.mount();
 
-    // Empty state should appear immediately on mount, no store update needed
+    // Empty state should appear immediately on mount, no store update needed (#1256)
     const messages = el.querySelector('.chat-messages');
     expect(messages!.querySelector('.empty-state')).not.toBeNull();
-    expect(messages!.textContent).toContain('Start a Conversation');
+    expect(messages!.textContent).toContain('Select a Project');
   });
 
   it('renders messages from store', async () => {
