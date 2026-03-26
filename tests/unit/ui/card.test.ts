@@ -212,8 +212,8 @@ describe('Card.create("task")', () => {
 
   it('marks checkbox as checked when completed', () => {
     const card = Card.create('task', { title: 'Done', completed: true });
-    const checkbox = card.querySelector('.task-checkbox');
-    expect(checkbox!.classList.contains('checked')).toBe(true);
+    const checkbox = card.querySelector('.task-checkbox') as HTMLInputElement;
+    expect(checkbox!.checked).toBe(true);
     expect(card.classList.contains('task-done')).toBe(true);
   });
 

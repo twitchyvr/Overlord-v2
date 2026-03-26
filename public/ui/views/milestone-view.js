@@ -257,19 +257,19 @@ export class MilestoneView extends Component {
     // Actions
     const cardActions = h('div', { class: 'milestone-card-actions' });
 
-    const editBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Edit' }, '\u270E');
+    const editBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Edit', 'aria-label': 'Edit milestone' }, '\u270E');
     editBtn.addEventListener('click', (e) => { e.stopPropagation(); this._openEditModal(milestone); });
     cardActions.appendChild(editBtn);
 
     if (milestone.status === 'active') {
-      const completeBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Mark Complete', style: { color: 'var(--accent-green)' } }, '\u2713');
+      const completeBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Mark Complete', 'aria-label': 'Mark milestone complete', style: { color: 'var(--accent-green)' } }, '\u2713');
       completeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._updateMilestoneStatus(milestone.id, 'completed');
       });
       cardActions.appendChild(completeBtn);
     } else if (milestone.status === 'completed') {
-      const reopenBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Reopen', style: { color: 'var(--accent-blue)' } }, '\u21BA');
+      const reopenBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Reopen', 'aria-label': 'Reopen milestone', style: { color: 'var(--accent-blue)' } }, '\u21BA');
       reopenBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this._updateMilestoneStatus(milestone.id, 'active');
@@ -277,7 +277,7 @@ export class MilestoneView extends Component {
       cardActions.appendChild(reopenBtn);
     }
 
-    const deleteBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Delete', style: { color: 'var(--accent-red)' } }, '\u2715');
+    const deleteBtn = h('button', { class: 'btn btn-ghost btn-xs', title: 'Delete', 'aria-label': 'Delete milestone', style: { color: 'var(--accent-red)' } }, '\u2715');
     deleteBtn.addEventListener('click', (e) => { e.stopPropagation(); this._confirmDelete(milestone); });
     cardActions.appendChild(deleteBtn);
 

@@ -67,12 +67,21 @@ export class Card {
     }
 
     // Card body click handler — distinct from action buttons (#1006)
+    // Add keyboard accessibility when card is clickable (#1242)
     if (typeof onClick === 'function') {
       card.style.cursor = 'pointer';
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('role', 'button');
       card.addEventListener('click', (e) => {
         // Don't trigger on button/link clicks inside the card
-        if (e.target.closest('button, a, .card-actions')) return;
+        if (e.target.closest('button, a, input, .card-actions')) return;
         onClick(data, card);
+      });
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(data, card);
+        }
       });
     }
 
@@ -105,11 +114,15 @@ export class Card {
 
   /** @private */
   static _buildTask(card, data) {
+    const checkbox = h('input', {
+      type: 'checkbox',
+      class: 'task-checkbox task-row-checkbox',
+      'data-task-id': data.id,
+      'aria-label': `Select this task`,
+    });
+    if (data.completed) checkbox.checked = true;
     const header = h('div', { class: 'card-header' },
-      h('div', {
-        class: `task-checkbox ${data.completed ? 'checked' : ''}`,
-        'data-task-id': data.id
-      }),
+      checkbox,
       h('span', { class: 'task-title' }, data.title || 'Untitled Task'),
       data.priority ? h('span', { class: `task-priority priority-${data.priority}` }, data.priority) : null,
       data.id ? h('span', { class: 'task-id', title: data.id }, `T-${data.id.slice(-4).toUpperCase()}`) : null
