@@ -28,6 +28,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
+import * as os from 'node:os';
 import { ok, err } from './contracts.js';
 import type { Result } from './contracts.js';
 import { logger } from './logger.js';
@@ -42,6 +43,7 @@ export interface LockState {
   acquiredAt: number;
   refreshedAt: number;
   ttl: number;
+  hostname?: string; // Multi-machine disambiguation (#1137)
   metadata?: Record<string, unknown>;
 }
 
@@ -72,6 +74,7 @@ export interface LockStateEntry {
   ttl: number;
   timeRemaining: number;
   status: 'active' | 'expiring';
+  hostname?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -462,6 +465,7 @@ export class ResourceLockManager {
         acquiredAt: now,
         refreshedAt: now,
         ttl,
+        hostname: os.hostname(), // Multi-machine disambiguation (#1137)
         metadata,
       };
       this._writeLockFile(lockFile, state);
@@ -670,6 +674,7 @@ export class ResourceLockManager {
           ttl: state.ttl,
           timeRemaining: remaining,
           status: remaining <= EXPIRING_THRESHOLD_MS ? 'expiring' : 'active',
+          hostname: state.hostname,
           metadata: state.metadata,
         });
       }
