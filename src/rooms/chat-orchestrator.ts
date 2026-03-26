@@ -21,6 +21,7 @@ import { AgentErrorBoundary } from '../agents/agent-error-boundary.js';
 import { getResourceLockManager } from '../core/resource-lock.js';
 import { queryHook } from '../plugins/plugin-loader.js';
 import { getDb } from '../storage/db.js';
+import { onTableMessage } from './conversation-summarizer.js';
 import type { Bus, BusEventData } from '../core/bus.js';
 import type {
   Result,
@@ -366,6 +367,8 @@ async function handleChatMessage(
     // 9b. Persist user message (with attachments if any) and load conversation history
     try {
       persistMessage(room.id, null, 'user', userContent, threadId, undefined, attachments, tableId || undefined, recipients, messageMode);
+      // Track table discussion for auto-summary (#1268)
+      if (tableId && buildingId) onTableMessage(tableId, buildingId);
     } catch (persistErr) {
       log.warn({ persistErr }, 'Failed to persist user message — continuing without history');
     }
@@ -449,6 +452,8 @@ async function handleChatMessage(
           data.toolCalls.map((tc) => ({ name: tc.name, input: tc.input })),
           undefined, tableId || undefined,
         );
+        // Track table discussion for auto-summary (#1268)
+        if (tableId && buildingId) onTableMessage(tableId, buildingId);
       } catch (persistErr) {
         log.warn({ persistErr }, 'Failed to persist assistant message');
       }
