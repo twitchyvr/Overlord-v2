@@ -232,11 +232,26 @@ export class ChatView extends Component {
         window.overlordSocket.fetchTableChatList(newBuildingId);
       }
     });
-    // Initial fetch
+    // Initial fetch — retry once if empty (selectBuilding may still be in flight)
     const activeBuildingId = store.get('building.active');
     if (activeBuildingId && window.overlordSocket?.fetchTableChatList) {
-      window.overlordSocket.fetchTableChatList(activeBuildingId);
+      window.overlordSocket.fetchTableChatList(activeBuildingId).then((res) => {
+        if (res?.ok && (!res.data || res.data.length === 0)) {
+          // Retry after selectBuilding likely finishes
+          setTimeout(() => {
+            const bid = store.get('building.active');
+            if (bid) window.overlordSocket.fetchTableChatList(bid);
+          }, 1500);
+        }
+      });
     }
+    // Also subscribe to building.data which fires AFTER selectBuilding completes
+    this.subscribe(store, 'building.data', () => {
+      const bid = store.get('building.active');
+      if (bid && window.overlordSocket?.fetchTableChatList) {
+        window.overlordSocket.fetchTableChatList(bid);
+      }
+    });
   }
 
   _render() {
