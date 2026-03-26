@@ -773,6 +773,20 @@ export function initSocketBridge(socket, store, engine) {
     engine.dispatch('activity:new', { event: 'table:work-divided', ...data });
   });
 
+  // ── Table presence events (#1255) ──
+
+  socket.on('table:presence-changed', (data) => {
+    if (data && data.tableId) {
+      // Update presence map in store
+      store.update('tables.presence', (pres) => {
+        const map = { ...(pres || {}) };
+        map[data.tableId] = data.occupants || [];
+        return map;
+      });
+      engine.dispatch('table:presence-changed', data);
+    }
+  });
+
   // ── Agent profile events ──
 
   socket.on('agent:profile-updated', (data) => {
@@ -1314,10 +1328,12 @@ export function initSocketBridge(socket, store, engine) {
       const messageText = text || content || '';
       const activeRoom = roomId || store.get('rooms.active') || '';
       const activeBuilding = buildingId || store.get('building.active') || '';
+      const activeTable = store.get('tables.activeChat') || ''; // Table-scoped chat (#1255)
       const threadId = store.get('conversations.active') || '';
       const attachMeta = (attachments || []).map((a) => ({ id: a.id, fileName: a.fileName, mimeType: a.mimeType, size: a.size }));
       store.update('chat.messages', (msgs) => [...(msgs || []), {
         id: Date.now().toString(), role: 'user', content: messageText, agentId,
+        tableId: activeTable || undefined,
         attachments: attachMeta, type: 'user', timestamp: Date.now(),
         recipients: recipients || [], messageMode: messageMode || 'broadcast',
       }]);
@@ -1325,7 +1341,7 @@ export function initSocketBridge(socket, store, engine) {
       socket.emit('chat:message', {
         text: messageText, agentId: agentId || '', tokens: tokens || [],
         attachments: attachments || [], buildingId: activeBuilding,
-        roomId: activeRoom, threadId,
+        roomId: activeRoom, tableId: activeTable, threadId,
         recipients: recipients || [], messageMode: messageMode || 'broadcast',
       });
     },
@@ -1778,7 +1794,8 @@ export function initSocketBridge(socket, store, engine) {
 
     fetchChatHistory(roomId, opts = {}) {
       return _emitWithTimeout('chat:history', {
-        roomId,
+        roomId: roomId || '',
+        tableId: opts.tableId || '', // Table-scoped chat (#1255)
         limit: opts.limit || 50,
         before: opts.before,
       }).then((res) => {
@@ -1793,6 +1810,21 @@ export function initSocketBridge(socket, store, engine) {
         }
         return res;
       });
+    },
+
+    // ── Table Chat methods (#1255) ──
+
+    fetchTableChatList(buildingId) {
+      return _emitWithTimeout('table:chat-list', { buildingId }).then((res) => {
+        if (res && res.ok) {
+          store.set('tables.chatList', res.data || []);
+        }
+        return res;
+      });
+    },
+
+    sendTablePresence(tableId, action) {
+      return _emitWithTimeout('table:presence', { tableId, action });
     },
 
     // ── Agent Stats methods ──

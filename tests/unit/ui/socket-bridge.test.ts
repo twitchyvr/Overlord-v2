@@ -1006,7 +1006,7 @@ describe('window.overlordSocket.sendMessage()', () => {
     initSocketBridge(mockSocket, mockStore, mockEngine);
     const api = (window as any).overlordSocket;
     api.sendMessage({ content: 'hello world', agentId: 'agent-5' });
-    expect(mockSocket.emit).toHaveBeenCalledWith('chat:message', { text: 'hello world', agentId: 'agent-5', tokens: [], attachments: [], buildingId: '', roomId: '', threadId: '', recipients: [], messageMode: 'broadcast' });
+    expect(mockSocket.emit).toHaveBeenCalledWith('chat:message', { text: 'hello world', agentId: 'agent-5', tokens: [], attachments: [], buildingId: '', roomId: '', tableId: '', threadId: '', recipients: [], messageMode: 'broadcast' });
   });
 
   it('does not return a promise (synchronous fire-and-forget)', () => {
