@@ -203,17 +203,14 @@ describe('Card.create("task")', () => {
     expect(title!.textContent).toBe('Untitled Task');
   });
 
-  it('renders task checkbox', () => {
+  it('does not render its own checkbox (task-view manages selection) (#1353)', () => {
     const card = Card.create('task', { title: 'T', id: '7' });
     const checkbox = card.querySelector('.task-checkbox');
-    expect(checkbox).not.toBeNull();
-    expect(checkbox!.getAttribute('data-task-id')).toBe('7');
+    expect(checkbox).toBeNull();
   });
 
-  it('marks checkbox as checked when completed', () => {
+  it('adds task-done class when completed', () => {
     const card = Card.create('task', { title: 'Done', completed: true });
-    const checkbox = card.querySelector('.task-checkbox') as HTMLInputElement;
-    expect(checkbox!.checked).toBe(true);
     expect(card.classList.contains('task-done')).toBe(true);
   });
 
