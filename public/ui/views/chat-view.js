@@ -1583,12 +1583,20 @@ export class ChatView extends Component {
     }
 
     if (window.overlordSocket) {
+      // Extract @mentioned agent IDs from tokens for directed messaging (#1388)
+      const mentionedAgents = (tokens || [])
+        .filter(t => t.type === 'agent' && t.id)
+        .map(t => t.id);
+      const mode = mentionedAgents.length > 0 ? 'directed' : 'broadcast';
+
       window.overlordSocket.sendMessage({
         text,
         tokens,
         attachments: this._pendingAttachments,
         buildingId,
         roomId: store?.get('rooms.active'),
+        recipients: mentionedAgents,
+        messageMode: mode,
       });
       this._showTypingIndicator();
     }

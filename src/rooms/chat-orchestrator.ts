@@ -221,9 +221,17 @@ async function handleChatMessage(
       return;
     }
 
-    // 5. Resolve agent — find agent in this room or use a default
+    // 5. Resolve agent — @mention recipients take priority, then room default (#1388)
     let agent: ParsedAgent | null = null;
-    if (resolvedAgentId) {
+    if (recipients.length > 0 && messageMode !== 'broadcast') {
+      // Directed message — route to the first @mentioned agent
+      agent = agents.getAgent(recipients[0]);
+      if (agent) {
+        resolvedAgentId = agent.id;
+        log.info({ agentId: agent.id, agentName: agent.name, recipients }, 'Directed message routed to @mentioned agent');
+      }
+    }
+    if (!agent && resolvedAgentId) {
       agent = agents.getAgent(resolvedAgentId);
     }
 
