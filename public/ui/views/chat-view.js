@@ -495,12 +495,20 @@ export class ChatView extends Component {
     listEl.textContent = '';
 
     const store = OverlordUI.getStore();
-    const tables = store?.get('tables.chatList') || [];
+    const rawTables = store?.get('tables.chatList') || [];
     const activeTableId = store?.get('tables.activeChat') || null;
 
-    if (tables.length === 0) {
+    if (rawTables.length === 0) {
       listEl.appendChild(h('div', { class: 'chat-table-empty' }, 'No tables yet. Start a project to see conversations.'));
       return;
+    }
+
+    // Sort by most recent activity so active conversations appear first (#1347)
+    const tables = [...rawTables].sort((a, b) => (b.message_count || 0) - (a.message_count || 0));
+
+    // Auto-select the most active conversation if none is selected (#1347)
+    if (!activeTableId && tables.length > 0 && tables[0].message_count > 0) {
+      this._switchToTable(tables[0].id);
     }
 
     for (const table of tables) {
