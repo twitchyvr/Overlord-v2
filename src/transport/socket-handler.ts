@@ -4442,11 +4442,17 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
         ...exitDocData,
       });
 
-      // RAID auto-populate: create a "decision" entry for phase completion (#508)
+      // RAID auto-populate: create a "decision" entry for phase completion (#508, #1392 dedup)
       if (buildingId && phase) {
         try {
-          const raidId = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
           const phaseName = phase.charAt(0).toUpperCase() + phase.slice(1);
+          const summaryText = `Phase ${phaseName} completed \u2014 exit document submitted`;
+          // Skip if this phase completion decision already exists (#1392)
+          const existingRaid = getDb().prepare(
+            `SELECT id FROM raid_entries WHERE building_id = ? AND type = 'decision' AND summary = ?`
+          ).get(buildingId, summaryText) as { id: string } | undefined;
+          if (!existingRaid) {
+          const raidId = `raid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
           // Resolve agent name instead of showing raw ID (#673)
           const agentRow = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as Record<string, unknown> | undefined;
           const agentName = (agentRow?.display_name as string) || (agentRow?.name as string) || 'Agent';
@@ -4458,13 +4464,14 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
             buildingId,
             phase,
             roomId,
-            `Phase ${phaseName} completed \u2014 exit document submitted`,
+            summaryText,
             `${agentName} completed ${phaseName} phase. Deliverables captured in exit document.`,
             agentId,
             JSON.stringify([exitDocType || phase]),
           );
           bus.emit('raid:created', { id: raidId, buildingId, type: 'decision', phase });
           log.info({ raidId, buildingId, phase }, 'RAID decision auto-created for phase completion');
+          } // close if (!existingRaid)
         } catch (raidErr) {
           log.warn({ err: raidErr, buildingId, phase }, 'Failed to auto-create RAID decision entry');
         }
