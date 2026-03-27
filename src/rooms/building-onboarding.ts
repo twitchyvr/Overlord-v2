@@ -200,6 +200,36 @@ export function initBuildingOnboarding({ bus, rooms, agents }: OnboardingDeps): 
           'Phase agent auto-dispatched',
         );
       }
+      // Auto-assign unassigned agents to the new phase's rooms (#1348)
+      try {
+        const db = getDb();
+        const unassigned = db.prepare(
+          `SELECT id, role FROM agents WHERE building_id = ? AND (current_room_id IS NULL OR current_room_id = '')`
+        ).all(buildingId) as Array<{ id: string; role: string }>;
+
+        if (unassigned.length > 0 && result.roomId) {
+          // Get all rooms on the floor for this phase
+          const phaseRooms = db.prepare(
+            `SELECT r.id, r.type FROM rooms r JOIN floors f ON r.floor_id = f.id
+             WHERE f.building_id = ? AND f.type = ?`
+          ).all(buildingId, _phaseToFloorType(nextPhase)) as Array<{ id: string; type: string }>;
+
+          if (phaseRooms.length > 0) {
+            let assigned = 0;
+            for (const agent of unassigned) {
+              // Round-robin across available rooms
+              const targetRoom = phaseRooms[assigned % phaseRooms.length];
+              db.prepare('UPDATE agents SET current_room_id = ? WHERE id = ?').run(targetRoom.id, agent.id);
+              assigned++;
+            }
+            log.info({ buildingId, nextPhase, assigned, total: unassigned.length }, 'Auto-assigned agents to new phase rooms');
+
+            bus.emit('agents:reassigned', { buildingId, phase: nextPhase, count: assigned });
+          }
+        }
+      } catch (e) {
+        log.warn({ err: e instanceof Error ? e.message : String(e) }, 'Failed to auto-assign agents on phase advance');
+      }
     } else {
       log.error({ buildingId, nextPhase, error: result.error }, 'Failed to provision next phase room');
     }
@@ -668,6 +698,19 @@ function getDefaultTable(roomType: string): Record<string, boolean> {
  * Get a phase-specific prompt for auto-dispatching agents (#1021).
  * Each phase's agent gets instructions relevant to their role.
  */
+/** Map phase names to floor types for room lookup (#1348) */
+function _phaseToFloorType(phase: string): string {
+  const map: Record<string, string> = {
+    strategy: 'strategy',
+    discovery: 'collaboration',
+    architecture: 'collaboration',
+    execution: 'execution',
+    review: 'governance',
+    deploy: 'operations',
+  };
+  return map[phase] || 'execution';
+}
+
 function _getPhasePrompt(phase: string, buildingId: string): string {
   // Fetch ALL tasks for this building so agents know the full picture (#1141)
   const db = getDb();
