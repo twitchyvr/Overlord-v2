@@ -1378,14 +1378,52 @@ function registerBuiltinTools(): void {
         }
       }
 
+      // Smart assignment: match task to best-fit agent by role, not the creating agent (#1352)
+      let assigneeId = ctx?.agentId || null;
+      const titleLower = title.toLowerCase();
+      const descLower = (description || '').toLowerCase();
+      const taskText = `${titleLower} ${descLower}`;
+
+      // Role matching keywords
+      const roleKeywords: Record<string, string[]> = {
+        developer:  ['build', 'compile', 'code', 'implement', 'fix', 'write', 'create', 'wire', 'connect', 'integrate', 'runtime', 'render', 'visual', 'loop', 'function'],
+        tester:     ['test', 'verify', 'validate', 'qa', 'coverage', 'assert', 'unit test', 'e2e', 'spec'],
+        architect:  ['architecture', 'design', 'structure', 'schema', 'interface', 'api', 'pattern'],
+        reviewer:   ['review', 'audit', 'check', 'inspect', 'quality'],
+        documentation_specialist: ['document', 'spec', 'readme', 'changelog', 'wiki', 'guide'],
+        operator:   ['deploy', 'ci', 'cd', 'pipeline', 'release', 'monitor'],
+      };
+
+      // Find best matching role
+      let bestRole: string | null = null;
+      let bestScore = 0;
+      for (const [role, keywords] of Object.entries(roleKeywords)) {
+        const score = keywords.filter(kw => taskText.includes(kw)).length;
+        if (score > bestScore) { bestScore = score; bestRole = role; }
+      }
+
+      // Find an available agent with that role in this building
+      if (bestRole && bestScore >= 1) {
+        const candidates = db.prepare(
+          `SELECT id FROM agents WHERE building_id = ? AND role = ? AND id != ? ORDER BY RANDOM() LIMIT 1`
+        ).get(buildingId, bestRole, ctx?.agentId || '') as { id: string } | undefined;
+        if (candidates) {
+          assigneeId = candidates.id;
+        }
+      }
+
       const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       db.prepare(`
         INSERT INTO tasks (id, building_id, title, description, priority, phase, status, assignee_id, milestone_id)
         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-      `).run(id, buildingId, title, description, priority, phase, ctx?.agentId || null, milestoneId);
+      `).run(id, buildingId, title, description, priority, phase, assigneeId, milestoneId);
+
+      const assigneeName = assigneeId && assigneeId !== ctx?.agentId
+        ? (db.prepare('SELECT display_name FROM agents WHERE id = ?').get(assigneeId) as { display_name?: string } | undefined)?.display_name || 'agent'
+        : null;
 
       return {
-        output: `Task created: "${title}" (${priority} priority)${phase ? ` for ${phase} phase` : ''}${milestoneId ? ` [linked to milestone]` : ''}`,
+        output: `Task created: "${title}" (${priority} priority)${phase ? ` for ${phase} phase` : ''}${milestoneId ? ` [linked to milestone]` : ''}${assigneeName ? ` [assigned to ${assigneeName}]` : ''}`,
         taskId: id,
       };
     },
