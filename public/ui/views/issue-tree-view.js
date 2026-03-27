@@ -239,8 +239,151 @@ export class IssueTreeView extends Component {
 
   _onGraphNodeClick(nodeData) {
     if (!nodeData || !this._treeGraph) return;
-    // Center the graph on the clicked node
     this._treeGraph.centerOnNode(nodeData.id);
+    this._showNodeDetail(nodeData);
+  }
+
+  _showNodeDetail(node) {
+    // Remove existing panel
+    const existing = this.el.querySelector('.issue-tree-detail-panel');
+    if (existing) existing.remove();
+
+    const statusCfg = STATUS_CONFIG[node.status] || STATUS_CONFIG.pending;
+    const typeCfg = TYPE_ICONS[node.type] || TYPE_ICONS.task;
+    const priorityCfg = PRIORITY_CONFIG[node.priority] || {};
+    const progress = this._computeProgress(node);
+
+    // Find parent and siblings
+    const parent = this._findParentOf(node.id, this._tree);
+    const siblings = parent?.children?.filter(c => c.id !== node.id) || [];
+
+    const panel = h('div', { class: 'issue-tree-detail-panel' });
+
+    // Close button
+    const closeBtn = h('button', {
+      class: 'issue-tree-detail-close',
+      'aria-label': 'Close detail panel',
+    }, '\u2715');
+    closeBtn.addEventListener('click', () => panel.remove());
+    panel.appendChild(closeBtn);
+
+    // Header
+    panel.appendChild(h('div', { class: 'issue-tree-detail-header' },
+      h('span', { class: 'issue-tree-detail-type' }, typeCfg),
+      h('span', {
+        class: 'issue-tree-detail-status',
+        style: { color: statusCfg.color },
+      }, statusCfg.label),
+    ));
+
+    // Title
+    panel.appendChild(h('h3', { class: 'issue-tree-detail-title' }, node.title));
+
+    // Meta badges
+    const meta = h('div', { class: 'issue-tree-detail-meta' });
+    if (node.priority && node.priority !== 'normal') {
+      meta.appendChild(h('span', {
+        class: 'issue-tree-detail-badge',
+        style: { borderColor: priorityCfg.color || 'var(--text-muted)', color: priorityCfg.color || 'var(--text-muted)' },
+      }, node.priority.toUpperCase()));
+    }
+    if (node.assignee) {
+      meta.appendChild(h('span', { class: 'issue-tree-detail-badge' }, node.assignee));
+    }
+    meta.appendChild(h('span', { class: 'issue-tree-detail-badge' }, node.type));
+    panel.appendChild(meta);
+
+    // Progress
+    if (node.children && node.children.length > 0) {
+      const done = node.children.filter(c => c.status === 'done').length;
+      const total = node.children.length;
+      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+      const progressSection = h('div', { class: 'issue-tree-detail-progress' },
+        h('div', { class: 'issue-tree-detail-progress-label' }, `${done}/${total} children done (${pct}%)`),
+        h('div', { class: 'issue-tree-detail-progress-bar' },
+          h('div', { class: 'issue-tree-detail-progress-fill', style: { width: `${pct}%` } }),
+        ),
+      );
+      panel.appendChild(progressSection);
+    }
+
+    // Connections section
+    const connections = h('div', { class: 'issue-tree-detail-connections' });
+    connections.appendChild(h('div', { class: 'issue-tree-detail-section-title' }, 'Connections'));
+
+    // Parent
+    if (parent && parent.id !== '__vroot__') {
+      const parentRow = h('div', { class: 'issue-tree-detail-conn-row' },
+        h('span', { class: 'issue-tree-detail-conn-type', style: { color: 'var(--accent-purple)' } }, '\u2191 Parent'),
+        h('span', { class: 'issue-tree-detail-conn-name' }, parent.title),
+      );
+      parentRow.style.cursor = 'pointer';
+      parentRow.addEventListener('click', () => {
+        this._treeGraph?.centerOnNode(parent.id);
+        this._showNodeDetail(parent);
+      });
+      connections.appendChild(parentRow);
+    }
+
+    // Children
+    if (node.children && node.children.length > 0) {
+      connections.appendChild(h('div', { class: 'issue-tree-detail-conn-label' },
+        `\u2193 ${node.children.length} ${node.children.length === 1 ? 'child' : 'children'}`));
+      for (const child of node.children.slice(0, 10)) {
+        const childStatusCfg = STATUS_CONFIG[child.status] || STATUS_CONFIG.pending;
+        const row = h('div', { class: 'issue-tree-detail-conn-row' },
+          h('span', { style: { color: childStatusCfg.color } }, childStatusCfg.char),
+          h('span', { class: 'issue-tree-detail-conn-name' }, child.title),
+        );
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', () => {
+          this._treeGraph?.centerOnNode(child.id);
+          this._showNodeDetail(child);
+        });
+        connections.appendChild(row);
+      }
+      if (node.children.length > 10) {
+        connections.appendChild(h('div', { class: 'issue-tree-detail-conn-more' }, `+${node.children.length - 10} more`));
+      }
+    }
+
+    // Siblings
+    if (siblings.length > 0) {
+      connections.appendChild(h('div', { class: 'issue-tree-detail-conn-label' },
+        `\u2194 ${siblings.length} ${siblings.length === 1 ? 'sibling' : 'siblings'}`));
+      for (const sib of siblings.slice(0, 5)) {
+        const sibStatusCfg = STATUS_CONFIG[sib.status] || STATUS_CONFIG.pending;
+        const row = h('div', { class: 'issue-tree-detail-conn-row' },
+          h('span', { style: { color: sibStatusCfg.color } }, sibStatusCfg.char),
+          h('span', { class: 'issue-tree-detail-conn-name' }, sib.title),
+        );
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', () => {
+          this._treeGraph?.centerOnNode(sib.id);
+          this._showNodeDetail(sib);
+        });
+        connections.appendChild(row);
+      }
+      if (siblings.length > 5) {
+        connections.appendChild(h('div', { class: 'issue-tree-detail-conn-more' }, `+${siblings.length - 5} more`));
+      }
+    }
+
+    panel.appendChild(connections);
+    this.el.appendChild(panel);
+  }
+
+  _findParentOf(nodeId, nodes, parent = null) {
+    if (!nodes) return null;
+    for (const node of nodes) {
+      if (node.id === nodeId) return parent;
+      if (node.children) {
+        const found = this._findParentOf(nodeId, node.children, node);
+        if (found) return found;
+      }
+    }
+    return null;
   }
 
   _destroyTreeGraph() {

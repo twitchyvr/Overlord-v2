@@ -1183,3 +1183,168 @@
     animation: none;
   }
 }
+
+/* ── Node Detail Panel ── */
+
+.issue-tree-detail-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 340px;
+  height: 100%;
+  background: var(--bg-elevated, #1e293b);
+  border-left: 1px solid var(--border-primary, rgba(255,255,255,0.08));
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  overflow-y: auto;
+  padding: var(--sp-4, 1rem);
+  animation: issue-tree-slide-in-right 0.2s ease-out;
+}
+
+@keyframes issue-tree-slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+.issue-tree-detail-close {
+  position: absolute;
+  top: var(--sp-2, 0.5rem);
+  right: var(--sp-2, 0.5rem);
+  background: none;
+  border: none;
+  color: var(--text-muted, #64748b);
+  font-size: 18px;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm, 4px);
+}
+.issue-tree-detail-close:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.04));
+  color: var(--text-primary, #e2e8f0);
+}
+
+.issue-tree-detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2, 0.5rem);
+  margin-bottom: var(--sp-2, 0.5rem);
+}
+
+.issue-tree-detail-type {
+  font-size: 1.25rem;
+}
+
+.issue-tree-detail-status {
+  font-size: var(--text-sm, 0.8125rem);
+  font-weight: var(--font-semibold, 600);
+}
+
+.issue-tree-detail-title {
+  font-size: var(--text-lg, 1rem);
+  font-weight: var(--font-bold, 700);
+  color: var(--text-primary, #e2e8f0);
+  margin: 0 0 var(--sp-3, 0.75rem);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.issue-tree-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1, 0.25rem);
+  margin-bottom: var(--sp-4, 1rem);
+}
+
+.issue-tree-detail-badge {
+  font-size: var(--text-xs, 0.75rem);
+  padding: 2px 8px;
+  border: 1px solid var(--border-primary, rgba(255,255,255,0.08));
+  border-radius: var(--radius-full, 9999px);
+  color: var(--text-secondary, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.issue-tree-detail-progress {
+  margin-bottom: var(--sp-4, 1rem);
+}
+
+.issue-tree-detail-progress-label {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-muted, #64748b);
+  margin-bottom: var(--sp-1, 0.25rem);
+}
+
+.issue-tree-detail-progress-bar {
+  height: 6px;
+  background: var(--bg-tertiary, #1a2332);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.issue-tree-detail-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-green, #4ade80), var(--accent-cyan, #22d3ee));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.issue-tree-detail-connections {
+  margin-top: var(--sp-4, 1rem);
+}
+
+.issue-tree-detail-section-title {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: var(--font-semibold, 600);
+  color: var(--text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: var(--sp-2, 0.5rem);
+  padding-bottom: var(--sp-1, 0.25rem);
+  border-bottom: 1px solid var(--border-primary, rgba(255,255,255,0.08));
+}
+
+.issue-tree-detail-conn-label {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-muted, #64748b);
+  margin-top: var(--sp-3, 0.75rem);
+  margin-bottom: var(--sp-1, 0.25rem);
+}
+
+.issue-tree-detail-conn-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2, 0.5rem);
+  padding: var(--sp-1, 0.25rem) var(--sp-2, 0.5rem);
+  border-radius: var(--radius-sm, 4px);
+  transition: background 0.15s;
+}
+
+.issue-tree-detail-conn-row:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.04));
+}
+
+.issue-tree-detail-conn-type {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: var(--font-semibold, 600);
+  white-space: nowrap;
+}
+
+.issue-tree-detail-conn-name {
+  font-size: var(--text-sm, 0.8125rem);
+  color: var(--text-primary, #e2e8f0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issue-tree-detail-conn-more {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-muted, #64748b);
+  padding: var(--sp-1, 0.25rem) var(--sp-2, 0.5rem);
+  font-style: italic;
+}
