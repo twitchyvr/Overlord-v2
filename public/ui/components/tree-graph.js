@@ -388,8 +388,50 @@ export class TreeGraph {
     svg.style.cssText = 'cursor:grab;display:block;';
     this._svg = svg;
 
-    // Defs for reusable elements
+    // Defs for reusable elements (filters, animations)
     const defs = document.createElementNS(this._svgNS, 'defs');
+
+    // Glow filter for in-progress nodes
+    const glowFilter = document.createElementNS(this._svgNS, 'filter');
+    glowFilter.setAttribute('id', 'active-glow');
+    glowFilter.setAttribute('x', '-30%');
+    glowFilter.setAttribute('y', '-30%');
+    glowFilter.setAttribute('width', '160%');
+    glowFilter.setAttribute('height', '160%');
+    const blur = document.createElementNS(this._svgNS, 'feGaussianBlur');
+    blur.setAttribute('stdDeviation', '4');
+    blur.setAttribute('result', 'glow');
+    glowFilter.appendChild(blur);
+    const merge = document.createElementNS(this._svgNS, 'feMerge');
+    const mergeGlow = document.createElementNS(this._svgNS, 'feMergeNode');
+    mergeGlow.setAttribute('in', 'glow');
+    merge.appendChild(mergeGlow);
+    const mergeOrig = document.createElementNS(this._svgNS, 'feMergeNode');
+    mergeOrig.setAttribute('in', 'SourceGraphic');
+    merge.appendChild(mergeOrig);
+    glowFilter.appendChild(merge);
+    defs.appendChild(glowFilter);
+
+    // Aurora glow animation style
+    const style = document.createElementNS(this._svgNS, 'style');
+    style.textContent = `
+      @keyframes aurora-pulse {
+        0%   { filter: url(#active-glow); opacity: 1; }
+        50%  { filter: url(#active-glow); opacity: 0.85; }
+        100% { filter: url(#active-glow); opacity: 1; }
+      }
+      .tree-node-active {
+        animation: aurora-pulse 2s ease-in-out infinite;
+        filter: url(#active-glow);
+      }
+      .tree-node-active rect:first-child {
+        stroke: #38bdf8;
+        stroke-width: 1.5;
+      }
+      .tree-node-done { opacity: 0.55; }
+    `;
+    defs.appendChild(style);
+
     svg.appendChild(defs);
 
     // Main transform group
@@ -522,6 +564,9 @@ export class TreeGraph {
     g.setAttribute('transform', `translate(${node.x}, ${node.y})`);
     g.setAttribute('data-node-id', node.id);
     g.style.cursor = 'pointer';
+    // Status-based visual effects
+    if (node.status === 'in-progress') g.setAttribute('class', 'tree-node-active');
+    else if (node.status === 'done') g.setAttribute('class', 'tree-node-done');
 
     const statusColor = STATUS_COLORS[node.status] || STATUS_COLORS.pending;
     const typeColor = TYPE_COLORS[node.type] || TYPE_COLORS.task;
