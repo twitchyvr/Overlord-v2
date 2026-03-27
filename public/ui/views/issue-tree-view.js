@@ -482,11 +482,15 @@ export class IssueTreeView extends Component {
       ? childTasks.map(c => this._taskToNode(c, depth + 1))
       : [];
 
+    // Normalize status: in_progress → in-progress for consistent rendering
+    let status = task.status || 'pending';
+    if (status === 'in_progress') status = 'in-progress';
+
     return {
       id: task.id,
       title: task.title,
       type: this._inferType(task),
-      status: task.status || 'pending',
+      status,
       priority: task.priority || 'normal',
       assignee: task.assignee_name || task.assignee_id || null,
       children,
@@ -632,9 +636,10 @@ export class IssueTreeView extends Component {
   _computeStats() {
     let done = 0, inProgress = 0, pending = 0, blocked = 0;
     for (const t of this._tasks) {
-      if (t.status === 'done') done++;
-      else if (t.status === 'in-progress') inProgress++;
-      else if (t.status === 'blocked') blocked++;
+      const s = t.status === 'in_progress' ? 'in-progress' : (t.status || 'pending');
+      if (s === 'done') done++;
+      else if (s === 'in-progress') inProgress++;
+      else if (s === 'blocked') blocked++;
       else pending++;
     }
     return { done, inProgress, pending, blocked, total: this._tasks.length };
