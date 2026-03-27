@@ -845,11 +845,13 @@ export class DashboardView extends Component {
     const section = h('div', { class: 'dashboard-section', id: 'recent-activity' });
     section.appendChild(h('h3', { class: 'dashboard-section-title' }, 'Recent Activity'));
 
-    // Deduplicate consecutive same-agent same-event entries (#1337)
+    // Deduplicate consecutive same-agent same-event entries (#1337, #1368)
+    // Normalize event names: tool_executed == tool:executed, ai_request == ai:request
+    const normalizeEvent = (e) => (e || '').replace(/_/g, ':');
     const deduped = [];
     for (const item of this._activityItems) {
       const prev = deduped[deduped.length - 1];
-      if (prev && prev.agentId === item.agentId && prev.event === item.event) {
+      if (prev && prev.agentId === item.agentId && normalizeEvent(prev.event) === normalizeEvent(item.event)) {
         // Skip consecutive duplicate — increment count instead
         prev._count = (prev._count || 1) + 1;
         continue;
