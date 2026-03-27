@@ -180,10 +180,13 @@ export class DashboardView extends Component {
 
     const phase = b.activePhase || b.active_phase || 'strategy';
     const taskTotal = b.taskCount ?? 0;
-    const taskActive = b.activeTaskCount ?? 0;
-    const taskDone = taskTotal - taskActive;
-    const agentTotal = b.totalAgentCount ?? b.agentCount ?? 0;
-    const activeAgents = b.activeAgentCount ?? 0;
+    // Use actual agent-reported done count, not metadata subtraction (#1340, #1343)
+    const store = OverlordUI.getStore();
+    const tasks = store?.get('tasks.list') || [];
+    const taskDone = tasks.filter(t => t.status === 'done').length || (taskTotal - (b.activeTaskCount ?? 0));
+    // Use live agent data, not stale building metadata (#1340)
+    const agentTotal = b.totalAgentCount ?? b.agentCount ?? this._agents.length ?? 0;
+    const activeAgents = this._agents.filter(a => a.status === 'active' || a.status === 'working').length;
     const health = b.healthScore?.total ?? null;
     const state = b.executionState || b.execution_state || 'stopped';
     const risks = this._raidEntries.filter(r => r.type === 'risk' && r.status === 'active').length;
@@ -224,8 +227,14 @@ export class DashboardView extends Component {
     if (risks > 0) sentences.push(`${risks} active ${risks === 1 ? 'risk' : 'risks'} identified.`);
     if (issues > 0) sentences.push(`${issues} open ${issues === 1 ? 'issue' : 'issues'} to resolve.`);
 
+    // Closing sentence matches the status — don't say "on track" if status is Watch Closely (#1341)
     if (risks === 0 && issues === 0 && taskTotal > 0) {
-      sentences.push('No blockers \u2014 everything is on track.');
+      if (statusLabel === 'On Track') {
+        sentences.push('No blockers \u2014 everything is on track.');
+      } else if (statusLabel === 'Watch Closely') {
+        const pct = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 100) : 0;
+        sentences.push(pct < 50 ? 'Task completion is low \u2014 may need more agents assigned.' : 'Progress is steady but health score suggests room for improvement.');
+      }
     }
 
     const card = h('div', { class: 'health-summary-card glass-card' },
