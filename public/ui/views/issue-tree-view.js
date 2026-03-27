@@ -449,16 +449,24 @@ export class IssueTreeView extends Component {
 
     const nodes = [];
 
-    // Milestone nodes
+    // Milestone nodes — derive status from children (#1376)
     for (const ms of this._milestones) {
       const tasks = milestoneGroups.get(ms.id) || [];
+      const children = tasks.map(t => this._taskToNode(t, 0));
+      // Milestone status: done if all children done, in-progress if any active, pending otherwise
+      let msStatus = 'pending';
+      if (ms.status === 'completed') {
+        msStatus = 'done';
+      } else if (children.some(c => c.status === 'in-progress' || c.status === 'done')) {
+        msStatus = 'in-progress';
+      }
       nodes.push({
         id: `ms_${ms.id}`,
         title: ms.title,
         type: 'epic',
-        status: ms.status === 'completed' ? 'done' : 'pending',
+        status: msStatus,
         priority: 'high',
-        children: tasks.map(t => this._taskToNode(t, 0)),
+        children,
         assignee: null,
       });
     }
