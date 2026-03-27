@@ -525,8 +525,9 @@ export class ChatView extends Component {
       );
       entry.appendChild(title);
 
-      // Table type badge + agent count + message count (#1296)
-      const agentCount = table.agent_count || 0;
+      // Table type badge + agent names + message count (#1296, #1388)
+      const agents = table.agents || [];
+      const agentCount = agents.length || table.agent_count || 0;
       const msgCount = table.message_count || 0;
       const metaParts = [
         table.type || 'table',
@@ -539,6 +540,15 @@ export class ChatView extends Component {
         h('span', { class: 'chat-table-type-badge' }, metaParts.join(' · ')),
       );
       entry.appendChild(meta);
+
+      // Show seated agent names (#1388)
+      if (agents.length > 0) {
+        const agentNames = agents.map(a => a.name).join(', ');
+        const agentLine = h('div', { class: 'chat-table-entry-agents', style: 'font-size: 0.75rem; color: var(--text-muted); padding-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' },
+          `\u{1F464} ${agentNames}`
+        );
+        entry.appendChild(agentLine);
+      }
 
       // Last message preview
       if (table.last_message) {
@@ -764,17 +774,33 @@ export class ChatView extends Component {
     );
     contentWrap.appendChild(meta);
 
-    // Recipient badges for multicast/direct messages (#585)
+    // Recipient badges for directed or broadcast messages (#585, #1388)
     if (msg.recipients && msg.recipients.length > 0 && msg.messageMode !== 'broadcast') {
-      const recipientRow = h('div', { class: 'chat-message-recipients' },
-        h('span', { class: 'chat-recipient-arrow' }, '\u2192'),
+      // Directed message — show @mentions
+      const recipientRow = h('div', { class: 'chat-message-recipients', style: 'display: flex; align-items: center; gap: 4px; font-size: 0.75rem; margin-top: 2px;' },
+        h('span', { style: 'color: var(--text-muted);' }, '\u2192'),
       );
       for (const rid of msg.recipients) {
         const rAgent = resolveAgent(rid);
         const rName = rAgent?.name || rid;
-        recipientRow.appendChild(h('span', { class: 'chat-recipient-badge' }, `@${rName}`));
+        recipientRow.appendChild(h('span', {
+          style: 'background: var(--accent-light, #e0f0ff); color: var(--accent, #0088cc); padding: 1px 6px; border-radius: 10px; font-size: 0.7rem;'
+        }, `@${rName}`));
       }
       contentWrap.appendChild(recipientRow);
+    } else if (role === 'user') {
+      // Broadcast user message — show subtle "to table" indicator
+      const store = OverlordUI.getStore();
+      const activeTableId = store?.get('tables.activeChat');
+      const chatList = store?.get('tables.chatList') || [];
+      const activeTable = activeTableId ? chatList.find(t => t.id === activeTableId) : null;
+      const tableAgents = activeTable?.agents || [];
+      if (tableAgents.length > 0) {
+        const names = tableAgents.map(a => a.name).join(', ');
+        contentWrap.appendChild(h('div', {
+          style: 'font-size: 0.7rem; color: var(--text-muted); margin-top: 1px;'
+        }, `\u2192 to table (${names})`));
+      }
     }
 
     // Message content — handle both string and array-of-blocks formats (#532)
@@ -1636,37 +1662,58 @@ export class ChatView extends Component {
       indicator.hidden = true;
     }
 
-    // Show agents in the current room (#510)
+    // Show agents at the table or in the room (#510, #1388)
     if (agentsEl) {
-      if (activeRoomId) {
-        const allAgents = store?.get('agents.list') || [];
-        const roomAgents = allAgents.filter(a => a.current_room_id === activeRoomId);
-        if (roomAgents.length > 0) {
-          // Agent names are clickable with activity badges (#979, #1176)
-          agentsEl.textContent = '';
-          const activities = store?.get('agents.activities') || {};
-          roomAgents.forEach((a, i) => {
-            if (i > 0) agentsEl.appendChild(document.createTextNode(' '));
-            const nameEl = EntityLink.agent(a.id, a.display_name || a.name || 'Agent');
-            agentsEl.appendChild(nameEl);
-            // Show activity badge if agent is actively working
-            const activity = activities[a.id];
-            if (activity && (Date.now() - activity.timestamp) < 60000) {
-              const BADGES = { thinking: '\u{1F9E0}', coding: '\u{1F4BB}', reading: '\u{1F4D6}', running: '\u26A1', searching: '\u{1F50D}', testing: '\u{1F9EA}', planning: '\u{1F4CB}', working: '\u2699\uFE0F' };
-              const emoji = BADGES[activity.activity] || '\u2699\uFE0F';
-              const badge = h('span', {
-                class: 'agent-activity-indicator',
-                title: `${activity.activity}${activity.toolName ? ': ' + activity.toolName : ''}`,
-              }, h('span', { class: 'activity-emoji' }, emoji));
-              agentsEl.appendChild(badge);
-            }
+      const activeTableId = store?.get('tables.activeChat');
+      const chatList = store?.get('tables.chatList') || [];
+      const activeTable = activeTableId ? chatList.find(t => t.id === activeTableId) : null;
+      const allAgents = store?.get('agents.list') || [];
+
+      // Prefer table-seated agents, fall back to room agents
+      let seatedAgents = [];
+      if (activeTable?.agents?.length > 0) {
+        seatedAgents = activeTable.agents;
+      } else if (activeRoomId) {
+        seatedAgents = allAgents
+          .filter(a => a.current_room_id === activeRoomId)
+          .map(a => ({ id: a.id, name: a.display_name || a.name, status: a.status }));
+      }
+
+      if (seatedAgents.length > 0) {
+        agentsEl.textContent = '';
+        // "At this table:" label
+        const label = h('span', {
+          style: 'font-size: 0.75rem; color: var(--text-muted); margin-right: 6px;'
+        }, 'At this table:');
+        agentsEl.appendChild(label);
+
+        const activities = store?.get('agents.activities') || {};
+        seatedAgents.forEach((a, i) => {
+          if (i > 0) agentsEl.appendChild(document.createTextNode(', '));
+          // Status dot + name
+          const statusColors = { active: 'var(--status-active, #22c55e)', working: 'var(--status-active, #22c55e)', idle: 'var(--text-muted)', paused: 'var(--status-busy, #f59e0b)' };
+          const dot = h('span', {
+            style: `display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${statusColors[a.status] || statusColors.idle}; margin-right: 4px; vertical-align: middle;`
           });
-          agentsEl.title = `Agents in this room: ${roomAgents.map(a => a.display_name || a.name).join(', ')}`;
-          agentsEl.hidden = false;
-        } else {
-          agentsEl.textContent = '';
-          agentsEl.hidden = true;
-        }
+          agentsEl.appendChild(dot);
+          const nameEl = typeof EntityLink !== 'undefined' && EntityLink?.agent
+            ? EntityLink.agent(a.id, a.name || 'Agent')
+            : h('span', { style: 'font-size: 0.8rem;' }, a.name || 'Agent');
+          agentsEl.appendChild(nameEl);
+
+          // Activity badge
+          const activity = activities[a.id];
+          if (activity && (Date.now() - activity.timestamp) < 60000) {
+            const BADGES = { thinking: '\u{1F9E0}', coding: '\u{1F4BB}', reading: '\u{1F4D6}', running: '\u26A1', searching: '\u{1F50D}', testing: '\u{1F9EA}', planning: '\u{1F4CB}', working: '\u2699\uFE0F' };
+            const emoji = BADGES[activity.activity] || '\u2699\uFE0F';
+            agentsEl.appendChild(h('span', {
+              class: 'agent-activity-indicator',
+              title: `${activity.activity}${activity.toolName ? ': ' + activity.toolName : ''}`,
+            }, h('span', { class: 'activity-emoji' }, emoji)));
+          }
+        });
+        agentsEl.title = `At this table: ${seatedAgents.map(a => a.name).join(', ')}`;
+        agentsEl.hidden = false;
       } else {
         agentsEl.textContent = '';
         agentsEl.hidden = true;

@@ -1048,7 +1048,15 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
         ORDER BY last_message_at DESC NULLS LAST, t.created_at
       `).all(parsed.buildingId) as Array<Record<string, unknown>>;
 
-      if (ack) ack({ ok: true, data: tables });
+      // Enrich each table with the names of agents seated there (#1388)
+      const enriched = tables.map((table) => {
+        const seated = db.prepare(
+          `SELECT id, COALESCE(display_name, name) as name, status FROM agents WHERE current_table_id = ?`
+        ).all(table.id as string) as Array<{ id: string; name: string; status: string }>;
+        return { ...table, agents: seated };
+      });
+
+      if (ack) ack({ ok: true, data: enriched });
     });
 
     // ─── Table Context Events (Fleet Coordination) ───
