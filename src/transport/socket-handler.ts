@@ -4449,7 +4449,7 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
             phase,
             roomId,
             `Phase ${phaseName} completed \u2014 exit document submitted`,
-            `${agentName} completed ${exitDocType || phase} phase. Deliverables captured in exit document.`,
+            `${agentName} completed ${phaseName} phase. Deliverables captured in exit document.`,
             agentId,
             JSON.stringify([exitDocType || phase]),
           );
