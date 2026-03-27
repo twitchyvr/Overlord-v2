@@ -845,7 +845,19 @@ export class DashboardView extends Component {
     const section = h('div', { class: 'dashboard-section', id: 'recent-activity' });
     section.appendChild(h('h3', { class: 'dashboard-section-title' }, 'Recent Activity'));
 
-    const recent = this._activityItems.slice(0, 6);
+    // Deduplicate consecutive same-agent same-event entries (#1337)
+    const deduped = [];
+    for (const item of this._activityItems) {
+      const prev = deduped[deduped.length - 1];
+      if (prev && prev.agentId === item.agentId && prev.event === item.event) {
+        // Skip consecutive duplicate — increment count instead
+        prev._count = (prev._count || 1) + 1;
+        continue;
+      }
+      deduped.push({ ...item, _count: 1 });
+      if (deduped.length >= 8) break;
+    }
+    const recent = deduped.slice(0, 6);
     if (recent.length === 0) {
       section.appendChild(h('p', { class: 'dashboard-empty' }, 'No activity yet. Start a project to see agent activity here.'));
       return section;
@@ -894,11 +906,15 @@ export class DashboardView extends Component {
       };
       let summary = EVENT_LABELS[item.event] || item.event?.replace(/[_:]/g, ' ') || 'Activity';
       if ((item.event === 'tool:executed' || item.event === 'tool_executed') && item.toolName) {
-        summary = item.toolName.replace(/_/g, ' ');
+        summary = _humanToolName(item.toolName);
       } else if (item.event === 'dev-loop:stage-transition') {
         summary = `${item.from || '?'} \u2192 ${item.to || '?'}`;
       } else if (item.event === 'phase:gate:signed-off' && item.verdict) {
         summary = `Gate: ${item.verdict}`;
+      }
+      // Append count if grouped consecutive events (#1337)
+      if (item._count > 1) {
+        summary = `${summary} (\u00D7${item._count})`;
       }
 
       // Resolve agent name from ID (#1247)
