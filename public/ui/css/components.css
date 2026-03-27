@@ -5272,7 +5272,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 160px;
+  max-width: 180px;
+  direction: ltr; /* ensure ellipsis on right, not left (#1334, #1342) */
+  text-align: left;
 }
 .project-switcher-caret {
   font-size: 0.6rem;
