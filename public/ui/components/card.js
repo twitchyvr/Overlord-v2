@@ -382,7 +382,8 @@ export class Card {
       stats.appendChild(h('span', { class: 'building-stat' }, `${data.floorCount} ${data.floorCount === 1 ? 'floor' : 'floors'}`));
     }
     if (data.totalAgentCount > 0) {
-      const activeCount = data.agentCount || 0;
+      // Use activeAgentCount (status=active) not agentCount (in-room JOIN) (#1335)
+      const activeCount = data.activeAgentCount || 0;
       const totalCount = data.totalAgentCount;
       stats.appendChild(h('span', { class: 'building-stat' },
         activeCount > 0 ? `${activeCount} active / ${totalCount} agents` : `${totalCount} agents`
