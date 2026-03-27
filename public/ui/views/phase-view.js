@@ -151,6 +151,9 @@ export class PhaseView extends Component {
     // Gate cards for the current phase
     this.el.appendChild(this._renderGateCards());
 
+    // Phase analytics — quality metrics for the current phase (#1194)
+    this.el.appendChild(this._renderPhaseAnalytics());
+
     // Phase history (collapsible)
     this.el.appendChild(this._renderPhaseHistory());
   }
@@ -626,6 +629,75 @@ export class PhaseView extends Component {
     form.appendChild(actionsRow);
 
     return form;
+  }
+
+  /* ── Phase Analytics (#1194) ── */
+
+  _renderPhaseAnalytics() {
+    const section = h('div', { class: 'phase-view-analytics' });
+    section.appendChild(h('h3', { class: 'phase-view-section-title' }, 'Phase Analytics'));
+
+    const store = OverlordUI.getStore();
+    const tasks = store?.get('tasks.list') || [];
+    const raidEntries = store?.get('raid.entries') || [];
+    const agents = store?.get('agents.list') || [];
+
+    // Filter tasks for current phase
+    const phaseTasks = tasks.filter(t => t.phase === this._currentPhase);
+    const totalTasks = phaseTasks.length;
+    const doneTasks = phaseTasks.filter(t => t.status === 'done').length;
+    const inProgressTasks = phaseTasks.filter(t => t.status === 'in-progress').length;
+    const blockedTasks = phaseTasks.filter(t => t.status === 'blocked').length;
+    const taskPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+    // RAID stats for this phase
+    const phaseRaid = raidEntries.filter(r => r.phase === this._currentPhase);
+    const activeRisks = phaseRaid.filter(r => r.type === 'risk' && r.status === 'active').length;
+    const activeIssues = phaseRaid.filter(r => r.type === 'issue' && r.status === 'active').length;
+    const decisions = phaseRaid.filter(r => r.type === 'decision').length;
+
+    // Gate attempt count
+    const phaseGates = this._gates.filter(g => g.phase === this._currentPhase);
+    const gateAttempts = phaseGates.length;
+    const goGates = phaseGates.filter(g => (g.signoffs || []).some(s => s.verdict === 'GO')).length;
+
+    // Active agents in this phase
+    const activeAgents = agents.filter(a => a.status === 'active').length;
+
+    // Metrics grid
+    const grid = h('div', { class: 'phase-analytics-grid' });
+
+    const addMetric = (label, value, color, detail) => {
+      const card = h('div', { class: 'phase-analytics-metric glass-card' },
+        h('div', { class: 'phase-analytics-value', style: { color } }, String(value)),
+        h('div', { class: 'phase-analytics-label' }, label),
+        detail ? h('div', { class: 'phase-analytics-detail' }, detail) : null,
+      );
+      grid.appendChild(card);
+    };
+
+    addMetric('Task Completion', `${taskPct}%`, 'var(--accent-green)', `${doneTasks} of ${totalTasks} done`);
+    addMetric('In Progress', String(inProgressTasks), 'var(--accent-blue)', totalTasks > 0 ? `${Math.round((inProgressTasks / totalTasks) * 100)}% of tasks` : 'No tasks');
+    addMetric('Blocked', String(blockedTasks), blockedTasks > 0 ? 'var(--accent-red, #ef4444)' : 'var(--text-muted)', blockedTasks > 0 ? 'Needs attention' : 'None blocked');
+    addMetric('Active Risks', String(activeRisks), activeRisks > 0 ? 'var(--accent-orange, #fb923c)' : 'var(--text-muted)', `${activeIssues} open issues`);
+    addMetric('Decisions', String(decisions), 'var(--accent-purple)', 'RAID decisions logged');
+    addMetric('Gate Reviews', String(gateAttempts), goGates > 0 ? 'var(--accent-green)' : 'var(--text-muted)', goGates > 0 ? `${goGates} approved` : 'No sign-offs yet');
+
+    section.appendChild(grid);
+
+    // Task completion bar
+    if (totalTasks > 0) {
+      const bar = h('div', { class: 'phase-analytics-bar' },
+        h('div', { class: 'phase-analytics-bar-label' }, `Task Progress: ${doneTasks}/${totalTasks} (${taskPct}%)`),
+        h('div', { class: 'phase-analytics-bar-track' },
+          h('div', { class: 'phase-analytics-bar-done', style: { width: `${taskPct}%` } }),
+          inProgressTasks > 0 ? h('div', { class: 'phase-analytics-bar-progress', style: { width: `${Math.round((inProgressTasks / totalTasks) * 100)}%` } }) : null,
+        ),
+      );
+      section.appendChild(bar);
+    }
+
+    return section;
   }
 
   /* ── Phase History (collapsible completed phases) ── */
