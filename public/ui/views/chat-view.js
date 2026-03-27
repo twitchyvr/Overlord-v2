@@ -232,7 +232,7 @@ export class ChatView extends Component {
         window.overlordSocket.fetchTableChatList(newBuildingId);
       }
     });
-    // Initial fetch — retry once if empty (selectBuilding may still be in flight)
+    // Initial fetch — single fetch with retry if empty (#1381: reduce redundant calls)
     const activeBuildingId = store.get('building.active');
     if (activeBuildingId && window.overlordSocket?.fetchTableChatList) {
       window.overlordSocket.fetchTableChatList(activeBuildingId).then((res) => {
@@ -245,13 +245,6 @@ export class ChatView extends Component {
         }
       });
     }
-    // Also subscribe to building.data which fires AFTER selectBuilding completes
-    this.subscribe(store, 'building.data', () => {
-      const bid = store.get('building.active');
-      if (bid && window.overlordSocket?.fetchTableChatList) {
-        window.overlordSocket.fetchTableChatList(bid);
-      }
-    });
   }
 
   _render() {
@@ -498,13 +491,21 @@ export class ChatView extends Component {
     const rawTables = store?.get('tables.chatList') || [];
     const activeTableId = store?.get('tables.activeChat') || null;
 
-    if (rawTables.length === 0) {
+    // Deduplicate by table ID — race condition can cause duplicate entries (#1381)
+    const seen = new Set();
+    const dedupedTables = rawTables.filter((t) => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+
+    if (dedupedTables.length === 0) {
       listEl.appendChild(h('div', { class: 'chat-table-empty' }, 'No tables yet. Start a project to see conversations.'));
       return;
     }
 
     // Sort by most recent activity so active conversations appear first (#1347)
-    const tables = [...rawTables].sort((a, b) => (b.message_count || 0) - (a.message_count || 0));
+    const tables = [...dedupedTables].sort((a, b) => (b.message_count || 0) - (a.message_count || 0));
 
     // Auto-select the most active conversation if none is selected (#1347)
     if (!activeTableId && tables.length > 0 && tables[0].message_count > 0) {
