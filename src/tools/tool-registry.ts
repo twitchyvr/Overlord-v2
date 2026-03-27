@@ -1589,11 +1589,13 @@ function registerBuiltinTools(): void {
         };
       }
 
-      // Word-overlap dedup for milestones (#1291)
+      // Word-overlap dedup for milestones (#1291, #1371)
       const msStopWords = new Set(['the', 'and', 'for', 'with', 'are', 'this', 'that', 'from']);
       const msStem = (w: string) => w.replace(/(ing|tion|ment|ness|ence|ance|ible|able|ies|ous|ive|ful|ity|ise|ize|ify|ate|ure|ual|ory|ary|ery)$/i, '').replace(/(ed|ly|es|er|al|en|ic)$/i, '').replace(/s$/, '');
+      // Strip version prefixes (v0.1, v1.0, etc.) before comparing (#1371)
+      const msStripVersion = (t: string) => t.replace(/v\d+\.\d+\s*[-—–]?\s*/gi, '').trim();
       const msExtractWords = (t: string) => new Set(
-        t.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2 && !msStopWords.has(w)).map(msStem).filter(w => w.length > 2)
+        msStripVersion(t).toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2 && !msStopWords.has(w)).map(msStem).filter(w => w.length > 2)
       );
       const msNewWords = msExtractWords(title);
       if (msNewWords.size >= 2) {
