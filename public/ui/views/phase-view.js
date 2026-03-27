@@ -118,6 +118,10 @@ export class PhaseView extends Component {
     this._gates = store.get('phase.gates') || [];
     this._buildingId = store.get('building.active') || null;
     this._exitDocs = store.get('exitDocs.list') || [];
+    // Get effort level from building config (#1372)
+    const buildingData = store.get('building.data') || {};
+    const buildingConfig = typeof buildingData.config === 'string' ? JSON.parse(buildingData.config || '{}') : (buildingData.config || {});
+    this._effortLevel = buildingConfig.effortLevel || 'easy';
     this._fetchExitDocs();
 
     this._render();
@@ -265,11 +269,20 @@ export class PhaseView extends Component {
     );
     card.appendChild(headerRow);
 
+    // Effort level indicator (#1372)
+    if (this._effortLevel === 'easy') {
+      card.appendChild(
+        h('div', { class: 'phase-view-effort-badge', style: 'padding: 4px 10px; background: var(--accent-light, #e0f0ff); border-radius: 6px; font-size: 0.78rem; color: var(--accent, #0088cc); margin-bottom: 8px; display: inline-block;' },
+          '\u26A1 Easy mode \u2014 gates auto-approve when exit documents are submitted'
+        )
+      );
+    }
+
     // Gate summary bar
     const summaryRow = h('div', { class: 'phase-view-current-summary' });
     if (currentGates.length === 0) {
       summaryRow.appendChild(
-        h('span', { class: 'phase-view-current-summary-text' }, 'No gates defined for this phase.')
+        h('span', { class: 'phase-view-current-summary-text' }, 'No gates defined for this phase yet.')
       );
     } else {
       const goCount = currentGates.filter(g => g.status === 'go').length;
@@ -781,6 +794,7 @@ export class PhaseView extends Component {
             const statusCfg = GATE_STATUS_CONFIG[gate.status] || GATE_STATUS_CONFIG.pending;
             const signoffCount = (gate.signoffs || []).length;
 
+            const isAutoApproved = gate.signoff_reviewer === 'system-auto';
             gateList.appendChild(
               h('div', { class: 'phase-view-history-gate-row' },
                 h('span', {
@@ -791,9 +805,11 @@ export class PhaseView extends Component {
                   `${this._capitalize(gate.phase)} Gate`
                 ),
                 h('span', { class: 'phase-view-history-gate-verdict' }, statusCfg.label),
-                h('span', { class: 'phase-view-history-gate-signoffs' },
-                  `${signoffCount} sign-off${signoffCount !== 1 ? 's' : ''}`
-                ),
+                isAutoApproved
+                  ? h('span', { class: 'phase-view-history-gate-signoffs', style: 'color: var(--accent, #0088cc); font-style: italic;' }, 'Auto-approved')
+                  : h('span', { class: 'phase-view-history-gate-signoffs' },
+                      `${signoffCount} sign-off${signoffCount !== 1 ? 's' : ''}`
+                    ),
                 gate.created_at
                   ? h('span', { class: 'phase-view-history-gate-time' }, this._formatDate(gate.created_at))
                   : null
