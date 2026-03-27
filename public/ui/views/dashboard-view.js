@@ -905,8 +905,10 @@ export class DashboardView extends Component {
         'building:stopped': 'Project stopped',
       };
       let summary = EVENT_LABELS[item.event] || item.event?.replace(/[_:]/g, ' ') || 'Activity';
-      if ((item.event === 'tool:executed' || item.event === 'tool_executed') && item.toolName) {
-        summary = _humanToolName(item.toolName);
+      // DB stores 'tool', real-time socket sends 'toolName' — check both (#1365)
+      const toolName = item.toolName || item.tool;
+      if ((item.event === 'tool:executed' || item.event === 'tool_executed') && toolName) {
+        summary = _humanToolName(toolName);
       } else if (item.event === 'dev-loop:stage-transition') {
         summary = `${item.from || '?'} \u2192 ${item.to || '?'}`;
       } else if (item.event === 'phase:gate:signed-off' && item.verdict) {

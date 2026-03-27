@@ -685,21 +685,29 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
         ok: true,
         data: {
           isNewUser: buildings.length === 0,
-          buildings: buildings.map((b) => ({
-            id: b.id,
-            name: b.name,
-            activePhase: b.active_phase,
-            description: (b.config as Record<string, unknown>)?.description || '',
-            repoUrl: b.repo_url || '',
-            floorCount: floorMap.get(b.id) || 0,
-            roomCount: roomMap.get(b.id) || 0,
-            agentCount: agentMap.get(b.id) || 0,
-            totalAgentCount: totalAgentMap.get(b.id) || 0,
-            taskCount: taskMap.get(b.id)?.total || 0,
-            activeTaskCount: taskMap.get(b.id)?.active || 0,
-            healthScore: healthMap.get(b.id) || null,
-            executionState: (() => { const r = getBuildingExecState(b.id); return r.ok ? (r.data as { executionState: string }).executionState : 'stopped'; })(),
-          })),
+          buildings: buildings.map((b) => {
+            // Count agents with active/working status (#1366)
+            const activeCount = (db.prepare(
+              `SELECT COUNT(*) as cnt FROM agents WHERE building_id = ? AND (status = 'active' OR status = 'working')`
+            ).get(b.id) as { cnt: number })?.cnt || 0;
+
+            return {
+              id: b.id,
+              name: b.name,
+              activePhase: b.active_phase,
+              description: (b.config as Record<string, unknown>)?.description || '',
+              repoUrl: b.repo_url || '',
+              floorCount: floorMap.get(b.id) || 0,
+              roomCount: roomMap.get(b.id) || 0,
+              agentCount: agentMap.get(b.id) || 0,
+              totalAgentCount: totalAgentMap.get(b.id) || 0,
+              activeAgentCount: activeCount,
+              taskCount: taskMap.get(b.id)?.total || 0,
+              activeTaskCount: taskMap.get(b.id)?.active || 0,
+              healthScore: healthMap.get(b.id) || null,
+              executionState: (() => { const r = getBuildingExecState(b.id); return r.ok ? (r.data as { executionState: string }).executionState : 'stopped'; })(),
+            };
+          }),
         },
       });
     });
