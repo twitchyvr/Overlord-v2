@@ -183,8 +183,13 @@ export class ActivityView extends Component {
     const store = OverlordUI.getStore();
     if (!store) return;
 
-    // Seed from existing store data
-    this._items = (store.get('activity.items') || []).slice(-MAX_ITEMS);
+    // Seed from existing store data — filter by active building (#1394)
+    const allItems = store.get('activity.items') || [];
+    const activeBid = store.get('building.active');
+    this._items = (activeBid
+      ? allItems.filter(i => !i.buildingId || i.buildingId === activeBid)
+      : allItems
+    ).slice(-MAX_ITEMS);
     if (this._items.length > 0) this._loading = false;
 
     // No building selected — nothing to load, clear loading state
@@ -196,9 +201,13 @@ export class ActivityView extends Component {
       window.overlordSocket.fetchActivityHistory(buildingId);
     }
 
-    // Subscribe to bulk store updates
+    // Subscribe to bulk store updates — filter by active building (#1394)
     this.subscribe(store, 'activity.items', (items) => {
-      this._items = (items || []).slice(-MAX_ITEMS);
+      const activeBid = store.get('building.active');
+      const filtered = activeBid
+        ? (items || []).filter(i => !i.buildingId || i.buildingId === activeBid)
+        : (items || []);
+      this._items = filtered.slice(-MAX_ITEMS);
       this._loading = false;
       this._render();
     });
