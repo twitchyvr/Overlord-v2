@@ -16,7 +16,7 @@
 .chat-table-sidebar {
   width: 240px;
   min-width: 240px;
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-primary);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -26,7 +26,7 @@
   padding: var(--sp-3) var(--sp-3);
   font-weight: 600;
   font-size: 0.85rem;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-primary);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -38,7 +38,7 @@
 .chat-table-entry {
   padding: var(--sp-2) var(--sp-3);
   cursor: pointer;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-primary);
   transition: background 0.15s;
 }
 .chat-table-entry:hover {
