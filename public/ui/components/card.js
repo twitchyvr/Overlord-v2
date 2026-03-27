@@ -347,9 +347,20 @@ export class Card {
       const score = data.healthScore.total;
       const color = score >= 75 ? 'green' : score >= 50 ? 'yellow' : score >= 25 ? 'orange' : 'red';
       const advice = score >= 75 ? 'Great shape!' : score >= 50 ? 'Making progress' : score >= 25 ? 'Needs attention' : 'Just getting started';
+      // Find the weakest dimension to show as the reason (#1336)
+      const dims = [
+        { name: 'Low progress', val: data.healthScore.phaseProgress ?? 0 },
+        { name: 'Few tasks done', val: data.healthScore.taskCompletion ?? 0 },
+        { name: 'Risks untracked', val: data.healthScore.raidHealth ?? 0 },
+        { name: 'Low activity', val: data.healthScore.agentActivity ?? 0 },
+      ];
+      const weakest = dims.reduce((a, b) => a.val < b.val ? a : b);
+      const reason = score < 75 ? weakest.name : '';
+
       const badge = h('div', { class: `health-badge health-badge-${color}` },
         h('span', { class: 'health-badge-score' }, String(score)),
         h('span', { class: 'health-badge-label' }, advice),
+        reason ? h('span', { class: 'health-badge-reason' }, reason) : null,
       );
 
       // Tooltip with breakdown (#1241 — badge needs context without hover)
