@@ -2629,8 +2629,10 @@ Focus on being helpful to a non-technical project owner. Use plain language.`,
       let sql: string;
       const params: unknown[] = [];
       if (parsed.tableId) {
-        sql = 'SELECT * FROM messages WHERE table_id = ?';
-        params.push(parsed.tableId);
+        // Include table-scoped messages AND room-level messages (table_id IS NULL)
+        // from the same room — agent conversation loop messages don't get a table_id (#1345)
+        sql = `SELECT * FROM messages WHERE table_id = ? OR (room_id = (SELECT room_id FROM tables_v2 WHERE id = ?) AND table_id IS NULL)`;
+        params.push(parsed.tableId, parsed.tableId);
       } else if (parsed.roomId) {
         sql = 'SELECT * FROM messages WHERE room_id = ?';
         params.push(parsed.roomId);
