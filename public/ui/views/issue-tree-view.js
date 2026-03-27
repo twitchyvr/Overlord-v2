@@ -371,6 +371,26 @@ export class IssueTreeView extends Component {
     }
 
     panel.appendChild(connections);
+
+    // Quick actions — navigate to related Overlord views
+    const actions = h('div', { class: 'issue-tree-detail-actions' });
+    actions.appendChild(h('div', { class: 'issue-tree-detail-section-title' }, 'Quick Actions'));
+
+    const makeAction = (label, icon, handler) => {
+      const btn = h('button', { class: 'issue-tree-detail-action-btn' },
+        h('span', null, icon), h('span', null, label));
+      btn.addEventListener('click', handler);
+      return btn;
+    };
+
+    actions.appendChild(makeAction('View in Tasks', '\u{1F4CB}', () => OverlordUI.navigateTo('tasks')));
+    if (node.assignee) {
+      actions.appendChild(makeAction('View Agent', '\u{1F916}', () => OverlordUI.navigateTo('agents')));
+    }
+    actions.appendChild(makeAction('View Activity', '\u{23F2}', () => OverlordUI.navigateTo('activity')));
+    actions.appendChild(makeAction('View RAID Log', '\u26A0\uFE0F', () => OverlordUI.navigateTo('raid-log')));
+
+    panel.appendChild(actions);
     this.el.appendChild(panel);
   }
 
