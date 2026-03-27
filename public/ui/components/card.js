@@ -114,15 +114,9 @@ export class Card {
 
   /** @private */
   static _buildTask(card, data) {
-    const checkbox = h('input', {
-      type: 'checkbox',
-      class: 'task-checkbox task-row-checkbox',
-      'data-task-id': data.id,
-      'aria-label': `Select this task`,
-    });
-    if (data.completed) checkbox.checked = true;
+    // Note: task-view.js adds its own row checkbox for bulk selection (#1353)
+    // The card only renders the title/priority/ID — no duplicate checkbox
     const header = h('div', { class: 'card-header' },
-      checkbox,
       h('span', { class: 'task-title' }, data.title || 'Untitled Task'),
       data.priority ? h('span', { class: `task-priority priority-${data.priority}` }, data.priority) : null,
       data.id ? h('span', { class: 'task-id', title: data.id }, `T-${data.id.slice(-4).toUpperCase()}`) : null
