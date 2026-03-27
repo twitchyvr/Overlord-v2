@@ -2583,6 +2583,77 @@
 }
 
 /* ═══════════════════════════════════════════════════
+   PHASE ANALYTICS (#1194)
+   ═══════════════════════════════════════════════════ */
+
+.phase-view-analytics {
+  margin-top: var(--sp-6);
+}
+
+.phase-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.phase-analytics-metric {
+  padding: var(--sp-3);
+  text-align: center;
+  border-radius: var(--radius-lg);
+}
+
+.phase-analytics-value {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  line-height: 1.2;
+}
+
+.phase-analytics-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: var(--sp-1);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.phase-analytics-detail {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-top: var(--sp-1);
+}
+
+.phase-analytics-bar {
+  margin-top: var(--sp-2);
+}
+
+.phase-analytics-bar-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-1);
+}
+
+.phase-analytics-bar-track {
+  display: flex;
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.phase-analytics-bar-done {
+  background: var(--accent-green);
+  border-radius: 4px 0 0 4px;
+  transition: width 0.4s ease;
+}
+
+.phase-analytics-bar-progress {
+  background: var(--accent-blue);
+  transition: width 0.4s ease;
+}
+
+/* ═══════════════════════════════════════════════════
    PHASE HISTORY (collapsible)
    ═══════════════════════════════════════════════════ */
 
