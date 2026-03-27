@@ -87,6 +87,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Issue Tree: detail panel** — click node → slide-out with info, connections, quick actions (PR #1326)
 - **Issue Tree: link styles + perf** — 5 link types (child/dependency/related/deprecated/blocked), 500-node cap (PR #1327)
 - **Phase analytics** — quality metrics per phase: task completion %, risks, decisions, gate reviews (#1194, PR #1328)
+- **Tree graph: aurora glow** — in-progress nodes pulse with blue glow, done nodes dim (PR #1330)
+- **MiniMax Async T2A Pro** — long-form audio generation up to 1M chars, project briefing convenience wrapper (#1221, PR #1331)
 - **Task/milestone dedup improved** — suffix stemming, description overlap check, catches "Verify Build" × 4 variants (#1290, #1291, PR #1293)
 - **Centralized pushActivity()** — all real-time socket events enriched with agent display names (#1286)
 - **8 open-source dogfood projects** — kaneo, maplibre-gl-js, clack, grist-core, racing-game, noisecraft, bemuse, battle-city (#1184-1191)
