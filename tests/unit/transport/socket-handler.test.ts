@@ -575,6 +575,7 @@ describe('Socket Handler (Transport Layer)', () => {
             roomCount: 0,
             agentCount: 0,
             totalAgentCount: 0,
+            activeAgentCount: 0,
             taskCount: 0,
             activeTaskCount: 0,
             healthScore: { phaseProgress: 8, taskCompletion: 12, raidHealth: 25, agentActivity: 5, total: 50 },
