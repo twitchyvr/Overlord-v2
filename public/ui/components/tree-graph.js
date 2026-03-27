@@ -155,12 +155,34 @@ export class TreeGraph {
     this._treeW += PADDING * 2;
     this._treeH += PADDING * 2;
 
+    // Large tree warning — cap at 500 visible nodes for performance
+    const MAX_RENDERED = 500;
+    if (this._layoutNodes.length > MAX_RENDERED) {
+      // Sort by depth (shallow first), render only first MAX_RENDERED
+      const sorted = [...this._layoutNodes].sort((a, b) => a.x - b.x);
+      this._layoutNodes = sorted.slice(0, MAX_RENDERED);
+      const renderedIds = new Set(this._layoutNodes.map(n => n.id));
+      this._layoutEdges = this._layoutEdges.filter(e => renderedIds.has(e.parentId) && renderedIds.has(e.childId));
+      this._truncated = true;
+      this._totalCount = sorted.length;
+    } else {
+      this._truncated = false;
+    }
+
     // Phase 2: Build DOM
     this._buildDOM();
 
     // Phase 3: Draw
     this._drawEdges();
     this._drawNodes();
+
+    // Show truncation warning if needed
+    if (this._truncated) {
+      const warn = document.createElement('div');
+      warn.style.cssText = 'position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#1a2332;border:1px solid #fb923c;border-radius:6px;padding:6px 16px;color:#fb923c;font-size:12px;z-index:20;';
+      warn.textContent = `Showing ${MAX_RENDERED} of ${this._totalCount} nodes. Zoom in or use Cards/Text mode for full tree.`;
+      this._wrapperEl?.appendChild(warn);
+    }
 
     // Phase 4: Fit to view
     requestAnimationFrame(() => this.fitToView());
@@ -320,13 +342,27 @@ export class TreeGraph {
       const cx1 = x1 + dx * 0.4;
       const cx2 = x2 - dx * 0.4;
 
+      // Determine link style based on relationship type
+      const linkType = child._linkType || 'child'; // child, dependency, related, deprecated
+      const linkStyles = {
+        child:      { dash: 'none',   width: 2,   opacity: 0.55 },
+        dependency: { dash: '8,4',    width: 2,   opacity: 0.7  },
+        related:    { dash: '3,3',    width: 1.5, opacity: 0.35 },
+        deprecated: { dash: '4,4',    width: 1,   opacity: 0.2  },
+        blocked:    { dash: '6,3,2,3',width: 2,   opacity: 0.7  },
+      };
+      const ls = linkStyles[linkType] || linkStyles.child;
+
       this._layoutEdges.push({
         parentId: node.id,
         childId: child.id,
         d: `M ${x1} ${y1} C ${cx1} ${y1}, ${cx2} ${y2}, ${x2} ${y2}`,
-        color: TYPE_COLORS[child.type] || TYPE_COLORS.task,
+        color: linkType === 'blocked' ? '#f87171' : linkType === 'dependency' ? '#fb923c' : linkType === 'deprecated' ? '#475569' : (TYPE_COLORS[child.type] || TYPE_COLORS.task),
         statusColor: STATUS_COLORS[child.status] || STATUS_COLORS.pending,
-        // Junction dots
+        linkType,
+        dash: ls.dash,
+        width: ls.width,
+        opacity: ls.opacity,
         dotParent: { x: x1, y: y1 },
         dotChild: { x: x2, y: y2 },
       });
@@ -439,15 +475,19 @@ export class TreeGraph {
     const frag = document.createDocumentFragment();
 
     for (const edge of this._layoutEdges) {
-      // Bezier path
+      // Bezier path with link-type-specific styling
       const path = document.createElementNS(this._svgNS, 'path');
       path.setAttribute('d', edge.d);
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', edge.color);
-      path.setAttribute('stroke-width', '2');
-      path.setAttribute('stroke-opacity', '0.5');
+      path.setAttribute('stroke-width', String(edge.width || 2));
+      path.setAttribute('stroke-opacity', String(edge.opacity || 0.5));
+      if (edge.dash && edge.dash !== 'none') {
+        path.setAttribute('stroke-dasharray', edge.dash);
+      }
       path.setAttribute('data-parent', edge.parentId);
       path.setAttribute('data-child', edge.childId);
+      path.setAttribute('data-link-type', edge.linkType || 'child');
       frag.appendChild(path);
 
       // Junction dot at child end
