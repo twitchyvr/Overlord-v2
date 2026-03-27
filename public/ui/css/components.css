@@ -530,11 +530,22 @@
   color: var(--text-muted);
 }
 .card-task.task-done {
-  opacity: 0.6;
+  opacity: 0.55;
+  border-left: 3px solid var(--accent-green);
+  background: var(--accent-green-bg, rgba(74, 222, 128, 0.04));
 }
 .card-task.task-done .task-title {
   text-decoration: line-through;
   color: var(--text-muted);
+}
+/* In-progress tasks get blue left border for visual distinction */
+.card-task.task-in-progress {
+  border-left: 3px solid var(--accent-blue);
+}
+/* Blocked tasks get red left border */
+.card-task.task-blocked {
+  border-left: 3px solid var(--accent-red, #ef4444);
+  background: var(--accent-red-bg, rgba(248, 113, 113, 0.04));
 }
 
 /* ── Card: RAID ── */
