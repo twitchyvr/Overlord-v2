@@ -397,3 +397,176 @@ export async function synthesizeSpeech(
 export function isSpeechAvailable(): boolean {
   return !!getApiKey();
 }
+
+// ─── Async T2A Pro (#1221) ───────────────────────────────
+
+export interface AsyncT2AOptions {
+  voiceId?: string;
+  model?: string;
+  speed?: number;
+  volume?: number;
+  pitch?: number;
+  audioFormat?: 'mp3' | 'wav' | 'flac';
+  subtitleEnable?: boolean;
+  pronunciationDict?: Record<string, string>;
+}
+
+export interface AsyncT2ATask {
+  taskId: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  audioUrl?: string;
+  subtitleUrl?: string;
+  charCount?: number;
+  durationMs?: number;
+  error?: string;
+}
+
+/**
+ * Submit a long text (up to 1M chars) for async T2A processing.
+ * Returns a task ID that can be polled for status.
+ */
+export async function submitAsyncT2A(
+  text: string,
+  opts: AsyncT2AOptions = {},
+): Promise<Result<{ taskId: string }>> {
+  const apiKey = getApiKey();
+  if (!apiKey) return err('NO_API_KEY', 'MiniMax API key not configured', { retryable: false });
+
+  const baseUrl = process.env.MINIMAX_BASE_URL || 'https://api.minimax.chat';
+  const groupId = process.env.MINIMAX_GROUP_ID || '';
+
+  try {
+    const body: Record<string, unknown> = {
+      model: opts.model || 'speech-02-hd',
+      text,
+      voice_setting: {
+        voice_id: opts.voiceId || 'male-qn-qingse',
+        speed: opts.speed ?? 1.0,
+        vol: opts.volume ?? 1.0,
+        pitch: opts.pitch ?? 0,
+      },
+      audio_setting: {
+        format: opts.audioFormat || 'mp3',
+        sample_rate: 32000,
+      },
+    };
+
+    if (opts.subtitleEnable) {
+      (body as Record<string, unknown>).subtitle_enable = true;
+    }
+
+    if (opts.pronunciationDict && Object.keys(opts.pronunciationDict).length > 0) {
+      (body as Record<string, unknown>).pronunciation_dict = {
+        tone: Object.entries(opts.pronunciationDict).map(([word, pinyin]) => ({
+          word, tone: pinyin,
+        })),
+      };
+    }
+
+    const response = await fetch(`${baseUrl}/v1/t2a_pro?GroupId=${groupId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      return err('T2A_SUBMIT_FAILED', `Async T2A submission failed: ${response.status} ${errText}`, { retryable: response.status >= 500 });
+    }
+
+    const data = await response.json() as { task_id?: string; base_resp?: { status_code?: number; status_msg?: string } };
+
+    if (data.base_resp?.status_code !== 0 && data.base_resp?.status_code !== undefined) {
+      return err('T2A_API_ERROR', data.base_resp.status_msg || 'Unknown T2A error', { retryable: false });
+    }
+
+    if (!data.task_id) {
+      return err('T2A_NO_TASK_ID', 'No task_id in T2A response', { retryable: false });
+    }
+
+    log.info({ taskId: data.task_id, charCount: text.length }, 'Async T2A task submitted');
+    return ok({ taskId: data.task_id });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return err('T2A_NETWORK_ERROR', `Async T2A network error: ${msg}`, { retryable: true });
+  }
+}
+
+/**
+ * Poll the status of an async T2A task.
+ */
+export async function pollAsyncT2A(taskId: string): Promise<Result<AsyncT2ATask>> {
+  const apiKey = getApiKey();
+  if (!apiKey) return err('NO_API_KEY', 'MiniMax API key not configured', { retryable: false });
+
+  const baseUrl = process.env.MINIMAX_BASE_URL || 'https://api.minimax.chat';
+  const groupId = process.env.MINIMAX_GROUP_ID || '';
+
+  try {
+    const response = await fetch(`${baseUrl}/v1/t2a_pro/${taskId}?GroupId=${groupId}`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+    });
+
+    if (!response.ok) {
+      return err('T2A_POLL_FAILED', `T2A poll failed: ${response.status}`, { retryable: response.status >= 500 });
+    }
+
+    const data = await response.json() as {
+      status?: number; // 0=processing, 1=completed, 2=failed
+      file_url?: string;
+      subtitle_url?: string;
+      base_resp?: { status_code?: number; status_msg?: string };
+    };
+
+    if (data.base_resp?.status_code !== 0 && data.base_resp?.status_code !== undefined) {
+      return err('T2A_API_ERROR', data.base_resp.status_msg || 'Unknown T2A error', { retryable: false });
+    }
+
+    const statusMap: Record<number, AsyncT2ATask['status']> = {
+      0: 'processing', 1: 'completed', 2: 'failed',
+    };
+
+    return ok({
+      taskId,
+      status: statusMap[data.status ?? 0] || 'pending',
+      audioUrl: data.file_url,
+      subtitleUrl: data.subtitle_url,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return err('T2A_NETWORK_ERROR', `T2A poll error: ${msg}`, { retryable: true });
+  }
+}
+
+/**
+ * Generate a project briefing as spoken audio.
+ * Convenience wrapper: builds text summary → submits async T2A → returns task ID.
+ */
+export async function generateProjectBriefing(
+  buildingName: string,
+  phase: string,
+  tasksDone: number,
+  tasksTotal: number,
+  activeRisks: number,
+  agentSummary: string,
+  opts: AsyncT2AOptions = {},
+): Promise<Result<{ taskId: string }>> {
+  const briefing = [
+    `Project briefing for ${buildingName}.`,
+    `The project is currently in the ${phase} phase.`,
+    tasksTotal > 0
+      ? `${tasksDone} of ${tasksTotal} tasks have been completed, that's ${Math.round((tasksDone / tasksTotal) * 100)} percent.`
+      : 'No tasks have been created yet.',
+    activeRisks > 0
+      ? `There ${activeRisks === 1 ? 'is' : 'are'} ${activeRisks} active ${activeRisks === 1 ? 'risk' : 'risks'} to be aware of.`
+      : 'No active risks have been identified.',
+    agentSummary || 'The team is standing by.',
+    'End of briefing.',
+  ].join(' ');
+
+  return submitAsyncT2A(briefing, opts);
+}
