@@ -1339,6 +1339,24 @@ function registerBuiltinTools(): void {
       );
       const newWords = extractWords(title);
 
+      // Synonym groups for common action verbs (#1354)
+      const synonyms: Record<string, string> = {
+        verif: 'check', check: 'check', valid: 'check', test: 'check',
+        build: 'build', compil: 'build',
+        implement: 'impl', complet: 'impl', creat: 'impl',
+        connect: 'wire', wir: 'wire', integr: 'wire', link: 'wire',
+        fix: 'fix', repair: 'fix',
+        add: 'add', writ: 'add',
+      };
+      const normalizeStem = (w: string) => {
+        const s = stem(w);
+        return synonyms[s] || s;
+      };
+      const extractNormalized = (t: string) => new Set(
+        t.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w)).map(w => normalizeStem(w)).filter(w => w.length > 2)
+      );
+      const newNormalized = extractNormalized(title);
+
       if (newWords.size >= 2) {
         const allTasks = db.prepare(
           `SELECT id, title, description FROM tasks WHERE building_id = ?`
@@ -1355,6 +1373,18 @@ function registerBuiltinTools(): void {
           if (titleSim >= 0.30 && intersection.size >= 2) {
             return {
               output: `Similar task exists: "${task.title}" (id: ${task.id}) — ${Math.round(titleSim * 100)}% overlap (${intersection.size} shared stems), skipped`,
+              taskId: task.id,
+            };
+          }
+
+          // Synonym-normalized check (#1354): "Verify build" == "Check compile"
+          const existingNormalized = extractNormalized(task.title);
+          const normIntersection = new Set([...newNormalized].filter(w => existingNormalized.has(w)));
+          const normUnion = new Set([...newNormalized, ...existingNormalized]);
+          const normSim = normIntersection.size / normUnion.size;
+          if (normSim >= 0.40 && normIntersection.size >= 2) {
+            return {
+              output: `Similar task exists: "${task.title}" (id: ${task.id}) — ${Math.round(normSim * 100)}% synonym overlap, skipped`,
               taskId: task.id,
             };
           }
