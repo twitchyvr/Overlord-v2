@@ -391,7 +391,8 @@ export function initTransport({ io, bus, rooms, agents, tools: _tools, ai }: Ini
         db.prepare(`DELETE FROM citations WHERE source_room_id IN (${rq}) OR target_room_id IN (${rq})`).run(buildingId, buildingId);
         db.prepare(`DELETE FROM tables_v2 WHERE room_id IN (${rq})`).run(buildingId);
 
-        // ── Phase 5: Agents, rooms, floors, building ──
+        // ── Phase 5: Agents, activity logs, rooms, floors, building ──
+        db.prepare(`DELETE FROM agent_activity_log WHERE building_id = ?`).run(buildingId);
         db.prepare(`DELETE FROM agents WHERE building_id = ?`).run(buildingId);
         db.prepare(`DELETE FROM rooms WHERE floor_id IN (${fq})`).run(buildingId);
         db.prepare(`DELETE FROM floors WHERE building_id = ?`).run(buildingId);
