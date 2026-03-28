@@ -990,7 +990,7 @@ export class EmailView extends Component {
               subject,
               body,
               priority: prioritySelect.value,
-              buildingId: store.get('building.active'),
+              buildingId: OverlordUI.getStore()?.get('building.active') || '',
             });
           }
 
@@ -1003,11 +1003,15 @@ export class EmailView extends Component {
               this._loadPreview(prefill.threadId, prefill.replyToEmailId);
             }
           } else {
+            const errMsg = res?.error?.message || res?.error || 'Unknown error';
+            console.error('[Email] Server rejected:', errMsg);
+            Toast.error(`Email failed: ${errMsg}`);
             sendBtn.disabled = false;
             sendBtn.textContent = 'Send';
           }
-        } catch {
-          Toast.error('Error sending email');
+        } catch (sendErr) {
+          console.error('[Email] Send failed:', sendErr);
+          Toast.error(`Error sending email: ${sendErr?.message || sendErr}`);
           sendBtn.disabled = false;
           sendBtn.textContent = 'Send';
         }
