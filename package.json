@@ -38,7 +38,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.80.0",
+    "@anthropic-ai/sdk": "^0.81.0",
     "@dicebear/collection": "^9.4.2",
     "@dicebear/core": "^9.4.2",
     "better-sqlite3": "^11.8.0",
